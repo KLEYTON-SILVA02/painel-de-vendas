@@ -20,6 +20,11 @@ interface DateRangeState {
   setDay: (iso: string) => void;
   setRange: (from: string, to: string) => void;
   goToMonth: (year: number, month: number) => void;
+  /** Prev/next month arrows (legacy prevMonth/nextMonth): always changes
+   * which month's calendar page is shown; only resets dashFrom/dashTo to the
+   * new month's bounds when modoGeral is already active — otherwise a
+   * custom day/range selection survives browsing to a different month. */
+  navigateMonth: (delta: 1 | -1) => void;
   /** Month-grid button click (legacy `data-quickmonth`): sets refMonth, then
    * applies setModoGeral() semantics for that month within the current refYear. */
   quickMonth: (month: number) => void;
@@ -71,6 +76,23 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
         setRefMonth(month);
         setDashFrom(monthFirstISO(year, month));
         setDashTo(monthLastISO(year, month));
+      },
+      navigateMonth: (delta: 1 | -1) => {
+        let month = refMonth + delta;
+        let year = refYear;
+        if (month < 0) {
+          month = 11;
+          year -= 1;
+        } else if (month > 11) {
+          month = 0;
+          year += 1;
+        }
+        setRefMonth(month);
+        setRefYear(year);
+        if (modoGeral) {
+          setDashFrom(monthFirstISO(year, month));
+          setDashTo(monthLastISO(year, month));
+        }
       },
       quickMonth: (month: number) => {
         setRefMonth(month);
