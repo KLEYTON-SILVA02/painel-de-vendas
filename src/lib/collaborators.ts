@@ -1,22 +1,14 @@
 import { supabase } from './supabase';
 
-export interface CreateCollaboratorInput {
-  matricula: string;
-  senha: string;
-  nome: string;
-  apelido?: string | null;
-  setor?: string | null;
-  meta_individual?: number;
-  foto_url?: string | null;
-}
-
-/** Calls the create-collaborator edge function (service-role only operation:
- * provisions the matricula+senha login alongside the collaborator record). */
-export async function createCollaboratorLogin(input: CreateCollaboratorInput) {
-  const { data, error } = await supabase.functions.invoke<{ collaborator_id: string; user_id: string }>(
-    'create-collaborator',
-    { body: input },
-  );
+/** Calls the grant-collaborator-login edge function (service-role only
+ * operation: provisions a matricula+senha login for an already-existing
+ * collaborator record). Plain roster management never needs this — a
+ * collaborator can exist without ever having a login, exactly like the
+ * legacy system, where the concept didn't exist at all. */
+export async function grantCollaboratorLogin(collaboratorId: string, senha: string) {
+  const { data, error } = await supabase.functions.invoke<{ user_id: string }>('grant-collaborator-login', {
+    body: { collaborator_id: collaboratorId, senha },
+  });
   if (error) throw error;
   return data;
 }

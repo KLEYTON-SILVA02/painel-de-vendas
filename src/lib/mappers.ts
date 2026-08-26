@@ -1,4 +1,5 @@
-import type { CategoryKey } from './business/classification';
+import type { CategoryKey, ClassificationInputs } from './business/classification';
+import { CAT_KEYS } from './business/classification';
 import type { Collaborator, Dynamic, Goal, Sale } from './business/types';
 import type { SpecialListItem } from './business/summary';
 import type { Tables } from '../types/database';
@@ -57,4 +58,28 @@ export function mapDynamic(row: Tables<'dynamics'>): Dynamic {
 
 export function mapSpecialListItem(row: Tables<'special_lists'>): SpecialListItem {
   return { nome: row.nome, palavras: row.palavras };
+}
+
+/** Assembles the ClassificationInputs the pure classifyProduct/classifyProductTier
+ * functions need, from the raw DB rows fetched for the Produtos admin screens. */
+export function buildClassificationInputs(
+  catalog: Tables<'catalog'>[],
+  products: Tables<'products'>[],
+  brandKeywords: Tables<'brand_keywords'>[],
+  exclusiveBrands: Tables<'exclusive_brands'>[],
+): ClassificationInputs {
+  const productsByCategory = {} as ClassificationInputs['productsByCategory'];
+  const brandKeywordsByCategory = {} as ClassificationInputs['brandKeywordsByCategory'];
+  CAT_KEYS.forEach((k) => {
+    productsByCategory[k] = products
+      .filter((p) => p.categoria === k)
+      .map((p) => ({ nome: p.nome, padrao: p.padrao, palavras: p.palavras }));
+    brandKeywordsByCategory[k] = brandKeywords.filter((b) => b.categoria === k).map((b) => b.palavra);
+  });
+  return {
+    catalog: catalog.map((c) => ({ nome: c.nome, codigo: c.codigo, categoria: c.categoria as CategoryKey })),
+    productsByCategory,
+    brandKeywordsByCategory,
+    exclusiveBrands: exclusiveBrands.map((b) => b.palavra),
+  };
 }

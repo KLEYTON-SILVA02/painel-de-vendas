@@ -84,11 +84,82 @@ export function useSpecialLists() {
   });
 }
 
+/** Set of collaborator_ids that already have a login (a profiles row), so
+ * the UI can offer "grant access" only where it isn't redundant. */
+export function useCollaboratorsWithLogin() {
+  return useQuery({
+    queryKey: ['profiles_with_login'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('profiles').select('collaborator_id').not('collaborator_id', 'is', null);
+      if (error) throw error;
+      return new Set(data.map((r) => r.collaborator_id as string));
+    },
+  });
+}
+
+export function useCatalog() {
+  return useQuery({
+    queryKey: ['catalog'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('catalog').select('*').order('nome');
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useProducts() {
+  return useQuery({
+    queryKey: ['products'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('products').select('*').order('nome');
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useBrandKeywords() {
+  return useQuery({
+    queryKey: ['brand_keywords'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('brand_keywords').select('*').order('palavra');
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useExclusiveBrands() {
+  return useQuery({
+    queryKey: ['exclusive_brands'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('exclusive_brands').select('*').order('palavra');
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
 export function useBioGroups() {
   return useQuery({
     queryKey: ['bio_groups'],
     queryFn: async () => {
       const { data, error } = await supabase.from('bio_groups').select('*').order('nome');
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+/** Raw special_lists rows (with ids), for the Configurações admin screen —
+ * as opposed to useSpecialLists()'s grouped {levmel, chip} shape used by
+ * the business-logic layer. */
+export function useSpecialListRows() {
+  return useQuery({
+    queryKey: ['special_lists_rows'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('special_lists').select('*').order('nome');
       if (error) throw error;
       return data;
     },

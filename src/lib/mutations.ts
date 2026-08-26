@@ -3,6 +3,52 @@ import type { CategoryKey } from './business/classification';
 import { supabase } from './supabase';
 import type { TablesInsert, TablesUpdate } from '../types/database';
 
+type SimpleTable = 'catalog' | 'products' | 'brand_keywords' | 'exclusive_brands';
+
+/** Generic "insert a row scoped to the current store" mutation, for the
+ * several admin lists (catalog, products, brand keywords, exclusive brands)
+ * that are otherwise identical CRUD shapes. */
+export function useInsertRow<T extends SimpleTable>(table: T, storeId: string | undefined, invalidateKey: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: Omit<TablesInsert<T>, 'store_id'>) => {
+      if (!storeId) throw new Error('store not loaded');
+      // Supabase's typed .from() can't narrow its Insert/Update row shape on a
+      // generic table-name union, so the query builder itself is untyped here;
+      // the generic constraints on `input`/`patch` at each call site are what
+      // actually keep this type-safe end-to-end.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase.from(table) as any).insert({ ...input, store_id: storeId });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [invalidateKey] }),
+  });
+}
+
+export function useDeleteRow<T extends SimpleTable>(table: T, invalidateKey: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase.from(table) as any).delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [invalidateKey] }),
+  });
+}
+
+export function useUpdateRow<T extends SimpleTable>(table: T, invalidateKey: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, patch }: { id: string; patch: TablesUpdate<T> }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase.from(table) as any).update(patch).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [invalidateKey] }),
+  });
+}
+
 export function useUpdateGoal() {
   const qc = useQueryClient();
   return useMutation({
@@ -59,6 +105,92 @@ export function useCreateDynamic(storeId: string | undefined) {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['dynamics'] }),
+  });
+}
+
+export function useCreateCollaborator(storeId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { matricula: string; nome: string; apelido: string; setor: string }) => {
+      if (!storeId) throw new Error('store not loaded');
+      const { error } = await supabase.from('collaborators').insert({ store_id: storeId, ...input });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['collaborators'] }),
+  });
+}
+
+export function useUpdateCollaborator() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, patch }: { id: string; patch: TablesUpdate<'collaborators'> }) => {
+      const { error } = await supabase.from('collaborators').update(patch).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['collaborators'] }),
+  });
+}
+
+export function useDeleteCollaborators() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase.from('collaborators').delete().in('id', ids);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['collaborators'] }),
+  });
+}
+
+export function useUpdateStore(storeId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (patch: TablesUpdate<'stores'>) => {
+      if (!storeId) throw new Error('store not loaded');
+      const { error } = await supabase.from('stores').update(patch).eq('id', storeId);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['store'] }),
+  });
+}
+
+export function useUpdateStoreSettings(storeId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (patch: TablesUpdate<'store_settings'>) => {
+      if (!storeId) throw new Error('store not loaded');
+      const { error } = await supabase.from('store_settings').update(patch).eq('store_id', storeId);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['store_settings'] }),
+  });
+}
+
+function invalidateSpecialLists(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ['special_lists'] });
+  qc.invalidateQueries({ queryKey: ['special_lists_rows'] });
+}
+
+export function useAddSpecialListProduct(storeId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ tipo, nome }: { tipo: 'levmel' | 'chip'; nome: string }) => {
+      if (!storeId) throw new Error('store not loaded');
+      const { error } = await supabase.from('special_lists').insert({ store_id: storeId, tipo, nome, palavras: [nome] });
+      if (error) throw error;
+    },
+    onSuccess: () => invalidateSpecialLists(qc),
+  });
+}
+
+export function useDeleteSpecialListProduct() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('special_lists').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => invalidateSpecialLists(qc),
   });
 }
 

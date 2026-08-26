@@ -1,7 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
+import { Suspense, lazy } from 'react';
 import { NavLink, Route, Routes } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { supabase } from '../lib/supabase';
+import { AdminLandingPage } from './admin/AdminLandingPage';
+import { AuditoriaPage } from './admin/AuditoriaPage';
+import { BackupPage } from './admin/BackupPage';
+import { ColaboradoresPage } from './admin/ColaboradoresPage';
+import { ConfiguracoesPage } from './admin/ConfiguracoesPage';
+import { MinhaLojaPage } from './admin/MinhaLojaPage';
+import { ProdutosPage } from './admin/ProdutosPage';
+
+// xlsx is a large parsing library — only the Importar screen needs it, so it
+// gets its own chunk instead of bloating everyone else's initial load.
+const ImportarPage = lazy(() => import('./admin/ImportarPage').then((m) => ({ default: m.ImportarPage })));
 import { BioPage } from './bio/BioPage';
 import { CategoryPage } from './category/CategoryPage';
 import { DashboardPage } from './dashboard/DashboardPage';
@@ -19,9 +31,9 @@ const NAV_ITEMS = [
   { to: '/categoria/MER', label: 'Merc. Geral', end: false },
   { to: '/categoria/LEVMEL', label: 'Levmel', end: false },
   { to: '/categoria/CHIP', label: 'Chip', end: false },
-  { to: '/metas', label: 'Metas', end: false },
   { to: '/dinamicas', label: 'Dinâmicas', end: false },
   { to: '/bio', label: 'Biosintética', end: false },
+  { to: '/admin', label: 'ADM', end: false },
 ];
 
 export function AppShell() {
@@ -91,6 +103,21 @@ export function AppShell() {
             <Route path="/metas" element={<MetasPage />} />
             <Route path="/dinamicas" element={<DinamicasPage />} />
             <Route path="/bio" element={<BioPage />} />
+            <Route path="/admin" element={<AdminLandingPage />} />
+            <Route path="/admin/colaboradores" element={<ColaboradoresPage />} />
+            <Route path="/admin/produtos" element={<ProdutosPage />} />
+            <Route
+              path="/admin/importar"
+              element={
+                <Suspense fallback={<div className="text-sm text-slate-500 p-6">Carregando…</div>}>
+                  <ImportarPage />
+                </Suspense>
+              }
+            />
+            <Route path="/admin/auditoria" element={<AuditoriaPage />} />
+            <Route path="/admin/backup" element={<BackupPage />} />
+            <Route path="/admin/minha-loja" element={<MinhaLojaPage />} />
+            <Route path="/admin/configuracoes" element={<ConfiguracoesPage />} />
           </Routes>
         </main>
       </div>

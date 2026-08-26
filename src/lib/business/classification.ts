@@ -54,7 +54,7 @@ export interface ClassificationInputs {
 }
 
 export interface ClassificationResult {
-  categoria: CategoryKey;
+  categoria: CategoryKey | null;
   tier: 1 | 2 | 3 | 4 | 5;
 }
 
@@ -71,88 +71,90 @@ export function classifyProductTier(
   nome: string,
   codigo: string | null | undefined,
   inputs: ClassificationInputs,
+  /** When false, a product that matches nothing (tiers 1-4) stays
+   * unclassified (categoria: null) instead of defaulting to MER — used by
+   * the Auditoria "pendentes" screen to find products with no specific rule
+   * at all, as opposed to ones legitimately classified as MER by a rule. */
+  useFallback = true,
 ): ClassificationResult {
   const n = normalize(nome);
+  if (!n) return { categoria: null, tier: 5 };
+
   let result: CategoryKey | null = null;
   let tier: 1 | 2 | 3 | 4 | 5 = 5;
 
-  if (n) {
-    // Tier 1 — exact catalog match by code or name (highest priority)
-    const codN = (codigo || '').toString().trim();
-    const cat = inputs.catalog.find(
-      (c) =>
-        (codN && c.codigo && c.codigo.toString().trim() === codN) ||
-        (c.nome && normalize(c.nome) === n),
-    );
-    if (cat) {
-      result = cat.categoria;
-      tier = 1;
-    }
+  // Tier 1 — exact catalog match by code or name (highest priority)
+  const codN = (codigo || '').toString().trim();
+  const cat = inputs.catalog.find(
+    (c) => (codN && c.codigo && c.codigo.toString().trim() === codN) || (c.nome && normalize(c.nome) === n),
+  );
+  if (cat) {
+    result = cat.categoria;
+    tier = 1;
+  }
 
-    // Tier 2 — per-product keywords across all categories (longest match wins)
-    if (!result) {
-      const matches: { k: CategoryKey; len: number }[] = [];
-      CAT_KEYS.forEach((k) => {
-        (inputs.productsByCategory[k] || []).forEach((p) => {
-          keywordsOf(p).forEach((kw) => {
-            const pad = normalize(kw);
-            if (pad && pad.length >= 3 && n.includes(pad)) matches.push({ k, len: pad.length });
-          });
+  // Tier 2 — per-product keywords across all categories (longest match wins)
+  if (!result) {
+    const matches: { k: CategoryKey; len: number }[] = [];
+    CAT_KEYS.forEach((k) => {
+      (inputs.productsByCategory[k] || []).forEach((p) => {
+        keywordsOf(p).forEach((kw) => {
+          const pad = normalize(kw);
+          if (pad && pad.length >= 3 && n.includes(pad)) matches.push({ k, len: pad.length });
         });
       });
-      if (matches.length) {
-        matches.sort((a, b) => b.len - a.len);
-        result = matches[0].k;
-        tier = 2;
-      }
+    });
+    if (matches.length) {
+      matches.sort((a, b) => b.len - a.len);
+      result = matches[0].k;
+      tier = 2;
     }
+  }
 
-    // Tier 3 — brand keywords per category (GEN requires a generic marker too)
-    if (!result) {
-      const kwMatches: { k: CategoryKey; len: number }[] = [];
-      CAT_KEYS.forEach((k) => {
-        (inputs.brandKeywordsByCategory[k] || []).forEach((kw) => {
-          const kwn = normalize(kw);
-          if (!kwn || !n.includes(kwn)) return;
-          if (k === 'GEN') {
-            const hasMarker = GENERIC_MARKERS.some((m) => n.includes(m.trim()));
-            if (!hasMarker) return;
-          }
-          kwMatches.push({ k, len: kwn.length });
-        });
-      });
-      if (kwMatches.length) {
-        kwMatches.sort((a, b) => b.len - a.len);
-        result = kwMatches[0].k;
-        tier = 3;
-      }
-    }
-
-    // Tier 4 — internal heuristics (known-term fallback)
-    if (!result) {
-      for (const k of ['MP', 'DERM', 'GEN', 'MER'] as CategoryKey[]) {
-        if (HEURISTICS[k].some((h) => n.includes(h))) {
-          result = k;
-          tier = 4;
-          break;
+  // Tier 3 — brand keywords per category (GEN requires a generic marker too)
+  if (!result) {
+    const kwMatches: { k: CategoryKey; len: number }[] = [];
+    CAT_KEYS.forEach((k) => {
+      (inputs.brandKeywordsByCategory[k] || []).forEach((kw) => {
+        const kwn = normalize(kw);
+        if (!kwn || !n.includes(kwn)) return;
+        if (k === 'GEN') {
+          const hasMarker = GENERIC_MARKERS.some((m) => n.includes(m.trim()));
+          if (!hasMarker) return;
         }
+        kwMatches.push({ k, len: kwn.length });
+      });
+    });
+    if (kwMatches.length) {
+      kwMatches.sort((a, b) => b.len - a.len);
+      result = kwMatches[0].k;
+      tier = 3;
+    }
+  }
+
+  // Tier 4 — internal heuristics (known-term fallback)
+  if (!result) {
+    for (const k of ['MP', 'DERM', 'GEN', 'MER'] as CategoryKey[]) {
+      if (HEURISTICS[k].some((h) => n.includes(h))) {
+        result = k;
+        tier = 4;
+        break;
       }
     }
+  }
 
-    // Tier 5 — nothing matched: Mercadoria Geral is the universal fallback
-    if (!result) {
-      result = 'MER';
-      tier = 5;
-    }
-
-    // Exclusive-brand rule: always recategorizes to MP, even over a match found above
-    const brands = inputs.exclusiveBrands.length ? inputs.exclusiveBrands : EXCLUSIVE_BRANDS_DEFAULT;
-    if (brands.some((b) => n.includes(normalize(b)))) {
-      result = 'MP';
-    }
-  } else {
+  // Tier 5 — nothing matched: Mercadoria Geral is the universal fallback,
+  // unless the caller explicitly wants to know about the "no rule at all" case.
+  if (!result && useFallback) {
     result = 'MER';
     tier = 5;
+  }
+
+  // Exclusive-brand rule: always recategorizes to MP, even over a match found
+  // above — and even over an unclassified (useFallback=false) result.
+  const brands = inputs.exclusiveBrands.length ? inputs.exclusiveBrands : EXCLUSIVE_BRANDS_DEFAULT;
+  if (brands.some((b) => n.includes(normalize(b)))) {
+    result = 'MP';
   }
 
   return { categoria: result, tier };
@@ -163,7 +165,8 @@ export function classifyProduct(
   codigo: string | null | undefined,
   inputs: ClassificationInputs,
 ): CategoryKey {
-  return classifyProductTier(nome, codigo, inputs).categoria;
+  // useFallback defaults to true here, so categoria is guaranteed non-null.
+  return classifyProductTier(nome, codigo, inputs).categoria!;
 }
 
 /**

@@ -77,8 +77,28 @@ describe('classifyProductTier', () => {
     expect(classifyProduct('Levmel Suplemento', '', inputs)).toBe('MP');
   });
 
-  it('empty product name yields MER/tier 5 without throwing', () => {
-    expect(classifyProductTier('', '', emptyInputs)).toEqual({ categoria: 'MER', tier: 5 });
+  it('empty product name always yields null, regardless of useFallback', () => {
+    expect(classifyProductTier('', '', emptyInputs)).toEqual({ categoria: null, tier: 5 });
+    expect(classifyProductTier('', '', emptyInputs, false)).toEqual({ categoria: null, tier: 5 });
+  });
+
+  it('useFallback=false leaves an unmatched product unclassified instead of defaulting to MER', () => {
+    expect(classifyProductTier('produto totalmente desconhecido xyz', '', emptyInputs, false)).toEqual({
+      categoria: null,
+      tier: 5,
+    });
+  });
+
+  it('useFallback=false still applies the exclusive-brand override', () => {
+    expect(classifyProductTier('Levmel Suplemento', '', emptyInputs, false).categoria).toBe('MP');
+  });
+
+  it('useFallback=false does not affect a product that matched tiers 1-4', () => {
+    const inputs: ClassificationInputs = {
+      ...emptyInputs,
+      catalog: [{ nome: 'Produto X', codigo: null, categoria: 'DERM' }],
+    };
+    expect(classifyProductTier('Produto X', '', inputs, false)).toEqual({ categoria: 'DERM', tier: 1 });
   });
 });
 
