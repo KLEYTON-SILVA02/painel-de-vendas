@@ -84,6 +84,17 @@ export function useSpecialLists() {
   });
 }
 
+export function useBioGroups() {
+  return useQuery({
+    queryKey: ['bio_groups'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('bio_groups').select('*').order('nome');
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
 export function useDynamics() {
   return useQuery({
     queryKey: ['dynamics'],

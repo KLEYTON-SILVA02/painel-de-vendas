@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { NavLink, Route, Routes } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { supabase } from '../lib/supabase';
+import { BioPage } from './bio/BioPage';
 import { CategoryPage } from './category/CategoryPage';
 import { DashboardPage } from './dashboard/DashboardPage';
 import { DateRangeProvider } from './DateRangeContext';
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { to: '/categoria/CHIP', label: 'Chip', end: false },
   { to: '/metas', label: 'Metas', end: false },
   { to: '/dinamicas', label: 'Dinâmicas', end: false },
+  { to: '/bio', label: 'Biosintética', end: false },
 ];
 
 export function AppShell() {
@@ -88,6 +90,7 @@ export function AppShell() {
             <Route path="/categoria/CHIP" element={<CategoryPage catKey="CHIP" />} />
             <Route path="/metas" element={<MetasPage />} />
             <Route path="/dinamicas" element={<DinamicasPage />} />
+            <Route path="/bio" element={<BioPage />} />
           </Routes>
         </main>
       </div>

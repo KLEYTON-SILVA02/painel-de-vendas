@@ -35,11 +35,14 @@ export function PodiumStaircase<T extends StaircaseRow>({
   getValue,
   formatValue,
   variant,
+  getSub,
 }: {
   ranking: T[];
   getValue: (r: T) => number;
   formatValue: (v: number) => string;
   variant: 'escadinha' | 'lista';
+  /** Optional secondary label shown under the name (e.g. BIOSINTÉTICA's unit count). */
+  getSub?: (r: T) => string;
 }) {
   if (!ranking.length) {
     return <div className="text-sm text-slate-500 py-6 text-center">Sem vendas para este período.</div>;
@@ -52,7 +55,10 @@ export function PodiumStaircase<T extends StaircaseRow>({
           <div key={r.matricula} className="flex items-center gap-3 rounded-lg bg-slate-900/60 border border-slate-800 px-3 py-2">
             <div className="w-6 text-center text-sm text-slate-400 font-medium">{i + 1}</div>
             <Avatar foto={r.foto} size={36} />
-            <div className="flex-1 text-sm font-medium">{r.apelido || r.nome}</div>
+            <div className="flex-1">
+              <div className="text-sm font-medium">{r.apelido || r.nome}</div>
+              {getSub && <div className="text-xs text-slate-500">{getSub(r)}</div>}
+            </div>
             <div className="text-sm font-mono text-slate-200">{formatValue(getValue(r))}</div>
           </div>
         ))}
@@ -81,6 +87,7 @@ export function PodiumStaircase<T extends StaircaseRow>({
                 {i + 1}
               </div>
               <div className="text-xs font-medium text-center px-1 truncate w-full mt-6">{r.apelido || r.nome}</div>
+              {getSub && <div className="text-[10px] text-slate-400 text-center px-1 truncate w-full">{getSub(r)}</div>}
             </div>
           </div>
         );

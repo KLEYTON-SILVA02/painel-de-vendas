@@ -62,6 +62,41 @@ export function useCreateDynamic(storeId: string | undefined) {
   });
 }
 
+export function useAddBioProduct(storeId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ grupo, nome }: { grupo: 'G1' | 'G2' | 'G3' | 'G4'; nome: string }) => {
+      if (!storeId) throw new Error('store not loaded');
+      const { error } = await supabase.from('bio_groups').insert({ store_id: storeId, grupo, nome, palavras: [nome] });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bio_groups'] }),
+  });
+}
+
+export function useDeleteBioProduct() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('bio_groups').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bio_groups'] }),
+  });
+}
+
+export function useUpdateBioWeights(storeId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (weights: Record<'G1' | 'G2' | 'G3' | 'G4', number>) => {
+      if (!storeId) throw new Error('store not loaded');
+      const { error } = await supabase.from('store_settings').update({ bio_weights: weights }).eq('store_id', storeId);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['store_settings'] }),
+  });
+}
+
 export function useDeleteDynamic() {
   const qc = useQueryClient();
   return useMutation({
