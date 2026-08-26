@@ -81,6 +81,17 @@ export function isDynamicActive(din: Dynamic, todayISO = new Date().toISOString(
   return din.dataFim >= todayISO;
 }
 
+export type DynamicStatus = 'ativa' | 'agendada' | 'encerrada';
+
+/** Three-way status used by the Dinâmicas admin screen: a dynamic is
+ * "ativa" while today falls within its period, "agendada" before it starts,
+ * and "encerrada" once its end date has passed (moves to the gallery tab). */
+export function dynamicStatus(din: Dynamic, todayISO = new Date().toISOString().slice(0, 10)): DynamicStatus {
+  if (din.dataFim < todayISO) return 'encerrada';
+  if (din.dataInicio > todayISO) return 'agendada';
+  return 'ativa';
+}
+
 /**
  * Intersects an externally active date filter (e.g. the dashboard's date
  * range) with the dynamic's own period, clamping to the tighter bound on

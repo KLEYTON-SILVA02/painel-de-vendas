@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { CategoryPage } from './category/CategoryPage';
 import { DashboardPage } from './dashboard/DashboardPage';
 import { DateRangeProvider } from './DateRangeContext';
+import { DinamicasPage } from './dinamicas/DinamicasPage';
 import { MetasPage } from './metas/MetasPage';
 import { RankingPage } from './ranking/RankingPage';
 
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { to: '/categoria/LEVMEL', label: 'Levmel', end: false },
   { to: '/categoria/CHIP', label: 'Chip', end: false },
   { to: '/metas', label: 'Metas', end: false },
+  { to: '/dinamicas', label: 'Dinâmicas', end: false },
 ];
 
 export function AppShell() {
@@ -85,6 +87,7 @@ export function AppShell() {
             <Route path="/categoria/LEVMEL" element={<CategoryPage catKey="LEVMEL" />} />
             <Route path="/categoria/CHIP" element={<CategoryPage catKey="CHIP" />} />
             <Route path="/metas" element={<MetasPage />} />
+            <Route path="/dinamicas" element={<DinamicasPage />} />
           </Routes>
         </main>
       </div>

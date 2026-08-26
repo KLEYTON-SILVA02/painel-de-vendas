@@ -7,3 +7,9 @@
 body {
   margin: 0;
 }
+
+@layer components {
+  .input {
+    @apply w-full rounded-md bg-slate-800 border border-slate-700 px-2.5 py-1.5 text-sm text-slate-100 focus:outline-none focus:border-cyan-500;
+  }
+}

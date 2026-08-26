@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CategoryKey } from './business/classification';
 import { supabase } from './supabase';
-import type { TablesUpdate } from '../types/database';
+import type { TablesInsert, TablesUpdate } from '../types/database';
 
 export function useUpdateGoal() {
   const qc = useQueryClient();
@@ -47,5 +47,28 @@ export function useUpsertIndividualGoal(storeId: string | undefined) {
       if (error) throw error;
     },
     onSuccess: (_data, vars) => qc.invalidateQueries({ queryKey: ['individual_goals', vars.categoria] }),
+  });
+}
+
+export function useCreateDynamic(storeId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: Omit<TablesInsert<'dynamics'>, 'store_id'>) => {
+      if (!storeId) throw new Error('store not loaded');
+      const { error } = await supabase.from('dynamics').insert({ ...input, store_id: storeId });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['dynamics'] }),
+  });
+}
+
+export function useDeleteDynamic() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('dynamics').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['dynamics'] }),
   });
 }

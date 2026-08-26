@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   computeDinamicaProgresso,
   computeDinamicaRanking,
+  dynamicStatus,
   intersectDynamicPeriod,
   isDynamicActive,
 } from './dynamics';
@@ -61,6 +62,19 @@ describe('isDynamicActive', () => {
   });
   it('is inactive the day after it ends', () => {
     expect(isDynamicActive(din, '2026-08-11')).toBe(false);
+  });
+});
+
+describe('dynamicStatus', () => {
+  it('is "agendada" before it starts', () => {
+    expect(dynamicStatus(din, '2026-07-31')).toBe('agendada');
+  });
+  it('is "ativa" within its period', () => {
+    expect(dynamicStatus(din, '2026-08-01')).toBe('ativa');
+    expect(dynamicStatus(din, '2026-08-10')).toBe('ativa');
+  });
+  it('is "encerrada" after its end date', () => {
+    expect(dynamicStatus(din, '2026-08-11')).toBe('encerrada');
   });
 });
 
