@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { LoginPage } from './auth/LoginPage';
 import { AppShell } from './routes/AppShell';
@@ -22,9 +23,11 @@ function Root() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <Root />
-      </AuthProvider>
+      <BrowserRouter>
+        <AuthProvider>
+          <Root />
+        </AuthProvider>
+      </BrowserRouter>
     </QueryClientProvider>
   );
 }
