@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { ColumnRankingRow } from '../../lib/business/ranking';
 import { copyText, formatRankingText } from '../../lib/clipboard';
+import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
+import { RankingImageModal } from './RankingImageModal';
 
 // Ported 1:1 from legacy/index-original.html — .rank-col / .rank-col-header /
 // .rank-col-item / .rci-* (viewRanking()).
@@ -45,12 +47,27 @@ export function RankingColumnCard({
   storeName?: string;
 }) {
   const [copied, setCopied] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
 
   async function handleCopy() {
     const text = formatRankingText(ranking, title, dashFrom, dashTo, storeName);
     const ok = await copyText(text);
     setCopied(ok);
     setTimeout(() => setCopied(false), 1500);
+  }
+
+  async function handleGenerateImage() {
+    setGenerating(true);
+    try {
+      const blob = await generateRankingImageBlob(ranking, title, dashFrom, dashTo, storeName);
+      if (!blob) return;
+      const copiedToClipboard = await tryCopyImage(blob);
+      const url = URL.createObjectURL(blob);
+      setImageModal({ url, copied: copiedToClipboard });
+    } finally {
+      setGenerating(false);
+    }
   }
 
   return (
@@ -138,6 +155,16 @@ export function RankingColumnCard({
       >
         {copied ? '✓ Copiado!' : '📋 Copiar'}
       </button>
+      <button
+        onClick={handleGenerateImage}
+        disabled={generating}
+        className="rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+        style={{ borderColor: '#ffb700', color: '#ffb700' }}
+      >
+        {generating ? 'Gerando...' : '🖼️ Gerar imagem'}
+      </button>
+
+      {imageModal && <RankingImageModal url={imageModal.url} copied={imageModal.copied} onClose={() => setImageModal(null)} />}
     </div>
   );
 }
