@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { catTotals, computeSummary, daysSince, lastSaleDateFor, matchesSpecialList } from './summary';
+import { catTotals, computeSummary, computeVendorExtract, daysSince, lastSaleDateFor, matchesSpecialList } from './summary';
 import type { Collaborator, Sale } from './types';
 
 const collaborators: Collaborator[] = [
@@ -56,6 +56,24 @@ describe('matchesSpecialList', () => {
     const list = [{ nome: 'Levmel', palavras: ['levmel'] }];
     expect(matchesSpecialList('Levmel Suplemento 30cp', list)).toBe(true);
     expect(matchesSpecialList('Outro Produto', list)).toBe(false);
+  });
+});
+
+describe('computeVendorExtract', () => {
+  it('filters by matricula, category and date range, newest first', () => {
+    const extract = computeVendorExtract(sales, 'M1', 'DERM', '2026-08-01', '2026-08-31');
+    expect(extract.map((s) => s.id)).toEqual(['s1']);
+  });
+
+  it('filters by special list membership for LEVMEL/CHIP', () => {
+    const specialLists = { levmel: [{ nome: 'Produto A', palavras: ['produto a'] }], chip: [] };
+    const extract = computeVendorExtract(sales, 'M1', 'LEVMEL', null, null, specialLists);
+    expect(extract.map((s) => s.id)).toEqual(['s1']);
+  });
+
+  it('returns everything for the matricula when catKey is ALL', () => {
+    const extract = computeVendorExtract(sales, 'M1', 'ALL', null, null);
+    expect(extract.map((s) => s.id).sort()).toEqual(['s1', 's2']);
   });
 });
 

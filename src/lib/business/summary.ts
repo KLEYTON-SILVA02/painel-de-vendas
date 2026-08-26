@@ -122,3 +122,28 @@ export function daysSince(iso: string | null): number | null {
   const d2 = new Date();
   return Math.floor((d2.getTime() - d1.getTime()) / 86400000);
 }
+
+/** A single collaborator's sales extract, filtered by category (or special
+ * list for LEVMEL/CHIP) and date range, newest first. */
+export function computeVendorExtract(
+  sales: Sale[],
+  matricula: string,
+  catKey: CategoryKey | 'LEVMEL' | 'CHIP' | 'ALL',
+  fromDate: string | null,
+  toDate: string | null,
+  specialLists?: { levmel: SpecialListItem[]; chip: SpecialListItem[] },
+): Sale[] {
+  const isUnit = catKey === 'LEVMEL' || catKey === 'CHIP';
+  const list = sales.filter((s) => {
+    if (s.matricula !== matricula) return false;
+    if (fromDate && s.dataISO && s.dataISO < fromDate) return false;
+    if (toDate && s.dataISO && s.dataISO > toDate) return false;
+    if (isUnit) {
+      const lst = catKey === 'LEVMEL' ? specialLists?.levmel : specialLists?.chip;
+      return matchesSpecialList(s.produto, lst);
+    }
+    if (catKey && catKey !== 'ALL') return s.grupo === catKey;
+    return true;
+  });
+  return list.slice().sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''));
+}
