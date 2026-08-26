@@ -1,0 +1,124 @@
+// Ported 1:1 from legacy/index-original.html (computeSummary / catTotals).
+import { CAT_KEYS, type CategoryKey } from './classification';
+import { normalize } from './normalize';
+import type { Collaborator, Sale, SummaryRow } from './types';
+
+export interface SpecialListItem {
+  nome: string;
+  palavras: string[];
+}
+
+/** Matches a product name against a special list (Levmel, Chip) by keyword substring. */
+export function matchesSpecialList(produtoNome: string, list: SpecialListItem[] | undefined): boolean {
+  const n = normalize(produtoNome);
+  if (!n || !list || !list.length) return false;
+  return list.some((p) => {
+    const palavras = p.palavras && p.palavras.length ? p.palavras : [p.nome];
+    return palavras.some((kw) => {
+      const pad = normalize(kw);
+      return !!pad && n.includes(pad);
+    });
+  });
+}
+
+function emptyQtd(): Record<CategoryKey | 'SEM', number> {
+  const qtd = {} as Record<CategoryKey | 'SEM', number>;
+  CAT_KEYS.forEach((k) => (qtd[k] = 0));
+  qtd.SEM = 0;
+  return qtd;
+}
+
+/**
+ * Per-collaborator sales summary within a date range, optionally filtered by
+ * category, or by a special list (LEVMEL/CHIP) matched against product names.
+ * Rows are seeded from every registered collaborator (so zero-sale collaborators
+ * still appear) and unrecognized matriculas get synthesized rows from the sale itself.
+ */
+export function computeSummary(
+  sales: Sale[],
+  collaborators: Collaborator[],
+  fromDate: string | null,
+  toDate: string | null,
+  catFilter?: CategoryKey | 'ALL' | 'LEVMEL' | 'CHIP' | null,
+  specialLists?: { levmel: SpecialListItem[]; chip: SpecialListItem[] },
+): SummaryRow[] {
+  const map: Record<string, SummaryRow> = {};
+  collaborators.forEach((c) => {
+    map[c.matricula] = {
+      matricula: c.matricula,
+      nome: c.nome,
+      apelido: c.apelido || c.nome,
+      foto: c.foto,
+      metaIndividual: Number(c.metaIndividual) || 0,
+      qtd: emptyQtd(),
+      valor: 0,
+      itens: 0,
+    };
+  });
+
+  sales.forEach((s) => {
+    if (fromDate && s.dataISO && s.dataISO < fromDate) return;
+    if (toDate && s.dataISO && s.dataISO > toDate) return;
+    if (catFilter === 'LEVMEL' || catFilter === 'CHIP') {
+      const list = catFilter === 'LEVMEL' ? specialLists?.levmel : specialLists?.chip;
+      if (!matchesSpecialList(s.produto, list)) return;
+    } else if (catFilter && catFilter !== 'ALL' && s.grupo !== catFilter) {
+      return;
+    }
+
+    if (!map[s.matricula]) {
+      map[s.matricula] = {
+        matricula: s.matricula,
+        nome: s.vendedor || s.matricula,
+        apelido: s.vendedor || s.matricula,
+        foto: null,
+        metaIndividual: 0,
+        qtd: emptyQtd(),
+        valor: 0,
+        itens: 0,
+      };
+    }
+    const row = map[s.matricula];
+    const g = s.grupo;
+    const qtdv = Number(s.qtd) || 0;
+    const valor = Number(s.valor) || 0;
+    if (g && row.qtd[g] !== undefined) row.qtd[g] += qtdv;
+    else row.qtd.SEM += qtdv;
+    row.valor += valor;
+    row.itens += qtdv;
+  });
+
+  return Object.values(map).sort((a, b) => b.valor - a.valor);
+}
+
+/** Total quantity/value sold for a single category within a date range. */
+export function catTotals(sales: Sale[], fromDate: string | null, toDate: string | null, key: CategoryKey) {
+  let qtd = 0;
+  let valor = 0;
+  sales.forEach((s) => {
+    if (fromDate && s.dataISO && s.dataISO < fromDate) return;
+    if (toDate && s.dataISO && s.dataISO > toDate) return;
+    if (s.grupo !== key) return;
+    qtd += Number(s.qtd) || 0;
+    valor += Number(s.valor) || 0;
+  });
+  return { qtd, valor };
+}
+
+/** Last sale date for a matricula — used to flag 60+ days of inactivity. */
+export function lastSaleDateFor(sales: Sale[], matricula: string): string | null {
+  let last: string | null = null;
+  sales.forEach((s) => {
+    if (s.matricula === matricula && s.dataISO) {
+      if (!last || s.dataISO > last) last = s.dataISO;
+    }
+  });
+  return last;
+}
+
+export function daysSince(iso: string | null): number | null {
+  if (!iso) return null;
+  const d1 = new Date(iso + 'T00:00:00');
+  const d2 = new Date();
+  return Math.floor((d2.getTime() - d1.getTime()) / 86400000);
+}
