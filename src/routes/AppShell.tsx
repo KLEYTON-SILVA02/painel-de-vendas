@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { Suspense, lazy } from 'react';
-import { NavLink, Route, Routes } from 'react-router-dom';
+import { Suspense, lazy, useState } from 'react';
+import { Route, Routes } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { HamburgerIcon } from '../components/icons/NavIcons';
+import { Sidebar } from '../components/Sidebar';
 import { supabase } from '../lib/supabase';
 import { AdminLandingPage } from './admin/AdminLandingPage';
 import { AuditoriaPage } from './admin/AuditoriaPage';
@@ -23,22 +25,10 @@ import { DinamicasPage } from './dinamicas/DinamicasPage';
 import { MetasPage } from './metas/MetasPage';
 import { RankingPage } from './ranking/RankingPage';
 
-const NAV_ITEMS = [
-  { to: '/', label: 'Início', end: true },
-  { to: '/ranking', label: 'Ranking', end: false },
-  { to: '/categoria/DERM', label: 'Dermo', end: false },
-  { to: '/categoria/GEN', label: 'Gen/Sim', end: false },
-  { to: '/categoria/MP', label: 'Marcas Excl.', end: false },
-  { to: '/categoria/MER', label: 'Merc. Geral', end: false },
-  { to: '/categoria/LEVMEL', label: 'Levmel', end: false },
-  { to: '/categoria/CHIP', label: 'Chip', end: false },
-  { to: '/dinamicas', label: 'Dinâmicas', end: false },
-  { to: '/bio', label: 'Biosintética', end: false },
-  { to: '/admin', label: 'ADM', end: false },
-];
-
 export function AppShell() {
   const { profile, signOut } = useAuth();
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const storeQuery = useQuery({
     queryKey: ['store', profile?.store_id],
@@ -72,36 +62,35 @@ export function AppShell() {
 
   return (
     <DateRangeProvider>
-      <div className="min-h-screen bg-slate-950 text-slate-100">
-        <header className="border-b border-slate-800 px-6 py-4">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h1 className="text-lg font-semibold">{storeQuery.data?.nome_loja || 'Painel de Gestão de Vendas'}</h1>
-              <p className="text-xs text-slate-400">Administrador</p>
-            </div>
-            <button
-              onClick={() => signOut()}
-              className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800"
-            >
-              Sair
-            </button>
-          </div>
-          <nav className="flex flex-wrap gap-1">
-            {NAV_ITEMS.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) =>
-                  `rounded-lg px-3 py-1.5 text-sm ${isActive ? 'bg-cyan-500 text-slate-950 font-medium' : 'text-slate-300 hover:bg-slate-800'}`
-                }
+      <div className={`app-shell min-h-screen bg-slate-950 text-slate-100 ${collapsed ? 'is-collapsed' : ''} ${mobileOpen ? 'is-mobile-open' : ''}`}>
+        <Sidebar
+          collapsed={collapsed}
+          onToggleCollapsed={() => setCollapsed((v) => !v)}
+          logoUrl={storeQuery.data?.logo_url}
+          onNavigate={() => setMobileOpen(false)}
+        />
+        <div className="sb-backdrop" onClick={() => setMobileOpen(false)} />
+        <div className="app-content">
+          <header className="border-b border-slate-800 px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <button className="sb-hamburger" onClick={() => setMobileOpen(true)} aria-label="Abrir menu">
+                  <HamburgerIcon />
+                </button>
+                <div>
+                  <h1 className="text-lg font-semibold">{storeQuery.data?.nome_loja || 'Painel de Gestão de Vendas'}</h1>
+                  <p className="text-xs text-slate-400">Administrador</p>
+                </div>
+              </div>
+              <button
+                onClick={() => signOut()}
+                className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800"
               >
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
-        </header>
-        <main className="p-6">
+                Sair
+              </button>
+            </div>
+          </header>
+          <main className="p-6">
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/ranking" element={<RankingPage />} />
@@ -130,7 +119,8 @@ export function AppShell() {
             <Route path="/admin/minha-loja" element={<MinhaLojaPage />} />
             <Route path="/admin/configuracoes" element={<ConfiguracoesPage />} />
           </Routes>
-        </main>
+          </main>
+        </div>
       </div>
     </DateRangeProvider>
   );
