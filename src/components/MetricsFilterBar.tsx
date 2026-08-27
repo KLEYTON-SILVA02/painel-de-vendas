@@ -61,7 +61,20 @@ function StatCard({ c, compact, hasStack }: { c: MfbStat; compact: boolean; hasS
   return (
     <div
       style={{
-        flex: '1 1 140px',
+        // Legacy: .mfb-stat{flex:1 1 140px} but .mfb-top.compact .mfb-stat
+        // overrides the basis to 105px for the 8-card layout.
+        flex: compact ? '1 1 66px' : '1 1 140px',
+        // The value text below is nowrap+ellipsis, which gives this card an
+        // intrinsic (content-based) minimum width around ~120px regardless
+        // of flex-basis — a flex item's "automatic minimum size" defaults to
+        // its content's min-content size and overrides a smaller basis
+        // unless the item's own overflow is non-visible. Without this, the
+        // 105px basis above is nominal only: six of these plus the date-grid
+        // block don't fit one row at common laptop widths (1366-1440px), so
+        // the date-grid wraps onto its own line — this is what actually
+        // lets these cards (and the row as a whole) shrink to fit.
+        overflow: 'hidden',
+        minWidth: 0,
         height: compact ? (hasStack ? 114 : 56) : undefined,
         minHeight: compact ? 0 : 95,
         padding: compact ? '5px 8px' : '8px 12px',
