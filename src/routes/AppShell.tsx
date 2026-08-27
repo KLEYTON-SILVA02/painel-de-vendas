@@ -19,6 +19,7 @@ const ImportarPage = lazy(() => import('./admin/ImportarPage').then((m) => ({ de
 import { BioPage } from './bio/BioPage';
 import { CategoryPage } from './category/CategoryPage';
 import { CollaboratorHomePage } from './collaborator/CollaboratorHomePage';
+import { ConquistasPage } from './conquistas/ConquistasPage';
 import { DashboardPage } from './dashboard/DashboardPage';
 import { DateRangeProvider } from './DateRangeContext';
 import { DinamicasPage } from './dinamicas/DinamicasPage';
@@ -103,6 +104,7 @@ export function AppShell() {
             <Route path="/metas" element={<MetasPage />} />
             <Route path="/dinamicas" element={<DinamicasPage />} />
             <Route path="/bio" element={<BioPage />} />
+            <Route path="/conquistas" element={<ConquistasPage />} />
             <Route path="/admin" element={<AdminLandingPage />} />
             <Route path="/admin/colaboradores" element={<ColaboradoresPage />} />
             <Route path="/admin/produtos" element={<ProdutosPage />} />

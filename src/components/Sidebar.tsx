@@ -8,6 +8,7 @@ import {
   HexagonIcon,
   HomeIcon,
   LeafIcon,
+  MedalIcon,
   PillIcon,
   SettingsIcon,
   TagIcon,
@@ -44,6 +45,7 @@ const CAT_NAV: {
   { key: 'CHIP', label: 'Chip', color: '#00f0ff', icon: (p) => <CpuIcon width={p.size} height={p.size} />, grupo: 'Categorias', to: '/categoria/CHIP', end: false },
   { key: 'DINAMICA', label: 'Dinâmicas', color: '#a82bff', icon: (p) => <TargetIcon width={p.size} height={p.size} />, grupo: 'Programas', to: '/dinamicas', end: false },
   { key: 'BIO', label: 'Biosintética', color: '#14ff00', icon: (p) => <LeafIcon width={p.size} height={p.size} />, grupo: 'Programas', to: '/bio', end: false },
+  { key: 'CONQUISTAS', label: 'Conquistas', color: '#ffb700', icon: (p) => <MedalIcon width={p.size} height={p.size} />, grupo: 'Programas', to: '/conquistas', end: false },
   { key: 'ADM', label: 'ADM', color: '#00f0ff', icon: (p) => <SettingsIcon width={p.size} height={p.size} />, grupo: 'Sistema', to: '/admin', end: false },
 ];
 

@@ -160,6 +160,45 @@ export type Database = {
           },
         ]
       }
+      conquista_super_metas: {
+        Row: {
+          categoria: string
+          collaborator_id: string
+          id: string
+          store_id: string
+          valor: number
+        }
+        Insert: {
+          categoria: string
+          collaborator_id: string
+          id?: string
+          store_id: string
+          valor?: number
+        }
+        Update: {
+          categoria?: string
+          collaborator_id?: string
+          id?: string
+          store_id?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conquista_super_metas_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conquista_super_metas_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dynamics: {
         Row: {
           created_at: string
