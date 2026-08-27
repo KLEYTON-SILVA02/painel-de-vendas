@@ -1,59 +1,146 @@
+import { useState } from 'react';
 import type { ColumnRankingRow } from '../../lib/business/ranking';
-import { medalClass } from '../../lib/business/ranking';
+import { copyText, formatRankingText } from '../../lib/clipboard';
+import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
+import { RankingImageModal } from './RankingImageModal';
 
-const MEDAL_RING: Record<string, string> = {
-  gold: 'ring-2 ring-amber-400',
-  silver: 'ring-2 ring-slate-300',
-  bronze: 'ring-2 ring-amber-700',
+// Ported 1:1 from legacy/index-original.html — .rank-col / .rank-col-header /
+// .rank-col-item / .rci-* (viewRanking()).
+
+const MEDAL_TEXT: Record<string, { color: string; weight: number }> = {
+  gold: { color: '#eab308', weight: 900 },
+  silver: { color: '#cbd5e1', weight: 900 },
+  bronze: { color: '#f97316', weight: 900 },
 };
+const MEDAL_AVATAR: Record<string, string> = {
+  gold: '2px solid #eab308',
+  silver: '2px solid #cbd5e1',
+  bronze: '2px solid #f97316',
+};
+const MEDAL_SHADOW: Record<string, string> = {
+  gold: '0 0 6px rgba(234,179,8,.5)',
+  silver: '0 0 6px rgba(203,213,225,.5)',
+  bronze: '0 0 6px rgba(249,115,22,.5)',
+};
+
+function medalOf(i: number): 'gold' | 'silver' | 'bronze' | null {
+  return i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : null;
+}
 
 export function RankingColumnCard({
   title,
+  icon,
   color,
   ranking,
   isUnit,
+  dashFrom,
+  dashTo,
+  storeName,
 }: {
   title: string;
+  icon: string;
   color: string;
   ranking: ColumnRankingRow[];
   isUnit: boolean;
+  dashFrom: string;
+  dashTo: string;
+  storeName?: string;
 }) {
+  const [copied, setCopied] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
+
+  async function handleCopy() {
+    const text = formatRankingText(ranking, title, dashFrom, dashTo, storeName);
+    const ok = await copyText(text);
+    setCopied(ok);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  async function handleGenerateImage() {
+    setGenerating(true);
+    try {
+      const blob = await generateRankingImageBlob(ranking, title, dashFrom, dashTo, storeName);
+      if (!blob) return;
+      const copiedToClipboard = await tryCopyImage(blob);
+      const url = URL.createObjectURL(blob);
+      setImageModal({ url, copied: copiedToClipboard });
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 flex flex-col min-w-[220px]">
-      <div className="text-sm font-semibold mb-2 pb-2 border-b" style={{ color, borderColor: color }}>
-        {title}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, background: '#0b0e1d', border: '1px solid #212948', borderRadius: 14, padding: 10 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          fontWeight: 800,
+          fontSize: 12,
+          textTransform: 'uppercase',
+          letterSpacing: '.03em',
+          paddingBottom: 8,
+          borderBottom: `1.5px solid ${color}`,
+          color,
+        }}
+      >
+        <span>{icon}</span>
+        <span>{title}</span>
       </div>
-      <div className="flex flex-col gap-2 flex-1">
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 360, overflowY: 'auto' }}>
         {ranking.length === 0 ? (
-          <div className="text-xs text-slate-500 py-4 text-center">Sem vendas.</div>
+          <div style={{ padding: '16px 0' }} className="text-sm text-slate-500 text-center">
+            Sem vendas.
+          </div>
         ) : (
           ranking.map((r, i) => {
-            const medal = medalClass(i);
+            const medal = medalOf(i);
             return (
-              <div key={r.matricula} className="flex items-center gap-2">
-                <div className={`w-5 h-5 shrink-0 rounded-full text-[10px] font-bold flex items-center justify-center bg-slate-800 text-slate-300 ${medal ? MEDAL_RING[medal] : ''}`}>
+              <div key={r.matricula} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ fontSize: 10, color: medal ? MEDAL_TEXT[medal].color : '#8b90bf', width: 14, flexShrink: 0, fontWeight: medal ? MEDAL_TEXT[medal].weight : 700 }}>
                   {i + 1}
                 </div>
                 {r.foto ? (
-                  <img src={r.foto} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" />
+                  <img
+                    src={r.foto}
+                    alt=""
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: '50%',
+                      objectFit: 'cover',
+                      background: '#0b0e1d',
+                      border: medal ? MEDAL_AVATAR[medal] : '2px solid #00f0ff',
+                      boxShadow: medal ? MEDAL_SHADOW[medal] : 'none',
+                      flexShrink: 0,
+                    }}
+                  />
                 ) : (
-                  <div className="w-6 h-6 rounded-full bg-slate-700 shrink-0" />
+                  <div
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: '50%',
+                      background: '#0b0e1d',
+                      border: medal ? MEDAL_AVATAR[medal] : '2px solid #00f0ff',
+                      boxShadow: medal ? MEDAL_SHADOW[medal] : 'none',
+                      flexShrink: 0,
+                    }}
+                  />
                 )}
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-medium truncate">{r.apelido || r.nome}</div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="flex-1 h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                      <div
-                        className="h-full rounded-full"
-                        style={{ width: `${Math.min(100, r.pct ?? 0)}%`, background: color }}
-                      />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.apelido || r.nome}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <div style={{ flex: 1, height: 4, borderRadius: 3, background: '#080818', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', borderRadius: 3, width: `${Math.min(100, r.pct ?? 0)}%`, background: color }} />
                     </div>
-                    <div className="text-[10px] text-slate-400 tabular-nums w-8 text-right">
-                      {r.pct !== null ? `${r.pct.toFixed(0)}%` : '—'}
-                    </div>
+                    <div style={{ fontSize: 9, color: '#8b90bf', flexShrink: 0, width: 26, textAlign: 'right' }}>{r.pct !== null ? `${r.pct.toFixed(0)}%` : '—'}</div>
                   </div>
                 </div>
-                <div className="text-[11px] font-mono text-slate-200 shrink-0">
+                <div style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", color: '#ffb700', flexShrink: 0, whiteSpace: 'nowrap' }}>
                   {isUnit ? `${r.itens} un.` : r.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </div>
               </div>
@@ -61,6 +148,23 @@ export function RankingColumnCard({
           })
         )}
       </div>
+
+      <button
+        onClick={handleCopy}
+        className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
+      >
+        {copied ? '✓ Copiado!' : '📋 Copiar'}
+      </button>
+      <button
+        onClick={handleGenerateImage}
+        disabled={generating}
+        className="rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+        style={{ borderColor: '#ffb700', color: '#ffb700' }}
+      >
+        {generating ? 'Gerando...' : '🖼️ Gerar imagem'}
+      </button>
+
+      {imageModal && <RankingImageModal url={imageModal.url} copied={imageModal.copied} onClose={() => setImageModal(null)} />}
     </div>
   );
 }

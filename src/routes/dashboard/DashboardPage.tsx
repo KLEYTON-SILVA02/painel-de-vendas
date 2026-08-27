@@ -1,12 +1,15 @@
+import type { ReactNode } from 'react';
+import { SidebarCalendarCard } from '../../components/SidebarCalendarCard';
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
-import { DateRangeControls } from '../../components/DateRangeControls';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
+import { computeDinamicaRanking, intersectDynamicPeriod } from '../../lib/business/dynamics';
 import { effectiveMetaGeral, getGoal, getSuperMeta } from '../../lib/business/goals';
+import type { Dynamic } from '../../lib/business/types';
 import { catTotals, computeSummary } from '../../lib/business/summary';
-import { monthFirstISO, monthLastISO } from '../../lib/dateRange';
-import { fmtMoney } from '../../lib/format';
-import { useCollaborators, useGoals, useSales, useStore, useStoreSettings } from '../../lib/queries';
-import { useDateRange } from '../DateRangeContext';
+import { monthFirstISO, monthLastISO, todayISO } from '../../lib/dateRange';
+import { fmtMoney, monthName } from '../../lib/format';
+import { useCollaborators, useDynamics, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
+import { useDateRange, type RankFilter } from '../DateRangeContext';
 
 const CAT_LABEL: Record<CategoryKey, string> = {
   DERM: 'Dermocosméticos',
@@ -21,15 +24,136 @@ const CAT_COLOR: Record<CategoryKey, string> = {
   MER: '#ff6a00',
 };
 
+// Ported 1:1 from legacy/index-original.html (RANK_FILTERS).
+const RANK_FILTERS: { k: RankFilter; l: string }[] = [
+  { k: 'ALL', l: 'Todas' },
+  { k: 'DERM', l: 'Dermo' },
+  { k: 'GEN', l: 'Gen/Sim' },
+  { k: 'MP', l: 'Marcas Excl.' },
+  { k: 'MER', l: 'Merc. Geral' },
+];
+
+// Ported 1:1 from legacy/index-original.html (resolveRankFilterParams()).
+function resolveRankFilterParams(rankFilter: RankFilter, dashFrom: string, dashTo: string, dynamics: Dynamic[]) {
+  if (rankFilter.startsWith('DIN:')) {
+    const din = dynamics.find((d) => d.id === rankFilter.slice(4));
+    if (din) {
+      const { from, to } = intersectDynamicPeriod(din, dashFrom, dashTo);
+      return { from, to, catFilter: 'ALL' as const, label: din.titulo, dinamica: din };
+    }
+    return { from: dashFrom, to: dashTo, catFilter: 'ALL' as const, label: 'Todas', dinamica: null };
+  }
+  if (rankFilter === 'LEVMEL') return { from: dashFrom, to: dashTo, catFilter: 'LEVMEL' as const, label: 'Levmel', dinamica: null };
+  if (rankFilter === 'CHIP') return { from: dashFrom, to: dashTo, catFilter: 'CHIP' as const, label: 'Chip', dinamica: null };
+  const found = RANK_FILTERS.find((x) => x.k === rankFilter);
+  // rankFilter here is one of RANK_FILTERS' keys ('ALL'|'DERM'|'GEN'|'MP'|'MER') —
+  // the DIN:/LEVMEL/CHIP cases were already returned above, but .startsWith()
+  // isn't a type guard so TS can't narrow the template-literal member out.
+  return { from: dashFrom, to: dashTo, catFilter: rankFilter as CategoryKey | 'ALL', label: found?.l || 'Todas', dinamica: null };
+}
+
+function RankFilterBar({ dynamics }: { dynamics: Dynamic[] }) {
+  const { rankFilter, setRankFilter } = useDateRange();
+  const today = todayISO();
+  const activeDynamics = dynamics.filter((d) => d.dataFim >= today);
+
+  return (
+    <>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+        {[...RANK_FILTERS, { k: 'LEVMEL' as RankFilter, l: 'Levmel' }, { k: 'CHIP' as RankFilter, l: 'Chip' }].map((x) => (
+          <SubtabButton key={x.k} active={rankFilter === x.k} onClick={() => setRankFilter(x.k)}>
+            {x.l}
+          </SubtabButton>
+        ))}
+      </div>
+      {activeDynamics.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+          {activeDynamics.map((d) => (
+            <SubtabButton key={d.id} active={rankFilter === `DIN:${d.id}`} onClick={() => setRankFilter(`DIN:${d.id}`)}>
+              🎯 {d.titulo}
+            </SubtabButton>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+function SubtabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background: active ? '#ffb700' : 'transparent',
+        border: `1px solid ${active ? '#ffb700' : '#212948'}`,
+        color: active ? '#231a02' : '#8b90bf',
+        padding: '7px 13px',
+        borderRadius: 10,
+        cursor: 'pointer',
+        fontSize: 12,
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        letterSpacing: '.04em',
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function CategoryGauge({ label, valor, goal, color }: { label: string; valor: number; goal: number; color: string }) {
+  const pct = goal > 0 ? Math.min(100, (valor / goal) * 100) : 0;
+  return (
+    <div style={{ textAlign: 'center' }}>
+      <div style={{ width: '100%', maxWidth: 88, aspectRatio: '2/1', overflow: 'hidden', position: 'relative', margin: '0 auto' }}>
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            aspectRatio: '1/1',
+            borderRadius: '50%',
+            background: `conic-gradient(${color} ${pct}%, rgba(255,255,255,.07) 0)`,
+          }}
+        >
+          <div style={{ position: 'absolute', inset: '12%', borderRadius: '50%', background: '#0b0e1d' }} />
+        </div>
+      </div>
+      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, marginTop: 4, color }}>{pct.toFixed(0)}%</div>
+      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.03em', fontWeight: 700, marginTop: 2 }}>{label}</div>
+      <div style={{ fontSize: 10.5, color: '#8b90bf' }}>{fmtMoney(valor)}</div>
+      <div style={{ fontSize: 10.5, color: '#8b90bf' }}>meta {fmtMoney(goal)}</div>
+    </div>
+  );
+}
+
+function StatCard({ label, value, color, badge }: { label: string; value: string; color: string; badge?: string }) {
+  return (
+    <div style={{ background: '#0b0e1d', border: `1px solid ${color}`, borderRadius: 14, padding: '9px 10px', height: '100%' }}>
+      <div style={{ fontSize: 9, color: '#8b90bf', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 4, fontWeight: 700 }}>
+        {label}
+        {badge && (
+          <span style={{ marginLeft: 8, fontSize: 10, background: '#ffb700', color: '#231a02', padding: '2px 6px', borderRadius: 6, fontWeight: 800 }}>
+            {badge}
+          </span>
+        )}
+      </div>
+      <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color }}>{value}</div>
+    </div>
+  );
+}
+
 export function DashboardPage() {
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
   const { data: goals } = useGoals();
   const { data: storeSettings } = useStoreSettings();
   const { data: store } = useStore();
-  const { dashFrom, dashTo, refYear, refMonth } = useDateRange();
+  const { data: specialLists } = useSpecialLists();
+  const { data: dynamics } = useDynamics();
+  const { dashFrom, dashTo, refYear, refMonth, rankFilter } = useDateRange();
 
-  if (!collaborators || !sales || !goals || !storeSettings) {
+  if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !dynamics) {
     return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
   }
 
@@ -74,116 +198,117 @@ export function DashboardPage() {
   const monthRanking = computeSummary(sales, collaborators, monthFirst, monthLast);
   const campeaoSource = modoDia ? ranking : monthRanking;
   const campeao = campeaoSource.length && campeaoSource[0].valor > 0 ? campeaoSource[0] : null;
+  const campeaoLabel = modoDia ? `Campeão do dia — ${dashFrom.split('-').reverse().join('/')}` : `Campeão — ${monthName(refMonth)}/${refYear}`;
 
-  const rankingList = ranking.filter((r) => r.valor > 0);
+  const rankFilterParams = resolveRankFilterParams(rankFilter, dashFrom, dashTo, dynamics);
+  const rankingFiltered = rankFilterParams.dinamica
+    ? computeDinamicaRanking(
+        { ...rankFilterParams.dinamica, dataInicio: rankFilterParams.from, dataFim: rankFilterParams.to },
+        sales,
+        collaborators,
+      )
+    : computeSummary(sales, collaborators, rankFilterParams.from, rankFilterParams.to, rankFilterParams.catFilter, specialLists);
+  const isUnitRanking =
+    rankFilterParams.catFilter === 'LEVMEL' || rankFilterParams.catFilter === 'CHIP' || rankFilterParams.dinamica?.metrica === 'unidade';
+  const rankingFilteredList = rankingFiltered.filter((r) => r.valor > 0 || r.itens > 0);
   const modeloRanking = storeSettings.modelo_ranking as 'escadinha' | 'lista';
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
-      <div className="flex flex-col gap-6">
-        <div className="rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 to-slate-950 p-6">
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <div className="text-xs uppercase tracking-wide text-slate-400">{saudacao.toUpperCase()},</div>
-              <div className="text-xl font-semibold">{store?.nome_equipe || 'Equipe'}</div>
-              <div className="text-sm text-slate-500">Painel Geral</div>
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
+      <div className="flex flex-col gap-4">
+        <div style={{ background: 'rgba(0,0,0,.35)', border: '1px solid #00f0ff', borderRadius: 18, padding: '11px 16px' }}>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ minWidth: 150 }}>
+              <div style={{ color: '#00f0ff', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 700 }}>
+                {saudacao.toUpperCase()},
+              </div>
+              <div style={{ fontSize: 15, margin: '2px 0', fontWeight: 700 }}>{store?.nome_equipe || 'Equipe'}</div>
+              <div style={{ color: '#8b90bf', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>Painel Geral</div>
             </div>
-            <div className="text-right">
-              <div className="text-xs text-slate-400">Atingim. período</div>
-              <div className="text-2xl font-mono font-bold text-cyan-400">{pct.toFixed(0)}%</div>
+            <div style={{ textAlign: 'right', minWidth: 120 }}>
+              <div style={{ color: '#8b90bf', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.08em' }}>Atingim. período</div>
+              <div style={{ fontSize: 26, textShadow: '0 0 10px rgba(0,240,255,.55)', color: '#00f0ff' }}>{pct.toFixed(0)}%</div>
             </div>
           </div>
-          <div className="mb-2">
-            <div className="text-xs text-slate-400">⭐ Venda total do período</div>
-            <div className="text-3xl font-mono font-bold">{fmtMoney(totalValor)}</div>
+          <div style={{ textAlign: 'left', marginTop: 8 }}>
+            <div style={{ color: '#ffb700', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 700 }}>
+              ⭐ Venda total do período
+            </div>
+            <div style={{ fontSize: 26, textShadow: '0 0 10px rgba(0,240,255,.55)' }}>{fmtMoney(totalValor)}</div>
           </div>
-          <div className="relative h-2.5 rounded-full bg-slate-800 overflow-hidden">
-            <div className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-fuchsia-500" style={{ width: `${pct}%` }} />
-            {marker !== null && (
-              <div className="absolute top-[-3px] bottom-[-3px] w-0.5 bg-amber-400" style={{ left: `${marker}%` }} />
-            )}
+          <div style={{ position: 'relative', height: 8, borderRadius: 5, background: '#080818', border: '1px solid #212948', overflow: 'hidden', marginTop: 8 }}>
+            <div style={{ height: '100%', width: `${pct}%`, background: 'linear-gradient(90deg,#00f0ff,#a82bff)', borderRadius: 5 }} />
+            {marker !== null && <div style={{ position: 'absolute', top: -3, bottom: -3, width: 2, background: '#ffb700', left: `${marker}%` }} />}
           </div>
         </div>
 
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-cyan-400 font-semibold text-sm">🏆 Ranking Geral de Vendas</h3>
-            <DateRangeControls />
+          <h3 className="text-cyan-400 font-semibold text-sm mb-2">🏆 Ranking Geral de Vendas — {rankFilterParams.label}</h3>
+          <RankFilterBar dynamics={dynamics} />
+          <div className="mt-3">
+            <PodiumStaircase
+              ranking={rankingFilteredList}
+              getValue={(r) => (isUnitRanking ? r.itens : r.valor)}
+              formatValue={(v) => (isUnitRanking ? `${v} un.` : fmtMoney(v))}
+              variant={modeloRanking}
+            />
           </div>
-          <PodiumStaircase
-            ranking={rankingList}
-            getValue={(r) => r.valor}
-            formatValue={fmtMoney}
-            variant={modeloRanking}
-          />
         </div>
 
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-          <h3 className="text-sm font-semibold mb-3 text-slate-300">Categorias</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <h3 className="text-cyan-400 font-semibold text-sm mb-3">Vendas por Categoria</h3>
+          <div className="grid grid-cols-2 min-[1051px]:grid-cols-4 gap-1.5">
             {CAT_KEYS.map((k) => {
               const t = catTotals(sales, dashFrom, dashTo, k);
               const goal = getGoal(goals[k], mode, sales, collaborators);
-              const gaugePct = goal > 0 ? Math.min(100, (t.valor / goal) * 100) : 0;
-              return (
-                <div key={k} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                  <div className="text-xs font-medium mb-1" style={{ color: CAT_COLOR[k] }}>
-                    {CAT_LABEL[k]}
-                  </div>
-                  <div className="text-sm font-mono mb-2">{fmtMoney(t.valor)}</div>
-                  <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                    <div className="h-full rounded-full" style={{ width: `${gaugePct}%`, background: CAT_COLOR[k] }} />
-                  </div>
-                  <div className="text-[10px] text-slate-500 mt-1">{gaugePct.toFixed(0)}% da meta</div>
-                </div>
-              );
+              return <CategoryGauge key={k} label={CAT_LABEL[k]} valor={t.valor} goal={goal} color={CAT_COLOR[k]} />;
             })}
           </div>
         </div>
       </div>
 
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3">
         {campeao && (
-          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 flex items-center gap-3">
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              borderColor: '#ffb700',
+              boxShadow: '0 0 18px rgba(255,183,0,.35)',
+              padding: '10px 12px',
+              background: '#0b0e1d',
+              border: '1px solid #ffb700',
+              borderRadius: 18,
+            }}
+          >
             {campeao.foto ? (
-              <img src={campeao.foto} alt="" className="w-12 h-12 rounded-full object-cover" />
+              <img src={campeao.foto} alt="" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
             ) : (
-              <div className="w-12 h-12 rounded-full bg-slate-700" />
+              <div style={{ width: 38, height: 38, borderRadius: '50%', background: '#212948', flexShrink: 0 }} />
             )}
-            <div>
-              <div className="text-xs text-amber-400">👑 {modoDia ? 'Campeão do dia' : 'Campeão do mês'}</div>
-              <div className="font-semibold text-sm">{campeao.apelido || campeao.nome}</div>
-              <div className="text-xs text-slate-400">
+            <div style={{ minWidth: 0, overflow: 'hidden' }}>
+              <div style={{ fontSize: 9, color: '#ffb700', textTransform: 'uppercase', letterSpacing: '.04em', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                👑 {campeaoLabel}
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{campeao.apelido || campeao.nome}</div>
+              <div style={{ fontSize: 10.5, color: '#8b90bf', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {fmtMoney(campeao.valor)} · {campeao.itens} it.
               </div>
             </div>
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
-          <StatCard label={metaLabel + (atingiuMeta ? ' ✓' : '')} value={fmtMoney(metaExibida)} color="cyan" />
-          <StatCard label={faltaLabel} value={fmtMoney(faltaValor)} color="purple" />
-          <StatCard label="Saldo" value={`${saldo >= 0 ? '' : '-'}${fmtMoney(Math.abs(saldo))}`} color={saldo >= 0 ? 'gold' : 'pink'} />
-          <StatCard label="Itens Vendidos" value={`${totalItens} un.`} color="green" />
+        <div className="grid grid-cols-2 gap-2">
+          <StatCard label={metaLabel} value={fmtMoney(metaExibida)} color="#00f0ff" badge={atingiuMeta ? 'MG ✓' : undefined} />
+          <StatCard label={faltaLabel} value={fmtMoney(faltaValor)} color="#a82bff" />
+          <StatCard label="Saldo" value={`${saldo >= 0 ? '' : '-'}${fmtMoney(Math.abs(saldo))}`} color={saldo >= 0 ? '#ffb700' : '#ff3df0'} />
+          <StatCard label="Itens Vendidos" value={`${totalItens} un.`} color="#14ff00" />
         </div>
+
+        <SidebarCalendarCard />
       </div>
     </div>
   );
 }
 
-const STAT_COLORS: Record<string, string> = {
-  cyan: 'text-cyan-400',
-  purple: 'text-purple-400',
-  gold: 'text-amber-400',
-  pink: 'text-pink-400',
-  green: 'text-green-400',
-};
-
-function StatCard({ label, value, color }: { label: string; value: string; color: string }) {
-  return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-      <div className="text-[11px] text-slate-400 mb-1">{label}</div>
-      <div className={`text-sm font-mono font-semibold ${STAT_COLORS[color] || ''}`}>{value}</div>
-    </div>
-  );
-}

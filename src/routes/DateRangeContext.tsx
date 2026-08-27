@@ -8,11 +8,29 @@ interface DateRangeState {
   refMonth: number; // 0-indexed
   dashFrom: string;
   dashTo: string;
+  /** Whole-month filter active (legacy `_modoGeral`) — when true, no single
+   * day/range is "selected" in the calendar even though dashFrom/dashTo span
+   * the month. */
+  modoGeral: boolean;
+  /** "Busca período" toggle — when on, day-cell clicks build a from/to range
+   * (first click = anchor, second click = range) instead of picking a single day. */
+  buscaPeriodoOpen: boolean;
   rankFilter: RankFilter;
   setModoGeral: () => void;
   setDay: (iso: string) => void;
   setRange: (from: string, to: string) => void;
   goToMonth: (year: number, month: number) => void;
+  /** Prev/next month arrows (legacy prevMonth/nextMonth): always changes
+   * which month's calendar page is shown; only resets dashFrom/dashTo to the
+   * new month's bounds when modoGeral is already active — otherwise a
+   * custom day/range selection survives browsing to a different month. */
+  navigateMonth: (delta: 1 | -1) => void;
+  /** Month-grid button click (legacy `data-quickmonth`): sets refMonth, then
+   * applies setModoGeral() semantics for that month within the current refYear. */
+  quickMonth: (month: number) => void;
+  /** Day-cell click, respecting `buscaPeriodoOpen` (single day vs range-anchor). */
+  pickDay: (iso: string) => void;
+  toggleBuscaPeriodo: () => void;
   setRankFilter: (f: RankFilter) => void;
 }
 
@@ -24,6 +42,9 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
   const [refMonth, setRefMonth] = useState(today.getMonth());
   const [dashFrom, setDashFrom] = useState(monthFirstISO(refYear, refMonth));
   const [dashTo, setDashTo] = useState(monthLastISO(refYear, refMonth));
+  const [modoGeral, setModoGeralFlag] = useState(true);
+  const [buscaPeriodoOpen, setBuscaPeriodoOpen] = useState(false);
+  const [rangeAnchor, setRangeAnchor] = useState<string | null>(null);
   const [rankFilter, setRankFilterState] = useState<RankFilter>('ALL');
 
   const value = useMemo<DateRangeState>(
@@ -32,18 +53,23 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
       refMonth,
       dashFrom,
       dashTo,
+      modoGeral,
+      buscaPeriodoOpen,
       rankFilter,
       setModoGeral: () => {
         setDashFrom(monthFirstISO(refYear, refMonth));
         setDashTo(monthLastISO(refYear, refMonth));
+        setModoGeralFlag(true);
       },
       setDay: (iso: string) => {
         setDashFrom(iso);
         setDashTo(iso);
+        setModoGeralFlag(false);
       },
       setRange: (from: string, to: string) => {
         setDashFrom(from);
         setDashTo(to);
+        setModoGeralFlag(false);
       },
       goToMonth: (year: number, month: number) => {
         setRefYear(year);
@@ -51,9 +77,55 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
         setDashFrom(monthFirstISO(year, month));
         setDashTo(monthLastISO(year, month));
       },
+      navigateMonth: (delta: 1 | -1) => {
+        let month = refMonth + delta;
+        let year = refYear;
+        if (month < 0) {
+          month = 11;
+          year -= 1;
+        } else if (month > 11) {
+          month = 0;
+          year += 1;
+        }
+        setRefMonth(month);
+        setRefYear(year);
+        if (modoGeral) {
+          setDashFrom(monthFirstISO(year, month));
+          setDashTo(monthLastISO(year, month));
+        }
+      },
+      quickMonth: (month: number) => {
+        setRefMonth(month);
+        setDashFrom(monthFirstISO(refYear, month));
+        setDashTo(monthLastISO(refYear, month));
+        setModoGeralFlag(true);
+      },
+      pickDay: (iso: string) => {
+        if (buscaPeriodoOpen) {
+          if (!rangeAnchor) {
+            setRangeAnchor(iso);
+            setDashFrom(iso);
+            setDashTo(iso);
+          } else {
+            const a = rangeAnchor;
+            const b = iso;
+            setDashFrom(a < b ? a : b);
+            setDashTo(a < b ? b : a);
+            setRangeAnchor(null);
+          }
+        } else {
+          setDashFrom(iso);
+          setDashTo(iso);
+        }
+        setModoGeralFlag(false);
+      },
+      toggleBuscaPeriodo: () => {
+        setBuscaPeriodoOpen((v) => !v);
+        setRangeAnchor(null);
+      },
       setRankFilter: setRankFilterState,
     }),
-    [refYear, refMonth, dashFrom, dashTo, rankFilter],
+    [refYear, refMonth, dashFrom, dashTo, modoGeral, buscaPeriodoOpen, rangeAnchor, rankFilter],
   );
 
   return <DateRangeContext.Provider value={value}>{children}</DateRangeContext.Provider>;

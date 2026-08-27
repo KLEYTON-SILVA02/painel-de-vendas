@@ -1,16 +1,20 @@
 import { useState } from 'react';
+import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
-import { DateRangeControls } from '../../components/DateRangeControls';
+import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import type { CategoryKey } from '../../lib/business/classification';
-import { getGoal, getSuperMeta } from '../../lib/business/goals';
+import { copyText, formatRankingText } from '../../lib/clipboard';
+import { diasRestantesNoMes, getGoal, getSuperMeta } from '../../lib/business/goals';
 import { computeSummary, computeVendorExtract } from '../../lib/business/summary';
 import type { SummaryRow } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
-import { useCollaborators, useGoals, useSales, useSpecialLists, useStoreSettings } from '../../lib/queries';
+import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
+import { useCollaborators, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 
 export type PageCategoryKey = CategoryKey | 'LEVMEL' | 'CHIP';
 
+// Ported 1:1 from legacy/index-original.html (CATEGORIA_META / CATS / catLabel / catCls / .pill.*).
 const CATEGORY_META: Record<PageCategoryKey, { titulo: string; cor: string }> = {
   DERM: { titulo: '🩹 Dermocosméticos', cor: '#ff3df0' },
   GEN: { titulo: '💊 Genérico & Similar', cor: '#14ff00' },
@@ -19,17 +23,18 @@ const CATEGORY_META: Record<PageCategoryKey, { titulo: string; cor: string }> = 
   LEVMEL: { titulo: '🍯 Levmel', cor: '#ffb700' },
   CHIP: { titulo: '🔴 Chip', cor: '#00e5ff' },
 };
-
-function StatCard({ label, value, color }: { label: string; value: string; color: string }) {
-  return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-      <div className="text-[11px] text-slate-400 mb-1">{label}</div>
-      <div className="text-sm font-mono font-semibold" style={{ color }}>
-        {value}
-      </div>
-    </div>
-  );
-}
+const CAT_PLAIN_LABEL: Record<CategoryKey, string> = {
+  DERM: 'Dermocosméticos',
+  GEN: 'Genérico & Similar',
+  MP: 'Marcas Exclusivas',
+  MER: 'Mercadoria Geral',
+};
+const CAT_PILL: Record<CategoryKey, { bg: string; color: string }> = {
+  DERM: { bg: '#ff3df033', color: '#ff3df0' },
+  GEN: { bg: '#39ff1433', color: '#14ff00' },
+  MP: { bg: '#b026ff33', color: '#a82bff' },
+  MER: { bg: '#ff6a0033', color: '#ff6a00' },
+};
 
 export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   const { data: collaborators } = useCollaborators();
@@ -37,9 +42,13 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   const { data: goals } = useGoals();
   const { data: storeSettings } = useStoreSettings();
   const { data: specialLists } = useSpecialLists();
+  const { data: store } = useStore();
   const { dashFrom, dashTo } = useDateRange();
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [extractMatricula, setExtractMatricula] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
 
   if (!collaborators || !sales || !goals || !storeSettings || !specialLists) {
     return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
@@ -53,8 +62,10 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   const ranking = computeSummary(sales, collaborators, dashFrom, dashTo, catKey, specialLists);
   const totalValor = ranking.reduce((a, r) => a + r.valor, 0);
   const totalItens = ranking.reduce((a, r) => a + r.itens, 0);
+  const dias = diasRestantesNoMes();
 
-  let statCards: { label: string; value: string; color: string }[];
+  // Ported 1:1 from legacy/index-original.html (viewCategoria()'s statCards).
+  let statCards: MfbStatCard[];
   if (!isUnit) {
     const goal = goals[catKey];
     const isUnidadeMetric = goal?.metrica === 'unidade';
@@ -80,10 +91,17 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
       { label: (atingiuMeta ? 'MG OK · ' : 'MG · ') + faltaLabel, value: fmtMetrica(faltaValor), color: faltaValor <= 0 ? '#14ff00' : '#ff6a00' },
       { label: 'Atingim. Meta', value: `${pctMeta.toFixed(0)}%`, color: '#00f0ff' },
       { label: 'Atingim. Super Meta', value: pctSuper !== null ? `${pctSuper.toFixed(0)}%` : '—', color: '#ffd700' },
-      { label: `Meta Geral (${isUnidadeMetric ? 'un.' : 'R$'})`, value: fmtMetrica(metaGeral), color: '#ffd700' },
+      {
+        stack: [
+          { label: `Meta Geral (${isUnidadeMetric ? 'un.' : 'R$'})`, value: fmtMetrica(metaGeral), color: '#ffd700' },
+          { label: `Super Meta (${isUnidadeMetric ? 'un.' : 'R$'})`, value: fmtMetrica(metaSuper), color: '#ff3df0' },
+          { label: 'Dias restantes', value: `${dias} dia(s)`, color: '#14ff00' },
+        ],
+      },
     ];
   } else {
     statCards = [
+      { label: 'Dias restantes', value: `${dias} dia(s)`, color: '#14ff00' },
       { label: 'Itens vendidos', value: `${totalItens} un.`, color: '#00f0ff' },
       { label: 'Vendedores ativos', value: String(ranking.filter((r) => r.itens > 0).length), color: '#a82bff' },
     ];
@@ -91,6 +109,25 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
 
   const rankingList = ranking.filter((r) => (isUnit ? r.itens > 0 : r.valor > 0));
   const modeloRanking = storeSettings.modelo_ranking as 'escadinha' | 'lista';
+
+  async function handleCopy() {
+    const text = formatRankingText(rankingList, info.titulo, dashFrom, dashTo, store?.nome_loja);
+    const ok = await copyText(text);
+    setCopied(ok);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  async function handleGenerateImage() {
+    setGenerating(true);
+    try {
+      const blob = await generateRankingImageBlob(rankingList, info.titulo, dashFrom, dashTo, store?.nome_loja);
+      if (!blob) return;
+      const copiedToClipboard = await tryCopyImage(blob);
+      setImageModal({ url: URL.createObjectURL(blob), copied: copiedToClipboard });
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   const categorySales = !isUnit
     ? sales
@@ -105,20 +142,12 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
     : [];
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="text-lg font-semibold" style={{ color: info.cor }}>
-            {info.titulo}
-          </h3>
-          <DateRangeControls />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {statCards.map((s) => (
-          <StatCard key={s.label} {...s} />
-        ))}
+        <h3 className="text-lg font-semibold mb-3" style={{ color: info.cor }}>
+          {info.titulo}
+        </h3>
+        <MetricsFilterBar statCards={statCards} />
       </div>
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
@@ -128,12 +157,25 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
           formatValue={(v) => (isUnit ? `${v} un.` : fmtMoney(v))}
           variant={modeloRanking}
         />
-        <button
-          onClick={() => setGalleryOpen(true)}
-          className="mt-4 rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800"
-        >
-          👥 Detalhamento por vendedor
-        </button>
+        <div className="flex flex-wrap gap-2 mt-4">
+          <button onClick={handleCopy} className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800">
+            {copied ? '✓ Copiado!' : '📋 Copiar ranking p/ WhatsApp'}
+          </button>
+          <button
+            onClick={handleGenerateImage}
+            disabled={generating}
+            className="rounded-lg border px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
+            style={{ borderColor: '#ffb700', color: '#ffb700' }}
+          >
+            {generating ? 'Gerando...' : '🖼️ Gerar imagem do ranking'}
+          </button>
+          <button
+            onClick={() => setGalleryOpen(true)}
+            className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800"
+          >
+            👥 Detalhamento por vendedor
+          </button>
+        </div>
       </div>
 
       {!isUnit && (
@@ -151,6 +193,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
                     <th className="py-1.5 pr-3">Vendedor</th>
                     <th className="py-1.5 pr-3">Produto</th>
                     <th className="py-1.5 pr-3">Qtd</th>
+                    <th className="py-1.5 pr-3">Tipo</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -161,6 +204,14 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
                       <td className="py-1.5 pr-3">{s.vendedor}</td>
                       <td className="py-1.5 pr-3">{s.produto}</td>
                       <td className="py-1.5 pr-3 font-mono">{s.qtd}</td>
+                      <td className="py-1.5 pr-3">
+                        <span
+                          className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide"
+                          style={{ background: CAT_PILL[catKey as CategoryKey].bg, color: CAT_PILL[catKey as CategoryKey].color }}
+                        >
+                          {CAT_PLAIN_LABEL[catKey as CategoryKey]}
+                        </span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -169,6 +220,8 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
           )}
         </div>
       )}
+
+      {imageModal && <RankingImageModal url={imageModal.url} copied={imageModal.copied} onClose={() => setImageModal(null)} />}
 
       {galleryOpen && (
         <VendorGalleryModal

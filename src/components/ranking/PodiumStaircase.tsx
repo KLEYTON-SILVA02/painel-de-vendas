@@ -1,4 +1,4 @@
-import { medalClass, podiumHeightPx } from '../../lib/business/ranking';
+import { podiumHeightPx } from '../../lib/business/ranking';
 
 export interface StaircaseRow {
   matricula: string;
@@ -7,27 +7,31 @@ export interface StaircaseRow {
   foto: string | null;
 }
 
-const MEDAL_STYLES: Record<string, string> = {
-  gold: 'border-amber-400 shadow-amber-400/30',
-  silver: 'border-slate-300 shadow-slate-300/20',
-  bronze: 'border-amber-700 shadow-amber-700/20',
+// Ported 1:1 from legacy/index-original.html (renderStaircase()). Three
+// distinct visual variants, matched exactly by CSS pixel/color values:
+//  - 'lista'                       → .rank-list / .rank-list-item
+//  - 'escadinha' + getSub          → .podium-wrap / .pc-card (BIOSINTÉTICA, Dinâmicas)
+//  - 'escadinha' without getSub    → .rank-grid / .rc-card, the 4-layer capsule (§11.2)
+
+const POS_COLORS: Record<'pos1' | 'pos2' | 'pos3' | 'posx', { fundo: string; capaFrom: string; capaTo: string }> = {
+  pos1: { fundo: '#a16207', capaFrom: '#ffd700', capaTo: '#d49b00' },
+  pos2: { fundo: '#475569', capaFrom: '#e2e8f0', capaTo: '#94a3b8' },
+  pos3: { fundo: '#7c2d12', capaFrom: '#f97316', capaTo: '#c2410c' },
+  posx: { fundo: '#0f172a', capaFrom: '#3b5bdb', capaTo: '#1e3a8a' },
 };
 
-const MEDAL_BADGE: Record<string, string> = {
-  gold: 'bg-amber-400 text-slate-950',
-  silver: 'bg-slate-300 text-slate-950',
-  bronze: 'bg-amber-700 text-slate-950',
+const PC_GRADIENTS: Record<'p1' | 'p2' | 'p3' | 'px', string> = {
+  p1: 'linear-gradient(180deg,#ffe066,#c9960b)',
+  p2: 'linear-gradient(180deg,#f0f2f6,#8f97a6)',
+  p3: 'linear-gradient(180deg,#ff9d4d,#c25a00)',
+  px: 'linear-gradient(180deg,#3f6bd6,#12224f)',
 };
 
-function Avatar({ foto, size = 56 }: { foto: string | null; size?: number }) {
-  return foto ? (
-    <img src={foto} alt="" className="rounded-full object-cover border-2 border-slate-900" style={{ width: size, height: size }} />
-  ) : (
-    <div
-      className="rounded-full bg-slate-700 border-2 border-slate-900"
-      style={{ width: size, height: size }}
-    />
-  );
+function posClass(i: number): 'pos1' | 'pos2' | 'pos3' | 'posx' {
+  return i === 0 ? 'pos1' : i === 1 ? 'pos2' : i === 2 ? 'pos3' : 'posx';
+}
+function pClass(i: number): 'p1' | 'p2' | 'p3' | 'px' {
+  return i === 0 ? 'p1' : i === 1 ? 'p2' : i === 2 ? 'p3' : 'px';
 }
 
 export function PodiumStaircase<T extends StaircaseRow>({
@@ -41,7 +45,8 @@ export function PodiumStaircase<T extends StaircaseRow>({
   getValue: (r: T) => number;
   formatValue: (v: number) => string;
   variant: 'escadinha' | 'lista';
-  /** Optional secondary label shown under the name (e.g. BIOSINTÉTICA's unit count). */
+  /** Optional secondary label shown under the name (e.g. BIOSINTÉTICA's unit count).
+   * Its presence switches the escadinha variant to the simpler .pc-card design. */
   getSub?: (r: T) => string;
 }) {
   if (!ranking.length) {
@@ -50,48 +55,276 @@ export function PodiumStaircase<T extends StaircaseRow>({
 
   if (variant === 'lista') {
     return (
-      <div className="flex flex-col gap-2">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {ranking.map((r, i) => (
-          <div key={r.matricula} className="flex items-center gap-3 rounded-lg bg-slate-900/60 border border-slate-800 px-3 py-2">
-            <div className="w-6 text-center text-sm text-slate-400 font-medium">{i + 1}</div>
-            <Avatar foto={r.foto} size={36} />
-            <div className="flex-1">
-              <div className="text-sm font-medium">{r.apelido || r.nome}</div>
-              {getSub && <div className="text-xs text-slate-500">{getSub(r)}</div>}
+          <div
+            key={r.matricula}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              background: '#0b0e1d',
+              border: '1px solid #212948',
+              borderRadius: 14,
+              padding: '8px 12px',
+            }}
+          >
+            <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: 13, color: '#ffb700', width: 22, flexShrink: 0, textAlign: 'center' }}>{i + 1}</div>
+            <Avatar foto={r.foto} size={32} border="2px solid #00f0ff" />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.apelido || r.nome}</div>
+              {getSub && <div style={{ fontSize: 10.5, color: '#8b90bf' }}>{getSub(r)}</div>}
             </div>
-            <div className="text-sm font-mono text-slate-200">{formatValue(getValue(r))}</div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, color: '#ffb700', flexShrink: 0 }}>{formatValue(getValue(r))}</div>
           </div>
         ))}
       </div>
     );
   }
 
-  return (
-    <div className="flex items-end gap-3 overflow-x-auto pb-2 pt-8" style={{ minHeight: 316 }}>
-      {ranking.map((r, i) => {
-        const medal = medalClass(i);
-        const height = podiumHeightPx(i);
-        return (
-          <div key={r.matricula} className="flex flex-col items-center shrink-0" style={{ width: 96 }}>
-            <div className="text-xs font-mono text-slate-300 mb-7 text-center">{formatValue(getValue(r))}</div>
-            <div
-              className={`relative w-full rounded-2xl border-2 flex flex-col items-center justify-end pb-2 bg-gradient-to-b from-slate-800 to-slate-900 shadow-lg ${medal ? MEDAL_STYLES[medal] : 'border-slate-700'}`}
-              style={{ height }}
-            >
-              <div className="absolute -top-6">
-                <Avatar foto={r.foto} size={48} />
+  const isBioVariant = !!getSub;
+
+  if (isBioVariant) {
+    return (
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', width: '100%', flexWrap: 'wrap' }}>
+        {ranking.map((r, i) => {
+          const pc = pClass(i);
+          return (
+            <div key={r.matricula} style={{ flex: '1 1 0', minWidth: 64, maxWidth: 150, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 800,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  color: '#fff',
+                  marginBottom: 6,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  maxWidth: '100%',
+                }}
+              >
+                {formatValue(getValue(r))}
               </div>
               <div
-                className={`absolute -top-2 -right-1 w-6 h-6 rounded-full text-[11px] font-bold flex items-center justify-center ${medal ? MEDAL_BADGE[medal] : 'bg-slate-700 text-slate-200'}`}
+                style={{
+                  width: '100%',
+                  height: 150,
+                  borderRadius: '44px 44px 12px 12px',
+                  position: 'relative',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  paddingTop: 34,
+                  boxShadow: '0 4px 14px rgba(0,0,0,.35)',
+                  background: PC_GRADIENTS[pc],
+                }}
+              >
+                <div
+                  style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: '50%',
+                    background: '#fff',
+                    border: '2px solid rgba(255,255,255,.6)',
+                    overflow: 'hidden',
+                    position: 'absolute',
+                    top: 12,
+                    flexShrink: 0,
+                  }}
+                >
+                  {r.foto && <img src={r.foto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                </div>
+                <div
+                  style={{
+                    width: 34,
+                    height: 34,
+                    background: '#5b1a8c',
+                    border: '2px solid rgba(255,255,255,.5)',
+                    clipPath: 'polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 800,
+                    fontSize: 13,
+                    color: '#fff',
+                    position: 'absolute',
+                    top: 66,
+                  }}
+                >
+                  {i + 1}
+                </div>
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 104,
+                    fontSize: 10.5,
+                    fontWeight: 800,
+                    color: '#fff',
+                    textTransform: 'uppercase',
+                    textAlign: 'center',
+                    width: '90%',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {r.apelido || r.nome}
+                </div>
+                <div style={{ position: 'absolute', bottom: 8, fontSize: 9.5, color: 'rgba(255,255,255,.9)', fontWeight: 700 }}>{getSub(r)}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: `repeat(${ranking.length},1fr)`,
+        gap: 10,
+        alignItems: 'flex-end',
+        width: '100%',
+        minHeight: 230,
+        overflowX: 'auto',
+        overflowY: 'visible',
+      }}
+    >
+      {ranking.map((r, i) => {
+        const pos = posClass(i);
+        const colors = POS_COLORS[pos];
+        const height = podiumHeightPx(i);
+        return (
+          <div key={r.matricula} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 64 }}>
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: '#fff',
+                textAlign: 'center',
+                marginBottom: 6,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: '100%',
+              }}
+            >
+              {formatValue(getValue(r))}
+            </div>
+            <div style={{ position: 'relative', width: '100%', boxSizing: 'border-box', height }}>
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  zIndex: 1,
+                  background: colors.fundo,
+                  borderTopLeftRadius: 9999,
+                  borderTopRightRadius: 9999,
+                  borderBottomLeftRadius: 6,
+                  borderBottomRightRadius: 6,
+                }}
+              />
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: 74,
+                  zIndex: 2,
+                  background: `linear-gradient(180deg,${colors.capaFrom} 0%,${colors.capaTo} 100%)`,
+                  borderTopLeftRadius: 9999,
+                  borderTopRightRadius: 9999,
+                }}
+              />
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 81,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  zIndex: 2,
+                  background: `linear-gradient(180deg,${colors.capaFrom} 0%,${colors.capaTo} 100%)`,
+                  borderBottomLeftRadius: 6,
+                  borderBottomRightRadius: 6,
+                }}
+              />
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 10,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  zIndex: 3,
+                  width: 52,
+                  height: 52,
+                  borderRadius: '50%',
+                  background: '#ffffff',
+                  border: '3px solid #581c87',
+                  overflow: 'hidden',
+                }}
+              >
+                {r.foto && <img src={r.foto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+              </div>
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 59,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  zIndex: 4,
+                  width: 30,
+                  height: 34,
+                  clipPath: 'polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%)',
+                  background: '#581c87',
+                  outline: '2px solid #eab308',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  fontWeight: 800,
+                  fontSize: 12,
+                }}
               >
                 {i + 1}
               </div>
-              <div className="text-xs font-medium text-center px-1 truncate w-full mt-6">{r.apelido || r.nome}</div>
-              {getSub && <div className="text-[10px] text-slate-400 text-center px-1 truncate w-full">{getSub(r)}</div>}
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: 10,
+                  left: 0,
+                  right: 0,
+                  zIndex: 4,
+                  textAlign: 'center',
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  color: '#ffffff',
+                  textTransform: 'uppercase',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  padding: '0 4px',
+                  boxSizing: 'border-box',
+                }}
+              >
+                {r.apelido || r.nome}
+              </div>
             </div>
           </div>
         );
       })}
     </div>
+  );
+}
+
+function Avatar({ foto, size, border }: { foto: string | null; size: number; border: string }) {
+  return foto ? (
+    <img src={foto} alt="" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', border, flexShrink: 0 }} />
+  ) : (
+    <div style={{ width: size, height: size, borderRadius: '50%', background: '#0b0e1d', border, flexShrink: 0 }} />
   );
 }
