@@ -1,15 +1,18 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../auth/AuthContext';
 import { classifyProductTier } from '../../lib/business/classification';
 import { autoMapColumns, detectHeaderRow, type ColumnMap, type ImportField } from '../../lib/business/importMapping';
 import { parseDateISO, parseNumeroBR } from '../../lib/business/parsing';
 import { buildClassificationInputs } from '../../lib/mappers';
+import { fmtMoney } from '../../lib/format';
 import { useBrandKeywords, useCatalog, useExclusiveBrands, useProducts, useSales } from '../../lib/queries';
 import { supabase } from '../../lib/supabase';
 
 const MAX_SIZE = 50 * 1024 * 1024;
 const FIELDS: ImportField[] = ['data', 'matricula', 'vendedor', 'codigo', 'produto', 'qtd', 'valor'];
+const NEON_CYAN = '#00f0ff';
+const NEON_PURPLE = '#a82bff';
 
 interface ParsedSheet {
   name: string;
@@ -28,8 +31,10 @@ export function ImportarPage() {
   const { data: exclusiveBrands } = useExclusiveBrands();
   const { refetch: refetchSales } = useSales();
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>('pick');
   const [sheets, setSheets] = useState<ParsedSheet[]>([]);
+  const [readPct, setReadPct] = useState<number | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmResult, setConfirmResult] = useState<{ count: number; invalidDate: number; noProduto: number } | null>(null);
@@ -45,28 +50,42 @@ export function ImportarPage() {
       setError('Arquivo maior que 50MB. Escolha um arquivo menor.');
       return;
     }
-    setProgress('Lendo arquivo…');
+    setReadPct(0);
+    setProgress('Lendo arquivo… 0%');
     const reader = new FileReader();
+    reader.onprogress = (ev) => {
+      if (!ev.lengthComputable) return;
+      const pct = Math.round((ev.loaded / ev.total) * 100);
+      setReadPct(pct);
+      setProgress(`Lendo arquivo… ${pct}%`);
+    };
     reader.onload = (ev) => {
+      setReadPct(100);
       setProgress('Processando planilha…');
-      const data = new Uint8Array(ev.target!.result as ArrayBuffer);
-      const wb = XLSX.read(data, { type: 'array', cellDates: true });
-      const parsed: ParsedSheet[] = wb.SheetNames.map((name) => {
-        const sheet = wb.Sheets[name];
-        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' }) as unknown[][];
-        if (!rows.length) return null;
-        const headerIdx = detectHeaderRow(rows);
-        const headers = rows[headerIdx];
-        const dataRows = rows.slice(headerIdx + 1).filter((r) => r.some((c) => c !== ''));
-        return { name, headers, rows: dataRows, map: autoMapColumns(headers) };
-      }).filter((s): s is ParsedSheet => s !== null);
-      setSheets(parsed);
-      setProgress(null);
-      setStep('map');
+      // Mirrors the legacy's own brief pause here — lets the 100% fill paint
+      // before the (synchronous, can be heavy on large files) parse blocks the thread.
+      setTimeout(() => {
+        const data = new Uint8Array(ev.target!.result as ArrayBuffer);
+        const wb = XLSX.read(data, { type: 'array', cellDates: true });
+        const parsed: ParsedSheet[] = wb.SheetNames.map((name) => {
+          const sheet = wb.Sheets[name];
+          const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' }) as unknown[][];
+          if (!rows.length) return null;
+          const headerIdx = detectHeaderRow(rows);
+          const headers = rows[headerIdx];
+          const dataRows = rows.slice(headerIdx + 1).filter((r) => r.some((c) => c !== ''));
+          return { name, headers, rows: dataRows, map: autoMapColumns(headers) };
+        }).filter((s): s is ParsedSheet => s !== null);
+        setSheets(parsed);
+        setProgress(null);
+        setReadPct(null);
+        setStep('map');
+      }, 200);
     };
     reader.onerror = () => {
       setError('Falha ao ler o arquivo.');
       setProgress(null);
+      setReadPct(null);
     };
     reader.readAsArrayBuffer(file);
   }
@@ -143,6 +162,9 @@ export function ImportarPage() {
     setSheets([]);
     setConfirmResult(null);
     setError(null);
+    setReadPct(null);
+    setProgress(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
   return (
@@ -151,16 +173,68 @@ export function ImportarPage() {
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <h3 className="font-semibold mb-1 text-sm">Importar planilha de vendas</h3>
           <p className="text-xs text-slate-500 mb-3">
-            Formatos aceitos: .xlsx, .xls, .xlsm, .csv, .ods — até 50MB. As colunas são mapeadas automaticamente;
-            confira antes de confirmar.
+            Formatos aceitos: .xlsx, .xls, .xlsm, .csv, .ods — até 50MB. O sistema varre as 15 primeiras linhas de
+            cada aba procurando o cabeçalho (data, matrícula, vendedor, produto, qtd, valor) e mapeia as colunas
+            automaticamente — se não encontrar, usa o layout padrão. Você pode revisar e ajustar antes de confirmar.
+            Todas as abas do arquivo são processadas.
           </p>
+
           <input
+            ref={fileInputRef}
             type="file"
             accept=".xlsx,.xls,.xlsm,.csv,.ods"
             onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-            className="text-xs text-slate-400"
+            style={{ display: 'none' }}
           />
-          {progress && <p className="text-xs text-cyan-400 mt-2">{progress}</p>}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 10,
+              width: '100%',
+              maxWidth: 420,
+              padding: '14px 20px',
+              borderRadius: 14,
+              border: 'none',
+              cursor: 'pointer',
+              background: `linear-gradient(90deg, ${NEON_CYAN}, ${NEON_PURPLE})`,
+              color: '#fff',
+              fontWeight: 800,
+              fontSize: 14,
+              textTransform: 'uppercase',
+              letterSpacing: '.03em',
+              boxShadow: '0 0 18px rgba(0,240,255,.35)',
+            }}
+          >
+            <UploadGlyph />
+            <span>Importar Planilha de Vendas</span>
+          </button>
+
+          {readPct !== null && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ width: '100%', height: 14, borderRadius: 8, background: '#080818', border: '1px solid #212948', overflow: 'hidden' }}>
+                <div
+                  style={{
+                    height: '100%',
+                    borderRadius: 8,
+                    width: `${readPct}%`,
+                    transition: 'width .15s ease',
+                    background:
+                      readPct >= 66
+                        ? 'linear-gradient(90deg,#00e5ff,#14ff00)'
+                        : readPct >= 33
+                          ? 'linear-gradient(90deg,#a82bff,#00e5ff)'
+                          : 'linear-gradient(90deg,#ff3df0,#a82bff)',
+                  }}
+                />
+              </div>
+              {progress && <p className="text-xs text-slate-500 mt-1">{progress}</p>}
+            </div>
+          )}
+          {readPct === null && progress && <p className="text-xs text-cyan-400 mt-2">{progress}</p>}
           {error && <p className="text-xs text-rose-400 mt-2">{error}</p>}
         </div>
       )}
@@ -236,6 +310,84 @@ export function ImportarPage() {
   );
 }
 
+function UploadGlyph() {
+  return (
+    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
+    </svg>
+  );
+}
+
+interface SheetSummary {
+  total: number;
+  baixaConfianca: number;
+  produtosNovos: number;
+  itensTotais: number;
+  valorTotal: number;
+  diasDistintos: number;
+  vendedores: { chave: string; nome: string }[];
+  amostras: { produto: string; categoria: string; tier: number }[];
+}
+
+function summarize(sheets: ParsedSheet[], inputs: ReturnType<typeof buildClassificationInputs>): SheetSummary {
+  let total = 0;
+  let baixaConfianca = 0;
+  let itensTotais = 0;
+  let valorTotal = 0;
+  const produtosNovosSet = new Set<string>();
+  const diasSet = new Set<string>();
+  const vendedoresMap = new Map<string, string>();
+  const amostras: { produto: string; categoria: string; tier: number }[] = [];
+
+  sheets.forEach((sheet) => {
+    const map = sheet.map;
+    sheet.rows.forEach((r) => {
+      const produto = map.produto >= 0 ? String(r[map.produto] ?? '').trim() : '';
+      if (!produto) return;
+      total++;
+      const codigo = map.codigo >= 0 ? String(r[map.codigo] ?? '').trim() : '';
+      const { categoria, tier } = classifyProductTier(produto, codigo, inputs);
+      if (tier >= 4) {
+        baixaConfianca++;
+        if (amostras.length < 25) amostras.push({ produto, categoria: categoria!, tier });
+      }
+      // "Produto novo" = nenhuma regra específica bateu (nem catálogo, palavra-chave
+      // ou heurística) — o mesmo critério que a aba "Pendentes de Revisão" da
+      // Auditoria usa (useFallback=false). Continua sendo importado com a
+      // classificação padrão; só fica sinalizado pra revisão futura.
+      const semRegra = classifyProductTier(produto, codigo, inputs, false).categoria === null;
+      if (semRegra) produtosNovosSet.add(produto.toLowerCase());
+
+      const qtd = map.qtd >= 0 ? parseNumeroBR(r[map.qtd]) : 0;
+      const valor = map.valor >= 0 ? parseNumeroBR(r[map.valor]) : 0;
+      itensTotais += qtd;
+      valorTotal += valor;
+
+      const dataStr = map.data >= 0 ? String(r[map.data] ?? '').trim() : '';
+      const dataISO = parseDateISO(dataStr);
+      if (dataISO) diasSet.add(dataISO);
+
+      const matricula = map.matricula >= 0 ? String(r[map.matricula] ?? '').trim() : '';
+      const vendedor = map.vendedor >= 0 ? String(r[map.vendedor] ?? '').trim() : '';
+      const chave = matricula || vendedor;
+      if (chave && !vendedoresMap.has(chave)) vendedoresMap.set(chave, vendedor || matricula);
+    });
+  });
+
+  return {
+    total,
+    baixaConfianca,
+    produtosNovos: produtosNovosSet.size,
+    itensTotais,
+    valorTotal,
+    diasDistintos: diasSet.size,
+    vendedores: Array.from(vendedoresMap.entries()).map(([chave, nome]) => ({ chave, nome })),
+    amostras,
+  };
+}
+
 function VerifyStep({
   sheets,
   inputs,
@@ -249,42 +401,74 @@ function VerifyStep({
   onConfirm: () => void;
   error: string | null;
 }) {
-  let total = 0;
-  let baixaConfianca = 0;
-  const amostras: { produto: string; categoria: string; tier: number }[] = [];
-
-  sheets.forEach((sheet) => {
-    sheet.rows.forEach((r) => {
-      const produto = sheet.map.produto >= 0 ? String(r[sheet.map.produto] ?? '').trim() : '';
-      if (!produto) return;
-      total++;
-      const codigo = sheet.map.codigo >= 0 ? String(r[sheet.map.codigo] ?? '').trim() : '';
-      const { categoria, tier } = classifyProductTier(produto, codigo, inputs);
-      if (tier >= 4) {
-        baixaConfianca++;
-        if (amostras.length < 25) amostras.push({ produto, categoria: categoria!, tier });
-      }
-    });
-  });
+  const s = summarize(sheets, inputs);
+  const [showVendedores, setShowVendedores] = useState(false);
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
       <h3 className="font-semibold mb-1 text-sm">🔍 2ª releitura — verificação de classificação</h3>
       <p className="text-xs text-slate-500 mb-3">
-        Antes de gravar, o sistema reclassificou todos os {total} produtos e conferiu o nível de confiança de cada
+        Antes de gravar, o sistema reclassificou todos os {s.total} produtos e conferiu o nível de confiança de cada
         um, pra reduzir o risco de categoria errada.
       </p>
+
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
           <div className="text-xs text-slate-400">Classificação de alta confiança</div>
-          <div className="text-lg font-mono font-semibold text-green-400">{total - baixaConfianca}</div>
+          <div className="text-lg font-mono font-semibold text-green-400">{s.total - s.baixaConfianca}</div>
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
           <div className="text-xs text-slate-400">Baixa confiança (heurística/padrão)</div>
-          <div className="text-lg font-mono font-semibold text-amber-400">{baixaConfianca}</div>
+          <div className="text-lg font-mono font-semibold text-amber-400">{s.baixaConfianca}</div>
         </div>
       </div>
-      {amostras.length > 0 && (
+
+      <p className="text-xs text-slate-500 mb-2">Detalhamento da planilha:</p>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
+        <button onClick={() => setShowVendedores((v) => !v)} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-left hover:border-cyan-500">
+          <div className="text-xs text-slate-400">Vendedores encontrados</div>
+          <div className="text-lg font-mono font-semibold text-cyan-400">{s.vendedores.length}</div>
+          <div className="text-[10px] text-slate-500">{showVendedores ? 'ocultar nomes ▲' : 'ver nomes ▼'}</div>
+        </button>
+        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+          <div className="text-xs text-slate-400">Itens totais</div>
+          <div className="text-lg font-mono font-semibold">{s.itensTotais}</div>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+          <div className="text-xs text-slate-400">Valor total</div>
+          <div className="text-lg font-mono font-semibold">{fmtMoney(s.valorTotal)}</div>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+          <div className="text-xs text-slate-400">Dias na planilha</div>
+          <div className="text-lg font-mono font-semibold">{s.diasDistintos}</div>
+        </div>
+        <div className="rounded-xl border border-amber-700/60 bg-slate-950/60 p-3">
+          <div className="text-xs text-slate-400">Produtos novos</div>
+          <div className="text-lg font-mono font-semibold text-amber-400">{s.produtosNovos}</div>
+        </div>
+      </div>
+
+      {s.produtosNovos > 0 && (
+        <p className="text-xs text-slate-500 mb-3">
+          {s.produtosNovos} produto(s) sem regra de classificação cadastrada serão importados normalmente (com a
+          categoria padrão) e ficarão sinalizados em <b>ADM → Auditoria → Pendentes de Revisão</b> pra classificação
+          futura.
+        </p>
+      )}
+
+      {showVendedores && (
+        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 mb-3 max-h-48 overflow-y-auto">
+          <div className="flex flex-wrap gap-1.5">
+            {s.vendedores.map((v) => (
+              <span key={v.chave} className="text-xs bg-slate-800 rounded-full px-2.5 py-1">
+                {v.nome || v.chave}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {s.amostras.length > 0 && (
         <>
           <p className="text-xs text-slate-500 mb-2">Amostra de produtos com baixa confiança (revise depois em Auditoria se necessário):</p>
           <div className="overflow-x-auto mb-3">
@@ -296,7 +480,7 @@ function VerifyStep({
                 </tr>
               </thead>
               <tbody>
-                {amostras.map((a, i) => (
+                {s.amostras.map((a, i) => (
                   <tr key={i} className="border-b border-slate-900">
                     <td className="py-1.5 pr-3">{a.produto}</td>
                     <td className="py-1.5 pr-3">
@@ -309,13 +493,23 @@ function VerifyStep({
           </div>
         </>
       )}
+
       {error && <p className="text-xs text-rose-400 mb-3">{error}</p>}
       <div className="flex gap-2">
         <button onClick={onBack} className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300">
           ← Voltar ao mapeamento
         </button>
-        <button onClick={onConfirm} className="rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm">
-          ✓ Confirmar e gravar {total} vendas
+        <button
+          onClick={onConfirm}
+          style={{
+            background: `linear-gradient(90deg, ${NEON_CYAN}, ${NEON_PURPLE})`,
+            color: '#04121a',
+            textTransform: 'uppercase',
+            letterSpacing: '.03em',
+          }}
+          className="rounded-lg font-bold px-4 py-2 text-sm"
+        >
+          💾 Salvar Dados de Venda ({s.total})
         </button>
       </div>
     </div>
