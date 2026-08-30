@@ -120,6 +120,7 @@ export type Database = {
         Row: {
           apelido: string | null
           created_at: string
+          foto_conquista_url: string | null
           foto_url: string | null
           id: string
           matricula: string
@@ -131,6 +132,7 @@ export type Database = {
         Insert: {
           apelido?: string | null
           created_at?: string
+          foto_conquista_url?: string | null
           foto_url?: string | null
           id?: string
           matricula: string
@@ -142,6 +144,7 @@ export type Database = {
         Update: {
           apelido?: string | null
           created_at?: string
+          foto_conquista_url?: string | null
           foto_url?: string | null
           id?: string
           matricula?: string

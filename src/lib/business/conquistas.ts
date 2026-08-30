@@ -33,6 +33,7 @@ export function computeConquistas(
   catKey: ConquistaCategoria,
   superMetas: SuperMetasPorMatricula,
 ): ConquistaRow[] {
+  const collaboratorsByMatricula = new Map(collaborators.map((c) => [c.matricula, c]));
   const rows = computeSummary(sales, collaborators, fromDate, toDate, catKey);
   return rows
     .map((r) => {
@@ -42,7 +43,11 @@ export function computeConquistas(
       });
       const superMeta = Number(superMetas[r.matricula]) || 0;
       const bateuSuper = superMeta > 0 && r.valor >= superMeta;
-      return { ...r, tier, bateuSuper, superMeta };
+      // Cards in the Galeria de Conquistas use the collaborator's dedicated
+      // conquista photo (cropped for this card format) when set, instead of
+      // their regular avatar used everywhere else (podiums, extracts, etc).
+      const foto = collaboratorsByMatricula.get(r.matricula)?.fotoConquista || r.foto;
+      return { ...r, foto, tier, bateuSuper, superMeta };
     })
     .filter((r) => r.tier > 0 || r.bateuSuper)
     .sort((a, b) => b.valor - a.valor)

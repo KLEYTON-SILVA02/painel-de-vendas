@@ -11,6 +11,7 @@ export function mapCollaborator(row: Tables<'collaborators'>): Collaborator {
     nome: row.nome,
     apelido: row.apelido,
     foto: row.foto_url,
+    fotoConquista: row.foto_conquista_url,
     setor: row.setor,
     metaIndividual: Number(row.meta_individual) || 0,
   };

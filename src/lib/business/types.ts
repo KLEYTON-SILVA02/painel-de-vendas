@@ -18,6 +18,11 @@ export interface Collaborator {
   nome: string;
   apelido: string | null;
   foto: string | null;
+  /** Separate photo cropped specifically for Galeria de Conquistas cards —
+   * falls back to `foto` when unset (see conquistaImage.ts). Optional so
+   * the many business-logic tests that build plain Collaborator literals
+   * don't all need updating for a field they don't exercise. */
+  fotoConquista?: string | null;
   setor: string | null;
   metaIndividual: number;
 }

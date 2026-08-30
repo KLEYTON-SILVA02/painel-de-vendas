@@ -1,5 +1,6 @@
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { useAuth } from '../../auth/AuthContext';
+import { PhotoCropModal } from '../../components/PhotoCropModal';
 import { grantCollaboratorLogin } from '../../lib/collaborators';
 import { daysSince, lastSaleDateFor } from '../../lib/business/summary';
 import type { Collaborator } from '../../lib/business/types';
@@ -37,12 +38,6 @@ export function ColaboradoresPage() {
     setMatricula('');
     setNome('');
     setApelido('');
-  }
-
-  async function handlePhotoChange(c: Collaborator, file: File) {
-    if (!profile?.store_id) return;
-    const url = await uploadPhoto(profile.store_id, `collaborators/${c.id}`, file);
-    updateCollaborator.mutate({ id: c.id, patch: { foto_url: url } });
   }
 
   function toggleSelected(id: string) {
@@ -110,8 +105,8 @@ export function ColaboradoresPage() {
           )}
         </div>
         <p className="text-xs text-slate-500 mb-3">
-          Colaboradores sem vendas há 60 dias ou mais aparecem como <b>Inativo</b>. Toque no ícone de câmera pra
-          trocar a foto, ou no lápis pra editar os dados.
+          Colaboradores sem vendas há 60 dias ou mais aparecem como <b>Inativo</b>. Toque no card pra editar os
+          dados e as fotos (avatar e foto da Galeria de Conquistas).
         </p>
         {selectMode && (
           <button
@@ -125,7 +120,7 @@ export function ColaboradoresPage() {
         {collaborators.length === 0 ? (
           <div className="text-sm text-slate-500 py-4 text-center">Nenhum colaborador cadastrado.</div>
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             {collaborators.map((c) => {
               const last = lastSaleDateFor(sales, c.matricula);
               const days = daysSince(last);
@@ -133,57 +128,56 @@ export function ColaboradoresPage() {
               const semVenda = last === null;
               const hasLogin = withLogin.has(c.id);
               return (
-                <div key={c.id} className="flex items-center gap-3 rounded-lg bg-slate-950/60 border border-slate-800 p-3">
+                <div
+                  key={c.id}
+                  className="relative rounded-xl bg-slate-950/60 border border-slate-800 p-3 flex flex-col items-center text-center gap-2 cursor-pointer hover:border-cyan-500"
+                  onClick={() => setEditing(c)}
+                >
                   {selectMode && (
-                    <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggleSelected(c.id)} />
-                  )}
-                  <label className="relative cursor-pointer shrink-0">
-                    {c.foto ? (
-                      <img src={c.foto} alt="" className="w-11 h-11 rounded-full object-cover" />
-                    ) : (
-                      <div className="w-11 h-11 rounded-full bg-slate-700" />
-                    )}
-                    <span className="absolute -bottom-0.5 -right-0.5 bg-slate-800 rounded-full w-4 h-4 flex items-center justify-center text-[9px]">
-                      📷
-                    </span>
                     <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => e.target.files?.[0] && handlePhotoChange(c, e.target.files[0])}
+                      type="checkbox"
+                      checked={selected.has(c.id)}
+                      onChange={() => toggleSelected(c.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute top-2 left-2"
                     />
-                  </label>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">
-                      {c.apelido || c.nome} <span className="text-xs text-slate-500 font-mono">#{c.matricula}</span>
-                    </div>
-                    <div className="text-xs text-slate-500 truncate">
-                      {c.nome} · {c.setor || '-'}
-                      {c.metaIndividual ? ` · meta ${fmtMoney(c.metaIndividual)}` : ''}
-                    </div>
+                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteCollaborators.mutate([c.id]);
+                    }}
+                    className="absolute top-2 right-2 text-slate-500 hover:text-rose-400"
+                  >
+                    ✕
+                  </button>
+                  {c.foto ? (
+                    <img src={c.foto} alt="" className="w-16 h-16 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full bg-slate-700" />
+                  )}
+                  <div className="min-w-0 w-full">
+                    <div className="text-sm font-medium truncate">{c.apelido || c.nome}</div>
+                    <div className="text-[11px] text-slate-500 font-mono truncate">#{c.matricula}</div>
+                    <div className="text-[11px] text-slate-500 truncate">{c.setor || '-'}</div>
+                    {c.metaIndividual > 0 && <div className="text-[11px] text-slate-500 truncate">meta {fmtMoney(c.metaIndividual)}</div>}
                   </div>
                   <span
-                    className={`text-[10px] px-2 py-0.5 rounded-full shrink-0 ${inativo ? 'bg-pink-500/20 text-pink-400' : 'bg-green-500/20 text-green-400'}`}
+                    className={`text-[10px] px-2 py-0.5 rounded-full ${inativo ? 'bg-pink-500/20 text-pink-400' : 'bg-green-500/20 text-green-400'}`}
                   >
                     {inativo ? `Inativo${semVenda ? '' : ` · ${days}d`}` : 'Ativo'}
                   </span>
                   {!hasLogin && (
                     <button
-                      onClick={() => setGrantingFor(c)}
-                      className="text-xs rounded-lg border border-slate-700 px-2 py-1 text-slate-300 hover:bg-slate-800 shrink-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setGrantingFor(c);
+                      }}
+                      className="text-[11px] rounded-lg border border-slate-700 px-2 py-1 text-slate-300 hover:bg-slate-800 w-full"
                     >
                       🔑 Criar acesso
                     </button>
                   )}
-                  <button onClick={() => setEditing(c)} className="text-slate-400 hover:text-slate-200 shrink-0">
-                    ✎
-                  </button>
-                  <button
-                    onClick={() => deleteCollaborators.mutate([c.id])}
-                    className="text-slate-500 hover:text-rose-400 shrink-0"
-                  >
-                    ✕
-                  </button>
                 </div>
               );
             })}
@@ -194,6 +188,7 @@ export function ColaboradoresPage() {
       {editing && (
         <EditCollaboratorModal
           collaborator={editing}
+          storeId={profile?.store_id}
           onClose={() => setEditing(null)}
           onSave={(patch) => {
             updateCollaborator.mutate({ id: editing.id, patch });
@@ -209,23 +204,55 @@ export function ColaboradoresPage() {
 
 function EditCollaboratorModal({
   collaborator,
+  storeId,
   onClose,
   onSave,
 }: {
   collaborator: Collaborator;
+  storeId: string | undefined;
   onClose: () => void;
-  onSave: (patch: { nome: string; apelido: string; setor: string; meta_individual: number }) => void;
+  onSave: (patch: { nome: string; apelido: string; setor: string; meta_individual: number; foto_url?: string; foto_conquista_url?: string }) => void;
 }) {
   const [nome, setNome] = useState(collaborator.nome);
   const [apelido, setApelido] = useState(collaborator.apelido || '');
   const [setor, setSetor] = useState(collaborator.setor || SETORES[0]);
   const [meta, setMeta] = useState(collaborator.metaIndividual);
+  const [foto, setFoto] = useState(collaborator.foto);
+  const [fotoConquista, setFotoConquista] = useState(collaborator.fotoConquista ?? null);
+  const [cropTarget, setCropTarget] = useState<'avatar' | 'conquista' | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const pendingFileRef = useRef<File | null>(null);
+
+  function handleFileSelected(target: 'avatar' | 'conquista', file: File | undefined) {
+    if (!file) return;
+    pendingFileRef.current = file;
+    setCropTarget(target);
+  }
+
+  async function handleCropped(blob: Blob) {
+    if (!storeId || !cropTarget) return;
+    setUploading(true);
+    try {
+      const file = new File([blob], 'foto.jpg', { type: 'image/jpeg' });
+      const path = cropTarget === 'avatar' ? `collaborators/${collaborator.id}` : `collaborators/${collaborator.id}-conquista`;
+      const url = await uploadPhoto(storeId, path, file);
+      if (cropTarget === 'avatar') setFoto(url);
+      else setFotoConquista(url);
+    } finally {
+      setUploading(false);
+      setCropTarget(null);
+    }
+  }
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-5" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-5 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <h3 className="font-semibold mb-4">Editar colaborador</h3>
         <div className="flex flex-col gap-3">
+          <div className="flex gap-4 justify-center">
+            <PhotoField label="Avatar" url={foto} uploading={uploading} onSelect={(f) => handleFileSelected('avatar', f)} />
+            <PhotoField label="Foto p/ Conquistas" url={fotoConquista} uploading={uploading} onSelect={(f) => handleFileSelected('conquista', f)} />
+          </div>
           <div>
             <label className="block text-xs text-slate-400 mb-1">Matrícula</label>
             <input value={collaborator.matricula} disabled className="input opacity-50" />
@@ -258,13 +285,60 @@ function EditCollaboratorModal({
             Cancelar
           </button>
           <button
-            onClick={() => onSave({ nome, apelido, setor, meta_individual: meta })}
+            onClick={() =>
+              onSave({
+                nome,
+                apelido,
+                setor,
+                meta_individual: meta,
+                ...(foto !== collaborator.foto && { foto_url: foto ?? undefined }),
+                ...(fotoConquista !== collaborator.fotoConquista && { foto_conquista_url: fotoConquista ?? undefined }),
+              })
+            }
             className="flex-1 rounded-lg bg-cyan-500 text-slate-950 font-medium px-3 py-2 text-sm"
           >
             Salvar
           </button>
         </div>
       </div>
+
+      {cropTarget && pendingFileRef.current && (
+        <PhotoCropModal
+          file={pendingFileRef.current}
+          title={cropTarget === 'avatar' ? 'Ajustar avatar' : 'Ajustar foto da Galeria de Conquistas'}
+          onCancel={() => setCropTarget(null)}
+          onCropped={handleCropped}
+        />
+      )}
+    </div>
+  );
+}
+
+function PhotoField({
+  label,
+  url,
+  uploading,
+  onSelect,
+}: {
+  label: string;
+  url: string | null;
+  uploading: boolean;
+  onSelect: (file: File | undefined) => void;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-1.5">
+      <label className="relative cursor-pointer">
+        {url ? (
+          <img src={url} alt="" className="w-16 h-16 rounded-full object-cover" />
+        ) : (
+          <div className="w-16 h-16 rounded-full bg-slate-700" />
+        )}
+        <span className="absolute -bottom-0.5 -right-0.5 bg-slate-800 rounded-full w-5 h-5 flex items-center justify-center text-[10px]">
+          {uploading ? '…' : '📷'}
+        </span>
+        <input type="file" accept="image/*" className="hidden" onChange={(e) => onSelect(e.target.files?.[0])} />
+      </label>
+      <span className="text-[10px] text-slate-500 text-center">{label}</span>
     </div>
   );
 }
