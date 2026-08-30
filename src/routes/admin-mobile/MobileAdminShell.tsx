@@ -27,9 +27,9 @@ import { MinhaLojaPage } from '../admin/MinhaLojaPage';
 import { ProdutosPage } from '../admin/ProdutosPage';
 import { CategoryPage } from '../category/CategoryPage';
 import { ConquistasPage } from '../conquistas/ConquistasPage';
-import { DinamicasPage } from '../dinamicas/DinamicasPage';
 import { MetasPage } from '../metas/MetasPage';
 import { MobileBioPage } from './MobileBioPage';
+import { MobileDinamicasPage } from './MobileDinamicasPage';
 import { MobileClosingTimer } from './MobileClosingTimer';
 import { MobileDermoPage } from './MobileDermoPage';
 import { MobileExclusivasPage } from './MobileExclusivasPage';
@@ -107,7 +107,7 @@ export function MobileAdminShell() {
           <Route path="/categoria/LEVMEL" element={<MobileLevmelPage />} />
           <Route path="/categoria/CHIP" element={<MobileChipPage />} />
           <Route path="/metas" element={<MetasPage />} />
-          <Route path="/dinamicas" element={<DinamicasPage />} />
+          <Route path="/dinamicas" element={<MobileDinamicasPage />} />
           <Route path="/bio" element={<MobileBioPage />} />
           <Route path="/conquistas" element={<ConquistasPage />} />
           <Route path="/admin" element={<AdminLandingPage />} />
