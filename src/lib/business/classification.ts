@@ -18,6 +18,34 @@ export type BioGroupKey = (typeof BIO_GROUP_KEYS)[number];
 export const GOAL_UNIT_KEYS = ['LEVMEL', 'CHIP'] as const;
 export type GoalCategoryKey = CategoryKey | (typeof GOAL_UNIT_KEYS)[number];
 
+/** Maps a free-text "Categoria" cell from a bulk product-import spreadsheet
+ * (e.g. "Dermocosmético", "Genérico", "Marca Exclusiva", "MP"...) onto a
+ * CategoryKey. Anything unrecognized falls back to MER ("Mercadoria
+ * Geral") per spec — it still lands in Catálogo, just available for
+ * recategorization instead of being silently dropped. */
+export function normalizeCategoriaImport(raw: string): CategoryKey {
+  const n = normalize(raw);
+  if (!n) return 'MER';
+  if (n.includes('derm')) return 'DERM';
+  if (n.includes('exclusiv') || n === 'mp' || n.includes('marca')) return 'MP';
+  if (n.includes('gen') || n.includes('similar')) return 'GEN';
+  return 'MER';
+}
+
+/** Maps a free-text "Categoria"/"Grupo" cell from the Biosintética
+ * product-import spreadsheet ("G1", "Grupo 1", "1"...) onto a BioGroupKey.
+ * Returns null when it can't be matched — the Biosintética grouping has no
+ * sensible default group to fall back to, unlike the general-products
+ * import's MER fallback. */
+export function normalizeGrupoImport(raw: string): BioGroupKey | null {
+  const n = normalize(raw).replace(/\s/g, '');
+  if (n.includes('g1') || n === '1') return 'G1';
+  if (n.includes('g2') || n === '2') return 'G2';
+  if (n.includes('g3') || n === '3') return 'G3';
+  if (n.includes('g4') || n === '4') return 'G4';
+  return null;
+}
+
 export const EXCLUSIVE_BRANDS_DEFAULT = [
   'dauf', 'ativday', 'be better', 'amoravel', 'eco clinic',
   'pague menos', 'p menos', 'choices', 'nutrabix', 'levmel', 'vita mais',

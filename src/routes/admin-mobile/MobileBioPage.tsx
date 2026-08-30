@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
+import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { auditBioOutsideBalcao, BALCAO_SETOR, computeBioSummary, type BioSummaryRow } from '../../lib/business/bio';
-import { classifyBio, type BioGroupKey } from '../../lib/business/classification';
+import { classifyBio, normalizeGrupoImport, type BioGroupKey } from '../../lib/business/classification';
 import { diasRestantesNoMes } from '../../lib/business/goals';
 import type { BioGroupGoal, BioGroupsProducts, BioWeights } from '../../lib/business/types';
 import { copyText, formatRankingText } from '../../lib/clipboard';
 import { fmtDateBR } from '../../lib/format';
-import { useAddBioProduct, useDeleteBioProduct, useUpdateBioGroupGoal, useUpdateBioWeights } from '../../lib/mutations';
+import { useAddBioProduct, useBulkInsertBioProducts, useDeleteBioProduct, useUpdateBioGroupGoal, useUpdateBioWeights } from '../../lib/mutations';
 import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
 import { useBioGroupGoals, useBioGroups, useCollaborators, useSales, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
@@ -328,6 +329,7 @@ function MobileBioGruposView({
   const [tab, setTab] = useState<BioGroupKey>('G1');
   const [nome, setNome] = useState('');
   const addProduct = useAddBioProduct(storeId);
+  const bulkInsertBio = useBulkInsertBioProducts(storeId);
   const deleteProduct = useDeleteBioProduct();
 
   function handleAdd() {
@@ -363,6 +365,21 @@ function MobileBioGruposView({
         <button className="mv2-btn-primary" style={{ width: '100%' }} onClick={handleAdd}>
           + Adicionar
         </button>
+      </div>
+
+      <div style={{ margin: '0 18px 12px' }}>
+        <SimpleSheetImportPanel
+          title="Importar planilha de produtos Biosintética"
+          columns={['Nome do produto', 'Categoria (Grupo)', 'Tipo']}
+          onConfirm={async (rows) => {
+            const parsed = rows
+              .map((r) => ({ nome: r[0]?.trim() || '', grupo: normalizeGrupoImport(r[1] || ''), palavras: [r[2]?.trim() || r[0]?.trim() || ''] }))
+              .filter((r) => r.nome && r.grupo);
+            if (parsed.length === 0) return { count: 0, skipped: rows.length };
+            await bulkInsertBio.mutateAsync(parsed as { grupo: BioGroupKey; nome: string; palavras: string[] }[]);
+            return { count: parsed.length, skipped: rows.length - parsed.length };
+          }}
+        />
       </div>
 
       <div style={{ margin: '0 18px' }}>

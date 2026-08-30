@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
+import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
 import {
@@ -8,11 +9,11 @@ import {
   computeBioSummary,
   type BioSummaryRow,
 } from '../../lib/business/bio';
-import { classifyBio, type BioGroupKey } from '../../lib/business/classification';
+import { classifyBio, normalizeGrupoImport, type BioGroupKey } from '../../lib/business/classification';
 import { diasRestantesNoMes } from '../../lib/business/goals';
 import type { BioGroupGoal, BioGroupsProducts, BioWeights } from '../../lib/business/types';
 import { fmtDateBR } from '../../lib/format';
-import { useAddBioProduct, useDeleteBioProduct, useUpdateBioGroupGoal, useUpdateBioWeights } from '../../lib/mutations';
+import { useAddBioProduct, useBulkInsertBioProducts, useDeleteBioProduct, useUpdateBioGroupGoal, useUpdateBioWeights } from '../../lib/mutations';
 import { useBioGroupGoals, useBioGroups, useCollaborators, useSales, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 
@@ -253,6 +254,7 @@ function BioGruposView({
   const [tab, setTab] = useState<BioGroupKey>('G1');
   const [nome, setNome] = useState('');
   const addProduct = useAddBioProduct(storeId);
+  const bulkInsertBio = useBulkInsertBioProducts(storeId);
   const deleteProduct = useDeleteBioProduct();
 
   function handleAdd() {
@@ -300,6 +302,19 @@ function BioGruposView({
           </button>
         </div>
       </div>
+
+      <SimpleSheetImportPanel
+        title="Importar planilha de produtos Biosintética"
+        columns={['Nome do produto', 'Categoria (Grupo)', 'Tipo']}
+        onConfirm={async (rows) => {
+          const parsed = rows
+            .map((r) => ({ nome: r[0]?.trim() || '', grupo: normalizeGrupoImport(r[1] || ''), palavras: [r[2]?.trim() || r[0]?.trim() || ''] }))
+            .filter((r) => r.nome && r.grupo);
+          if (parsed.length === 0) return { count: 0, skipped: rows.length };
+          await bulkInsertBio.mutateAsync(parsed as { grupo: BioGroupKey; nome: string; palavras: string[] }[]);
+          return { count: parsed.length, skipped: rows.length - parsed.length };
+        }}
+      />
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <h3 className="font-semibold mb-3 text-sm">

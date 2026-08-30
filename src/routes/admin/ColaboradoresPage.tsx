@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from 'react';
 import { useAuth } from '../../auth/AuthContext';
+import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
 import { PhotoCropModal } from '../../components/PhotoCropModal';
 import { grantCollaboratorLogin } from '../../lib/collaborators';
 import { daysSince, lastSaleDateFor } from '../../lib/business/summary';
 import type { Collaborator } from '../../lib/business/types';
 import { fmtMoney } from '../../lib/format';
-import { useCreateCollaborator, useDeleteCollaborators, useUpdateCollaborator } from '../../lib/mutations';
+import { useBulkUpsertCollaborators, useCreateCollaborator, useDeleteCollaborators, useUpdateCollaborator } from '../../lib/mutations';
 import { useCollaborators, useCollaboratorsWithLogin, useSales } from '../../lib/queries';
 import { uploadPhoto } from '../../lib/storage';
 
@@ -17,6 +18,7 @@ export function ColaboradoresPage() {
   const { data: sales } = useSales();
   const { data: withLogin } = useCollaboratorsWithLogin();
   const createCollaborator = useCreateCollaborator(profile?.store_id);
+  const bulkUpsertCollaborators = useBulkUpsertCollaborators(profile?.store_id);
   const updateCollaborator = useUpdateCollaborator();
   const deleteCollaborators = useDeleteCollaborators();
 
@@ -88,6 +90,20 @@ export function ColaboradoresPage() {
           </button>
         </div>
       </form>
+
+      <SimpleSheetImportPanel
+        title="Importar planilha de colaboradores"
+        columns={['Código de venda', 'Nome', 'Apelido', 'Setor']}
+        idColumnIndex={0}
+        onConfirm={async (rows) => {
+          const valid = rows.filter((r) => r[0]?.trim() && r[1]?.trim());
+          if (valid.length === 0) return { count: 0, skipped: rows.length };
+          await bulkUpsertCollaborators.mutateAsync(
+            valid.map((r) => ({ matricula: r[0].trim(), nome: r[1].trim(), apelido: r[2]?.trim() || '', setor: r[3]?.trim() || SETORES[0] })),
+          );
+          return { count: valid.length, skipped: rows.length - valid.length };
+        }}
+      />
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <div className="flex items-center justify-between mb-1">
