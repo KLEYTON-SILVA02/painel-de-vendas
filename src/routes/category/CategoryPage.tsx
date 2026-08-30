@@ -7,10 +7,10 @@ import { copyText, formatRankingText } from '../../lib/clipboard';
 import { diasRestantesNoMes, getGoal, getSuperMeta } from '../../lib/business/goals';
 import { todayISO } from '../../lib/dateRange';
 import { computeSummary, computeVendorExtract } from '../../lib/business/summary';
-import type { SummaryRow } from '../../lib/business/types';
+import type { CommissionRate, SummaryRow } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
-import { useCollaborators, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
+import { useCollaborators, useCommissionRates, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 
 export type PageCategoryKey = CategoryKey | 'LEVMEL' | 'CHIP';
@@ -44,6 +44,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   const { data: storeSettings } = useStoreSettings();
   const { data: specialLists } = useSpecialLists();
   const { data: store } = useStore();
+  const { data: commissionRates } = useCommissionRates();
   const { dashFrom, dashTo } = useDateRange();
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [extractMatricula, setExtractMatricula] = useState<string | null>(null);
@@ -51,7 +52,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   const [generating, setGenerating] = useState(false);
   const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
 
-  if (!collaborators || !sales || !goals || !storeSettings || !specialLists) {
+  if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !commissionRates) {
     return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
   }
 
@@ -255,6 +256,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
           from={dashFrom}
           to={dashTo}
           extract={extract}
+          commissionRate={catKey === 'DERM' || catKey === 'GEN' || catKey === 'MP' ? commissionRates[catKey] : undefined}
           onClose={() => setExtractMatricula(null)}
         />
       )}
@@ -319,16 +321,23 @@ function ExtractModal({
   from,
   to,
   extract,
+  commissionRate,
   onClose,
 }: {
   nome: string;
   from: string;
   to: string;
   extract: ReturnType<typeof computeVendorExtract>;
+  commissionRate?: CommissionRate;
   onClose: () => void;
 }) {
   const totalValor = extract.reduce((a, s) => a + s.valor, 0);
   const totalItens = extract.reduce((a, s) => a + s.qtd, 0);
+  // The extract modal is always about one specific vendor (extractMatricula),
+  // so this is exactly the "colaborador selecionado" moment the commission
+  // feature is scoped to — with no vendor selected there's no commission
+  // column anywhere in this screen, the sale's own valor is shown as-is.
+  const showCommission = !!commissionRate?.ativo;
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50" onClick={onClose}>
       <div
@@ -343,6 +352,7 @@ function ExtractModal({
         </div>
         <p className="text-xs text-slate-500 mb-3">
           {fmtDateBR(from)} — {fmtDateBR(to)} · {totalItens} itens · {fmtMoney(totalValor)}
+          {showCommission && ` · comissão (${commissionRate!.percentual}%): ${fmtMoney((totalValor * commissionRate!.percentual) / 100)}`}
         </p>
         {extract.length === 0 ? (
           <div className="text-sm text-slate-500 py-4 text-center">Nenhuma venda no período.</div>
@@ -354,6 +364,7 @@ function ExtractModal({
                 <th className="py-1.5 pr-3">Item</th>
                 <th className="py-1.5 pr-3">Qtd</th>
                 <th className="py-1.5 pr-3">Valor</th>
+                {showCommission && <th className="py-1.5 pr-3">Comissão</th>}
               </tr>
             </thead>
             <tbody>
@@ -363,6 +374,9 @@ function ExtractModal({
                   <td className="py-1.5 pr-3">{s.produto}</td>
                   <td className="py-1.5 pr-3 font-mono">{s.qtd}</td>
                   <td className="py-1.5 pr-3 font-mono">{fmtMoney(s.valor)}</td>
+                  {showCommission && (
+                    <td className="py-1.5 pr-3 font-mono text-amber-400">{fmtMoney((s.valor * commissionRate!.percentual) / 100)}</td>
+                  )}
                 </tr>
               ))}
             </tbody>

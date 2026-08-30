@@ -3,42 +3,33 @@ import type { CategoryKey } from '../../lib/business/classification';
 import { getGoal, getSuperMeta } from '../../lib/business/goals';
 import { computeSummary } from '../../lib/business/summary';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
-import { useCollaborators, useGoals, useSales } from '../../lib/queries';
+import { useCollaborators, useCommissionRates, useGoals, useSales } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { MobileDateFilter } from './MobileDateFilter';
 
-export interface CommissionRule {
-  /** Flat percentage, or 'escalonado' when the rate depends on a sales
-   * bracket the reference doc names but never defines the thresholds for
-   * (Marcas Exclusivas: "2,5%/5%/7% escalonado") — see FUNÇÕES PENDENTES. */
-  kind: 'flat' | 'escalonado';
-  flatPct?: number;
-}
-
 // Shared mobile v2 screen for Dermo / Marcas Exclusivas / Genéricos — the
-// spec says all three reuse this exact structure, only the accent color and
-// commission rule differ.
+// spec says all three reuse this exact structure, only the accent color
+// differs. Commission % comes from ADM > Funções > Metas > Comissões
+// (commission_rates table) — same source as the desktop CategoryPage.
 export function MobileCategoryScreen({
   catKey,
   title,
   titleClass,
   accent,
-  commission,
 }: {
   catKey: CategoryKey;
   title: string;
   titleClass: string;
   accent: string;
-  commission: CommissionRule;
 }) {
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
   const { data: goals } = useGoals();
+  const { data: commissionRates } = useCommissionRates();
   const { dashFrom, dashTo } = useDateRange();
   const [selectedSeller, setSelectedSeller] = useState<string | null>(null);
-  const [showCommission, setShowCommission] = useState(false);
 
-  if (!collaborators || !sales || !goals) {
+  if (!collaborators || !sales || !goals || !commissionRates) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
@@ -55,12 +46,11 @@ export function MobileCategoryScreen({
   const pctMeta = metaGeral > 0 ? Math.min(999, (totalValor / metaGeral) * 100) : 0;
   const pctSuper = metaSuper > 0 ? Math.min(999, (totalValor / metaSuper) * 100) : 0;
 
-  function commissionPct(): number {
-    // "Escalonado" tiers aren't defined in the reference doc (which bracket
-    // uses 2.5/5/7%) — using the middle tier as a visual placeholder.
-    if (commission.kind === 'escalonado') return 5;
-    return commission.flatPct ?? 1;
-  }
+  // Commission only ever applies to DERM/GEN/MP (see commission_rates'
+  // check constraint) and only shows once a specific seller is selected —
+  // with "Todos" selected, sales keep showing their original valor.
+  const commissionRate = catKey === 'DERM' || catKey === 'GEN' || catKey === 'MP' ? commissionRates[catKey] : undefined;
+  const showCommission = selectedSeller !== null && !!commissionRate?.ativo;
 
   const categorySales = sales
     .filter((s) => {
@@ -143,15 +133,14 @@ export function MobileCategoryScreen({
         ))}
       </div>
 
-      <div className="mv2-commission-toggle">
-        <span>
-          <span className="mv2-rate">Comissão vigente: {commissionPct()}%</span>
-        </span>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          Ver Comissões
-          <input type="checkbox" checked={showCommission} onChange={(e) => setShowCommission(e.target.checked)} />
-        </label>
-      </div>
+      {commissionRate?.ativo && (
+        <div className="mv2-commission-toggle">
+          <span className="mv2-rate">Comissão vigente: {commissionRate.percentual}%</span>
+          <span style={{ fontSize: 8, color: 'var(--mv2-texto-2)' }}>
+            {selectedSeller ? 'Exibindo comissão do vendedor selecionado' : 'Selecione um vendedor pra ver a comissão'}
+          </span>
+        </div>
+      )}
 
       <div style={{ margin: '0 18px' }}>
         <div style={{ fontSize: 10, fontWeight: 700, marginBottom: 4 }}>Detalhamento por Vendedor</div>
@@ -184,7 +173,9 @@ export function MobileCategoryScreen({
                     <td>{s.produto}</td>
                     <td>{s.qtd}</td>
                     <td className="mv2-valor">{fmtMoney(s.valor)}</td>
-                    {showCommission && <td className="mv2-valor">{fmtMoney((s.valor * commissionPct()) / 100)}</td>}
+                    {showCommission && (
+                      <td className="mv2-valor">{fmtMoney((s.valor * commissionRate!.percentual) / 100)}</td>
+                    )}
                   </tr>
                 ))
               )}

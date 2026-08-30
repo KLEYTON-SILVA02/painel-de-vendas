@@ -67,6 +67,22 @@ export function useUpdateGoal(storeId: string | undefined) {
   });
 }
 
+/** Upsert, same reasoning as useUpdateGoal — no commission_rates row exists
+ * until the admin first sets one, since the table isn't seeded at bootstrap. */
+export function useUpdateCommissionRate(storeId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ categoria, patch }: { categoria: 'DERM' | 'GEN' | 'MP'; patch: TablesUpdate<'commission_rates'> }) => {
+      if (!storeId) throw new Error('store not loaded');
+      const { error } = await supabase
+        .from('commission_rates')
+        .upsert({ ...patch, categoria, store_id: storeId }, { onConflict: 'store_id,categoria' });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['commission_rates'] }),
+  });
+}
+
 export function useIndividualGoals(categoria: CategoryKey) {
   return useQuery({
     queryKey: ['individual_goals', categoria],

@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import type { GoalCategoryKey } from './business/classification';
-import type { Goal } from './business/types';
+import type { CommissionRate, Goal } from './business/types';
 import type { SpecialListItem } from './business/summary';
-import { mapCollaborator, mapDynamic, mapGoal, mapSale, mapSpecialListItem } from './mappers';
+import { mapCollaborator, mapCommissionRate, mapDynamic, mapGoal, mapSale, mapSpecialListItem } from './mappers';
 import { supabase } from './supabase';
 
 export function useCollaborators() {
@@ -40,6 +40,22 @@ export function useGoals() {
       data.forEach((row) => {
         const goal = mapGoal(row);
         byCategory[goal.categoria] = goal;
+      });
+      return byCategory;
+    },
+  });
+}
+
+export function useCommissionRates() {
+  return useQuery({
+    queryKey: ['commission_rates'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('commission_rates').select('*');
+      if (error) throw error;
+      const byCategory = {} as Record<CommissionRate['categoria'], CommissionRate | undefined>;
+      data.forEach((row) => {
+        const rate = mapCommissionRate(row);
+        byCategory[rate.categoria] = rate;
       });
       return byCategory;
     },

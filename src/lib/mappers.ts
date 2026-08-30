@@ -1,6 +1,6 @@
 import type { CategoryKey, ClassificationInputs, GoalCategoryKey } from './business/classification';
 import { CAT_KEYS } from './business/classification';
-import type { Collaborator, Dynamic, Goal, Sale } from './business/types';
+import type { Collaborator, CommissionRate, Dynamic, Goal, Sale } from './business/types';
 import type { SpecialListItem } from './business/summary';
 import type { Tables } from '../types/database';
 
@@ -40,6 +40,14 @@ export function mapGoal(row: Tables<'goals'>): Goal {
     autoRedistribuir: row.auto_redistribuir,
     superMeta: Number(row.super_meta) || 0,
     superMetaAuto: row.super_meta_auto,
+  };
+}
+
+export function mapCommissionRate(row: Tables<'commission_rates'>): CommissionRate {
+  return {
+    categoria: row.categoria as CommissionRate['categoria'],
+    percentual: Number(row.percentual) || 0,
+    ativo: row.ativo,
   };
 }
 

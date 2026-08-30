@@ -163,6 +163,38 @@ export type Database = {
           },
         ]
       }
+      commission_rates: {
+        Row: {
+          ativo: boolean
+          categoria: string
+          id: string
+          percentual: number
+          store_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          categoria: string
+          id?: string
+          percentual?: number
+          store_id: string
+        }
+        Update: {
+          ativo?: boolean
+          categoria?: string
+          id?: string
+          percentual?: number
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commission_rates_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conquista_super_metas: {
         Row: {
           categoria: string

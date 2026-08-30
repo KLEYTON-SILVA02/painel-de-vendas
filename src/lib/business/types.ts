@@ -62,3 +62,10 @@ export interface Dynamic {
 
 export type BioGroupsProducts = Record<BioGroupKey, { nome: string; palavras: string[] }[]>;
 export type BioWeights = Record<BioGroupKey, number>;
+
+/** Commission % config — Dermocosméticos/Genéricos/Marcas Exclusivas only. */
+export interface CommissionRate {
+  categoria: 'DERM' | 'GEN' | 'MP';
+  percentual: number;
+  ativo: boolean;
+}
