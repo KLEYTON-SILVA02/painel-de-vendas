@@ -25,6 +25,22 @@ export function useInsertRow<T extends SimpleTable>(table: T, storeId: string | 
   });
 }
 
+/** Bulk import of general products (Dermo/Genérico/Marcas Exclusivas) from
+ * a spreadsheet, into the same Tier-2 `products` table the manual
+ * "Adicionar produto" form writes to. No upsert — matches that form's own
+ * behavior of not deduping by name. */
+export function useBulkInsertProducts(storeId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (rows: { categoria: CategoryKey; nome: string; palavras: string[] }[]) => {
+      if (!storeId) throw new Error('store not loaded');
+      const { error } = await supabase.from('products').insert(rows.map((r) => ({ ...r, store_id: storeId })));
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['products'] }),
+  });
+}
+
 export function useDeleteRow<T extends SimpleTable>(table: T, invalidateKey: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -197,6 +213,26 @@ export function useCreateCollaborator(storeId: string | undefined) {
   });
 }
 
+/** Bulk import from a spreadsheet: upserts on (store_id, matricula) so a
+ * re-imported roster updates existing collaborators (nome/apelido/setor)
+ * instead of failing outright on the first duplicate matrícula. */
+export function useBulkUpsertCollaborators(storeId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (rows: { matricula: string; nome: string; apelido: string; setor: string }[]) => {
+      if (!storeId) throw new Error('store not loaded');
+      const { error } = await supabase
+        .from('collaborators')
+        .upsert(
+          rows.map((r) => ({ ...r, store_id: storeId })),
+          { onConflict: 'store_id,matricula' },
+        );
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['collaborators'] }),
+  });
+}
+
 export function useUpdateCollaborator() {
   const qc = useQueryClient();
   return useMutation({
@@ -268,6 +304,23 @@ export function useDeleteSpecialListProduct() {
       if (error) throw error;
     },
     onSuccess: () => invalidateSpecialLists(qc),
+  });
+}
+
+/** Bulk import of Biosintética products from a spreadsheet — same shape as
+ * useAddBioProduct's single insert, just batched. No upsert: like the
+ * manual "Adicionar" flow, re-importing the same name creates another row
+ * rather than silently merging (bio_groups has no unique constraint to
+ * upsert against, and duplicate keyword rows are harmless for matching). */
+export function useBulkInsertBioProducts(storeId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (rows: { grupo: 'G1' | 'G2' | 'G3' | 'G4'; nome: string; palavras: string[] }[]) => {
+      if (!storeId) throw new Error('store not loaded');
+      const { error } = await supabase.from('bio_groups').insert(rows.map((r) => ({ ...r, store_id: storeId })));
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bio_groups'] }),
   });
 }
 

@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
-import { CAT_KEYS, classifyProductTier, type CategoryKey } from '../../lib/business/classification';
+import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
+import { CAT_KEYS, classifyProductTier, normalizeCategoriaImport, type CategoryKey } from '../../lib/business/classification';
 import { buildClassificationInputs } from '../../lib/mappers';
 import { fmtMoney } from '../../lib/format';
-import { useDeleteRow, useInsertRow, useUpdateRow } from '../../lib/mutations';
+import { useBulkInsertProducts, useDeleteRow, useInsertRow, useUpdateRow } from '../../lib/mutations';
 import { useBrandKeywords, useCatalog, useExclusiveBrands, useProducts, useSales } from '../../lib/queries';
 
 const CAT_LABEL: Record<CategoryKey, string> = {
@@ -51,6 +52,16 @@ export function ProdutosPage() {
   );
 }
 
+/** Surfaces a mutation failure (RLS denial, constraint violation, network
+ * error, …) that would otherwise vanish silently — an "Adicionar" click
+ * that does nothing is indistinguishable from a broken button unless the
+ * actual error reaches the screen. */
+function MutationError({ error }: { error: unknown }) {
+  if (!error) return null;
+  const message = error instanceof Error ? error.message : String(error);
+  return <p className="text-xs text-rose-400 mt-2">Falha ao salvar: {message}</p>;
+}
+
 function CategoryTabs({ group, setGroup }: { group: CategoryKey; setGroup: (k: CategoryKey) => void }) {
   return (
     <div className="flex gap-1 mb-1">
@@ -71,6 +82,7 @@ function ProdutosTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
   const { profile } = useAuth();
   const { data: products } = useProducts();
   const insertProduct = useInsertRow('products', profile?.store_id, 'products');
+  const bulkInsertProducts = useBulkInsertProducts(profile?.store_id);
   const updateProduct = useUpdateRow('products', 'products');
   const deleteProduct = useDeleteRow('products', 'products');
   const [nome, setNome] = useState('');
@@ -109,6 +121,23 @@ function ProdutosTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
           planilha, ele é classificado nesta categoria.
         </p>
       </div>
+      <SimpleSheetImportPanel
+        title="Importar planilha de produtos (Dermo/Genérico/Marcas Exclusivas)"
+        columns={['Nome do produto', 'Categoria', 'Tipo']}
+        onConfirm={async (rows) => {
+          const valid = rows.filter((r) => r[0]?.trim());
+          if (valid.length === 0) return { count: 0, skipped: rows.length };
+          await bulkInsertProducts.mutateAsync(
+            valid.map((r) => ({
+              nome: r[0].trim(),
+              categoria: normalizeCategoriaImport(r[1] || ''),
+              palavras: [r[2]?.trim() || r[0].trim()],
+            })),
+          );
+          return { count: valid.length, skipped: rows.length - valid.length };
+        }}
+      />
+
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <h3 className="font-semibold mb-3 text-sm">Adicionar produto em {CAT_LABEL[group]}</h3>
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
@@ -128,11 +157,13 @@ function ProdutosTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
             + Adicionar
           </button>
         </div>
+        <MutationError error={insertProduct.error} />
       </div>
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <h3 className="font-semibold mb-3 text-sm">
           Produtos — {CAT_LABEL[group]} ({groupProducts.length})
         </h3>
+        <MutationError error={updateProduct.error} />
         {groupProducts.length === 0 ? (
           <div className="text-sm text-slate-500 py-4 text-center">Nenhum produto cadastrado.</div>
         ) : (
@@ -239,6 +270,7 @@ function CatalogoTab() {
             + Adicionar
           </button>
         </div>
+        <MutationError error={insertCatalog.error} />
       </div>
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <div className="flex items-center justify-between mb-3">
@@ -322,6 +354,9 @@ function ClassificadosTab() {
   const [filtro, setFiltro] = useState<CategoryKey | 'ALL'>('ALL');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkCategoria, setBulkCategoria] = useState<CategoryKey>('DERM');
+  const [ordem, setOrdem] = useState<'ocorrencias' | 'alfabetica'>('ocorrencias');
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 500;
 
   if (!sales || !catalog || !products || !brandKeywords || !exclusiveBrands) {
     return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
@@ -347,8 +382,13 @@ function ClassificadosTab() {
       });
     }
   });
-  let list = Array.from(map.values()).sort((a, b) => b.ocorrencias - a.ocorrencias);
+  let list = Array.from(map.values()).sort((a, b) =>
+    ordem === 'alfabetica' ? a.produto.localeCompare(b.produto, 'pt-BR') : b.ocorrencias - a.ocorrencias,
+  );
   if (filtro !== 'ALL') list = list.filter((p) => p.categoria === filtro);
+  const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  const pageSafe = Math.min(page, totalPages - 1);
+  const pageList = list.slice(pageSafe * PAGE_SIZE, pageSafe * PAGE_SIZE + PAGE_SIZE);
 
   async function reclassify(produtoNomes: string[], categoria: CategoryKey) {
     for (const nome of produtoNomes) {
@@ -373,7 +413,10 @@ function ClassificadosTab() {
           {(['ALL', ...CAT_KEYS] as const).map((k) => (
             <button
               key={k}
-              onClick={() => setFiltro(k)}
+              onClick={() => {
+                setFiltro(k);
+                setPage(0);
+              }}
               className={`rounded-lg px-3 py-1.5 text-xs ${filtro === k ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
             >
               {k === 'ALL' ? 'Todos' : CAT_LABEL[k]}
@@ -383,7 +426,19 @@ function ClassificadosTab() {
       </div>
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-          <div className="text-xs text-slate-500">{list.length} produto(s)</div>
+          <div className="flex items-center gap-2">
+            <div className="text-xs text-slate-500">{list.length} produto(s)</div>
+            <button
+              onClick={() => {
+                setOrdem((o) => (o === 'alfabetica' ? 'ocorrencias' : 'alfabetica'));
+                setPage(0);
+              }}
+              className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300"
+              title="Alternar ordenação"
+            >
+              {ordem === 'alfabetica' ? 'A-Z ▾' : 'Mais vendidos ▾'}
+            </button>
+          </div>
           <div className="flex gap-2">
             <select value={bulkCategoria} onChange={(e) => setBulkCategoria(e.target.value as CategoryKey)} className="input">
               {CAT_KEYS.map((k) => (
@@ -411,8 +466,15 @@ function ClassificadosTab() {
                   <th className="py-1.5 pr-3">
                     <input
                       type="checkbox"
-                      checked={selected.size === list.length}
-                      onChange={(e) => setSelected(e.target.checked ? new Set(list.map((p) => p.produto)) : new Set())}
+                      checked={pageList.length > 0 && pageList.every((p) => selected.has(p.produto))}
+                      onChange={(e) =>
+                        setSelected((prev) => {
+                          const next = new Set(prev);
+                          pageList.forEach((p) => (e.target.checked ? next.add(p.produto) : next.delete(p.produto)));
+                          return next;
+                        })
+                      }
+                      title="Selecionar todos desta página"
                     />
                   </th>
                   <th className="py-1.5 pr-3">Produto</th>
@@ -424,7 +486,7 @@ function ClassificadosTab() {
                 </tr>
               </thead>
               <tbody>
-                {list.slice(0, 150).map((p) => (
+                {pageList.map((p) => (
                   <tr key={p.produto} className="border-b border-slate-900">
                     <td className="py-1.5 pr-3">
                       <input
@@ -464,7 +526,29 @@ function ClassificadosTab() {
                 ))}
               </tbody>
             </table>
-            {list.length > 150 && <div className="text-xs text-slate-500 mt-2">Mostrando 150 de {list.length} produtos.</div>}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-3">
+                <span className="text-xs text-slate-500">
+                  Página {pageSafe + 1} de {totalPages} — mostrando {pageList.length} de {list.length} produtos
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPage((p) => Math.max(0, p - 1))}
+                    disabled={pageSafe === 0}
+                    className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 disabled:opacity-40"
+                  >
+                    ← Anterior
+                  </button>
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                    disabled={pageSafe >= totalPages - 1}
+                    className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 disabled:opacity-40"
+                  >
+                    Próxima →
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -505,6 +589,7 @@ function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
             + Adicionar
           </button>
         </div>
+        <MutationError error={insertKw.error} />
         <div className="flex flex-wrap gap-1.5">
           {groupKeywords.length === 0 ? (
             <span className="text-xs text-slate-500">Nenhuma palavra-chave cadastrada.</span>
@@ -552,6 +637,7 @@ function ExclusivasTab() {
           + Adicionar
         </button>
       </div>
+      <MutationError error={insertBrand.error} />
       <div className="flex flex-wrap gap-1.5">
         {exclusiveBrands.map((b) => (
           <span key={b.id} className="text-xs bg-slate-800 rounded-full px-2 py-1 flex items-center gap-1.5">

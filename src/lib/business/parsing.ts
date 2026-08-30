@@ -1,5 +1,16 @@
 // Ported 1:1 from legacy/index-original.html (parseNumeroBR / parseDateISO)
 
+/** Cell value for an ID-like spreadsheet column (matrícula, código de
+ * produto): prefers the raw numeric value over a display-formatted one,
+ * since a source spreadsheet that applies a zero-padding number mask to
+ * the column (e.g. "70202407" shown as "00070202407") would otherwise get
+ * baked into the imported data. Pass both a `raw:true` and a `raw:false`
+ * SheetJS read of the same cell. */
+export function idFromCell(rawVal: unknown, formattedVal: unknown): string {
+  if (typeof rawVal === 'number' && Number.isFinite(rawVal)) return String(Math.trunc(rawVal));
+  return String(formattedVal ?? '').trim();
+}
+
 /** Parses a BR/US formatted number, optionally prefixed with "R$" or wrapped in
  * parentheses for negatives. Decimal separator is inferred from whichever of
  * "," or "." appears last in the string. */

@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import { useAuth } from '../../auth/AuthContext';
 import { classifyProductTier } from '../../lib/business/classification';
 import { autoMapColumns, detectHeaderRow, type ColumnMap, type ImportField } from '../../lib/business/importMapping';
-import { parseDateISO, parseNumeroBR } from '../../lib/business/parsing';
+import { idFromCell, parseDateISO, parseNumeroBR } from '../../lib/business/parsing';
 import { buildClassificationInputs } from '../../lib/mappers';
 import { fmtMoney } from '../../lib/format';
 import { useBrandKeywords, useCatalog, useExclusiveBrands, useProducts, useSales } from '../../lib/queries';
@@ -18,8 +18,10 @@ interface ParsedSheet {
   name: string;
   headers: unknown[];
   rows: unknown[][];
+  rawRows: unknown[][];
   map: ColumnMap;
 }
+
 
 type Step = 'pick' | 'map' | 'verify' | 'done';
 
@@ -69,12 +71,25 @@ export function ImportarPage() {
         const wb = XLSX.read(data, { type: 'array', cellDates: true });
         const parsed: ParsedSheet[] = wb.SheetNames.map((name) => {
           const sheet = wb.Sheets[name];
+          // Two passes: raw:false gives human-formatted text (needed for
+          // dates and money), raw:true gives the underlying numeric value
+          // (needed to sidestep a zero-padding number mask on ID columns —
+          // see idFromCell in lib/business/parsing.ts).
           const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' }) as unknown[][];
+          const rowsRaw = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' }) as unknown[][];
           if (!rows.length) return null;
           const headerIdx = detectHeaderRow(rows);
           const headers = rows[headerIdx];
-          const dataRows = rows.slice(headerIdx + 1).filter((r) => r.some((c) => c !== ''));
-          return { name, headers, rows: dataRows, map: autoMapColumns(headers) };
+          const body = rows.slice(headerIdx + 1);
+          const bodyRaw = rowsRaw.slice(headerIdx + 1);
+          const dataRows: unknown[][] = [];
+          const dataRowsRaw: unknown[][] = [];
+          body.forEach((r, i) => {
+            if (!r.some((c) => c !== '')) return;
+            dataRows.push(r);
+            dataRowsRaw.push(bodyRaw[i] ?? []);
+          });
+          return { name, headers, rows: dataRows, rawRows: dataRowsRaw, map: autoMapColumns(headers) };
         }).filter((s): s is ParsedSheet => s !== null);
         setSheets(parsed);
         setProgress(null);
@@ -115,7 +130,8 @@ export function ImportarPage() {
 
     try {
       for (const sheet of sheets) {
-        for (const r of sheet.rows) {
+        for (const [ri, r] of sheet.rows.entries()) {
+          const rr = sheet.rawRows[ri] ?? [];
           const produto = sheet.map.produto >= 0 ? String(r[sheet.map.produto] ?? '').trim() : '';
           if (!produto) {
             noProduto++;
@@ -124,13 +140,13 @@ export function ImportarPage() {
           const dataStr = sheet.map.data >= 0 ? String(r[sheet.map.data] ?? '').trim() : '';
           const dataISO = parseDateISO(dataStr);
           if (!dataISO) invalidDate++;
-          const codigo = sheet.map.codigo >= 0 ? String(r[sheet.map.codigo] ?? '').trim() : '';
+          const codigo = sheet.map.codigo >= 0 ? idFromCell(rr[sheet.map.codigo], r[sheet.map.codigo]) : '';
           const { categoria, tier } = classifyProductTier(produto, codigo, inputs);
           batch.push({
             store_id: profile.store_id,
             data_raw: dataStr,
             data_iso: dataISO,
-            matricula: sheet.map.matricula >= 0 ? String(r[sheet.map.matricula] ?? '').trim() : '',
+            matricula: sheet.map.matricula >= 0 ? idFromCell(rr[sheet.map.matricula], r[sheet.map.matricula]) : '',
             vendedor: sheet.map.vendedor >= 0 ? String(r[sheet.map.vendedor] ?? '').trim() : '',
             produto,
             codigo: codigo || null,
@@ -178,6 +194,8 @@ export function ImportarPage() {
             automaticamente — se não encontrar, usa o layout padrão. Você pode revisar e ajustar antes de confirmar.
             Todas as abas do arquivo são processadas.
           </p>
+
+          <ExpectedColumnsBar />
 
           <input
             ref={fileInputRef}
@@ -310,6 +328,44 @@ export function ImportarPage() {
   );
 }
 
+const EXPECTED_COLUMNS: { nome: string; descricao: string }[] = [
+  { nome: 'Data', descricao: 'Data da venda (DD/MM/AAAA ou AAAA-MM-DD).' },
+  { nome: 'Vendedor Nome', descricao: 'Nome do colaborador que realizou a venda.' },
+  { nome: 'Matrícula', descricao: 'Código de venda/matrícula do colaborador — usado para achar o cadastro dele.' },
+  { nome: 'Descrição do Produto', descricao: 'Nome do produto vendido, usado na classificação por categoria.' },
+  { nome: 'Quantidade Vendida', descricao: 'Quantidade de itens vendidos na linha.' },
+  { nome: 'Valor do Produto', descricao: 'Valor total vendido na linha (R$).' },
+];
+
+function ExpectedColumnsBar() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mb-3">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="text-xs text-cyan-400 flex items-center gap-1"
+      >
+        {open ? '▲' : '▼'} Quais colunas o sistema procura?
+      </button>
+      {open && (
+        <div className="mt-2 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+          <table className="w-full text-xs">
+            <tbody>
+              {EXPECTED_COLUMNS.map((c) => (
+                <tr key={c.nome} className="border-b border-slate-900 last:border-0">
+                  <td className="py-1.5 pr-3 font-medium text-slate-300 whitespace-nowrap align-top">{c.nome}</td>
+                  <td className="py-1.5 text-slate-500">{c.descricao}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function UploadGlyph() {
   return (
     <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -343,11 +399,12 @@ function summarize(sheets: ParsedSheet[], inputs: ReturnType<typeof buildClassif
 
   sheets.forEach((sheet) => {
     const map = sheet.map;
-    sheet.rows.forEach((r) => {
+    sheet.rows.forEach((r, ri) => {
+      const rr = sheet.rawRows[ri] ?? [];
       const produto = map.produto >= 0 ? String(r[map.produto] ?? '').trim() : '';
       if (!produto) return;
       total++;
-      const codigo = map.codigo >= 0 ? String(r[map.codigo] ?? '').trim() : '';
+      const codigo = map.codigo >= 0 ? idFromCell(rr[map.codigo], r[map.codigo]) : '';
       const { categoria, tier } = classifyProductTier(produto, codigo, inputs);
       if (tier >= 4) {
         baixaConfianca++;
@@ -369,7 +426,7 @@ function summarize(sheets: ParsedSheet[], inputs: ReturnType<typeof buildClassif
       const dataISO = parseDateISO(dataStr);
       if (dataISO) diasSet.add(dataISO);
 
-      const matricula = map.matricula >= 0 ? String(r[map.matricula] ?? '').trim() : '';
+      const matricula = map.matricula >= 0 ? idFromCell(rr[map.matricula], r[map.matricula]) : '';
       const vendedor = map.vendedor >= 0 ? String(r[map.vendedor] ?? '').trim() : '';
       const chave = matricula || vendedor;
       if (chave && !vendedoresMap.has(chave)) vendedoresMap.set(chave, vendedor || matricula);
