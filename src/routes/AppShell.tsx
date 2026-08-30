@@ -21,7 +21,7 @@ import { ProdutosPage } from './admin/ProdutosPage';
 const ImportarPage = lazy(() => import('./admin/ImportarPage').then((m) => ({ default: m.ImportarPage })));
 import { BioPage } from './bio/BioPage';
 import { CategoryPage } from './category/CategoryPage';
-import { CollaboratorHomePage } from './collaborator/CollaboratorHomePage';
+import { CollaboratorShell } from './collaborator/CollaboratorShell';
 import { ConquistasPage } from './conquistas/ConquistasPage';
 import { DashboardPage } from './dashboard/DashboardPage';
 import { DateRangeProvider } from './DateRangeContext';
@@ -63,7 +63,7 @@ export function AppShell() {
   if (profile.role !== 'admin') {
     return (
       <DateRangeProvider>
-        <CollaboratorHomePage />
+        <CollaboratorShell />
       </DateRangeProvider>
     );
   }
