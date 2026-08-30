@@ -4,6 +4,9 @@ import '../styles/login-retro-future.css';
 
 type Tab = 'admin' | 'colaborador';
 
+const WHATSAPP_URL = 'https://wa.me/qr/WEP75MIQBQSPB1';
+const INSTAGRAM_URL = 'https://www.instagram.com/kleytonmsilva?igsi=MWM0bnNscmtjNGkxag==';
+
 // Mobile v2 reskin (see mv2-* classes in src/styles/mobile-v2.css, ported
 // 1:1 from the "Scanner Técnico" login spec). Auth logic is untouched —
 // only the markup/classes changed. Remember-me, "Esqueci senha", and the
@@ -38,15 +41,15 @@ export function LoginPage() {
         <div className="mv2-divider">ou</div>
 
         <div className="mv2-social-row">
-          <button type="button" className="mv2-whatsapp" title="WhatsApp">
+          <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="mv2-whatsapp" title="WhatsApp">
             <WhatsAppIcon />
-          </button>
+          </a>
           <button type="button" title="QR Code">
             <QrIcon />
           </button>
-          <button type="button" className="mv2-instagram" title="Instagram">
+          <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="mv2-instagram" title="Instagram">
             <InstagramIcon />
-          </button>
+          </a>
         </div>
       </div>
     </div>
