@@ -626,27 +626,11 @@
   max-width: 100%;
 }
 
-/* ---------- 9. Gráfico de metas por categoria (gauge) ---------- */
-.mv2-goal-gauge {
-  --mv2-pct: 50%;
-  width: 90px;
-  aspect-ratio: 2 / 1;
-  border-radius: 90px 90px 0 0;
-  background: conic-gradient(from 180deg, var(--mv2-gauge-color, var(--mv2-rosa)) calc(var(--mv2-pct) * 1.8deg), #1a1a1a 0deg);
-  -webkit-mask: radial-gradient(farthest-side at bottom, transparent 62%, #000 63%);
-  mask: radial-gradient(farthest-side at bottom, transparent 62%, #000 63%);
-  position: relative;
-  margin: 0 auto;
-}
-.mv2-goal-gauge .mv2-pct-label {
-  position: absolute;
-  bottom: 4px;
-  width: 100%;
-  text-align: center;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--mv2-gauge-color, var(--mv2-rosa));
-}
+/* ---------- 9. Gráfico de metas por categoria (gauge) ----------
+   Rendered as SVG (see GoalGauge.tsx) rather than the conic-gradient +
+   radial-mask trick from the spec's CSS reference — that combination
+   doesn't produce a correct arc on a non-square aspect-ratio box (a
+   fragile geometry constraint of the trick itself, not the design). */
 .mv2-goals-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
