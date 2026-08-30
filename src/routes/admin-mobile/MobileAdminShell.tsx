@@ -30,9 +30,9 @@ import { CategoryPage } from '../category/CategoryPage';
 import { ConquistasPage } from '../conquistas/ConquistasPage';
 import { DinamicasPage } from '../dinamicas/DinamicasPage';
 import { MetasPage } from '../metas/MetasPage';
-import { RankingPage } from '../ranking/RankingPage';
 import { MobileClosingTimer } from './MobileClosingTimer';
 import { MobileInicioPage } from './MobileInicioPage';
+import { MobileRankingPage } from './MobileRankingPage';
 
 // Mobile v2 admin shell: the spec's sticky topbar + horizontal category
 // icon menu, replacing the desktop Sidebar below the 1024px breakpoint
@@ -94,7 +94,7 @@ export function MobileAdminShell() {
       <main style={{ paddingBottom: 24 }}>
         <Routes>
           <Route path="/" element={<MobileInicioPage />} />
-          <Route path="/ranking" element={<RankingPage />} />
+          <Route path="/ranking" element={<MobileRankingPage />} />
           <Route path="/categoria/DERM" element={<CategoryPage catKey="DERM" />} />
           <Route path="/categoria/GEN" element={<CategoryPage catKey="GEN" />} />
           <Route path="/categoria/MP" element={<CategoryPage catKey="MP" />} />
