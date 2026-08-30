@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { CAT_KEYS } from './business/classification';
-import type { Goal } from './business/types';
+import type { BioGroupKey, GoalCategoryKey } from './business/classification';
+import type { BioGroupGoal, CommissionRate, Goal } from './business/types';
 import type { SpecialListItem } from './business/summary';
-import { mapCollaborator, mapDynamic, mapGoal, mapSale, mapSpecialListItem } from './mappers';
+import { mapBioGroupGoal, mapCollaborator, mapCommissionRate, mapDynamic, mapGoal, mapSale, mapSpecialListItem } from './mappers';
 import { supabase } from './supabase';
 
 export function useCollaborators() {
@@ -36,10 +36,43 @@ export function useGoals() {
     queryFn: async () => {
       const { data, error } = await supabase.from('goals').select('*');
       if (error) throw error;
-      const byCategory = {} as Record<(typeof CAT_KEYS)[number], Goal | undefined>;
+      const byCategory = {} as Record<GoalCategoryKey, Goal | undefined>;
       data.forEach((row) => {
         const goal = mapGoal(row);
         byCategory[goal.categoria] = goal;
+      });
+      return byCategory;
+    },
+  });
+}
+
+/** icon_url by function_key, for the whole store — used by <FunctionIcon>
+ * to look up a custom override before falling back to the built-in icon. */
+export function useFunctionIcons() {
+  return useQuery({
+    queryKey: ['function_icons'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('function_icons').select('*');
+      if (error) throw error;
+      const byKey: Record<string, string | undefined> = {};
+      data.forEach((row) => {
+        if (row.icon_url) byKey[row.function_key] = row.icon_url;
+      });
+      return byKey;
+    },
+  });
+}
+
+export function useCommissionRates() {
+  return useQuery({
+    queryKey: ['commission_rates'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('commission_rates').select('*');
+      if (error) throw error;
+      const byCategory = {} as Record<CommissionRate['categoria'], CommissionRate | undefined>;
+      data.forEach((row) => {
+        const rate = mapCommissionRate(row);
+        byCategory[rate.categoria] = rate;
       });
       return byCategory;
     },
@@ -137,6 +170,22 @@ export function useExclusiveBrands() {
       const { data, error } = await supabase.from('exclusive_brands').select('*').order('palavra');
       if (error) throw error;
       return data;
+    },
+  });
+}
+
+export function useBioGroupGoals() {
+  return useQuery({
+    queryKey: ['bio_group_goals'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('bio_group_goals').select('*');
+      if (error) throw error;
+      const byGroup = {} as Record<BioGroupKey, BioGroupGoal | undefined>;
+      data.forEach((row) => {
+        const goal = mapBioGroupGoal(row);
+        byGroup[goal.grupo] = goal;
+      });
+      return byGroup;
     },
   });
 }

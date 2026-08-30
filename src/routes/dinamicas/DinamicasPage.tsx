@@ -12,6 +12,7 @@ import { useCreateDynamic, useDeleteDynamic } from '../../lib/mutations';
 import { useCollaborators, useDynamics, useSales, useStoreSettings } from '../../lib/queries';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
+const SETOR_ALVO_LABEL: Record<Dynamic['setorAlvo'], string> = { balcao: 'Balcão', caixa: 'Caixa', ambos: 'Balcão + Caixa' };
 
 export function DinamicasPage() {
   const { profile } = useAuth();
@@ -163,7 +164,7 @@ function DinamicaCard({
   onDelete: () => void;
 }) {
   const isUnidade = d.metrica === 'unidade';
-  const realizado = computeDinamicaProgresso(d, sales);
+  const realizado = computeDinamicaProgresso(d, sales, collaborators);
   const pct = d.metaValor > 0 ? Math.min(100, (realizado / d.metaValor) * 100) : null;
   const ranking = computeDinamicaRanking(d, sales, collaborators)
     .filter((r) => r.valor > 0 || r.itens > 0)
@@ -185,6 +186,7 @@ function DinamicaCard({
         {d.metaValor > 0 && ` · meta ${isUnidade ? `${d.metaValor} un.` : fmtMoney(d.metaValor)}`}
         {d.produtos.length ? ` · ${d.produtos.length} produto(s) específico(s)` : ' · todos os produtos'}
         {d.participantes.length ? ` · ${d.participantes.length} participante(s)` : ' · todos os colaboradores'}
+        {` · Setor: ${SETOR_ALVO_LABEL[d.setorAlvo]}`}
       </div>
       {d.descricao && <div className="text-xs text-slate-400 mt-1">{d.descricao}</div>}
       <div className="text-xs font-mono text-green-400 mt-2">
@@ -225,6 +227,7 @@ function NewDynamicForm({
     metrica: 'valor' | 'unidade';
     produtos: string[];
     participantes: string[];
+    setor_alvo: Dynamic['setorAlvo'];
   }) => void;
   creating: boolean;
 }) {
@@ -232,6 +235,7 @@ function NewDynamicForm({
   const [titulo, setTitulo] = useState('');
   const [dataInicio, setDataInicio] = useState(today);
   const [dataFim, setDataFim] = useState(today);
+  const [setorAlvo, setSetorAlvo] = useState<Dynamic['setorAlvo']>('ambos');
   const [metrica, setMetrica] = useState<'valor' | 'unidade'>('valor');
   const [metaValor, setMetaValor] = useState(0);
   const [descricao, setDescricao] = useState('');
@@ -262,9 +266,11 @@ function NewDynamicForm({
       metrica,
       produtos,
       participantes,
+      setor_alvo: setorAlvo,
     });
     setTitulo('');
     setDescricao('');
+    setSetorAlvo('ambos');
     setMetaValor(0);
     setProdutos([]);
     setParticipantes([]);
@@ -295,6 +301,13 @@ function NewDynamicForm({
           <input type="number" value={metaValor} onChange={(e) => setMetaValor(Number(e.target.value))} className="input" />
         </Field>
       </div>
+      <Field label="Setor participante">
+        <select value={setorAlvo} onChange={(e) => setSetorAlvo(e.target.value as Dynamic['setorAlvo'])} className="input">
+          <option value="ambos">Balcão + Caixa</option>
+          <option value="balcao">Balcão</option>
+          <option value="caixa">Caixa</option>
+        </select>
+      </Field>
       <Field label="Descrição">
         <input
           value={descricao}

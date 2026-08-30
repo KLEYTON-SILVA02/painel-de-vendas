@@ -5,11 +5,12 @@ import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import type { CategoryKey } from '../../lib/business/classification';
 import { copyText, formatRankingText } from '../../lib/clipboard';
 import { diasRestantesNoMes, getGoal, getSuperMeta } from '../../lib/business/goals';
+import { todayISO } from '../../lib/dateRange';
 import { computeSummary, computeVendorExtract } from '../../lib/business/summary';
-import type { SummaryRow } from '../../lib/business/types';
+import type { CommissionRate, SummaryRow } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
-import { useCollaborators, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
+import { useCollaborators, useCommissionRates, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 
 export type PageCategoryKey = CategoryKey | 'LEVMEL' | 'CHIP';
@@ -17,7 +18,7 @@ export type PageCategoryKey = CategoryKey | 'LEVMEL' | 'CHIP';
 // Ported 1:1 from legacy/index-original.html (CATEGORIA_META / CATS / catLabel / catCls / .pill.*).
 const CATEGORY_META: Record<PageCategoryKey, { titulo: string; cor: string }> = {
   DERM: { titulo: '🩹 Dermocosméticos', cor: '#ff3df0' },
-  GEN: { titulo: '💊 Genérico & Similar', cor: '#14ff00' },
+  GEN: { titulo: '💊 Genérico', cor: '#14ff00' },
   MP: { titulo: '🏷️ Marcas Exclusivas', cor: '#a82bff' },
   MER: { titulo: '📦 Mercadoria Geral', cor: '#ff6a00' },
   LEVMEL: { titulo: '🍯 Levmel', cor: '#ffb700' },
@@ -25,7 +26,7 @@ const CATEGORY_META: Record<PageCategoryKey, { titulo: string; cor: string }> = 
 };
 const CAT_PLAIN_LABEL: Record<CategoryKey, string> = {
   DERM: 'Dermocosméticos',
-  GEN: 'Genérico & Similar',
+  GEN: 'Genérico',
   MP: 'Marcas Exclusivas',
   MER: 'Mercadoria Geral',
 };
@@ -43,6 +44,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   const { data: storeSettings } = useStoreSettings();
   const { data: specialLists } = useSpecialLists();
   const { data: store } = useStore();
+  const { data: commissionRates } = useCommissionRates();
   const { dashFrom, dashTo } = useDateRange();
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [extractMatricula, setExtractMatricula] = useState<string | null>(null);
@@ -50,7 +52,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   const [generating, setGenerating] = useState(false);
   const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
 
-  if (!collaborators || !sales || !goals || !storeSettings || !specialLists) {
+  if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !commissionRates) {
     return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
   }
 
@@ -100,10 +102,22 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
       },
     ];
   } else {
+    // Levmel/Chip aren't CategoryKeys, but reuse the same `goals` table
+    // (categoria=LEVMEL/CHIP, configured in ADM > Funções > Metas > Levmel/Chip).
+    const goal = goals[catKey];
+    const metaMensal = goal?.mensal ?? 0;
+    const metaDiaria = goal?.diaria ?? 0;
+    const today = todayISO();
+    const todayRanking = computeSummary(sales, collaborators, today, today, catKey, specialLists);
+    const itensHoje = todayRanking.reduce((a, r) => a + r.itens, 0);
+    const pctMensal = metaMensal > 0 ? Math.min(999, (totalItens / metaMensal) * 100) : 0;
+    const pctDiaria = metaDiaria > 0 ? Math.min(999, (itensHoje / metaDiaria) * 100) : 0;
     statCards = [
       { label: 'Dias restantes', value: `${dias} dia(s)`, color: '#14ff00' },
       { label: 'Itens vendidos', value: `${totalItens} un.`, color: '#00f0ff' },
       { label: 'Vendedores ativos', value: String(ranking.filter((r) => r.itens > 0).length), color: '#a82bff' },
+      { label: 'Meta Mensal', value: metaMensal > 0 ? `${totalItens}/${metaMensal} un. (${pctMensal.toFixed(0)}%)` : '—', color: '#ffd700' },
+      { label: 'Meta Diária (hoje)', value: metaDiaria > 0 ? `${itensHoje}/${metaDiaria} un. (${pctDiaria.toFixed(0)}%)` : '—', color: '#ff3df0' },
     ];
   }
 
@@ -242,6 +256,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
           from={dashFrom}
           to={dashTo}
           extract={extract}
+          commissionRate={catKey === 'DERM' || catKey === 'GEN' || catKey === 'MP' ? commissionRates[catKey] : undefined}
           onClose={() => setExtractMatricula(null)}
         />
       )}
@@ -306,16 +321,23 @@ function ExtractModal({
   from,
   to,
   extract,
+  commissionRate,
   onClose,
 }: {
   nome: string;
   from: string;
   to: string;
   extract: ReturnType<typeof computeVendorExtract>;
+  commissionRate?: CommissionRate;
   onClose: () => void;
 }) {
   const totalValor = extract.reduce((a, s) => a + s.valor, 0);
   const totalItens = extract.reduce((a, s) => a + s.qtd, 0);
+  // The extract modal is always about one specific vendor (extractMatricula),
+  // so this is exactly the "colaborador selecionado" moment the commission
+  // feature is scoped to — with no vendor selected there's no commission
+  // column anywhere in this screen, the sale's own valor is shown as-is.
+  const showCommission = !!commissionRate?.ativo;
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50" onClick={onClose}>
       <div
@@ -330,6 +352,7 @@ function ExtractModal({
         </div>
         <p className="text-xs text-slate-500 mb-3">
           {fmtDateBR(from)} — {fmtDateBR(to)} · {totalItens} itens · {fmtMoney(totalValor)}
+          {showCommission && ` · comissão (${commissionRate!.percentual}%): ${fmtMoney((totalValor * commissionRate!.percentual) / 100)}`}
         </p>
         {extract.length === 0 ? (
           <div className="text-sm text-slate-500 py-4 text-center">Nenhuma venda no período.</div>
@@ -341,6 +364,7 @@ function ExtractModal({
                 <th className="py-1.5 pr-3">Item</th>
                 <th className="py-1.5 pr-3">Qtd</th>
                 <th className="py-1.5 pr-3">Valor</th>
+                {showCommission && <th className="py-1.5 pr-3">Comissão</th>}
               </tr>
             </thead>
             <tbody>
@@ -350,6 +374,9 @@ function ExtractModal({
                   <td className="py-1.5 pr-3">{s.produto}</td>
                   <td className="py-1.5 pr-3 font-mono">{s.qtd}</td>
                   <td className="py-1.5 pr-3 font-mono">{fmtMoney(s.valor)}</td>
+                  {showCommission && (
+                    <td className="py-1.5 pr-3 font-mono text-amber-400">{fmtMoney((s.valor * commissionRate!.percentual) / 100)}</td>
+                  )}
                 </tr>
               ))}
             </tbody>

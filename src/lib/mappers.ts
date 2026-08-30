@@ -1,6 +1,6 @@
-import type { CategoryKey, ClassificationInputs } from './business/classification';
+import type { BioGroupKey, CategoryKey, ClassificationInputs, GoalCategoryKey } from './business/classification';
 import { CAT_KEYS } from './business/classification';
-import type { Collaborator, Dynamic, Goal, Sale } from './business/types';
+import type { BioGroupGoal, Collaborator, CommissionRate, Dynamic, Goal, Sale } from './business/types';
 import type { SpecialListItem } from './business/summary';
 import type { Tables } from '../types/database';
 
@@ -33,13 +33,30 @@ export function mapSale(row: Tables<'sales'>): Sale {
 
 export function mapGoal(row: Tables<'goals'>): Goal {
   return {
-    categoria: row.categoria as CategoryKey,
+    categoria: row.categoria as GoalCategoryKey,
     mensal: Number(row.mensal) || 0,
     diaria: Number(row.diaria) || 0,
     metrica: row.metrica as 'valor' | 'unidade',
     autoRedistribuir: row.auto_redistribuir,
     superMeta: Number(row.super_meta) || 0,
     superMetaAuto: row.super_meta_auto,
+  };
+}
+
+export function mapCommissionRate(row: Tables<'commission_rates'>): CommissionRate {
+  return {
+    categoria: row.categoria as CommissionRate['categoria'],
+    percentual: Number(row.percentual) || 0,
+    ativo: row.ativo,
+  };
+}
+
+export function mapBioGroupGoal(row: Tables<'bio_group_goals'>): BioGroupGoal {
+  return {
+    grupo: row.grupo as BioGroupKey,
+    meta1: Number(row.meta1) || 0,
+    meta2: Number(row.meta2) || 0,
+    meta3: Number(row.meta3) || 0,
   };
 }
 
@@ -54,6 +71,7 @@ export function mapDynamic(row: Tables<'dynamics'>): Dynamic {
     metrica: row.metrica as 'valor' | 'unidade',
     produtos: row.produtos,
     participantes: row.participantes,
+    setorAlvo: row.setor_alvo as Dynamic['setorAlvo'],
   };
 }
 

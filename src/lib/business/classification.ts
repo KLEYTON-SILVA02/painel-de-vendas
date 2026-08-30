@@ -10,6 +10,14 @@ export type CategoryKey = (typeof CAT_KEYS)[number];
 export const BIO_GROUP_KEYS = ['G1', 'G2', 'G3', 'G4'] as const;
 export type BioGroupKey = (typeof BIO_GROUP_KEYS)[number];
 
+/** Levmel/Chip aren't CategoryKeys — they're classified at runtime via
+ * special_lists keyword matching, not the sale.grupo field like DERM/GEN/MP/
+ * MER — but they share the same `goals` table/row shape (categoria is a
+ * plain string column), so the goals infrastructure (useGoals/useUpdateGoal)
+ * is reused for their Meta Mensal/Diária instead of a second table. */
+export const GOAL_UNIT_KEYS = ['LEVMEL', 'CHIP'] as const;
+export type GoalCategoryKey = CategoryKey | (typeof GOAL_UNIT_KEYS)[number];
+
 export const EXCLUSIVE_BRANDS_DEFAULT = [
   'dauf', 'ativday', 'be better', 'amoravel', 'eco clinic',
   'pague menos', 'p menos', 'choices', 'nutrabix', 'levmel', 'vita mais',

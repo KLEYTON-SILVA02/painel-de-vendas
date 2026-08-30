@@ -1,17 +1,19 @@
 import { useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
+import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
-import { DateRangeControls } from '../../components/DateRangeControls';
 import {
   auditBioOutsideBalcao,
   BALCAO_SETOR,
   computeBioSummary,
+  type BioSummaryRow,
 } from '../../lib/business/bio';
 import { classifyBio, type BioGroupKey } from '../../lib/business/classification';
-import type { BioGroupsProducts, BioWeights } from '../../lib/business/types';
+import { diasRestantesNoMes } from '../../lib/business/goals';
+import type { BioGroupGoal, BioGroupsProducts, BioWeights } from '../../lib/business/types';
 import { fmtDateBR } from '../../lib/format';
-import { useAddBioProduct, useDeleteBioProduct, useUpdateBioWeights } from '../../lib/mutations';
-import { useBioGroups, useCollaborators, useSales, useStoreSettings } from '../../lib/queries';
+import { useAddBioProduct, useDeleteBioProduct, useUpdateBioGroupGoal, useUpdateBioWeights } from '../../lib/mutations';
+import { useBioGroupGoals, useBioGroups, useCollaborators, useSales, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 
 const BIO_GROUP_KEYS: BioGroupKey[] = ['G1', 'G2', 'G3', 'G4'];
@@ -33,12 +35,13 @@ export function BioPage() {
   const { data: sales } = useSales();
   const { data: storeSettings } = useStoreSettings();
   const { data: bioGroupRows } = useBioGroups();
+  const { data: groupGoals } = useBioGroupGoals();
   const { dashFrom, dashTo } = useDateRange();
   const [view, setView] = useState<'ranking' | 'grupos' | 'pontos'>('ranking');
   const [bioFilter, setBioFilter] = useState<BioGroupKey | 'ALL'>('ALL');
   const [tableView, setTableView] = useState<'padrao' | 'bio'>('padrao');
 
-  if (!collaborators || !sales || !storeSettings || !bioGroupRows) {
+  if (!collaborators || !sales || !storeSettings || !bioGroupRows || !groupGoals) {
     return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
   }
 
@@ -56,7 +59,17 @@ export function BioPage() {
     );
   }
   if (view === 'pontos') {
-    return <BioPontosView storeId={profile?.store_id} bioWeights={bioWeights} onBack={() => setView('ranking')} />;
+    // computeBioSummary already scopes its rows to the Balcão sector.
+    const demonstrativo = computeBioSummary(sales, collaborators, bioGroups, bioWeights, dashFrom, dashTo, 'ALL');
+    return (
+      <BioPontosView
+        storeId={profile?.store_id}
+        bioWeights={bioWeights}
+        groupGoals={groupGoals}
+        demonstrativo={demonstrativo}
+        onBack={() => setView('ranking')}
+      />
+    );
   }
 
   const ranking = computeBioSummary(sales, collaborators, bioGroups, bioWeights, dashFrom, dashTo, bioFilter);
@@ -66,34 +79,41 @@ export function BioPage() {
     bioGroups,
   );
   const balcaoMatriculas = new Set(collaborators.filter((c) => c.setor === BALCAO_SETOR).map((c) => c.matricula));
+  // "Visão Padrão" stays Balcão-only (it's about the sector's general sales).
+  // "Visão BIOSINTÉTICA" shows every G1-G4 sale regardless of sector — a sale
+  // by someone outside Balcão isn't hidden, just flagged with "!" in the row.
   const salesForTable = sales
     .filter((s) => {
-      if (!balcaoMatriculas.has(s.matricula)) return false;
       if (s.dataISO && s.dataISO < dashFrom) return false;
       if (s.dataISO && s.dataISO > dashTo) return false;
       if (tableView === 'bio') return !!classifyBio(s.produto, bioGroups);
-      return true;
+      return balcaoMatriculas.has(s.matricula);
     })
     .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
     .slice(0, 150);
 
   const modeloRanking = storeSettings.modelo_ranking as 'escadinha' | 'lista';
+  const totalItensBio = ranking.reduce((a, r) => a + r.itens, 0);
+  const vendedoresAtivos = ranking.filter((r) => r.itens > 0).length;
+  const dias = diasRestantesNoMes();
+
+  const statCards: MfbStatCard[] = [
+    { label: 'Dias restantes do mês', value: `${dias} dia(s)`, color: '#14ff00' },
+    { label: 'Itens vendidos G1-G4', value: `${totalItensBio} un.`, color: '#a82bff' },
+    { label: 'Vendedores ativos', value: String(vendedoresAtivos), color: '#ff3df0' },
+    {
+      actions: [
+        { label: 'Gerenciar Grupos', color: '#00c2ff', onClick: () => setView('grupos') },
+        { label: 'Gerenciar Pontos', color: '#ff8a00', onClick: () => setView('pontos') },
+      ],
+    },
+  ];
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 flex items-center justify-between">
-        <div>
-          <h3 className="text-green-400 font-semibold">🧪 BIOSINTÉTICA — Ranking Balcão</h3>
-        </div>
-        <div className="flex items-center gap-2">
-          <DateRangeControls />
-          <button onClick={() => setView('grupos')} className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800">
-            Gerenciar Grupos
-          </button>
-          <button onClick={() => setView('pontos')} className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800">
-            Gerenciar Pontos
-          </button>
-        </div>
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+        <h3 className="text-green-400 font-semibold mb-3">🧪 BIOSINTÉTICA — Ranking Balcão</h3>
+        <MetricsFilterBar statCards={statCards} />
       </div>
 
       {foraDoBalcao.length > 0 && (
@@ -174,12 +194,23 @@ export function BioPage() {
                 {salesForTable.map((s) => {
                   const g = classifyBio(s.produto, bioGroups);
                   const pontos = g ? s.qtd * (bioWeights[g] || 0) : 0;
+                  const outsideBalcao = tableView === 'bio' && g && !balcaoMatriculas.has(s.matricula);
                   return (
                     <tr key={s.id} className="border-b border-slate-900">
                       <td className="py-1.5 pr-3 font-mono">{fmtDateBR(s.dataISO)}</td>
                       <td className="py-1.5 pr-3 font-mono">{s.matricula}</td>
                       <td className="py-1.5 pr-3">{s.vendedor}</td>
-                      <td className="py-1.5 pr-3">{s.produto}</td>
+                      <td className="py-1.5 pr-3">
+                        {s.produto}
+                        {outsideBalcao && (
+                          <span
+                            title="Produto da Biosintética vendido por colaborador fora do setor Balcão — não entra no ranking."
+                            className="ml-1 font-bold text-pink-400"
+                          >
+                            !
+                          </span>
+                        )}
+                      </td>
                       <td className="py-1.5 pr-3 font-mono">{s.qtd}</td>
                       <td className="py-1.5 pr-3">
                         {tableView === 'bio' ? (
@@ -296,45 +327,129 @@ function BioGruposView({
 function BioPontosView({
   storeId,
   bioWeights,
+  groupGoals,
+  demonstrativo,
   onBack,
 }: {
   storeId: string | undefined;
   bioWeights: BioWeights;
+  groupGoals: Partial<Record<BioGroupKey, BioGroupGoal>>;
+  demonstrativo: BioSummaryRow[];
   onBack: () => void;
 }) {
   const [weights, setWeights] = useState<BioWeights>(bioWeights);
+  // Biosintética's own meta tiers — bio_group_goals table, deliberately
+  // separate from the general `goals` table.
+  const [metas, setMetas] = useState<Record<BioGroupKey, [number, number, number]>>({
+    G1: [groupGoals.G1?.meta1 ?? 0, groupGoals.G1?.meta2 ?? 0, groupGoals.G1?.meta3 ?? 0],
+    G2: [groupGoals.G2?.meta1 ?? 0, groupGoals.G2?.meta2 ?? 0, groupGoals.G2?.meta3 ?? 0],
+    G3: [groupGoals.G3?.meta1 ?? 0, groupGoals.G3?.meta2 ?? 0, groupGoals.G3?.meta3 ?? 0],
+    G4: [groupGoals.G4?.meta1 ?? 0, groupGoals.G4?.meta2 ?? 0, groupGoals.G4?.meta3 ?? 0],
+  });
   const updateWeights = useUpdateBioWeights(storeId);
+  const updateGroupGoal = useUpdateBioGroupGoal(storeId);
+  const [saving, setSaving] = useState(false);
+
+  function setMeta(g: BioGroupKey, idx: 0 | 1 | 2, value: number) {
+    setMetas((prev) => {
+      const next: [number, number, number] = [...prev[g]] as [number, number, number];
+      next[idx] = value;
+      return { ...prev, [g]: next };
+    });
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await updateWeights.mutateAsync(weights);
+      for (const g of BIO_GROUP_KEYS) {
+        await updateGroupGoal.mutateAsync({ grupo: g, patch: { meta1: metas[g][0], meta2: metas[g][1], meta3: metas[g][2] } });
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-      <div className="flex items-center justify-between mb-1">
-        <h3 className="text-green-400 font-semibold">🧪 BIOSINTÉTICA — Gerenciar Pontos</h3>
-        <button onClick={onBack} className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800">
-          ← Voltar ao Ranking
-        </button>
-      </div>
-      <p className="text-xs text-slate-500 mb-4">Pontos ganhos por item vendido em cada grupo.</p>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-        {BIO_GROUP_KEYS.map((k) => (
-          <div key={k}>
-            <label className="block text-xs text-slate-400 mb-1">{k}</label>
-            <input
-              type="number"
-              step="0.1"
-              value={weights[k]}
-              onChange={(e) => setWeights((prev) => ({ ...prev, [k]: Number(e.target.value) }))}
-              className="input"
-            />
-          </div>
-        ))}
+    <div className="flex flex-col gap-4">
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="text-green-400 font-semibold">🧪 BIOSINTÉTICA — Gerenciar Pontos</h3>
+          <button onClick={onBack} className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800">
+            ← Voltar ao Ranking
+          </button>
+        </div>
+        <p className="text-xs text-slate-500 mb-4">Pontuação por item vendido e as 3 metas (patamares) de cada grupo.</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {BIO_GROUP_KEYS.map((k) => (
+            <div key={k} className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+              <div className="font-semibold text-sm mb-2">{GRUPO_LABELS[k]}</div>
+              <label className="block text-xs text-slate-400 mb-1">Pontuação</label>
+              <input
+                type="number"
+                step="0.1"
+                value={weights[k]}
+                onChange={(e) => setWeights((prev) => ({ ...prev, [k]: Number(e.target.value) }))}
+                className="input mb-2"
+              />
+              <label className="block text-xs text-slate-400 mb-1">Meta 1</label>
+              <input type="number" value={metas[k][0]} onChange={(e) => setMeta(k, 0, Number(e.target.value))} className="input mb-2" />
+              <label className="block text-xs text-slate-400 mb-1">Meta 2</label>
+              <input type="number" value={metas[k][1]} onChange={(e) => setMeta(k, 1, Number(e.target.value))} className="input mb-2" />
+              <label className="block text-xs text-slate-400 mb-1">Meta 3</label>
+              <input type="number" value={metas[k][2]} onChange={(e) => setMeta(k, 2, Number(e.target.value))} className="input" />
+            </div>
+          ))}
+        </div>
       </div>
       <button
-        onClick={() => updateWeights.mutate(weights)}
-        disabled={updateWeights.isPending}
-        className="rounded-lg bg-amber-500 text-slate-950 font-medium px-4 py-2 text-sm disabled:opacity-50"
+        onClick={handleSave}
+        disabled={saving}
+        className="self-start rounded-lg bg-amber-500 text-slate-950 font-medium px-4 py-2 text-sm disabled:opacity-50"
       >
-        {updateWeights.isPending ? 'Salvando…' : 'Salvar pontuação'}
+        {saving ? 'Salvando…' : 'Salvar Ajustes'}
       </button>
+
+      {/* Demonstrativo de metas: % de pontuação alcançado por colaborador em
+          cada grupo, relativo à Meta 1 (patamar base) daquele grupo. */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+        <h3 className="font-semibold mb-3 text-sm">Demonstrativo de Metas</h3>
+        {demonstrativo.length === 0 ? (
+          <div className="text-sm text-slate-500 py-4 text-center">Nenhum colaborador no setor Balcão.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-slate-400 border-b border-slate-800">
+                  <th className="py-2 pr-3">Colaborador</th>
+                  {BIO_GROUP_KEYS.map((g) => (
+                    <th key={g} className="py-2 pr-3">
+                      {g}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {demonstrativo.map((r) => (
+                  <tr key={r.matricula} className="border-b border-slate-900">
+                    <td className="py-2 pr-3">{r.apelido || r.nome}</td>
+                    {BIO_GROUP_KEYS.map((g) => {
+                      const pontosGrupo = r.qtd[g] * (bioWeights[g] || 0);
+                      const meta1 = groupGoals[g]?.meta1 ?? 0;
+                      const pct = meta1 > 0 ? Math.min(999, (pontosGrupo / meta1) * 100) : null;
+                      return (
+                        <td key={g} className="py-2 pr-3 font-mono font-semibold">
+                          {pct !== null ? `${pct.toFixed(0)}%` : '—'}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

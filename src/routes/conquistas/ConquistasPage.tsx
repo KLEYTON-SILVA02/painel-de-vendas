@@ -18,7 +18,7 @@ import { useDateRange } from '../DateRangeContext';
 const CONQUISTA_CATS: { key: ConquistaCategoria; label: string; color: string }[] = [
   { key: 'DERM', label: 'Dermocosméticos', color: '#ff3df0' },
   { key: 'MP', label: 'Marcas Exclusivas', color: '#a82bff' },
-  { key: 'GEN', label: 'Genérico & Similar', color: '#14ff00' },
+  { key: 'GEN', label: 'Genérico', color: '#14ff00' },
 ];
 
 type TierFilter = 'ALL' | 'SUPER' | (typeof CONQUISTA_TIERS)[number];

@@ -8,7 +8,7 @@ import { useBrandKeywords, useCatalog, useCollaborators, useExclusiveBrands, use
 
 const CAT_LABEL: Record<CategoryKey, string> = {
   DERM: 'Dermocosméticos',
-  GEN: 'Genérico & Similar',
+  GEN: 'Genérico',
   MP: 'Marcas Exclusivas',
   MER: 'Mercadoria Geral',
 };

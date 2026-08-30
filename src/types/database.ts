@@ -14,6 +14,41 @@ export type Database = {
   }
   public: {
     Tables: {
+      bio_group_goals: {
+        Row: {
+          grupo: string
+          id: string
+          meta1: number
+          meta2: number
+          meta3: number
+          store_id: string
+        }
+        Insert: {
+          grupo: string
+          id?: string
+          meta1?: number
+          meta2?: number
+          meta3?: number
+          store_id: string
+        }
+        Update: {
+          grupo?: string
+          id?: string
+          meta1?: number
+          meta2?: number
+          meta3?: number
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bio_group_goals_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bio_groups: {
         Row: {
           created_at: string
@@ -163,6 +198,38 @@ export type Database = {
           },
         ]
       }
+      commission_rates: {
+        Row: {
+          ativo: boolean
+          categoria: string
+          id: string
+          percentual: number
+          store_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          categoria: string
+          id?: string
+          percentual?: number
+          store_id: string
+        }
+        Update: {
+          ativo?: boolean
+          categoria?: string
+          id?: string
+          percentual?: number
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commission_rates_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conquista_super_metas: {
         Row: {
           categoria: string
@@ -213,6 +280,7 @@ export type Database = {
           metrica: string
           participantes: string[]
           produtos: string[]
+          setor_alvo: string
           store_id: string
           titulo: string
         }
@@ -226,6 +294,7 @@ export type Database = {
           metrica?: string
           participantes?: string[]
           produtos?: string[]
+          setor_alvo?: string
           store_id: string
           titulo: string
         }
@@ -239,6 +308,7 @@ export type Database = {
           metrica?: string
           participantes?: string[]
           produtos?: string[]
+          setor_alvo?: string
           store_id?: string
           titulo?: string
         }
@@ -274,6 +344,35 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "exclusive_brands_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      function_icons: {
+        Row: {
+          function_key: string
+          icon_url: string | null
+          id: string
+          store_id: string
+        }
+        Insert: {
+          function_key: string
+          icon_url?: string | null
+          id?: string
+          store_id: string
+        }
+        Update: {
+          function_key?: string
+          icon_url?: string | null
+          id?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "function_icons_store_id_fkey"
             columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "stores"

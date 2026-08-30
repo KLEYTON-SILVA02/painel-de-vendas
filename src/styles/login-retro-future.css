@@ -1,0 +1,238 @@
+/* ============================================================
+   Login — "Retro Future" reskin (Colorlib login-forms/retro-future
+   spec). Purely visual: every rule here is scoped under
+   .mv2-login-page and only re-themes the existing mv2-* component
+   classes (role toggle, inputs, buttons, social row) already used
+   by LoginPage.tsx — no markup/behavior changes, no impact on
+   those same class names used elsewhere (Dinâmicas/Biosintética
+   forms), since those live outside this scope.
+   ============================================================ */
+
+.mv2-login-page {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #0a0a2e 0%, #16213e 25%, #0f3460 50%, #533483 75%, #e94560 100%);
+}
+
+/* Blurred colored blobs (roxo/azul/rosa) scattered behind the card */
+.mv2-login-page::before {
+  content: '';
+  position: absolute;
+  inset: -10%;
+  z-index: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle at 18% 22%, rgba(147, 51, 234, 0.5), transparent 34%),
+    radial-gradient(circle at 85% 18%, rgba(59, 130, 246, 0.42), transparent 32%),
+    radial-gradient(circle at 82% 88%, rgba(233, 69, 96, 0.42), transparent 36%),
+    radial-gradient(circle at 12% 82%, rgba(83, 52, 131, 0.48), transparent 34%);
+  filter: blur(40px);
+}
+
+.mv2-login-page .mv2-login-card {
+  position: relative;
+  z-index: 1;
+  border-radius: var(--mv2-radius-lg);
+  background: rgba(18, 12, 38, 0.35);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(255, 0, 255, 0.1);
+}
+
+/* Animated chrome-shift gradient ring: a masked pseudo-element so only
+   the 2px border strip is visible (not a rotating transform — that
+   caused a diagonal-streak render bug in the champion/dinâmica cards
+   work earlier this session — only the gradient's fill position
+   animates, the ring shape itself stays static). */
+.mv2-login-page .mv2-login-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  padding: 2px;
+  background-image: linear-gradient(90deg, #ff2ec4, #00e5ff, #ffe600, #ff2ec4);
+  background-size: 300% 100%;
+  animation: mv2ChromeShift 6s linear infinite;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+@keyframes mv2ChromeShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 300% 50%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mv2-login-page .mv2-login-card::before {
+    animation: none;
+  }
+}
+
+/* Logo — 64px pearlescent circle; ready to hold a future ADM-uploaded
+   brand image in place of the default icon (same swap point the
+   Gerenciamento de Ícones module already uses for other functions). */
+.mv2-login-page .mv2-logo-ring {
+  width: 64px;
+  height: 64px;
+  clip-path: none;
+  background: linear-gradient(145deg, #e6e6fa, #c0c0ff);
+  box-shadow: 0 4px 18px rgba(192, 192, 255, 0.45);
+  animation: mv2LogoRotate 8s linear infinite;
+}
+@keyframes mv2LogoRotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mv2-login-page .mv2-logo-ring {
+    animation: none;
+  }
+}
+.mv2-login-page .mv2-logo-ring svg {
+  width: 26px;
+  height: 26px;
+  stroke: #2d1b69;
+}
+
+/* Título */
+.mv2-login-page .mv2-login-header h1 {
+  font-family: 'Orbitron', 'Poppins', sans-serif;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  background: linear-gradient(90deg, #ffffff, #ff4da6 50%, #00e5ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.mv2-login-page .mv2-login-header .mv2-subtitle {
+  color: rgba(255, 255, 255, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Seletor de perfil */
+.mv2-login-page .mv2-role-toggle {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+.mv2-login-page .mv2-role-toggle button {
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.mv2-login-page .mv2-role-toggle button.active {
+  background: linear-gradient(90deg, #ff2ec4, #00e5ff);
+  color: #fff;
+  box-shadow: 0 0 14px rgba(255, 77, 166, 0.4);
+}
+
+/* Campos de input */
+.mv2-login-page .mv2-input-group {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.mv2-login-page .mv2-input-group:focus-within {
+  border-color: #ff4da6;
+  box-shadow: 0 0 15px rgba(255, 77, 166, 0.3);
+}
+.mv2-login-page .mv2-input-group svg {
+  color: rgba(255, 255, 255, 0.75);
+}
+.mv2-login-page .mv2-input-group input {
+  color: #fff;
+}
+.mv2-login-page .mv2-input-group input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+}
+
+/* Lembrar-me / Esqueci senha */
+.mv2-login-page .mv2-form-row {
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.mv2-login-page .mv2-form-row .mv2-remember {
+  color: rgba(255, 255, 255, 0.75);
+}
+.mv2-login-page .mv2-form-row input[type='checkbox'] {
+  accent-color: #ff4da6;
+}
+.mv2-login-page .mv2-form-row .mv2-forgot {
+  color: #ff4da6;
+  font-style: normal;
+}
+
+/* Botão Entrar */
+.mv2-login-page .mv2-btn-primary {
+  height: 56px;
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  background-image: linear-gradient(90deg, #ff2ec4, #00e5ff, #ffe600, #ff2ec4);
+  background-size: 300% 100%;
+  animation: mv2ButtonShift 3s linear infinite;
+}
+@keyframes mv2ButtonShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 300% 50%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mv2-login-page .mv2-btn-primary {
+    animation: none;
+  }
+}
+.mv2-login-page .mv2-btn-primary:hover {
+  filter: brightness(1.1);
+}
+
+/* Link secundário (rodapé "Primeiro acesso / Novo por aqui") */
+.mv2-login-page .mv2-link-secondary {
+  color: #ff4da6;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Divisor "ou" */
+.mv2-login-page .mv2-divider {
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+}
+.mv2-login-page .mv2-divider::before,
+.mv2-login-page .mv2-divider::after {
+  background: rgba(255, 255, 255, 0.25);
+  opacity: 1;
+}
+
+/* Cards de contato — mesmo "vidro" dos demais campos */
+.mv2-login-page .mv2-social-row a,
+.mv2-login-page .mv2-social-row button {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  transition: filter 0.15s ease, border-color 0.15s ease;
+}
+.mv2-login-page .mv2-social-row a:hover,
+.mv2-login-page .mv2-social-row button:hover {
+  filter: brightness(1.2);
+}
+.mv2-login-page .mv2-social-row .mv2-whatsapp {
+  color: #25d366;
+  border-color: rgba(37, 211, 102, 0.35);
+}
+.mv2-login-page .mv2-social-row .mv2-instagram {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(220, 39, 67, 0.35);
+  color: #ff4da6;
+}

@@ -12,18 +12,32 @@ export interface DinamicaRankingRow {
   itens: number;
 }
 
+/** Whether a collaborator's sector matches the dynamic's target sector —
+ * 'ambos' (the default, and every dynamic created before this field
+ * existed) never restricts. Determines who can participate, be counted
+ * toward the dynamic's total, and appear in its ranking. */
+export function dynamicAllowsCollaborator(din: Dynamic, collaborator: Pick<Collaborator, 'setor'>): boolean {
+  if (din.setorAlvo === 'ambos') return true;
+  const wanted = din.setorAlvo === 'balcao' ? 'Balcão' : 'Caixa';
+  return collaborator.setor === wanted;
+}
+
 /** Progress of a dynamic — honors the optional product list (empty = all
- * products) and participant list (empty = all collaborators), using the
- * dynamic's own metric (R$ or units). */
-export function computeDinamicaProgresso(din: Dynamic, sales: Sale[]): number {
+ * products), participant list (empty = all collaborators), and setorAlvo
+ * (a sale by a collaborator outside the target sector doesn't count),
+ * using the dynamic's own metric (R$ or units). */
+export function computeDinamicaProgresso(din: Dynamic, sales: Sale[], collaborators: Collaborator[]): number {
   const produtosSet = din.produtos.length ? new Set(din.produtos.map((p) => normalize(p))) : null;
   const participantesSet = din.participantes.length ? new Set(din.participantes) : null;
+  const collaboratorByMatricula = new Map(collaborators.map((c) => [c.matricula, c]));
   let valor = 0;
   let itens = 0;
   sales.forEach((s) => {
     if (!s.dataISO || s.dataISO < din.dataInicio || s.dataISO > din.dataFim) return;
     if (produtosSet && !produtosSet.has(normalize(s.produto))) return;
     if (participantesSet && !participantesSet.has(s.matricula)) return;
+    const c = collaboratorByMatricula.get(s.matricula);
+    if (din.setorAlvo !== 'ambos' && (!c || !dynamicAllowsCollaborator(din, c))) return;
     valor += Number(s.valor) || 0;
     itens += Number(s.qtd) || 0;
   });
@@ -42,6 +56,7 @@ export function computeDinamicaRanking(
 
   collaborators.forEach((c) => {
     if (participantesSet && !participantesSet.has(c.matricula)) return;
+    if (!dynamicAllowsCollaborator(din, c)) return;
     map[c.matricula] = {
       matricula: c.matricula,
       nome: c.nome,
@@ -58,6 +73,7 @@ export function computeDinamicaRanking(
     if (!map[s.matricula]) {
       if (participantesSet) return;
       const c = collaborators.find((cc) => cc.matricula === s.matricula);
+      if (c && !dynamicAllowsCollaborator(din, c)) return;
       map[s.matricula] = {
         matricula: s.matricula,
         nome: c ? c.nome : s.vendedor,

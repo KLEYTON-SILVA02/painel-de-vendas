@@ -8,12 +8,15 @@ import { HamburgerIcon, MedalIcon, RefreshIcon } from '../components/icons/NavIc
 import { Sidebar } from '../components/Sidebar';
 import type { Horario } from '../lib/business/horario';
 import { supabase } from '../lib/supabase';
+import { useIsMobileV2 } from '../lib/useIsMobileV2';
 import { useStoreSettings } from '../lib/queries';
+import { MobileAdminShell } from './admin-mobile/MobileAdminShell';
 import { AdminLandingPage } from './admin/AdminLandingPage';
 import { AuditoriaPage } from './admin/AuditoriaPage';
 import { BackupPage } from './admin/BackupPage';
 import { ColaboradoresPage } from './admin/ColaboradoresPage';
 import { ConfiguracoesPage } from './admin/ConfiguracoesPage';
+import { IconesPage } from './admin/IconesPage';
 import { MinhaLojaPage } from './admin/MinhaLojaPage';
 import { ProdutosPage } from './admin/ProdutosPage';
 
@@ -38,6 +41,7 @@ export function AppShell() {
   const queryClient = useQueryClient();
   const location = useLocation();
   const { data: storeSettings } = useStoreSettings();
+  const isMobileV2 = useIsMobileV2();
 
   const storeQuery = useQuery({
     queryKey: ['store', profile?.store_id],
@@ -65,6 +69,16 @@ export function AppShell() {
     return (
       <DateRangeProvider>
         <CollaboratorShell />
+      </DateRangeProvider>
+    );
+  }
+
+  // Mobile v2 reskin (see the "Scanner Técnico" spec): below 1024px, admins
+  // get the new topbar+category-menu shell instead of the desktop Sidebar.
+  if (isMobileV2) {
+    return (
+      <DateRangeProvider>
+        <MobileAdminShell />
       </DateRangeProvider>
     );
   }
@@ -158,6 +172,7 @@ export function AppShell() {
             <Route path="/admin/backup" element={<BackupPage />} />
             <Route path="/admin/minha-loja" element={<MinhaLojaPage />} />
             <Route path="/admin/configuracoes" element={<ConfiguracoesPage />} />
+            <Route path="/admin/icones" element={<IconesPage />} />
           </Routes>
           </main>
         </div>

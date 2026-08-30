@@ -1,0 +1,1126 @@
+/* ============================================================
+   Mobile v2 — ported from the "Scanner Técnico" spec PDFs
+   (Login/Início + the 8 category interfaces). Classes are
+   namespaced "mv2-" and variables scoped under .mv2 so this
+   never collides with the existing desktop Tailwind-based UI.
+   Values are taken verbatim from the spec's own CSS reference
+   pages, not approximated.
+   ============================================================ */
+
+.mv2 {
+  /* Neutros / fundos */
+  --mv2-bg-principal: #040811;
+  --mv2-bg-cards: #080815;
+  --mv2-bg-input: #091a38;
+  --mv2-texto: #ffffff;
+  --mv2-texto-2: #c9c9c9;
+
+  /* Marca / CTA */
+  --mv2-ciano: #00b6da;
+  --mv2-ciano-claro: #6bc8dd;
+  --mv2-azul-royal: #213f85;
+  --mv2-roxo-marca: #5c3795;
+  --mv2-indigo: #2e3593;
+
+  /* Categorias */
+  --mv2-roxo-cat: #813c97;
+  --mv2-magenta: #551353;
+  --mv2-rosa: #b84c9c;
+
+  /* Status / podio */
+  --mv2-dourado: #fed400;
+  --mv2-ambar: #f0b514;
+  --mv2-laranja: #f26122;
+  --mv2-bronze: #ed1c24;
+  --mv2-verde: #698b46;
+
+  /* Novas variáveis do adendo (8 interfaces) */
+  --mv2-azul-violeta: #2f498e; /* barra Dinâmicas */
+  --mv2-dourado-oliva: #b78d2c; /* barra Levmel/Chip */
+  --mv2-verde-lima: #96c93c; /* meta diária */
+
+  --mv2-radius-sm: 6px;
+  --mv2-radius-md: 12px;
+  --mv2-radius-lg: 24px;
+
+  background: var(--mv2-bg-principal);
+  color: var(--mv2-texto);
+  font-family: 'Poppins', 'Segoe UI', sans-serif;
+  min-height: 100%;
+}
+
+.mv2 * {
+  box-sizing: border-box;
+}
+
+/* ---------- 1. Login card ---------- */
+.mv2-login-card {
+  width: 328px;
+  max-width: 100%;
+  margin: 48px auto;
+  padding: 24px 28px;
+  background: linear-gradient(180deg, #02948b 0%, #04488f 100%);
+  border-radius: var(--mv2-radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ---------- 2. Cabeçalho / Logotipo ---------- */
+.mv2-login-header {
+  text-align: center;
+  margin-bottom: 4px;
+}
+.mv2-login-header .mv2-logo-ring {
+  width: 84px;
+  height: 84px;
+  margin: 0 auto 6px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 90deg,
+    var(--mv2-indigo),
+    var(--mv2-roxo-marca),
+    var(--mv2-roxo-marca),
+    var(--mv2-indigo)
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mv2-login-header h1 {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+.mv2-login-header .mv2-subtitle {
+  font-size: 10px;
+  color: var(--mv2-texto-2);
+  font-weight: 400;
+  margin-top: 2px;
+}
+
+/* ---------- 3. Seletor de perfil (toggle) ---------- */
+.mv2-role-toggle {
+  display: flex;
+  background: var(--mv2-bg-input);
+  border-radius: var(--mv2-radius-sm);
+  overflow: hidden;
+}
+.mv2-role-toggle button {
+  flex: 1;
+  padding: 8px 0;
+  border: none;
+  background: transparent;
+  color: var(--mv2-texto);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mv2-role-toggle button.active {
+  background: var(--mv2-ciano);
+  color: #fff;
+}
+
+/* ---------- 4. Campos de formulário (inputs) ---------- */
+.mv2-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--mv2-bg-input);
+  border-radius: var(--mv2-radius-sm);
+  padding: 10px 12px;
+}
+.mv2-input-group svg,
+.mv2-input-group i {
+  color: var(--mv2-texto);
+  opacity: 0.8;
+}
+.mv2-input-group input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--mv2-texto);
+  font-size: 12px;
+  min-width: 0;
+}
+.mv2-input-group input::placeholder {
+  color: var(--mv2-texto-2);
+}
+
+/* ---------- 5. Botão Entrar (CTA) ---------- */
+.mv2-btn-primary {
+  width: 100%;
+  padding: 12px 0;
+  background: var(--mv2-ciano);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  border-radius: var(--mv2-radius-sm);
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+.mv2-btn-primary:hover {
+  filter: brightness(1.08);
+}
+.mv2-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ---------- 6/7. Links auxiliares, checkbox e divisor ---------- */
+.mv2-link-secondary {
+  display: block;
+  text-align: center;
+  font-size: 10px;
+  color: var(--mv2-texto);
+  text-decoration: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.mv2-form-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+}
+.mv2-form-row .mv2-remember {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.mv2-form-row input[type='checkbox'] {
+  accent-color: var(--mv2-ciano);
+}
+.mv2-form-row .mv2-forgot {
+  color: var(--mv2-texto-2);
+  font-style: italic;
+  text-decoration: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.mv2-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 9px;
+  color: var(--mv2-texto-2);
+  text-align: center;
+}
+.mv2-divider::before,
+.mv2-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--mv2-texto-2);
+  opacity: 0.4;
+}
+
+/* ---------- 8. Cards de contato ---------- */
+.mv2-social-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.mv2-social-row a,
+.mv2-social-row button {
+  flex: 1;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--mv2-ciano);
+  border-radius: var(--mv2-radius-sm);
+  background: var(--mv2-bg-cards);
+  color: var(--mv2-texto);
+  cursor: pointer;
+  font-size: 16px;
+}
+.mv2-social-row .mv2-whatsapp {
+  color: #25d366;
+}
+.mv2-social-row .mv2-instagram {
+  background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+  border-color: transparent;
+  color: #fff;
+}
+
+/* ============================================================
+   PÁGINA INICIAL
+   ============================================================ */
+
+/* ---------- 1. Barra fixa superior ---------- */
+.mv2-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #080a08;
+}
+.mv2-topbar .mv2-store-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mv2-topbar .mv2-icon-btn {
+  background: none;
+  border: none;
+  color: var(--mv2-texto);
+  font-size: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.mv2-topbar .mv2-close-timer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(96, 187, 70, 0.15);
+  border: 1px solid var(--mv2-verde);
+  color: var(--mv2-verde);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.mv2-topbar .mv2-close-timer.mv2-closed {
+  border-color: var(--mv2-bronze);
+  color: var(--mv2-bronze);
+  background: rgba(237, 28, 36, 0.15);
+}
+
+/* ---------- 2. Barra fixa do menu (categorias) ---------- */
+.mv2-category-menu {
+  display: flex;
+  gap: 10px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  background: #080a08;
+  scrollbar-width: none;
+}
+.mv2-category-menu::-webkit-scrollbar {
+  display: none;
+}
+.mv2-category-menu .mv2-cat-icon {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 15px;
+  text-decoration: none;
+  cursor: pointer;
+  border: 2px solid transparent;
+}
+.mv2-category-menu .mv2-cat-icon.active {
+  border-color: #fff;
+}
+/* cor individual por categoria */
+.mv2-cat-icon.mv2-cat-inicio {
+  background: var(--mv2-ciano);
+}
+.mv2-cat-icon.mv2-cat-ranking {
+  background: var(--mv2-dourado);
+  color: #201a00;
+}
+.mv2-cat-icon.mv2-cat-dermo {
+  background: var(--mv2-rosa);
+}
+.mv2-cat-icon.mv2-cat-generico {
+  background: var(--mv2-verde);
+}
+.mv2-cat-icon.mv2-cat-exclusiva {
+  background: var(--mv2-roxo-cat);
+}
+.mv2-cat-icon.mv2-cat-mercgeral {
+  background: var(--mv2-laranja);
+}
+.mv2-cat-icon.mv2-cat-levmel {
+  background: var(--mv2-ambar);
+  color: #201a00;
+}
+.mv2-cat-icon.mv2-cat-chip {
+  background: var(--mv2-dourado);
+  color: #201a00;
+}
+.mv2-cat-icon.mv2-cat-biosintetica {
+  background: var(--mv2-verde);
+}
+.mv2-cat-icon.mv2-cat-dinamicas {
+  background: var(--mv2-azul-violeta);
+}
+.mv2-cat-icon.mv2-cat-adm {
+  background: var(--mv2-azul-royal);
+}
+
+/* ---------- 3. Card geral de vendas ---------- */
+.mv2-sales-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #080a08;
+  border: 1px solid var(--mv2-ciano-claro);
+  border-radius: var(--mv2-radius-sm);
+  padding: 10px 14px;
+  margin: 8px 18px;
+}
+.mv2-sales-summary .mv2-label {
+  font-size: 8px;
+  color: var(--mv2-texto-2);
+  text-transform: uppercase;
+}
+.mv2-sales-summary .mv2-value {
+  font-size: 18px;
+  font-weight: 700;
+}
+.mv2-sales-summary .mv2-target {
+  text-align: right;
+}
+.mv2-sales-summary .mv2-target .mv2-value {
+  color: var(--mv2-verde);
+}
+
+/* ---------- 4. Cards de métricas (grid 2x2) ---------- */
+.mv2-metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0 18px 16px;
+}
+.mv2-metric-card {
+  background: #080a08;
+  border: 1px solid var(--mv2-card-color, var(--mv2-ciano));
+  border-radius: var(--mv2-radius-sm);
+  padding: 8px 10px;
+}
+.mv2-metric-card .mv2-label {
+  font-size: 7px;
+  color: var(--mv2-card-color, var(--mv2-ciano));
+  text-transform: uppercase;
+}
+.mv2-metric-card .mv2-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--mv2-card-color, var(--mv2-texto));
+}
+.mv2-metric-card.mv2-meta {
+  --mv2-card-color: var(--mv2-azul-royal);
+}
+.mv2-metric-card.mv2-falta {
+  --mv2-card-color: var(--mv2-rosa);
+}
+.mv2-metric-card.mv2-saldo {
+  --mv2-card-color: var(--mv2-laranja);
+}
+.mv2-metric-card.mv2-itens {
+  --mv2-card-color: var(--mv2-verde);
+}
+
+/* ---------- 5. Filtro de datas — recolhido ---------- */
+.mv2-date-filter {
+  margin: 0 18px 16px;
+  background: var(--mv2-bg-cards);
+  border: 1px solid var(--mv2-roxo-marca);
+  border-radius: var(--mv2-radius-md);
+  padding: 8px;
+}
+.mv2-month-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.mv2-month-grid button {
+  background: var(--mv2-bg-input);
+  border: 1px solid var(--mv2-ciano-claro);
+  color: var(--mv2-texto);
+  border-radius: 4px;
+  font-size: 8px;
+  padding: 4px 0;
+  cursor: pointer;
+}
+.mv2-month-grid button.active {
+  background: var(--mv2-ciano-claro);
+  color: #002;
+}
+.mv2-mode-row {
+  display: flex;
+  gap: 6px;
+}
+.mv2-mode-row .mv2-pill {
+  flex: 1;
+  text-align: center;
+  border-radius: 999px;
+  border: 1px solid var(--mv2-ciano-claro);
+  font-size: 8px;
+  padding: 4px 0;
+  background: transparent;
+  color: var(--mv2-texto);
+  cursor: pointer;
+}
+.mv2-mode-row .mv2-pill.active {
+  background: var(--mv2-ciano-claro);
+  color: #002;
+}
+
+/* ---------- 6. Filtro de datas — expandido (calendário) ---------- */
+.mv2-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-top: 8px;
+}
+.mv2-calendar-grid .mv2-day {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 1px solid var(--mv2-roxo-marca);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  background: transparent;
+  color: var(--mv2-texto);
+  cursor: pointer;
+}
+.mv2-calendar-grid .mv2-day.selected {
+  background: var(--mv2-dourado);
+  border-color: var(--mv2-dourado);
+  color: #080a08;
+  font-weight: 700;
+}
+.mv2-weekday-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 8px;
+  text-align: center;
+  color: var(--mv2-texto-2);
+}
+.mv2-weekday-row .mv2-weekday.active {
+  background: var(--mv2-bronze);
+  color: #fff;
+  border-radius: 4px;
+}
+.mv2-weekday-row .mv2-weekday.active.sat {
+  background: var(--mv2-ciano-claro);
+  color: #002;
+}
+
+/* ---------- 7. Card do campeão de vendas ---------- */
+.mv2-champion-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 18px 16px;
+  padding: 8px 12px;
+  background: var(--mv2-bg-cards);
+  border: 1px solid var(--mv2-dourado);
+  border-radius: var(--mv2-radius-sm);
+}
+.mv2-champion-card .mv2-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 2px solid var(--mv2-ciano-claro);
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--mv2-bg-input);
+}
+.mv2-champion-card .mv2-info {
+  flex: 1;
+  min-width: 0;
+}
+.mv2-champion-card .mv2-badge {
+  font-size: 8px;
+  color: var(--mv2-dourado);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.mv2-champion-card .mv2-name {
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mv2-champion-card .mv2-stars {
+  color: var(--mv2-dourado);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+/* ---------- 8. Ranking de vendas (colunas tipo pódio) ---------- */
+.mv2-ranking-track {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin: 0 18px 16px;
+  padding-bottom: 6px;
+}
+.mv2-ranking-col {
+  flex: 0 0 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-radius: var(--mv2-radius-sm);
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--mv2-col-color, var(--mv2-azul-royal)) 0%, #04080f 100%);
+}
+.mv2-ranking-col .mv2-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #fff;
+  margin: 8px 0;
+  object-fit: cover;
+}
+.mv2-ranking-col .mv2-position {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--mv2-col-color, var(--mv2-azul-royal));
+  border: 2px solid #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 8px 0;
+}
+.mv2-ranking-col.mv2-first {
+  --mv2-col-color: var(--mv2-dourado);
+}
+.mv2-ranking-col.mv2-second {
+  --mv2-col-color: #c9c9c9;
+}
+.mv2-ranking-col.mv2-third {
+  --mv2-col-color: var(--mv2-bronze);
+}
+.mv2-ranking-col .mv2-name {
+  font-size: 8px;
+  font-weight: 700;
+  text-align: center;
+  padding: 0 2px 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* ---------- 9. Gráfico de metas por categoria (gauge) ----------
+   Rendered as SVG (see GoalGauge.tsx) rather than the conic-gradient +
+   radial-mask trick from the spec's CSS reference — that combination
+   doesn't produce a correct arc on a non-square aspect-ratio box (a
+   fragile geometry constraint of the trick itself, not the design). */
+.mv2-goals-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 0 18px 18px;
+}
+.mv2-goals-grid .mv2-goal-item {
+  text-align: center;
+}
+.mv2-goals-grid .mv2-goal-item .mv2-goal-name {
+  font-size: 10px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+.mv2-goals-grid .mv2-goal-item .mv2-goal-value {
+  font-size: 9px;
+  color: var(--mv2-texto-2);
+}
+
+/* ============================================================
+   SCREENS: Ranking / Dermo / Marcas Excl. / Genéricos / Levmel
+   / Chip / Biosintética / Dinâmicas
+   ============================================================ */
+
+/* ---------- Barra de título com gradiente por categoria ---------- */
+.mv2-screen-title {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 12px;
+  background: linear-gradient(90deg, #000 0%, var(--mv2-accent, var(--mv2-ciano)) 100%);
+}
+.mv2-screen-title.mv2-ranking {
+  --mv2-accent: var(--mv2-dourado);
+}
+.mv2-screen-title.mv2-dermo {
+  --mv2-accent: var(--mv2-rosa);
+}
+.mv2-screen-title.mv2-exclusivas {
+  --mv2-accent: var(--mv2-roxo-cat);
+}
+.mv2-screen-title.mv2-genericos {
+  --mv2-accent: var(--mv2-laranja);
+}
+.mv2-screen-title.mv2-levmel {
+  --mv2-accent: var(--mv2-dourado-oliva);
+}
+.mv2-screen-title.mv2-chip {
+  --mv2-accent: var(--mv2-dourado-oliva);
+}
+.mv2-screen-title.mv2-biosintetica {
+  --mv2-accent: var(--mv2-rosa);
+}
+.mv2-screen-title.mv2-dinamicas {
+  --mv2-accent: var(--mv2-azul-violeta);
+}
+
+/* ---------- Cards de metricas com status MG/SM ---------- */
+.mv2-metric-goal-card {
+  border: 1px solid var(--mv2-card-color, var(--mv2-ciano));
+  border-radius: var(--mv2-radius-sm);
+  padding: 8px 10px;
+  background: #080a08;
+}
+.mv2-metric-goal-card .mv2-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.mv2-metric-goal-card .mv2-progress {
+  height: 3px;
+  border-radius: 2px;
+  background: #1a1a1a;
+  margin-top: 4px;
+  overflow: hidden;
+}
+.mv2-metric-goal-card .mv2-progress span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--mv2-card-color, var(--mv2-ciano));
+}
+.mv2-status-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-size: 7px;
+  font-weight: 700;
+  color: #666;
+  background: #1a1a1a;
+}
+.mv2-status-pill.mv2-on {
+  background: rgba(96, 187, 70, 0.2);
+  color: var(--mv2-verde);
+}
+
+/* ---------- Célula de ranking (lista) + ações ---------- */
+.mv2-ranking-list-card {
+  border: 1px solid var(--mv2-ciano-claro);
+  border-radius: var(--mv2-radius-sm);
+  padding: 8px;
+  margin: 0 18px 8px;
+}
+.mv2-ranking-list-card .mv2-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.mv2-ranking-list-card .mv2-row:last-child {
+  border-bottom: none;
+}
+.mv2-ranking-list-card .mv2-pos {
+  width: 14px;
+  font-weight: 700;
+}
+.mv2-ranking-list-card .mv2-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--mv2-ciano-claro);
+  object-fit: cover;
+  background: var(--mv2-bg-input);
+}
+.mv2-ranking-list-card .mv2-name {
+  flex: 1;
+  font-size: 10px;
+  font-weight: 700;
+}
+.mv2-ranking-list-card .mv2-qty {
+  color: var(--mv2-laranja);
+  font-weight: 700;
+  font-size: 9px;
+}
+.mv2-ranking-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 18px 8px;
+}
+.mv2-ranking-actions .mv2-row {
+  display: flex;
+}
+.mv2-view-toggle {
+  flex: 1;
+  border-radius: 999px 0 0 999px;
+  border: none;
+  font-size: 9px;
+  cursor: pointer;
+  padding: 6px 0;
+  background: #1a1a1a;
+  color: var(--mv2-texto-2);
+}
+.mv2-view-toggle.active {
+  background: var(--mv2-ciano-claro);
+  color: #002;
+}
+.mv2-view-toggle:not(.active) {
+  background: #1a1a1a;
+  color: #fff;
+}
+.mv2-view-toggle:last-child {
+  border-radius: 0 999px 999px 0;
+}
+.mv2-btn-outline {
+  border: 1px solid var(--mv2-ciano-claro);
+  background: transparent;
+  color: #fff;
+  border-radius: 999px;
+  padding: 6px 0;
+  font-size: 9px;
+  cursor: pointer;
+  flex: 1;
+}
+.mv2-btn-generate {
+  background: var(--mv2-laranja);
+  border: none;
+  color: #080a08;
+  border-radius: 999px;
+  padding: 7px 0;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+  flex: 1;
+}
+
+/* ---------- Cartão exportado (imagem do ranking) ---------- */
+.mv2-export-card {
+  width: 328px;
+  max-width: 100%;
+  padding: 14px;
+  background: var(--mv2-bg-principal);
+  border-radius: var(--mv2-radius-md);
+}
+.mv2-export-card .mv2-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.mv2-export-card .mv2-stat-row {
+  display: flex;
+  gap: 8px;
+}
+.mv2-export-card .mv2-stat-row .mv2-stat {
+  flex: 1;
+  border: 1px solid var(--mv2-ciano-claro);
+  border-radius: var(--mv2-radius-sm);
+  padding: 4px 8px;
+}
+
+/* ---------- Cards Meta / Super Meta + Falta p/Meta ---------- */
+.mv2-dual-goal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0 18px 8px;
+}
+.mv2-goal-remaining-card {
+  border: 1px solid var(--mv2-card-color, var(--mv2-ciano));
+  border-radius: var(--mv2-radius-sm);
+  padding: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.mv2-goal-remaining-card .mv2-value {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mv2-card-color, var(--mv2-texto));
+}
+.mv2-goal-remaining-card .mv2-pct {
+  font-size: 9px;
+}
+
+/* ---------- Seletor de vendedor (grade de avatares) + comissões ---------- */
+.mv2-seller-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin: 0 18px 8px;
+}
+.mv2-seller-grid .mv2-seller {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--mv2-texto);
+}
+.mv2-seller-grid .mv2-seller .mv2-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid var(--mv2-ciano-claro);
+  object-fit: cover;
+  background: var(--mv2-bg-input);
+}
+.mv2-seller-grid .mv2-seller.mv2-all .mv2-avatar {
+  border-color: var(--mv2-laranja);
+  background: var(--mv2-laranja);
+}
+.mv2-seller-grid .mv2-seller.active .mv2-avatar {
+  border-color: var(--mv2-dourado);
+}
+.mv2-seller-grid .mv2-seller .mv2-name {
+  font-size: 6.5px;
+}
+.mv2-commission-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 18px 8px;
+  font-size: 9px;
+}
+.mv2-commission-toggle .mv2-rate {
+  color: var(--mv2-texto-2);
+  margin-right: 6px;
+}
+.mv2-commission-toggle input[type='checkbox'] {
+  accent-color: var(--mv2-ciano);
+}
+
+/* ---------- Tabela de detalhamento ---------- */
+.mv2-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8px;
+  margin: 0 0 12px;
+}
+.mv2-data-table thead th {
+  text-align: left;
+  text-transform: uppercase;
+  color: var(--mv2-texto-2);
+  font-size: 6.5px;
+  border-bottom: 1px solid var(--mv2-ciano-claro);
+  padding: 4px 6px;
+}
+.mv2-data-table tbody td {
+  padding: 4px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.mv2-data-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+.mv2-data-table td.mv2-valor {
+  color: var(--mv2-dourado);
+  font-weight: 600;
+}
+
+/* ---------- Contagem regressiva + metas duplas (Levmel/Chip) ---------- */
+.mv2-countdown-card {
+  border: 1px solid var(--mv2-roxo-cat);
+  border-radius: var(--mv2-radius-sm);
+  padding: 8px;
+}
+.mv2-countdown-card .mv2-value {
+  font-size: 14px;
+  font-weight: 700;
+}
+.mv2-dual-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 18px 8px;
+}
+.mv2-dual-progress .mv2-track {
+  height: 4px;
+  border-radius: 2px;
+  background: #1a1a1a;
+  position: relative;
+  overflow: hidden;
+}
+.mv2-dual-progress .mv2-track span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+}
+.mv2-dual-progress .mv2-mensal span {
+  background: var(--mv2-rosa);
+  width: var(--mv2-pct, 45%);
+}
+.mv2-dual-progress .mv2-diaria span {
+  background: var(--mv2-verde-lima);
+  width: var(--mv2-pct, 70%);
+}
+
+/* ---------- Biosintética — gerenciar grupos/pontos ---------- */
+.mv2-group-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 0 18px 8px;
+}
+.mv2-group-tabs button {
+  flex: 1;
+  padding: 6px 0;
+  border-radius: var(--mv2-radius-sm);
+  border: 1px solid var(--mv2-dourado);
+  background: transparent;
+  color: #fff;
+  font-size: 9px;
+  cursor: pointer;
+}
+.mv2-group-tabs button.active {
+  background: var(--mv2-dourado);
+  color: #080a08;
+}
+.mv2-product-form input,
+.mv2-product-form select {
+  width: 100%;
+  background: var(--mv2-bg-input);
+  border: 1px solid var(--mv2-roxo-marca);
+  border-radius: var(--mv2-radius-sm);
+  padding: 6px 8px;
+  color: #fff;
+  font-size: 9px;
+  margin-bottom: 6px;
+}
+.mv2-product-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid var(--mv2-ciano-claro);
+  border-radius: var(--mv2-radius-sm);
+  padding: 6px 8px;
+  margin-top: 4px;
+  font-size: 9px;
+}
+.mv2-points-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin: 0 18px 8px;
+}
+.mv2-points-grid .mv2-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mv2-points-grid input {
+  background: var(--mv2-bg-input);
+  border: 1px solid var(--mv2-ciano-claro);
+  border-radius: 4px;
+  padding: 4px;
+  font-size: 8px;
+  color: #fff;
+  text-align: center;
+}
+.mv2-goals-table td.mv2-pct {
+  font-weight: 700;
+}
+
+/* ---------- Dinâmicas — criação e acompanhamento ---------- */
+.mv2-dynamic-form textarea,
+.mv2-dynamic-form input {
+  width: 100%;
+  background: var(--mv2-bg-input);
+  border: 1px solid var(--mv2-roxo-marca);
+  border-radius: var(--mv2-radius-sm);
+  padding: 8px 10px;
+  color: #fff;
+  font-size: 9px;
+  margin-bottom: 8px;
+}
+.mv2-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.mv2-tag-list .mv2-tag {
+  font-size: 7px;
+  border: 1px solid var(--mv2-ciano-claro);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.mv2-dynamic-accordion .mv2-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px;
+  cursor: pointer;
+  border: 1px solid var(--mv2-azul-violeta);
+  border-radius: var(--mv2-radius-sm);
+}
+.mv2-dynamic-accordion .mv2-item-body {
+  padding: 8px 8px 8px;
+}
+.mv2-dynamic-accordion table td.mv2-ok {
+  color: var(--mv2-verde);
+}
+.mv2-dynamic-accordion table td.mv2-low {
+  color: var(--mv2-bronze);
+}
+.mv2-dynamic-export-card .mv2-day-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 7px;
+  margin-top: 4px;
+}
+.mv2-dynamic-export-card .mv2-footer {
+  margin-top: 10px;
+  font-size: 7px;
+  text-align: center;
+  color: var(--mv2-texto-2);
+  font-style: italic;
+}
+
+/* ============================================================
+   Media queries — mobile-first: base styles above are the phone
+   layout; small phones stack further, and >=1024px is handled by
+   the existing desktop Sidebar shell (this stylesheet only ever
+   mounts below that breakpoint — see MobileAdminShell).
+   ============================================================ */
+@media (max-width: 340px) {
+  .mv2-metrics-grid,
+  .mv2-goals-grid,
+  .mv2-dual-goal-grid {
+    grid-template-columns: 1fr;
+  }
+  .mv2-form-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+}

@@ -7,7 +7,7 @@ import { useConquistaSuperMetas } from '../lib/mutations';
 import { useCollaborators, useSales } from '../lib/queries';
 
 const CONQUISTA_CATS: ConquistaCategoria[] = ['DERM', 'MP', 'GEN'];
-const CAT_LABEL: Record<ConquistaCategoria, string> = { DERM: 'Dermocosméticos', MP: 'Marcas Exclusivas', GEN: 'Genérico & Similar' };
+const CAT_LABEL: Record<ConquistaCategoria, string> = { DERM: 'Dermocosméticos', MP: 'Marcas Exclusivas', GEN: 'Genérico' };
 const SEEN_KEY = 'conquistas_celebration_seen_v1';
 const AUTO_CLOSE_MS = 30000;
 

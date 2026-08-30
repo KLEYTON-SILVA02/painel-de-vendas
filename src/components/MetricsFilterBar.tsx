@@ -11,7 +11,12 @@ export interface MfbStat {
   color: string;
   labelColor?: string;
 }
-export type MfbStatCard = MfbStat | { stack: MfbStat[] };
+export interface MfbAction {
+  label: string;
+  color: string;
+  onClick: () => void;
+}
+export type MfbStatCard = MfbStat | { stack: MfbStat[] } | { actions: MfbAction[] };
 
 const MESES_ABREV = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 const DOW_ABBR = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
@@ -118,6 +123,42 @@ function StatCard({ c, compact, hasStack }: { c: MfbStat; compact: boolean; hasS
   );
 }
 
+/** Same stacked-pill layout as StatStack, but each row is a clickable
+ * button stretching edge-to-edge of its slot (e.g. BIOSINTÉTICA's
+ * "Gerenciar Grupos"/"Gerenciar Pontos") instead of a read-only stat. */
+function ActionStack({ actions }: { actions: MfbAction[] }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: '1 1 120px' }}>
+      {actions.map((a, i) => (
+        <button
+          key={i}
+          onClick={a.onClick}
+          style={{
+            height: 36,
+            boxSizing: 'border-box',
+            borderRadius: 8,
+            border: `1.5px solid ${a.color}`,
+            background: 'rgba(255,255,255,.02)',
+            padding: '3px 10px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '100%',
+            fontSize: 10.5,
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '.02em',
+            color: a.color,
+            cursor: 'pointer',
+          }}
+        >
+          {a.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function StatStack({ stack }: { stack: MfbStat[] }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: '1 1 120px' }}>
@@ -169,7 +210,13 @@ export function MetricsFilterBar({ statCards }: { statCards: MfbStatCard[] }) {
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: compact ? 6 : 12, flexWrap: 'wrap' }}>
         {statCards.map((c, i) =>
-          'stack' in c ? <StatStack key={i} stack={c.stack} /> : <StatCard key={i} c={c} compact={compact} hasStack={hasStack} />,
+          'stack' in c ? (
+            <StatStack key={i} stack={c.stack} />
+          ) : 'actions' in c ? (
+            <ActionStack key={i} actions={c.actions} />
+          ) : (
+            <StatCard key={i} c={c} compact={compact} hasStack={hasStack} />
+          ),
         )}
 
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 6, width: 340, flexShrink: 0 }}>

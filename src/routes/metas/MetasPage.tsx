@@ -1,23 +1,26 @@
 import { useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
-import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
+import { CAT_KEYS, GOAL_UNIT_KEYS, type CategoryKey, type GoalCategoryKey } from '../../lib/business/classification';
 import { computeMetaDiariaRedistribuida } from '../../lib/business/goals';
 import { distributeIndividualGoalsAuto } from '../../lib/business/individualGoals';
 import type { Goal } from '../../lib/business/types';
 import { fmtMoney } from '../../lib/format';
-import { useIndividualGoals, useUpdateGoal, useUpsertIndividualGoal } from '../../lib/mutations';
-import { useCollaborators, useGoals, useSales } from '../../lib/queries';
+import { useIndividualGoals, useUpdateCommissionRate, useUpdateGoal, useUpsertIndividualGoal } from '../../lib/mutations';
+import { useCollaborators, useCommissionRates, useGoals, useSales } from '../../lib/queries';
+
+const COMMISSION_KEYS = ['DERM', 'GEN', 'MP'] as const;
 
 const CAT_LABEL: Record<CategoryKey, string> = {
   DERM: 'Dermocosméticos',
-  GEN: 'Genérico & Similar',
+  GEN: 'Genérico',
   MP: 'Marcas Exclusivas',
   MER: 'Mercadoria Geral',
 };
+const UNIT_LABEL: Record<(typeof GOAL_UNIT_KEYS)[number], string> = { LEVMEL: 'Levmel', CHIP: 'Chip' };
 
 type GoalEdit = Partial<Pick<Goal, 'metrica' | 'mensal' | 'autoRedistribuir' | 'superMeta' | 'superMetaAuto'>>;
 
-function defaultGoal(categoria: CategoryKey): Goal {
+function defaultGoal(categoria: GoalCategoryKey): Goal {
   return { categoria, mensal: 0, diaria: 0, metrica: 'valor', autoRedistribuir: false, superMeta: 0, superMetaAuto: false };
 }
 
@@ -30,7 +33,7 @@ function withGoalDefaults(goals: Partial<Record<CategoryKey, Goal>>): Record<Cat
 }
 
 export function MetasPage() {
-  const [tab, setTab] = useState<'categoria' | 'individuais'>('categoria');
+  const [tab, setTab] = useState<'categoria' | 'individuais' | 'unidade' | 'comissoes'>('categoria');
 
   return (
     <div className="flex flex-col gap-4">
@@ -47,17 +50,38 @@ export function MetasPage() {
         >
           Metas Individuais
         </button>
+        <button
+          onClick={() => setTab('unidade')}
+          className={`rounded-lg px-3 py-1.5 text-sm ${tab === 'unidade' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+        >
+          Levmel / Chip
+        </button>
+        <button
+          onClick={() => setTab('comissoes')}
+          className={`rounded-lg px-3 py-1.5 text-sm ${tab === 'comissoes' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+        >
+          Comissões
+        </button>
       </div>
-      {tab === 'categoria' ? <MetasPorCategoria /> : <MetasIndividuais />}
+      {tab === 'categoria' ? (
+        <MetasPorCategoria />
+      ) : tab === 'individuais' ? (
+        <MetasIndividuais />
+      ) : tab === 'unidade' ? (
+        <MetasUnidade />
+      ) : (
+        <MetasComissoes />
+      )}
     </div>
   );
 }
 
 function MetasPorCategoria() {
+  const { profile } = useAuth();
   const { data: goals } = useGoals();
   const { data: sales } = useSales();
   const { data: collaborators } = useCollaborators();
-  const updateGoal = useUpdateGoal();
+  const updateGoal = useUpdateGoal(profile?.store_id);
   const [edits, setEdits] = useState<Partial<Record<CategoryKey, GoalEdit>>>({});
   const [saving, setSaving] = useState(false);
 
@@ -202,6 +226,84 @@ function MetasPorCategoria() {
   );
 }
 
+// Levmel/Chip aren't CategoryKeys (they're classified by keyword match, not
+// sale.grupo — see classification.ts), so they get their own simpler section
+// here instead of joining the CAT_KEYS table above: just Meta Mensal / Meta
+// Diária in unidades, no super meta / redistribuição automática. Reuses the
+// same `goals` table/mutation as the categories above (see useUpdateGoal).
+function MetasUnidade() {
+  const { profile } = useAuth();
+  const { data: goals } = useGoals();
+  const updateGoal = useUpdateGoal(profile?.store_id);
+  const [edits, setEdits] = useState<Partial<Record<(typeof GOAL_UNIT_KEYS)[number], { mensal: number; diaria: number }>>>({});
+  const [saving, setSaving] = useState(false);
+
+  if (!goals) return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+
+  function fieldValue(k: (typeof GOAL_UNIT_KEYS)[number], field: 'mensal' | 'diaria'): number {
+    const edit = edits[k]?.[field];
+    if (edit !== undefined) return edit;
+    return goals![k]?.[field] ?? 0;
+  }
+  function setField(k: (typeof GOAL_UNIT_KEYS)[number], field: 'mensal' | 'diaria', value: number) {
+    setEdits((prev) => ({ ...prev, [k]: { mensal: fieldValue(k, 'mensal'), diaria: fieldValue(k, 'diaria'), [field]: value } }));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      for (const k of GOAL_UNIT_KEYS) {
+        const patch = edits[k];
+        if (!patch) continue;
+        await updateGoal.mutateAsync({ categoria: k, patch: { mensal: patch.mensal, diaria: patch.diaria, metrica: 'unidade' } });
+      }
+      setEdits({});
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+        <h3 className="font-semibold mb-1">Metas — Levmel / Chip</h3>
+        <p className="text-xs text-slate-500 mb-4">
+          Meta Mensal e Meta Diária independentes para Levmel e Chip, em unidades. Usadas nos cards, rankings e no
+          cálculo de estrelas do card de campeão.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {GOAL_UNIT_KEYS.map((k) => (
+            <div key={k} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+              <div className="font-semibold text-sm mb-2">{UNIT_LABEL[k]}</div>
+              <label className="block text-xs text-slate-400 mb-1">Meta Mensal (un.)</label>
+              <input
+                type="number"
+                value={fieldValue(k, 'mensal')}
+                onChange={(e) => setField(k, 'mensal', Number(e.target.value))}
+                className="w-full rounded-md bg-slate-800 border border-slate-700 px-2 py-1.5 text-sm mb-2"
+              />
+              <label className="block text-xs text-slate-400 mb-1">Meta Diária (un.)</label>
+              <input
+                type="number"
+                value={fieldValue(k, 'diaria')}
+                onChange={(e) => setField(k, 'diaria', Number(e.target.value))}
+                className="w-full rounded-md bg-slate-800 border border-slate-700 px-2 py-1.5 text-sm"
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+      <button
+        onClick={handleSave}
+        disabled={saving || Object.keys(edits).length === 0}
+        className="self-start rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm disabled:opacity-50"
+      >
+        {saving ? 'Salvando…' : 'Atualizar metas no sistema'}
+      </button>
+    </div>
+  );
+}
+
 function MetasIndividuais() {
   const { profile } = useAuth();
   const { data: goals } = useGoals();
@@ -331,6 +433,84 @@ function MetasIndividuais() {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+// Commission % per category — only Dermo/Genéricos/Marcas Exclusivas, as
+// requested. Own table (commission_rates), separate from goals: a
+// percentage applied to sales, not a sales target.
+function MetasComissoes() {
+  const { profile } = useAuth();
+  const { data: rates } = useCommissionRates();
+  const updateRate = useUpdateCommissionRate(profile?.store_id);
+  const [edits, setEdits] = useState<Partial<Record<(typeof COMMISSION_KEYS)[number], { percentual: number; ativo: boolean }>>>({});
+  const [saving, setSaving] = useState(false);
+
+  if (!rates) return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+
+  function fieldValue<K extends 'percentual' | 'ativo'>(k: (typeof COMMISSION_KEYS)[number], field: K): { percentual: number; ativo: boolean }[K] {
+    const edit = edits[k]?.[field];
+    if (edit !== undefined) return edit;
+    return (rates![k]?.[field] ?? (field === 'ativo' ? false : 0)) as { percentual: number; ativo: boolean }[K];
+  }
+  function setField(k: (typeof COMMISSION_KEYS)[number], field: 'percentual' | 'ativo', value: number | boolean) {
+    setEdits((prev) => ({
+      ...prev,
+      [k]: { percentual: fieldValue(k, 'percentual'), ativo: fieldValue(k, 'ativo'), [field]: value },
+    }));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      for (const k of COMMISSION_KEYS) {
+        const patch = edits[k];
+        if (!patch) continue;
+        await updateRate.mutateAsync({ categoria: k, patch: { percentual: patch.percentual, ativo: patch.ativo } });
+      }
+      setEdits({});
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+        <h3 className="font-semibold mb-1">Comissões — Dermo / Genéricos / Marcas Exclusivas</h3>
+        <p className="text-xs text-slate-500 mb-4">
+          Percentual de comissão por categoria, aplicado sobre o valor de cada venda. Só aparece na tela da categoria
+          quando um vendedor específico está selecionado — com "Todos" selecionado, o valor original da venda é
+          exibido normalmente.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {COMMISSION_KEYS.map((k) => (
+            <div key={k} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+              <div className="font-semibold text-sm mb-2">{CAT_LABEL[k]}</div>
+              <label className="block text-xs text-slate-400 mb-1">Percentual (%)</label>
+              <input
+                type="number"
+                step="0.1"
+                value={fieldValue(k, 'percentual')}
+                onChange={(e) => setField(k, 'percentual', Number(e.target.value))}
+                className="w-full rounded-md bg-slate-800 border border-slate-700 px-2 py-1.5 text-sm mb-2"
+              />
+              <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                <input type="checkbox" checked={fieldValue(k, 'ativo')} onChange={(e) => setField(k, 'ativo', e.target.checked)} />
+                Exibir comissão nesta categoria
+              </label>
+            </div>
+          ))}
+        </div>
+      </div>
+      <button
+        onClick={handleSave}
+        disabled={saving || Object.keys(edits).length === 0}
+        className="self-start rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm disabled:opacity-50"
+      >
+        {saving ? 'Salvando…' : 'Atualizar comissões no sistema'}
+      </button>
     </div>
   );
 }
