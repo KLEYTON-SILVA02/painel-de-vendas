@@ -5,6 +5,7 @@ import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import type { CategoryKey } from '../../lib/business/classification';
 import { copyText, formatRankingText } from '../../lib/clipboard';
 import { diasRestantesNoMes, getGoal, getSuperMeta } from '../../lib/business/goals';
+import { todayISO } from '../../lib/dateRange';
 import { computeSummary, computeVendorExtract } from '../../lib/business/summary';
 import type { SummaryRow } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
@@ -100,10 +101,22 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
       },
     ];
   } else {
+    // Levmel/Chip aren't CategoryKeys, but reuse the same `goals` table
+    // (categoria=LEVMEL/CHIP, configured in ADM > Funções > Metas > Levmel/Chip).
+    const goal = goals[catKey];
+    const metaMensal = goal?.mensal ?? 0;
+    const metaDiaria = goal?.diaria ?? 0;
+    const today = todayISO();
+    const todayRanking = computeSummary(sales, collaborators, today, today, catKey, specialLists);
+    const itensHoje = todayRanking.reduce((a, r) => a + r.itens, 0);
+    const pctMensal = metaMensal > 0 ? Math.min(999, (totalItens / metaMensal) * 100) : 0;
+    const pctDiaria = metaDiaria > 0 ? Math.min(999, (itensHoje / metaDiaria) * 100) : 0;
     statCards = [
       { label: 'Dias restantes', value: `${dias} dia(s)`, color: '#14ff00' },
       { label: 'Itens vendidos', value: `${totalItens} un.`, color: '#00f0ff' },
       { label: 'Vendedores ativos', value: String(ranking.filter((r) => r.itens > 0).length), color: '#a82bff' },
+      { label: 'Meta Mensal', value: metaMensal > 0 ? `${totalItens}/${metaMensal} un. (${pctMensal.toFixed(0)}%)` : '—', color: '#ffd700' },
+      { label: 'Meta Diária (hoje)', value: metaDiaria > 0 ? `${itensHoje}/${metaDiaria} un. (${pctDiaria.toFixed(0)}%)` : '—', color: '#ff3df0' },
     ];
   }
 

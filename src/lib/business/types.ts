@@ -1,4 +1,4 @@
-import type { BioGroupKey, CategoryKey } from './classification';
+import type { BioGroupKey, CategoryKey, GoalCategoryKey } from './classification';
 
 export interface Sale {
   id: string;
@@ -39,7 +39,7 @@ export interface SummaryRow {
 }
 
 export interface Goal {
-  categoria: CategoryKey;
+  categoria: GoalCategoryKey;
   mensal: number;
   diaria: number;
   metrica: 'valor' | 'unidade';

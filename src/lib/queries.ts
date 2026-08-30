@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { CAT_KEYS } from './business/classification';
+import type { GoalCategoryKey } from './business/classification';
 import type { Goal } from './business/types';
 import type { SpecialListItem } from './business/summary';
 import { mapCollaborator, mapDynamic, mapGoal, mapSale, mapSpecialListItem } from './mappers';
@@ -36,7 +36,7 @@ export function useGoals() {
     queryFn: async () => {
       const { data, error } = await supabase.from('goals').select('*');
       if (error) throw error;
-      const byCategory = {} as Record<(typeof CAT_KEYS)[number], Goal | undefined>;
+      const byCategory = {} as Record<GoalCategoryKey, Goal | undefined>;
       data.forEach((row) => {
         const goal = mapGoal(row);
         byCategory[goal.categoria] = goal;

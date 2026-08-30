@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CategoryKey } from './business/classification';
+import type { CategoryKey, GoalCategoryKey } from './business/classification';
 import { supabase } from './supabase';
 import type { TablesInsert, TablesUpdate } from '../types/database';
 
@@ -49,11 +49,18 @@ export function useUpdateRow<T extends SimpleTable>(table: T, invalidateKey: str
   });
 }
 
-export function useUpdateGoal() {
+/** Upsert (not plain update) so this also works for categories that don't
+ * have a `goals` row yet — LEVMEL/CHIP are never seeded at store bootstrap,
+ * only DERM/GEN/MP/MER are, so the first edit needs to insert. Existing
+ * categories behave exactly as before (the upsert just updates their row). */
+export function useUpdateGoal(storeId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ categoria, patch }: { categoria: CategoryKey; patch: TablesUpdate<'goals'> }) => {
-      const { error } = await supabase.from('goals').update(patch).eq('categoria', categoria);
+    mutationFn: async ({ categoria, patch }: { categoria: GoalCategoryKey; patch: TablesUpdate<'goals'> }) => {
+      if (!storeId) throw new Error('store not loaded');
+      const { error } = await supabase
+        .from('goals')
+        .upsert({ ...patch, categoria, store_id: storeId }, { onConflict: 'store_id,categoria' });
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['goals'] }),

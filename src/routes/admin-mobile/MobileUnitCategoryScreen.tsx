@@ -5,7 +5,7 @@ import { computeSummary } from '../../lib/business/summary';
 import { copyText, formatRankingText } from '../../lib/clipboard';
 import { todayISO } from '../../lib/dateRange';
 import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
-import { useCollaborators, useSales, useSpecialLists, useStore } from '../../lib/queries';
+import { useCollaborators, useGoals, useSales, useSpecialLists, useStore } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { MobileDateFilter } from './MobileDateFilter';
 
@@ -13,13 +13,9 @@ import { MobileDateFilter } from './MobileDateFilter';
 // reuses Levmel's structure exactly, only color/values differ. No seller
 // selector or detail table (unlike Dermo/MP/Genéricos).
 //
-// Meta Mensal/Meta Diária for these two: the app has no goals concept for
-// Levmel/Chip at all (CAT_KEYS/the goals table only cover DERM/GEN/MP/MER —
-// confirmed against the desktop CategoryPage, which shows no meta cards for
-// these two either) — see FUNÇÕES PENDENTES. The two progress bars below
-// use an illustrative fixed target so the interface is complete now.
-const MOCK_META_MENSAL = 100;
-const MOCK_META_DIARIA = 5;
+// Meta Mensal/Meta Diária come from the `goals` table (categoria=LEVMEL/CHIP,
+// see ADM > Funções > Metas > Levmel/Chip) — reused via useGoals() same as
+// every other category. A store that hasn't configured them yet just sees 0%.
 
 export function MobileUnitCategoryScreen({
   catKey,
@@ -36,13 +32,14 @@ export function MobileUnitCategoryScreen({
   const { data: sales } = useSales();
   const { data: specialLists } = useSpecialLists();
   const { data: store } = useStore();
+  const { data: goals } = useGoals();
   const { dashFrom, dashTo } = useDateRange();
   const [view, setView] = useState<'lista' | 'colunas'>('lista');
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
 
-  if (!collaborators || !sales || !specialLists) {
+  if (!collaborators || !sales || !specialLists || !goals) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
@@ -56,8 +53,10 @@ export function MobileUnitCategoryScreen({
   const itensHoje = todayRanking.reduce((a, r) => a + r.itens, 0);
   const vendedoresAtivosHoje = todayRanking.filter((r) => r.itens > 0).length;
 
-  const pctMensal = Math.min(100, (totalItens / MOCK_META_MENSAL) * 100);
-  const pctDiaria = Math.min(100, (itensHoje / MOCK_META_DIARIA) * 100);
+  const metaMensal = goals[catKey]?.mensal ?? 0;
+  const metaDiaria = goals[catKey]?.diaria ?? 0;
+  const pctMensal = metaMensal > 0 ? Math.min(100, (totalItens / metaMensal) * 100) : 0;
+  const pctDiaria = metaDiaria > 0 ? Math.min(100, (itensHoje / metaDiaria) * 100) : 0;
 
   async function handleCopy() {
     const text = formatRankingText(

@@ -1,4 +1,4 @@
-import type { CategoryKey, ClassificationInputs } from './business/classification';
+import type { CategoryKey, ClassificationInputs, GoalCategoryKey } from './business/classification';
 import { CAT_KEYS } from './business/classification';
 import type { Collaborator, Dynamic, Goal, Sale } from './business/types';
 import type { SpecialListItem } from './business/summary';
@@ -33,7 +33,7 @@ export function mapSale(row: Tables<'sales'>): Sale {
 
 export function mapGoal(row: Tables<'goals'>): Goal {
   return {
-    categoria: row.categoria as CategoryKey,
+    categoria: row.categoria as GoalCategoryKey,
     mensal: Number(row.mensal) || 0,
     diaria: Number(row.diaria) || 0,
     metrica: row.metrica as 'valor' | 'unidade',
