@@ -26,6 +26,15 @@ const PC_GRADIENTS: Record<'p1' | 'p2' | 'p3' | 'px', string> = {
   p3: 'linear-gradient(180deg,#ff9d4d,#c25a00)',
   px: 'linear-gradient(180deg,#3f6bd6,#12224f)',
 };
+// Darker base tone (mirrors POS_COLORS' fundo) revealed through the gap
+// between the two PC_GRADIENTS cap layers below — the "cut" behind the
+// placement badge, same technique as the default capsule variant.
+const PC_BASE: Record<'p1' | 'p2' | 'p3' | 'px', string> = {
+  p1: '#8a6200',
+  p2: '#4b5563',
+  p3: '#7c2d12',
+  px: '#0f172a',
+};
 
 function posClass(i: number): 'pos1' | 'pos2' | 'pos3' | 'posx' {
   return i === 0 ? 'pos1' : i === 1 ? 'pos2' : i === 2 ? 'pos3' : 'posx';
@@ -117,9 +126,12 @@ export function PodiumStaircase<T extends StaircaseRow>({
                   alignItems: 'center',
                   paddingTop: 34,
                   boxShadow: '0 4px 14px rgba(0,0,0,.35)',
-                  background: PC_GRADIENTS[pc],
+                  background: PC_BASE[pc],
+                  overflow: 'hidden',
                 }}
               >
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 78, zIndex: 1, background: PC_GRADIENTS[pc] }} />
+                <div style={{ position: 'absolute', top: 87, left: 0, right: 0, bottom: 0, zIndex: 1, background: PC_GRADIENTS[pc] }} />
                 <div
                   style={{
                     width: 52,
@@ -130,6 +142,7 @@ export function PodiumStaircase<T extends StaircaseRow>({
                     overflow: 'hidden',
                     position: 'absolute',
                     top: 12,
+                    zIndex: 2,
                     flexShrink: 0,
                   }}
                 >
@@ -150,6 +163,7 @@ export function PodiumStaircase<T extends StaircaseRow>({
                     color: '#fff',
                     position: 'absolute',
                     top: 66,
+                    zIndex: 3,
                   }}
                 >
                   {i + 1}
@@ -167,11 +181,14 @@ export function PodiumStaircase<T extends StaircaseRow>({
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
+                    zIndex: 2,
                   }}
                 >
                   {r.apelido || r.nome}
                 </div>
-                <div style={{ position: 'absolute', bottom: 8, fontSize: 9.5, color: 'rgba(255,255,255,.9)', fontWeight: 700 }}>{getSub(r)}</div>
+                <div style={{ position: 'absolute', bottom: 8, fontSize: 9.5, color: 'rgba(255,255,255,.9)', fontWeight: 700, zIndex: 2 }}>
+                  {getSub(r)}
+                </div>
               </div>
             </div>
           );
@@ -233,7 +250,7 @@ export function PodiumStaircase<T extends StaircaseRow>({
                   top: 0,
                   left: 0,
                   right: 0,
-                  height: 74,
+                  height: 70,
                   zIndex: 2,
                   background: `linear-gradient(180deg,${colors.capaFrom} 0%,${colors.capaTo} 100%)`,
                   borderTopLeftRadius: 9999,
@@ -243,7 +260,7 @@ export function PodiumStaircase<T extends StaircaseRow>({
               <div
                 style={{
                   position: 'absolute',
-                  top: 81,
+                  top: 83,
                   left: 0,
                   right: 0,
                   bottom: 0,

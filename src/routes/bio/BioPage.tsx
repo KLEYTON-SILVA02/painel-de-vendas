@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
+import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
-import { DateRangeControls } from '../../components/DateRangeControls';
 import {
   auditBioOutsideBalcao,
   BALCAO_SETOR,
   computeBioSummary,
 } from '../../lib/business/bio';
 import { classifyBio, type BioGroupKey } from '../../lib/business/classification';
+import { diasRestantesNoMes } from '../../lib/business/goals';
 import type { BioGroupsProducts, BioWeights } from '../../lib/business/types';
 import { fmtDateBR } from '../../lib/format';
 import { useAddBioProduct, useDeleteBioProduct, useUpdateBioWeights } from '../../lib/mutations';
@@ -78,22 +79,27 @@ export function BioPage() {
     .slice(0, 150);
 
   const modeloRanking = storeSettings.modelo_ranking as 'escadinha' | 'lista';
+  const totalItensBio = ranking.reduce((a, r) => a + r.itens, 0);
+  const vendedoresAtivos = ranking.filter((r) => r.itens > 0).length;
+  const dias = diasRestantesNoMes();
+
+  const statCards: MfbStatCard[] = [
+    { label: 'Dias restantes do mês', value: `${dias} dia(s)`, color: '#14ff00' },
+    { label: 'Itens vendidos G1-G4', value: `${totalItensBio} un.`, color: '#a82bff' },
+    { label: 'Vendedores ativos', value: String(vendedoresAtivos), color: '#ff3df0' },
+    {
+      actions: [
+        { label: 'Gerenciar Grupos', color: '#00c2ff', onClick: () => setView('grupos') },
+        { label: 'Gerenciar Pontos', color: '#ff8a00', onClick: () => setView('pontos') },
+      ],
+    },
+  ];
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 flex items-center justify-between">
-        <div>
-          <h3 className="text-green-400 font-semibold">🧪 BIOSINTÉTICA — Ranking Balcão</h3>
-        </div>
-        <div className="flex items-center gap-2">
-          <DateRangeControls />
-          <button onClick={() => setView('grupos')} className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800">
-            Gerenciar Grupos
-          </button>
-          <button onClick={() => setView('pontos')} className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800">
-            Gerenciar Pontos
-          </button>
-        </div>
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+        <h3 className="text-green-400 font-semibold mb-3">🧪 BIOSINTÉTICA — Ranking Balcão</h3>
+        <MetricsFilterBar statCards={statCards} />
       </div>
 
       {foraDoBalcao.length > 0 && (
