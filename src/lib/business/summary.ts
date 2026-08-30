@@ -1,6 +1,6 @@
 // Ported 1:1 from legacy/index-original.html (computeSummary / catTotals).
 import { CAT_KEYS, type CategoryKey } from './classification';
-import { normalize } from './normalize';
+import { firstName, normalize } from './normalize';
 import type { Collaborator, Sale, SummaryRow } from './types';
 
 export interface SpecialListItem {
@@ -47,7 +47,7 @@ export function computeSummary(
     map[c.matricula] = {
       matricula: c.matricula,
       nome: c.nome,
-      apelido: c.apelido || c.nome,
+      apelido: c.apelido || firstName(c.nome),
       foto: c.foto,
       metaIndividual: Number(c.metaIndividual) || 0,
       qtd: emptyQtd(),
@@ -70,7 +70,7 @@ export function computeSummary(
       map[s.matricula] = {
         matricula: s.matricula,
         nome: s.vendedor || s.matricula,
-        apelido: s.vendedor || s.matricula,
+        apelido: s.vendedor ? firstName(s.vendedor) : s.matricula,
         foto: null,
         metaIndividual: 0,
         qtd: emptyQtd(),

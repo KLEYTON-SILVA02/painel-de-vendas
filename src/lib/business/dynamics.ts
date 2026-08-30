@@ -1,6 +1,6 @@
 // Ported 1:1 from legacy/index-original.html (computeDinamicaProgresso /
 // computeDinamicaRanking / resolveRankFilterParams' dynamic-intersection branch).
-import { normalize } from './normalize';
+import { firstName, normalize } from './normalize';
 import type { Collaborator, Dynamic, Sale } from './types';
 
 export interface DinamicaRankingRow {
@@ -60,7 +60,7 @@ export function computeDinamicaRanking(
     map[c.matricula] = {
       matricula: c.matricula,
       nome: c.nome,
-      apelido: c.apelido || c.nome,
+      apelido: c.apelido || firstName(c.nome),
       foto: c.foto,
       valor: 0,
       itens: 0,
@@ -77,7 +77,7 @@ export function computeDinamicaRanking(
       map[s.matricula] = {
         matricula: s.matricula,
         nome: c ? c.nome : s.vendedor,
-        apelido: c ? c.apelido || c.nome : s.vendedor,
+        apelido: c ? c.apelido || firstName(c.nome) : (s.vendedor && firstName(s.vendedor)) || s.matricula,
         foto: c ? c.foto : null,
         valor: 0,
         itens: 0,

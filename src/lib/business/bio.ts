@@ -4,6 +4,7 @@
 // alert (see auditBioOutsideBalcao), not part of the ranking.
 import { classifyBio } from './classification';
 import type { BioGroupKey } from './classification';
+import { firstName } from './normalize';
 import type { BioGroupsProducts, BioWeights, Collaborator, Sale } from './types';
 
 export const BALCAO_SETOR = 'Balcão';
@@ -33,7 +34,7 @@ export function computeBioSummary(
     map[c.matricula] = {
       matricula: c.matricula,
       nome: c.nome,
-      apelido: c.apelido || c.nome,
+      apelido: c.apelido || firstName(c.nome),
       foto: c.foto,
       qtd: { G1: 0, G2: 0, G3: 0, G4: 0 },
       pontos: 0,

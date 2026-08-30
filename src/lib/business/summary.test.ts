@@ -5,6 +5,7 @@ import type { Collaborator, Sale } from './types';
 const collaborators: Collaborator[] = [
   { id: '1', matricula: 'M1', nome: 'Ana', apelido: 'Ana', foto: null, setor: 'Balcão', metaIndividual: 0 },
   { id: '2', matricula: 'M2', nome: 'Bruno', apelido: 'Bruno', foto: null, setor: 'Caixa', metaIndividual: 0 },
+  { id: '3', matricula: 'M3', nome: 'Carla Souza Lima', apelido: null, foto: null, setor: 'Balcão', metaIndividual: 0 },
 ];
 
 const sales: Sale[] = [
@@ -24,6 +25,12 @@ describe('computeSummary', () => {
     expect(ana.itens).toBe(3);
     expect(bruno.valor).toBe(150); // 2026-07-31 sale excluded by range
     expect(bruno.itens).toBe(3);
+  });
+
+  it('falls back to just the first name when no apelido is registered', () => {
+    const rows = computeSummary(sales, collaborators, null, null);
+    const carla = rows.find((r) => r.matricula === 'M3')!;
+    expect(carla.apelido).toBe('Carla');
   });
 
   it('synthesizes a row for an unregistered matricula found in sales', () => {
