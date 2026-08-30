@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { supabase } from '../lib/supabase';
+import '../styles/login-retro-future.css';
 
 type Tab = 'admin' | 'colaborador';
 
@@ -13,7 +14,7 @@ export function LoginPage() {
   const [tab, setTab] = useState<Tab>('admin');
 
   return (
-    <div className="mv2" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div className="mv2 mv2-login-page" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div className="mv2-login-card">
         <div className="mv2-login-header">
           <div className="mv2-logo-ring">
