@@ -34,7 +34,9 @@ import { MobileClosingTimer } from './MobileClosingTimer';
 import { MobileDermoPage } from './MobileDermoPage';
 import { MobileExclusivasPage } from './MobileExclusivasPage';
 import { MobileGenericosPage } from './MobileGenericosPage';
+import { MobileChipPage } from './MobileChipPage';
 import { MobileInicioPage } from './MobileInicioPage';
+import { MobileLevmelPage } from './MobileLevmelPage';
 import { MobileRankingPage } from './MobileRankingPage';
 
 // Mobile v2 admin shell: the spec's sticky topbar + horizontal category
@@ -102,8 +104,8 @@ export function MobileAdminShell() {
           <Route path="/categoria/GEN" element={<MobileGenericosPage />} />
           <Route path="/categoria/MP" element={<MobileExclusivasPage />} />
           <Route path="/categoria/MER" element={<CategoryPage catKey="MER" />} />
-          <Route path="/categoria/LEVMEL" element={<CategoryPage catKey="LEVMEL" />} />
-          <Route path="/categoria/CHIP" element={<CategoryPage catKey="CHIP" />} />
+          <Route path="/categoria/LEVMEL" element={<MobileLevmelPage />} />
+          <Route path="/categoria/CHIP" element={<MobileChipPage />} />
           <Route path="/metas" element={<MetasPage />} />
           <Route path="/dinamicas" element={<DinamicasPage />} />
           <Route path="/bio" element={<BioPage />} />
