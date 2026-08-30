@@ -16,6 +16,7 @@ import { AuditoriaPage } from './admin/AuditoriaPage';
 import { BackupPage } from './admin/BackupPage';
 import { ColaboradoresPage } from './admin/ColaboradoresPage';
 import { ConfiguracoesPage } from './admin/ConfiguracoesPage';
+import { IconesPage } from './admin/IconesPage';
 import { MinhaLojaPage } from './admin/MinhaLojaPage';
 import { ProdutosPage } from './admin/ProdutosPage';
 
@@ -171,6 +172,7 @@ export function AppShell() {
             <Route path="/admin/backup" element={<BackupPage />} />
             <Route path="/admin/minha-loja" element={<MinhaLojaPage />} />
             <Route path="/admin/configuracoes" element={<ConfiguracoesPage />} />
+            <Route path="/admin/icones" element={<IconesPage />} />
           </Routes>
           </main>
         </div>

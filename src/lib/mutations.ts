@@ -83,6 +83,20 @@ export function useUpdateCommissionRate(storeId: string | undefined) {
   });
 }
 
+export function useSetFunctionIcon(storeId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ functionKey, iconUrl }: { functionKey: string; iconUrl: string | null }) => {
+      if (!storeId) throw new Error('store not loaded');
+      const { error } = await supabase
+        .from('function_icons')
+        .upsert({ function_key: functionKey, icon_url: iconUrl, store_id: storeId }, { onConflict: 'store_id,function_key' });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['function_icons'] }),
+  });
+}
+
 export function useIndividualGoals(categoria: CategoryKey) {
   return useQuery({
     queryKey: ['individual_goals', categoria],

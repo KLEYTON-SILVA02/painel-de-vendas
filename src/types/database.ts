@@ -351,6 +351,35 @@ export type Database = {
           },
         ]
       }
+      function_icons: {
+        Row: {
+          function_key: string
+          icon_url: string | null
+          id: string
+          store_id: string
+        }
+        Insert: {
+          function_key: string
+          icon_url?: string | null
+          id?: string
+          store_id: string
+        }
+        Update: {
+          function_key?: string
+          icon_url?: string | null
+          id?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "function_icons_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       goals: {
         Row: {
           auto_redistribuir: boolean

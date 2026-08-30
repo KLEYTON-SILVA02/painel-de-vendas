@@ -46,6 +46,23 @@ export function useGoals() {
   });
 }
 
+/** icon_url by function_key, for the whole store — used by <FunctionIcon>
+ * to look up a custom override before falling back to the built-in icon. */
+export function useFunctionIcons() {
+  return useQuery({
+    queryKey: ['function_icons'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('function_icons').select('*');
+      if (error) throw error;
+      const byKey: Record<string, string | undefined> = {};
+      data.forEach((row) => {
+        if (row.icon_url) byKey[row.function_key] = row.icon_url;
+      });
+      return byKey;
+    },
+  });
+}
+
 export function useCommissionRates() {
   return useQuery({
     queryKey: ['commission_rates'],
