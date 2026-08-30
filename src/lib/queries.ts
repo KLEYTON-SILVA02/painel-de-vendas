@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import type { GoalCategoryKey } from './business/classification';
-import type { CommissionRate, Goal } from './business/types';
+import type { BioGroupKey, GoalCategoryKey } from './business/classification';
+import type { BioGroupGoal, CommissionRate, Goal } from './business/types';
 import type { SpecialListItem } from './business/summary';
-import { mapCollaborator, mapCommissionRate, mapDynamic, mapGoal, mapSale, mapSpecialListItem } from './mappers';
+import { mapBioGroupGoal, mapCollaborator, mapCommissionRate, mapDynamic, mapGoal, mapSale, mapSpecialListItem } from './mappers';
 import { supabase } from './supabase';
 
 export function useCollaborators() {
@@ -153,6 +153,22 @@ export function useExclusiveBrands() {
       const { data, error } = await supabase.from('exclusive_brands').select('*').order('palavra');
       if (error) throw error;
       return data;
+    },
+  });
+}
+
+export function useBioGroupGoals() {
+  return useQuery({
+    queryKey: ['bio_group_goals'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('bio_group_goals').select('*');
+      if (error) throw error;
+      const byGroup = {} as Record<BioGroupKey, BioGroupGoal | undefined>;
+      data.forEach((row) => {
+        const goal = mapBioGroupGoal(row);
+        byGroup[goal.grupo] = goal;
+      });
+      return byGroup;
     },
   });
 }

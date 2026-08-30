@@ -292,6 +292,22 @@ export function useUpdateBioWeights(storeId: string | undefined) {
   });
 }
 
+/** Upsert, same reasoning as useUpdateGoal/useUpdateCommissionRate — no row
+ * exists per group until the admin first sets one. */
+export function useUpdateBioGroupGoal(storeId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ grupo, patch }: { grupo: 'G1' | 'G2' | 'G3' | 'G4'; patch: TablesUpdate<'bio_group_goals'> }) => {
+      if (!storeId) throw new Error('store not loaded');
+      const { error } = await supabase
+        .from('bio_group_goals')
+        .upsert({ ...patch, grupo, store_id: storeId }, { onConflict: 'store_id,grupo' });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bio_group_goals'] }),
+  });
+}
+
 export function useDeleteDynamic() {
   const qc = useQueryClient();
   return useMutation({

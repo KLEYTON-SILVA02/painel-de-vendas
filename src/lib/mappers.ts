@@ -1,6 +1,6 @@
-import type { CategoryKey, ClassificationInputs, GoalCategoryKey } from './business/classification';
+import type { BioGroupKey, CategoryKey, ClassificationInputs, GoalCategoryKey } from './business/classification';
 import { CAT_KEYS } from './business/classification';
-import type { Collaborator, CommissionRate, Dynamic, Goal, Sale } from './business/types';
+import type { BioGroupGoal, Collaborator, CommissionRate, Dynamic, Goal, Sale } from './business/types';
 import type { SpecialListItem } from './business/summary';
 import type { Tables } from '../types/database';
 
@@ -48,6 +48,15 @@ export function mapCommissionRate(row: Tables<'commission_rates'>): CommissionRa
     categoria: row.categoria as CommissionRate['categoria'],
     percentual: Number(row.percentual) || 0,
     ativo: row.ativo,
+  };
+}
+
+export function mapBioGroupGoal(row: Tables<'bio_group_goals'>): BioGroupGoal {
+  return {
+    grupo: row.grupo as BioGroupKey,
+    meta1: Number(row.meta1) || 0,
+    meta2: Number(row.meta2) || 0,
+    meta3: Number(row.meta3) || 0,
   };
 }
 

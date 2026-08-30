@@ -63,6 +63,15 @@ export interface Dynamic {
 export type BioGroupsProducts = Record<BioGroupKey, { nome: string; palavras: string[] }[]>;
 export type BioWeights = Record<BioGroupKey, number>;
 
+/** Biosintética's own G1-G4 meta tiers — separate from `goals` (the general
+ * store metas), see bio_group_goals table. */
+export interface BioGroupGoal {
+  grupo: BioGroupKey;
+  meta1: number;
+  meta2: number;
+  meta3: number;
+}
+
 /** Commission % config — Dermocosméticos/Genéricos/Marcas Exclusivas only. */
 export interface CommissionRate {
   categoria: 'DERM' | 'GEN' | 'MP';

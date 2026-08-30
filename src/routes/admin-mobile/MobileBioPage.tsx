@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
-import { auditBioOutsideBalcao, BALCAO_SETOR, computeBioSummary } from '../../lib/business/bio';
+import { auditBioOutsideBalcao, BALCAO_SETOR, computeBioSummary, type BioSummaryRow } from '../../lib/business/bio';
 import { classifyBio, type BioGroupKey } from '../../lib/business/classification';
 import { diasRestantesNoMes } from '../../lib/business/goals';
-import type { BioGroupsProducts, Collaborator, BioWeights } from '../../lib/business/types';
+import type { BioGroupGoal, BioGroupsProducts, BioWeights } from '../../lib/business/types';
 import { copyText, formatRankingText } from '../../lib/clipboard';
 import { fmtDateBR } from '../../lib/format';
-import { useAddBioProduct, useDeleteBioProduct, useUpdateBioWeights } from '../../lib/mutations';
+import { useAddBioProduct, useDeleteBioProduct, useUpdateBioGroupGoal, useUpdateBioWeights } from '../../lib/mutations';
 import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
-import { useBioGroups, useCollaborators, useSales, useStoreSettings } from '../../lib/queries';
+import { useBioGroupGoals, useBioGroups, useCollaborators, useSales, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { MobileDateFilter } from './MobileDateFilter';
 
@@ -33,6 +33,7 @@ export function MobileBioPage() {
   const { data: sales } = useSales();
   const { data: storeSettings } = useStoreSettings();
   const { data: bioGroupRows } = useBioGroups();
+  const { data: groupGoals } = useBioGroupGoals();
   const { dashFrom, dashTo } = useDateRange();
   const [view, setView] = useState<'ranking' | 'grupos' | 'pontos'>('ranking');
   const [groupFilter, setGroupFilter] = useState<BioGroupKey | 'ALL'>('ALL');
@@ -42,7 +43,7 @@ export function MobileBioPage() {
   const [copied, setCopied] = useState(false);
   const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
 
-  if (!collaborators || !sales || !storeSettings || !bioGroupRows) {
+  if (!collaborators || !sales || !storeSettings || !bioGroupRows || !groupGoals) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
@@ -56,11 +57,14 @@ export function MobileBioPage() {
     );
   }
   if (view === 'pontos') {
+    // computeBioSummary already scopes its rows to the Balcão sector.
+    const demonstrativo = computeBioSummary(sales, collaborators, bioGroups, bioWeights, dashFrom, dashTo, 'ALL');
     return (
       <MobileBioPontosView
         storeId={profile?.store_id}
         bioWeights={bioWeights}
-        collaborators={balcaoCollaborators}
+        groupGoals={groupGoals}
+        demonstrativo={demonstrativo}
         onBack={() => setView('ranking')}
       />
     );
@@ -388,26 +392,28 @@ function MobileBioGruposView({
 function MobileBioPontosView({
   storeId,
   bioWeights,
-  collaborators,
+  groupGoals,
+  demonstrativo,
   onBack,
 }: {
   storeId: string | undefined;
   bioWeights: BioWeights;
-  collaborators: Collaborator[];
+  groupGoals: Partial<Record<BioGroupKey, BioGroupGoal>>;
+  demonstrativo: BioSummaryRow[];
   onBack: () => void;
 }) {
   const [weights, setWeights] = useState<BioWeights>(bioWeights);
-  // The 3 meta tiers per group are described in the reference doc but have
-  // no backing field in the data model (bio_weights only stores the flat
-  // per-item score) — local-only mock state, not persisted. See FUNÇÕES
-  // PENDENTES.
+  // Biosintética's own meta tiers — bio_group_goals table, deliberately
+  // separate from the general `goals` table (see item 5 of the request).
   const [metas, setMetas] = useState<Record<BioGroupKey, [number, number, number]>>({
-    G1: [0, 0, 0],
-    G2: [0, 0, 0],
-    G3: [0, 0, 0],
-    G4: [0, 0, 0],
+    G1: [groupGoals.G1?.meta1 ?? 0, groupGoals.G1?.meta2 ?? 0, groupGoals.G1?.meta3 ?? 0],
+    G2: [groupGoals.G2?.meta1 ?? 0, groupGoals.G2?.meta2 ?? 0, groupGoals.G2?.meta3 ?? 0],
+    G3: [groupGoals.G3?.meta1 ?? 0, groupGoals.G3?.meta2 ?? 0, groupGoals.G3?.meta3 ?? 0],
+    G4: [groupGoals.G4?.meta1 ?? 0, groupGoals.G4?.meta2 ?? 0, groupGoals.G4?.meta3 ?? 0],
   });
   const updateWeights = useUpdateBioWeights(storeId);
+  const updateGroupGoal = useUpdateBioGroupGoal(storeId);
+  const [saving, setSaving] = useState(false);
 
   function setMeta(g: BioGroupKey, idx: 0 | 1 | 2, value: number) {
     setMetas((prev) => {
@@ -415,6 +421,18 @@ function MobileBioPontosView({
       next[idx] = value;
       return { ...prev, [g]: next };
     });
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await updateWeights.mutateAsync(weights);
+      for (const g of BIO_GROUP_KEYS) {
+        await updateGroupGoal.mutateAsync({ grupo: g, patch: { meta1: metas[g][0], meta2: metas[g][1], meta3: metas[g][2] } });
+      }
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -449,22 +467,16 @@ function MobileBioPontosView({
       </div>
 
       <div style={{ margin: '0 18px 16px' }}>
-        <button
-          className="mv2-btn-primary"
-          style={{ width: '100%' }}
-          onClick={() => updateWeights.mutate(weights)}
-          disabled={updateWeights.isPending}
-        >
-          {updateWeights.isPending ? 'Salvando…' : 'Salvar Ajustes'}
+        <button className="mv2-btn-primary" style={{ width: '100%' }} onClick={handleSave} disabled={saving}>
+          {saving ? 'Salvando…' : 'Salvar Ajustes'}
         </button>
       </div>
 
       {/* Demonstrativo de metas: % de pontuação alcançado por colaborador em
-          cada grupo. Sem uma fórmula de meta definida (as 3 metas acima são
-          mock, não persistidas), os valores exibidos são placeholders
-          ilustrativos — mesmo padrão usado no próprio documento de
-          referência, que repete os mesmos 4 percentuais em toda linha da
-          tabela de exemplo. Ver FUNÇÕES PENDENTES. */}
+          cada grupo, relativo à Meta 1 (o patamar base) daquele grupo — meta1
+          é usada como referência de 100%; meta2/meta3 são os próximos
+          patamares, configurados acima mas não usados no cálculo do %
+          principal. Sem Meta 1 configurada para o grupo, mostra "—". */}
       <div style={{ margin: '0 18px' }}>
         <div style={{ fontSize: 10, fontWeight: 700, marginBottom: 6 }}>Demonstrativo de Metas</div>
         <div style={{ overflowX: 'auto' }}>
@@ -479,20 +491,26 @@ function MobileBioPontosView({
               </tr>
             </thead>
             <tbody>
-              {collaborators.length === 0 ? (
+              {demonstrativo.length === 0 ? (
                 <tr>
                   <td colSpan={5} style={{ textAlign: 'center', color: 'var(--mv2-texto-2)', padding: 8 }}>
                     Nenhum colaborador no setor Balcão.
                   </td>
                 </tr>
               ) : (
-                collaborators.map((c) => (
-                  <tr key={c.id}>
-                    <td>{c.apelido || c.nome}</td>
-                    <td className="mv2-pct">50%</td>
-                    <td className="mv2-pct">25%</td>
-                    <td className="mv2-pct">15%</td>
-                    <td className="mv2-pct">38%</td>
+                demonstrativo.map((r) => (
+                  <tr key={r.matricula}>
+                    <td>{r.apelido || r.nome}</td>
+                    {BIO_GROUP_KEYS.map((g) => {
+                      const pontosGrupo = r.qtd[g] * (bioWeights[g] || 0);
+                      const meta1 = groupGoals[g]?.meta1 ?? 0;
+                      const pct = meta1 > 0 ? Math.min(999, (pontosGrupo / meta1) * 100) : null;
+                      return (
+                        <td key={g} className="mv2-pct">
+                          {pct !== null ? `${pct.toFixed(0)}%` : '—'}
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))
               )}
