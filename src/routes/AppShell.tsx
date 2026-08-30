@@ -1,10 +1,13 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Suspense, lazy, useState } from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Link, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
-import { HamburgerIcon } from '../components/icons/NavIcons';
+import { ClosingClock } from '../components/ClosingClock';
+import { HamburgerIcon, MedalIcon, RefreshIcon } from '../components/icons/NavIcons';
 import { Sidebar } from '../components/Sidebar';
+import type { Horario } from '../lib/business/horario';
 import { supabase } from '../lib/supabase';
+import { useStoreSettings } from '../lib/queries';
 import { AdminLandingPage } from './admin/AdminLandingPage';
 import { AuditoriaPage } from './admin/AuditoriaPage';
 import { BackupPage } from './admin/BackupPage';
@@ -30,6 +33,10 @@ export function AppShell() {
   const { profile, signOut } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [refreshed, setRefreshed] = useState(false);
+  const queryClient = useQueryClient();
+  const location = useLocation();
+  const { data: storeSettings } = useStoreSettings();
 
   const storeQuery = useQuery({
     queryKey: ['store', profile?.store_id],
@@ -83,12 +90,41 @@ export function AppShell() {
                   <p className="text-xs text-slate-400">Administrador</p>
                 </div>
               </div>
-              <button
-                onClick={() => signOut()}
-                className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800"
-              >
-                Sair
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    await queryClient.invalidateQueries();
+                    setRefreshed(true);
+                    setTimeout(() => setRefreshed(false), 1500);
+                  }}
+                  title="Atualizar"
+                  className="flex items-center justify-center w-8 h-8 rounded-full border border-slate-700 bg-slate-900 text-slate-400 hover:text-cyan-400 hover:border-cyan-400"
+                >
+                  {refreshed ? '✓' : <RefreshIcon width={15} height={15} />}
+                </button>
+                <Link
+                  to="/conquistas"
+                  title="Galeria de Conquistas"
+                  className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-semibold"
+                  style={
+                    location.pathname === '/conquistas'
+                      ? { borderColor: '#ffb700', background: '#ffb700', color: '#231a02' }
+                      : { borderColor: '#ffb700', color: '#ffb700', background: 'transparent' }
+                  }
+                >
+                  <MedalIcon width={15} height={15} />
+                  Galeria de Conquistas
+                </Link>
+                {storeSettings && (
+                  <ClosingClock horario={storeSettings.horario as unknown as Horario} feriadosDatas={storeSettings.feriados_datas} />
+                )}
+                <button
+                  onClick={() => signOut()}
+                  className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800"
+                >
+                  Sair
+                </button>
+              </div>
             </div>
           </header>
           <main className="p-6">
