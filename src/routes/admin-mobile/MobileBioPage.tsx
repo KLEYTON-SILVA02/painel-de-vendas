@@ -87,13 +87,16 @@ export function MobileBioPage() {
     bioGroups,
   );
   const balcaoMatriculas = new Set(balcaoCollaborators.map((c) => c.matricula));
+  // "Padrão" stays Balcão-only (it's about the sector's general sales). "BIO"
+  // shows every G1-G4 sale regardless of sector — a sale by someone outside
+  // Balcão isn't hidden, just flagged with "!" in the row (see the "!" badge
+  // below), matching auditBioOutsideBalcao's own audit criteria.
   const salesForTable = sales
     .filter((s) => {
-      if (!balcaoMatriculas.has(s.matricula)) return false;
       if (s.dataISO && s.dataISO < dashFrom) return false;
       if (s.dataISO && s.dataISO > dashTo) return false;
       if (tableView === 'bio') return !!classifyBio(s.produto, bioGroups);
-      return true;
+      return balcaoMatriculas.has(s.matricula);
     })
     .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
     .slice(0, 150);
@@ -265,12 +268,23 @@ export function MobileBioPage() {
                 salesForTable.map((s) => {
                   const g = classifyBio(s.produto, bioGroups);
                   const pontos = g ? s.qtd * (bioWeights[g] || 0) : 0;
+                  const outsideBalcao = tableView === 'bio' && g && !balcaoMatriculas.has(s.matricula);
                   return (
                     <tr key={s.id}>
                       <td>{fmtDateBR(s.dataISO)}</td>
                       <td>{s.matricula}</td>
                       <td>{s.vendedor}</td>
-                      <td>{s.produto}</td>
+                      <td>
+                        {s.produto}
+                        {outsideBalcao && (
+                          <span
+                            title="Produto da Biosintética vendido por colaborador fora do setor Balcão — não entra no ranking."
+                            style={{ marginLeft: 4, color: 'var(--mv2-rosa)', fontWeight: 700 }}
+                          >
+                            !
+                          </span>
+                        )}
+                      </td>
                       <td>{s.qtd}</td>
                       <td>{tableView === 'bio' ? (g ? `[${g}] ${pontos.toFixed(1)}pts` : '—') : s.grupo ? CAT_LABEL_SHORT[s.grupo] || s.grupo : '—'}</td>
                     </tr>
@@ -309,9 +323,6 @@ function MobileBioGruposView({
 }) {
   const [tab, setTab] = useState<BioGroupKey>('G1');
   const [nome, setNome] = useState('');
-  // Planilha import parsing isn't implemented — the reference doc doesn't
-  // define the file format beyond "3 colunas" — see FUNÇÕES PENDENTES.
-  const [planilhaFile, setPlanilhaFile] = useState<string | null>(null);
   const addProduct = useAddBioProduct(storeId);
   const deleteProduct = useDeleteBioProduct();
 
@@ -347,19 +358,6 @@ function MobileBioGruposView({
         <input placeholder="Nome do produto" value={nome} onChange={(e) => setNome(e.target.value)} />
         <button className="mv2-btn-primary" style={{ width: '100%' }} onClick={handleAdd}>
           + Adicionar
-        </button>
-      </div>
-
-      <div className="mv2-product-form" style={{ margin: '0 18px 12px' }}>
-        <div style={{ fontSize: 9, fontWeight: 700, marginBottom: 6, color: 'var(--mv2-texto-2)', textTransform: 'uppercase' }}>
-          Importar Planilha de Produtos
-        </div>
-        <div style={{ fontSize: 8, color: 'var(--mv2-texto-2)', marginBottom: 6 }}>
-          3 colunas: A - Nome do produto, B - Categoria (texto livre), C - Tipo (código do grupo: G1, G2, G3 ou G4).
-        </div>
-        <input type="file" accept=".csv,.xlsx" onChange={(e) => setPlanilhaFile(e.target.files?.[0]?.name ?? null)} />
-        <button className="mv2-btn-outline" style={{ width: '100%', marginTop: 6 }} disabled title="Importação de planilha ainda não implementada">
-          {planilhaFile ? `Adicionar (${planilhaFile})` : 'Adicionar'}
         </button>
       </div>
 

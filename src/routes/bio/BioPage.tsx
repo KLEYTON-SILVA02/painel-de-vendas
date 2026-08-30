@@ -67,13 +67,15 @@ export function BioPage() {
     bioGroups,
   );
   const balcaoMatriculas = new Set(collaborators.filter((c) => c.setor === BALCAO_SETOR).map((c) => c.matricula));
+  // "Visão Padrão" stays Balcão-only (it's about the sector's general sales).
+  // "Visão BIOSINTÉTICA" shows every G1-G4 sale regardless of sector — a sale
+  // by someone outside Balcão isn't hidden, just flagged with "!" in the row.
   const salesForTable = sales
     .filter((s) => {
-      if (!balcaoMatriculas.has(s.matricula)) return false;
       if (s.dataISO && s.dataISO < dashFrom) return false;
       if (s.dataISO && s.dataISO > dashTo) return false;
       if (tableView === 'bio') return !!classifyBio(s.produto, bioGroups);
-      return true;
+      return balcaoMatriculas.has(s.matricula);
     })
     .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
     .slice(0, 150);
@@ -180,12 +182,23 @@ export function BioPage() {
                 {salesForTable.map((s) => {
                   const g = classifyBio(s.produto, bioGroups);
                   const pontos = g ? s.qtd * (bioWeights[g] || 0) : 0;
+                  const outsideBalcao = tableView === 'bio' && g && !balcaoMatriculas.has(s.matricula);
                   return (
                     <tr key={s.id} className="border-b border-slate-900">
                       <td className="py-1.5 pr-3 font-mono">{fmtDateBR(s.dataISO)}</td>
                       <td className="py-1.5 pr-3 font-mono">{s.matricula}</td>
                       <td className="py-1.5 pr-3">{s.vendedor}</td>
-                      <td className="py-1.5 pr-3">{s.produto}</td>
+                      <td className="py-1.5 pr-3">
+                        {s.produto}
+                        {outsideBalcao && (
+                          <span
+                            title="Produto da Biosintética vendido por colaborador fora do setor Balcão — não entra no ranking."
+                            className="ml-1 font-bold text-pink-400"
+                          >
+                            !
+                          </span>
+                        )}
+                      </td>
                       <td className="py-1.5 pr-3 font-mono">{s.qtd}</td>
                       <td className="py-1.5 pr-3">
                         {tableView === 'bio' ? (
