@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { SidebarCalendarCard } from '../../components/SidebarCalendarCard';
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
+import { computeChampionStars } from '../../lib/business/champion';
 import { computeDinamicaRanking, intersectDynamicPeriod } from '../../lib/business/dynamics';
 import { effectiveMetaGeral, getGoal, getSuperMeta } from '../../lib/business/goals';
 import type { Dynamic } from '../../lib/business/types';
@@ -13,7 +14,7 @@ import { useDateRange, type RankFilter } from '../DateRangeContext';
 
 const CAT_LABEL: Record<CategoryKey, string> = {
   DERM: 'Dermocosméticos',
-  GEN: 'Genérico & Similar',
+  GEN: 'Genérico',
   MP: 'Marcas Exclusivas',
   MER: 'Mercadoria Geral',
 };
@@ -199,6 +200,9 @@ export function DashboardPage() {
   const campeaoSource = modoDia ? ranking : monthRanking;
   const campeao = campeaoSource.length && campeaoSource[0].valor > 0 ? campeaoSource[0] : null;
   const campeaoLabel = modoDia ? `Campeão do dia — ${dashFrom.split('-').reverse().join('/')}` : `Campeão — ${monthName(refMonth)}/${refYear}`;
+  const campeaoStars = campeao
+    ? computeChampionStars(campeao.matricula, sales, collaborators, goals, specialLists, modoDia ? dashFrom : monthFirst, modoDia ? dashTo : monthLast, mode)
+    : null;
 
   const rankFilterParams = resolveRankFilterParams(rankFilter, dashFrom, dashTo, dynamics);
   const rankingFiltered = rankFilterParams.dinamica
@@ -295,6 +299,15 @@ export function DashboardPage() {
               <div style={{ fontSize: 10.5, color: '#8b90bf', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {fmtMoney(campeao.valor)} · {campeao.itens} it.
               </div>
+              {campeaoStars && (
+                <div style={{ marginTop: 2 }} title={campeaoStars.map((s) => `${s.achieved ? '✓' : '✗'} ${s.label}`).join(' · ')}>
+                  {campeaoStars.map((s) => (
+                    <span key={s.key} style={{ fontSize: 12, color: s.achieved ? '#ffb700' : '#2b3350' }}>
+                      ★
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}

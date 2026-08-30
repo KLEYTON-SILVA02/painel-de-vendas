@@ -18,7 +18,7 @@ export type PageCategoryKey = CategoryKey | 'LEVMEL' | 'CHIP';
 // Ported 1:1 from legacy/index-original.html (CATEGORIA_META / CATS / catLabel / catCls / .pill.*).
 const CATEGORY_META: Record<PageCategoryKey, { titulo: string; cor: string }> = {
   DERM: { titulo: '🩹 Dermocosméticos', cor: '#ff3df0' },
-  GEN: { titulo: '💊 Genérico & Similar', cor: '#14ff00' },
+  GEN: { titulo: '💊 Genérico', cor: '#14ff00' },
   MP: { titulo: '🏷️ Marcas Exclusivas', cor: '#a82bff' },
   MER: { titulo: '📦 Mercadoria Geral', cor: '#ff6a00' },
   LEVMEL: { titulo: '🍯 Levmel', cor: '#ffb700' },
@@ -26,7 +26,7 @@ const CATEGORY_META: Record<PageCategoryKey, { titulo: string; cor: string }> = 
 };
 const CAT_PLAIN_LABEL: Record<CategoryKey, string> = {
   DERM: 'Dermocosméticos',
-  GEN: 'Genérico & Similar',
+  GEN: 'Genérico',
   MP: 'Marcas Exclusivas',
   MER: 'Mercadoria Geral',
 };

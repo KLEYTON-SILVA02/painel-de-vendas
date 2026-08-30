@@ -1,4 +1,5 @@
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
+import { computeChampionStars } from '../../lib/business/champion';
 import { effectiveMetaGeral, getGoal, getSuperMeta } from '../../lib/business/goals';
 import { catTotals, computeSummary } from '../../lib/business/summary';
 import { monthFirstISO, monthLastISO } from '../../lib/dateRange';
@@ -50,6 +51,9 @@ export function MobileInicioPage() {
   const campeaoSource = modoDia ? ranking : monthRanking;
   const campeao = campeaoSource.length && campeaoSource[0].valor > 0 ? campeaoSource[0] : null;
   const campeaoLabel = modoDia ? `Campeão do dia` : `Campeão — ${monthName(refMonth)}/${refYear}`;
+  const campeaoStars = campeao
+    ? computeChampionStars(campeao.matricula, sales, collaborators, goals, specialLists, modoDia ? dashFrom : monthFirst, modoDia ? dashTo : monthLast, mode)
+    : null;
 
   return (
     <div>
@@ -99,9 +103,18 @@ export function MobileInicioPage() {
             <div className="mv2-badge">👑 {campeaoLabel}</div>
             <div className="mv2-name">{campeao.apelido || campeao.nome}</div>
           </div>
-          {/* Star count: criteria for how many stars a champion earns isn't
-             specified in the reference doc — see FUNÇÕES PENDENTES. */}
-          <div className="mv2-stars">★★★★★</div>
+          {campeaoStars && (
+            <div
+              className="mv2-stars"
+              title={campeaoStars.map((s) => `${s.achieved ? '✓' : '✗'} ${s.label}`).join(' · ')}
+            >
+              {campeaoStars.map((s) => (
+                <span key={s.key} style={{ opacity: s.achieved ? 1 : 0.25 }}>
+                  ★
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

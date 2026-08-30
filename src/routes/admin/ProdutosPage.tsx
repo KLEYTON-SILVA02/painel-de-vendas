@@ -8,7 +8,7 @@ import { useBrandKeywords, useCatalog, useExclusiveBrands, useProducts, useSales
 
 const CAT_LABEL: Record<CategoryKey, string> = {
   DERM: 'Dermocosméticos',
-  GEN: 'Genérico & Similar',
+  GEN: 'Genérico',
   MP: 'Marcas Exclusivas',
   MER: 'Mercadoria Geral',
 };
@@ -493,7 +493,7 @@ function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <CategoryTabs group={group} setGroup={setGroup} />
         <p className="text-xs text-slate-500">
-          Tier 3 — palavras-chave de marca por categoria. Para <b>Genérico &amp; Similar</b>, o nome do produto
+          Tier 3 — palavras-chave de marca por categoria. Para <b>Genérico</b>, o nome do produto
           também precisa conter um marcador de genérico (ex: "generico", "similar", "gen", "gn").
         </p>
       </div>
