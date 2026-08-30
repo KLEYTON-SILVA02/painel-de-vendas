@@ -31,6 +31,9 @@ import { ConquistasPage } from '../conquistas/ConquistasPage';
 import { DinamicasPage } from '../dinamicas/DinamicasPage';
 import { MetasPage } from '../metas/MetasPage';
 import { MobileClosingTimer } from './MobileClosingTimer';
+import { MobileDermoPage } from './MobileDermoPage';
+import { MobileExclusivasPage } from './MobileExclusivasPage';
+import { MobileGenericosPage } from './MobileGenericosPage';
 import { MobileInicioPage } from './MobileInicioPage';
 import { MobileRankingPage } from './MobileRankingPage';
 
@@ -95,9 +98,9 @@ export function MobileAdminShell() {
         <Routes>
           <Route path="/" element={<MobileInicioPage />} />
           <Route path="/ranking" element={<MobileRankingPage />} />
-          <Route path="/categoria/DERM" element={<CategoryPage catKey="DERM" />} />
-          <Route path="/categoria/GEN" element={<CategoryPage catKey="GEN" />} />
-          <Route path="/categoria/MP" element={<CategoryPage catKey="MP" />} />
+          <Route path="/categoria/DERM" element={<MobileDermoPage />} />
+          <Route path="/categoria/GEN" element={<MobileGenericosPage />} />
+          <Route path="/categoria/MP" element={<MobileExclusivasPage />} />
           <Route path="/categoria/MER" element={<CategoryPage catKey="MER" />} />
           <Route path="/categoria/LEVMEL" element={<CategoryPage catKey="LEVMEL" />} />
           <Route path="/categoria/CHIP" element={<CategoryPage catKey="CHIP" />} />

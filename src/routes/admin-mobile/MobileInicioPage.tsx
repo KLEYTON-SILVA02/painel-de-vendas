@@ -1,15 +1,13 @@
-import { useState } from 'react';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
 import { effectiveMetaGeral, getGoal, getSuperMeta } from '../../lib/business/goals';
 import { catTotals, computeSummary } from '../../lib/business/summary';
-import { monthFirstISO, monthLastISO, todayISO } from '../../lib/dateRange';
+import { monthFirstISO, monthLastISO } from '../../lib/dateRange';
 import { fmtMoney, monthName } from '../../lib/format';
 import { useCollaborators, useDynamics, useGoals, useSales, useSpecialLists, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { GoalGauge } from './GoalGauge';
+import { MobileDateFilter } from './MobileDateFilter';
 
-const MESES_ABREV = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
-const DOW_ABBR = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
 const CAT_LABEL: Record<CategoryKey, string> = { DERM: 'Dermocosméticos', GEN: 'Genéricos', MP: 'Marcas Excl.', MER: 'Merc. Geral' };
 const CAT_COLOR: Record<CategoryKey, string> = { DERM: '#b84c9c', GEN: '#698b46', MP: '#813c97', MER: '#f26122' };
 
@@ -20,8 +18,7 @@ export function MobileInicioPage() {
   const { data: storeSettings } = useStoreSettings();
   const { data: specialLists } = useSpecialLists();
   const { data: dynamics } = useDynamics();
-  const { dashFrom, dashTo, refYear, refMonth, modoGeral, buscaPeriodoOpen, quickMonth, pickDay, toggleBuscaPeriodo, setModoGeral } = useDateRange();
-  const [expanded, setExpanded] = useState(false);
+  const { dashFrom, dashTo, refYear, refMonth } = useDateRange();
 
   if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !dynamics) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
@@ -53,9 +50,6 @@ export function MobileInicioPage() {
   const campeaoSource = modoDia ? ranking : monthRanking;
   const campeao = campeaoSource.length && campeaoSource[0].valor > 0 ? campeaoSource[0] : null;
   const campeaoLabel = modoDia ? `Campeão do dia` : `Campeão — ${monthName(refMonth)}/${refYear}`;
-
-  const today = todayISO();
-  const daysInMonth = new Date(refYear, refMonth + 1, 0).getDate();
 
   return (
     <div>
@@ -92,54 +86,7 @@ export function MobileInicioPage() {
         </div>
       </div>
 
-      <div className="mv2-date-filter">
-        <div className="mv2-month-grid">
-          {MESES_ABREV.map((lbl, i) => (
-            <button key={i} className={i === refMonth ? 'active' : ''} onClick={() => quickMonth(i)}>
-              {lbl}
-            </button>
-          ))}
-        </div>
-        <div className="mv2-mode-row">
-          <button className={`mv2-pill ${buscaPeriodoOpen ? 'active' : ''}`} onClick={toggleBuscaPeriodo}>
-            Buscar Período
-          </button>
-          <button className={`mv2-pill ${modoGeral ? 'active' : ''}`} onClick={setModoGeral}>
-            Modo Geral
-          </button>
-          <button className="mv2-pill" onClick={() => setExpanded((v) => !v)}>
-            {expanded ? '▲' : '▼'}
-          </button>
-        </div>
-
-        {expanded && (
-          <>
-            <div className="mv2-weekday-row">
-              {DOW_ABBR.map((d, i) => (
-                <div key={d} className={`mv2-weekday ${i === 0 ? 'active' : ''} ${i === 6 ? 'active sat' : ''}`}>
-                  {d}
-                </div>
-              ))}
-            </div>
-            <div className="mv2-calendar-grid">
-              {Array.from({ length: new Date(refYear, refMonth, 1).getDay() }, (_, i) => (
-                <div key={`pad-${i}`} />
-              ))}
-              {Array.from({ length: daysInMonth }, (_, i) => {
-                const d = i + 1;
-                const iso = `${refYear}-${String(refMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                const isSelected = !modoGeral && iso >= dashFrom && iso <= dashTo;
-                const isToday = iso === today;
-                return (
-                  <button key={d} className={`mv2-day ${isSelected || isToday ? 'selected' : ''}`} onClick={() => pickDay(iso)}>
-                    {d}
-                  </button>
-                );
-              })}
-            </div>
-          </>
-        )}
-      </div>
+      <MobileDateFilter />
 
       {campeao && (
         <div className="mv2-champion-card">

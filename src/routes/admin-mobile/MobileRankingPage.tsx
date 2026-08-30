@@ -7,6 +7,7 @@ import { fmtMoney } from '../../lib/format';
 import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
 import { useCollaborators, useGoals, useSales, useSpecialLists, useStore } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
+import { MobileDateFilter } from './MobileDateFilter';
 
 const RANKING_COLS = [
   { key: 'DERM' as const, titulo: 'Dermo', cor: '#b84c9c' },
@@ -65,6 +66,8 @@ export function MobileRankingPage() {
   return (
     <div>
       <div className="mv2-screen-title mv2-ranking">RANKING</div>
+
+      <MobileDateFilter />
 
       <div className="mv2-goals-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, margin: '0 18px 12px' }}>
         {RANKING_COLS.map((c) => {
