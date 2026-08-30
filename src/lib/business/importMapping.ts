@@ -17,10 +17,13 @@ export const FIELD_NAMES: Record<ImportField, string[]> = {
   valor: ['valor do produto', 'valor', 'total', 'valor total'],
 };
 
-// Fallback column indices for the store's known fixed spreadsheet layout,
-// used only when a field can't be matched by header name.
+// Fallback column indices for the store's known fixed spreadsheet layout
+// (A=Data, B=GO, C=GR, D=Filial, E=Filial Nome, F=PDV, G=Vendedor[código],
+// H=Vendedor Nome, I=Matrícula, J=Código do Produto, K=Descrição do Produto,
+// L=Quantidade Vendida, M=Valor do Produto), used only when a field can't be
+// matched by header name.
 export const FIXED_COLS: Partial<Record<ImportField, number>> = {
-  data: 0, matricula: 6, vendedor: 7, codigo: 9, produto: 10, qtd: 11, valor: 12,
+  data: 0, matricula: 8, vendedor: 7, codigo: 9, produto: 10, qtd: 11, valor: 12,
 };
 
 /** Scans the first 15 rows for a header row: the first one hitting >=2 known terms. */

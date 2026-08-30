@@ -13,10 +13,12 @@ import {
 } from '../../components/icons/NavIcons';
 
 // Ported 1:1 from legacy/index-original.html — ADMIN_SUBS + .admin-menu-grid
-// / .admin-card-btn. Icon-only per the latest spec (label dropped, kept as a
-// tooltip via title=) — same 8 cards, same order, no visual grouping, plus
-// Ícones (Gerenciamento de Ícones). `slot` maps to functionIconSlots.ts —
-// falls back to `icon` until an admin uploads a custom SVG for it.
+// / .admin-card-btn, later extended with Ícones (Gerenciamento de Ícones).
+// `slot` maps to functionIconSlots.ts — falls back to `icon` until an admin
+// uploads a custom SVG for it. Cards show their name (icon-only was tried
+// earlier and reverted per feedback) in a fixed 5-per-row grid that scales
+// card/icon/text size with clamp() rather than dropping columns, so 5 stay
+// visible edge-to-edge even on narrow phones.
 const ADMIN_CARDS = [
   { to: '/admin/colaboradores', label: 'Colaboradores', icon: UsersIcon, slot: 'adm_colaboradores' },
   { to: '/admin/produtos', label: 'Produtos', icon: PackageIcon, slot: 'adm_produtos' },
@@ -31,16 +33,21 @@ const ADMIN_CARDS = [
 
 export function AdminLandingPage() {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(90px,1fr))', gap: 12 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 'clamp(6px, 2vw, 12px)' }}>
       {ADMIN_CARDS.map((c) => (
         <Link
           key={c.to}
           to={c.to}
           title={c.label}
-          className="flex flex-col items-center justify-center rounded-2xl border-[1.5px] border-slate-800 bg-slate-900/60 text-slate-400 transition-all hover:border-cyan-500 hover:-translate-y-0.5 hover:text-cyan-400"
-          style={{ minHeight: 78, padding: '20px 12px' }}
+          className="flex flex-col items-center justify-center gap-1.5 rounded-2xl border-[1.5px] border-slate-800 bg-slate-900/60 text-slate-400 transition-all hover:border-cyan-500 hover:-translate-y-0.5 hover:text-cyan-400"
+          style={{ minHeight: 78, padding: 'clamp(8px, 3vw, 20px) clamp(4px, 1.5vw, 12px)' }}
         >
-          {c.slot ? <FunctionIcon slot={c.slot} fallback={c.icon} size={26} /> : <c.icon width={26} height={26} />}
+          {c.slot ? (
+            <FunctionIcon slot={c.slot} fallback={c.icon} size={22} />
+          ) : (
+            <c.icon width={22} height={22} />
+          )}
+          <span style={{ fontSize: 'clamp(8px, 2.4vw, 11px)', textAlign: 'center', lineHeight: 1.2 }}>{c.label}</span>
         </Link>
       ))}
     </div>

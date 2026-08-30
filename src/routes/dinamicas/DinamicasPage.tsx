@@ -242,6 +242,7 @@ function NewDynamicForm({
   const [produtoInput, setProdutoInput] = useState('');
   const [produtos, setProdutos] = useState<string[]>([]);
   const [participantes, setParticipantes] = useState<string[]>([]);
+  const [expanded, setExpanded] = useState(false);
 
   function addProduto() {
     const nome = produtoInput.trim();
@@ -274,11 +275,21 @@ function NewDynamicForm({
     setMetaValor(0);
     setProdutos([]);
     setParticipantes([]);
+    setExpanded(false);
   }
 
   return (
     <form onSubmit={handleSubmit} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 flex flex-col gap-3">
-      <h3 className="font-semibold">Nova dinâmica</h3>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="font-semibold text-left flex items-center justify-between"
+      >
+        <span>+ Nova dinâmica</span>
+        <span className="text-xs text-slate-400">{expanded ? '▲ recolher' : '▼ expandir'}</span>
+      </button>
+      {expanded && (
+        <>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Field label="Nome da dinâmica">
           <input value={titulo} onChange={(e) => setTitulo(e.target.value)} className="input" />
@@ -365,6 +376,8 @@ function NewDynamicForm({
       >
         {creating ? 'Criando…' : '+ Criar dinâmica'}
       </button>
+        </>
+      )}
     </form>
   );
 }

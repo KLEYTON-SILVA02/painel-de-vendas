@@ -51,6 +51,16 @@ export function ProdutosPage() {
   );
 }
 
+/** Surfaces a mutation failure (RLS denial, constraint violation, network
+ * error, …) that would otherwise vanish silently — an "Adicionar" click
+ * that does nothing is indistinguishable from a broken button unless the
+ * actual error reaches the screen. */
+function MutationError({ error }: { error: unknown }) {
+  if (!error) return null;
+  const message = error instanceof Error ? error.message : String(error);
+  return <p className="text-xs text-rose-400 mt-2">Falha ao salvar: {message}</p>;
+}
+
 function CategoryTabs({ group, setGroup }: { group: CategoryKey; setGroup: (k: CategoryKey) => void }) {
   return (
     <div className="flex gap-1 mb-1">
@@ -128,11 +138,13 @@ function ProdutosTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
             + Adicionar
           </button>
         </div>
+        <MutationError error={insertProduct.error} />
       </div>
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <h3 className="font-semibold mb-3 text-sm">
           Produtos — {CAT_LABEL[group]} ({groupProducts.length})
         </h3>
+        <MutationError error={updateProduct.error} />
         {groupProducts.length === 0 ? (
           <div className="text-sm text-slate-500 py-4 text-center">Nenhum produto cadastrado.</div>
         ) : (
@@ -239,6 +251,7 @@ function CatalogoTab() {
             + Adicionar
           </button>
         </div>
+        <MutationError error={insertCatalog.error} />
       </div>
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <div className="flex items-center justify-between mb-3">
@@ -505,6 +518,7 @@ function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
             + Adicionar
           </button>
         </div>
+        <MutationError error={insertKw.error} />
         <div className="flex flex-wrap gap-1.5">
           {groupKeywords.length === 0 ? (
             <span className="text-xs text-slate-500">Nenhuma palavra-chave cadastrada.</span>
@@ -552,6 +566,7 @@ function ExclusivasTab() {
           + Adicionar
         </button>
       </div>
+      <MutationError error={insertBrand.error} />
       <div className="flex flex-wrap gap-1.5">
         {exclusiveBrands.map((b) => (
           <span key={b.id} className="text-xs bg-slate-800 rounded-full px-2 py-1 flex items-center gap-1.5">

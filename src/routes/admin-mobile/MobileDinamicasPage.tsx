@@ -163,6 +163,7 @@ function MobileNewDynamicForm({
   const [produtoInput, setProdutoInput] = useState('');
   const [produtos, setProdutos] = useState<string[]>([]);
   const [participantes, setParticipantes] = useState<string[]>([]);
+  const [expanded, setExpanded] = useState(false);
 
   function addProduto() {
     const nome = produtoInput.trim();
@@ -194,11 +195,33 @@ function MobileNewDynamicForm({
     setMetaValor(0);
     setProdutos([]);
     setParticipantes([]);
+    setExpanded(false);
   }
 
   return (
     <form onSubmit={handleSubmit} className="mv2-dynamic-form" style={{ margin: '0 18px 16px' }}>
-      <div style={{ fontSize: 9, fontWeight: 700, marginBottom: 6, color: 'var(--mv2-texto-2)', textTransform: 'uppercase' }}>Nova Dinâmica</div>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setExpanded((v) => !v)}
+        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setExpanded((v) => !v)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          cursor: 'pointer',
+          fontSize: 9,
+          fontWeight: 700,
+          marginBottom: expanded ? 6 : 0,
+          color: 'var(--mv2-texto-2)',
+          textTransform: 'uppercase',
+        }}
+      >
+        <span>+ Nova Dinâmica</span>
+        <span>{expanded ? '▲' : '▼'}</span>
+      </div>
+      {expanded && (
+        <>
       <input placeholder="Nome da dinâmica" value={titulo} onChange={(e) => setTitulo(e.target.value)} />
 
       <div className="mv2-row" style={{ gap: 8 }}>
@@ -276,6 +299,8 @@ function MobileNewDynamicForm({
       <button type="submit" className="mv2-btn-primary" style={{ width: '100%', marginTop: 12 }} disabled={creating}>
         {creating ? 'Criando…' : 'Criar Dinâmica'}
       </button>
+        </>
+      )}
     </form>
   );
 }
