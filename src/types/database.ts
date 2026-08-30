@@ -120,6 +120,7 @@ export type Database = {
         Row: {
           apelido: string | null
           created_at: string
+          foto_conquista_url: string | null
           foto_url: string | null
           id: string
           matricula: string
@@ -131,6 +132,7 @@ export type Database = {
         Insert: {
           apelido?: string | null
           created_at?: string
+          foto_conquista_url?: string | null
           foto_url?: string | null
           id?: string
           matricula: string
@@ -142,6 +144,7 @@ export type Database = {
         Update: {
           apelido?: string | null
           created_at?: string
+          foto_conquista_url?: string | null
           foto_url?: string | null
           id?: string
           matricula?: string
@@ -153,6 +156,45 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "collaborators_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conquista_super_metas: {
+        Row: {
+          categoria: string
+          collaborator_id: string
+          id: string
+          store_id: string
+          valor: number
+        }
+        Insert: {
+          categoria: string
+          collaborator_id: string
+          id?: string
+          store_id: string
+          valor?: number
+        }
+        Update: {
+          categoria?: string
+          collaborator_id?: string
+          id?: string
+          store_id?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conquista_super_metas_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conquista_super_metas_store_id_fkey"
             columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "stores"
