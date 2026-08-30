@@ -11,6 +11,7 @@ import { MobileDateFilter } from './MobileDateFilter';
 
 const STATUS_LABEL: Record<DynamicStatus, string> = { ativa: 'Ativa', agendada: 'Agendada', encerrada: 'Encerrada' };
 const STATUS_COLOR: Record<DynamicStatus, string> = { ativa: '#14ff00', agendada: '#f26122', encerrada: '#666' };
+const SETOR_ALVO_LABEL: Record<Dynamic['setorAlvo'], string> = { balcao: 'Balcão', caixa: 'Caixa', ambos: 'Balcão + Caixa' };
 
 export function MobileDinamicasPage() {
   const { profile } = useAuth();
@@ -36,11 +37,14 @@ export function MobileDinamicasPage() {
 
   const atingimentoMedio = ativas.length
     ? ativas.reduce((sum, d) => {
-        const realizado = computeDinamicaProgresso(d, sales);
+        const realizado = computeDinamicaProgresso(d, sales, collaborators);
         const pct = d.metaValor > 0 ? Math.min(999, (realizado / d.metaValor) * 100) : 0;
         return sum + pct;
       }, 0) / ativas.length
     : 0;
+
+  const ativasBalcao = ativas.filter((d) => d.setorAlvo === 'balcao' || d.setorAlvo === 'ambos').length;
+  const ativasCaixa = ativas.filter((d) => d.setorAlvo === 'caixa' || d.setorAlvo === 'ambos').length;
 
   const visibleList = tab === 'ativas' ? listaAtual : encerradas;
 
@@ -63,18 +67,14 @@ export function MobileDinamicasPage() {
         </div>
       </div>
 
-      {/* "Dinâmica Balcão" / "Dinâmica Caixa" — the spec splits active
-          dynamics by sales-unit type, but the dynamics table has no
-          setor/tipo-de-unidade column to split by yet. Shown as static
-          placeholders — see FUNÇÕES PENDENTES. */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, margin: '0 18px 12px' }}>
         <div className="mv2-metric-card" style={{ ['--mv2-card-color' as string]: '#00b6da' }}>
           <div className="mv2-label">Dinâmica Balcão</div>
-          <div className="mv2-value">—</div>
+          <div className="mv2-value">{ativasBalcao}</div>
         </div>
         <div className="mv2-metric-card" style={{ ['--mv2-card-color' as string]: '#5c3795' }}>
           <div className="mv2-label">Dinâmica Caixa</div>
-          <div className="mv2-value">—</div>
+          <div className="mv2-value">{ativasCaixa}</div>
         </div>
       </div>
 
@@ -146,6 +146,7 @@ function MobileNewDynamicForm({
     metrica: 'valor' | 'unidade';
     produtos: string[];
     participantes: string[];
+    setor_alvo: Dynamic['setorAlvo'];
   }) => void;
   creating: boolean;
 }) {
@@ -153,11 +154,7 @@ function MobileNewDynamicForm({
   const [titulo, setTitulo] = useState('');
   const [dataInicio, setDataInicio] = useState(today);
   const [dataFim, setDataFim] = useState(today);
-  // Setor / Tipo de unidade — fields the reference doc shows on this form,
-  // but the dynamics table has no matching columns yet. Kept as local UI
-  // state only (not sent to onCreate) — see FUNÇÕES PENDENTES.
-  const [setor, setSetor] = useState('');
-  const [tipoUnidade, setTipoUnidade] = useState('');
+  const [setorAlvo, setSetorAlvo] = useState<Dynamic['setorAlvo']>('ambos');
   const [metrica, setMetrica] = useState<'valor' | 'unidade'>('valor');
   const [metaValor, setMetaValor] = useState(0);
   const [produtoInput, setProdutoInput] = useState('');
@@ -187,10 +184,10 @@ function MobileNewDynamicForm({
       metrica,
       produtos,
       participantes,
+      setor_alvo: setorAlvo,
     });
     setTitulo('');
-    setSetor('');
-    setTipoUnidade('');
+    setSetorAlvo('ambos');
     setMetaValor(0);
     setProdutos([]);
     setParticipantes([]);
@@ -206,10 +203,11 @@ function MobileNewDynamicForm({
         <input type="date" style={{ flex: 1 }} value={dataFim} onChange={(e) => setDataFim(e.target.value)} />
       </div>
 
-      <div className="mv2-row" style={{ gap: 8 }}>
-        <input style={{ flex: 1 }} placeholder="Setor" value={setor} onChange={(e) => setSetor(e.target.value)} />
-        <input style={{ flex: 1 }} placeholder="Tipo de unidade" value={tipoUnidade} onChange={(e) => setTipoUnidade(e.target.value)} />
-      </div>
+      <select value={setorAlvo} onChange={(e) => setSetorAlvo(e.target.value as Dynamic['setorAlvo'])}>
+        <option value="ambos">Setor: Balcão + Caixa</option>
+        <option value="balcao">Setor: Balcão</option>
+        <option value="caixa">Setor: Caixa</option>
+      </select>
 
       <div className="mv2-row" style={{ gap: 8 }}>
         <select style={{ flex: 1 }} value={metrica} onChange={(e) => setMetrica(e.target.value as 'valor' | 'unidade')}>
@@ -300,7 +298,7 @@ function MobileDinamicaAccordionItem({
 }) {
   const [cardMatricula, setCardMatricula] = useState<string | null>(null);
   const isUnidade = d.metrica === 'unidade';
-  const realizado = computeDinamicaProgresso(d, sales);
+  const realizado = computeDinamicaProgresso(d, sales, collaborators);
   const pct = d.metaValor > 0 ? Math.min(999, (realizado / d.metaValor) * 100) : 0;
   const ranking = computeDinamicaRanking(d, sales, collaborators);
 
@@ -346,7 +344,7 @@ function MobileDinamicaAccordionItem({
               </thead>
               <tbody>
                 <tr>
-                  <td>—</td>
+                  <td>{SETOR_ALVO_LABEL[d.setorAlvo]}</td>
                   <td>{d.participantes.length || 'Todos'}</td>
                   <td>
                     {fmtDateBR(d.dataInicio)}–{fmtDateBR(d.dataFim)}

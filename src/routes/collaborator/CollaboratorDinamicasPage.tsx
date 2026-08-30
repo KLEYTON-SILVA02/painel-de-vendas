@@ -1,7 +1,7 @@
 import { useAuth } from '../../auth/AuthContext';
-import { computeDinamicaProgresso, dynamicStatus } from '../../lib/business/dynamics';
+import { computeDinamicaProgresso, dynamicAllowsCollaborator, dynamicStatus } from '../../lib/business/dynamics';
 import { normalize } from '../../lib/business/normalize';
-import type { Dynamic } from '../../lib/business/types';
+import type { Collaborator, Dynamic } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { useCollaborators, useDynamics, useSales } from '../../lib/queries';
 
@@ -22,7 +22,9 @@ export function CollaboratorDinamicasPage() {
     return <div className="text-sm text-slate-500 p-6 text-center">Carregando…</div>;
   }
 
-  const minhas = dynamics.filter((d) => d.participantes.length === 0 || (me && d.participantes.includes(me.matricula)));
+  const minhas = dynamics.filter(
+    (d) => (d.participantes.length === 0 || (me && d.participantes.includes(me.matricula))) && (!me || dynamicAllowsCollaborator(d, me)),
+  );
   const today = todayISO();
   const ativas = minhas.filter((d) => dynamicStatus(d, today) !== 'encerrada').sort((a, b) => a.dataFim.localeCompare(b.dataFim));
   const encerradas = minhas.filter((d) => dynamicStatus(d, today) === 'encerrada').sort((a, b) => b.dataFim.localeCompare(a.dataFim));
@@ -41,7 +43,7 @@ export function CollaboratorDinamicasPage() {
         ) : (
           <div className="flex flex-col gap-3">
             {ativas.map((d) => (
-              <MyDinamicaCard key={d.id} d={d} status={dynamicStatus(d, today)} sales={sales} matricula={me?.matricula} />
+              <MyDinamicaCard key={d.id} d={d} status={dynamicStatus(d, today)} sales={sales} collaborators={collaborators} matricula={me?.matricula} />
             ))}
           </div>
         )}
@@ -55,7 +57,7 @@ export function CollaboratorDinamicasPage() {
         ) : (
           <div className="flex flex-col gap-3">
             {encerradas.map((d) => (
-              <MyDinamicaCard key={d.id} d={d} status="encerrada" sales={sales} matricula={me?.matricula} />
+              <MyDinamicaCard key={d.id} d={d} status="encerrada" sales={sales} collaborators={collaborators} matricula={me?.matricula} />
             ))}
           </div>
         )}
@@ -75,15 +77,17 @@ function MyDinamicaCard({
   d,
   status,
   sales,
+  collaborators,
   matricula,
 }: {
   d: Dynamic;
   status: 'ativa' | 'agendada' | 'encerrada';
   sales: ReturnType<typeof useSales>['data'];
+  collaborators: Collaborator[];
   matricula: string | undefined;
 }) {
   const isUnidade = d.metrica === 'unidade';
-  const realizadoLoja = computeDinamicaProgresso(d, sales ?? []);
+  const realizadoLoja = computeDinamicaProgresso(d, sales ?? [], collaborators);
   const pct = d.metaValor > 0 ? Math.min(100, (realizadoLoja / d.metaValor) * 100) : null;
 
   const produtosSet = d.produtos.length ? new Set(d.produtos.map((p) => normalize(p))) : null;

@@ -58,6 +58,8 @@ export interface Dynamic {
   metrica: 'valor' | 'unidade';
   produtos: string[];
   participantes: string[]; // matriculas; empty = everyone
+  /** Which sector(s) may participate — 'ambos' (default) means no restriction. */
+  setorAlvo: 'balcao' | 'caixa' | 'ambos';
 }
 
 export type BioGroupsProducts = Record<BioGroupKey, { nome: string; palavras: string[] }[]>;

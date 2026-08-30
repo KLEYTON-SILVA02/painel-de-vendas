@@ -71,6 +71,7 @@ export function mapDynamic(row: Tables<'dynamics'>): Dynamic {
     metrica: row.metrica as 'valor' | 'unidade',
     produtos: row.produtos,
     participantes: row.participantes,
+    setorAlvo: row.setor_alvo as Dynamic['setorAlvo'],
   };
 }
 

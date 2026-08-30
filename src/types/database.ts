@@ -280,6 +280,7 @@ export type Database = {
           metrica: string
           participantes: string[]
           produtos: string[]
+          setor_alvo: string
           store_id: string
           titulo: string
         }
@@ -293,6 +294,7 @@ export type Database = {
           metrica?: string
           participantes?: string[]
           produtos?: string[]
+          setor_alvo?: string
           store_id: string
           titulo: string
         }
@@ -306,6 +308,7 @@ export type Database = {
           metrica?: string
           participantes?: string[]
           produtos?: string[]
+          setor_alvo?: string
           store_id?: string
           titulo?: string
         }

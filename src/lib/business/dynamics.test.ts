@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   computeDinamicaProgresso,
   computeDinamicaRanking,
+  dynamicAllowsCollaborator,
   dynamicStatus,
   intersectDynamicPeriod,
   isDynamicActive,
@@ -22,20 +23,40 @@ const sales: Sale[] = [
 
 const din: Dynamic = {
   id: 'd1', titulo: 'Semana X', descricao: '', dataInicio: '2026-08-01', dataFim: '2026-08-10',
-  metaValor: 500, metrica: 'valor', produtos: ['Produto X'], participantes: [],
+  metaValor: 500, metrica: 'valor', produtos: ['Produto X'], participantes: [], setorAlvo: 'ambos',
 };
 
 describe('computeDinamicaProgresso', () => {
   it('sums only sales within the period, matching the product list', () => {
-    expect(computeDinamicaProgresso(din, sales)).toBe(300); // s1 + s2 only
+    expect(computeDinamicaProgresso(din, sales, collaborators)).toBe(300); // s1 + s2 only
   });
 
   it('uses unit count when metrica is unidade', () => {
-    expect(computeDinamicaProgresso({ ...din, metrica: 'unidade' }, sales)).toBe(3); // qtd 2 + 1
+    expect(computeDinamicaProgresso({ ...din, metrica: 'unidade' }, sales, collaborators)).toBe(3); // qtd 2 + 1
   });
 
   it('counts every product when the product list is empty', () => {
-    expect(computeDinamicaProgresso({ ...din, produtos: [] }, sales)).toBe(800); // s1+s2+s3
+    expect(computeDinamicaProgresso({ ...din, produtos: [] }, sales, collaborators)).toBe(800); // s1+s2+s3
+  });
+
+  it('excludes sales from collaborators outside the target sector', () => {
+    // Bruno (M2) is Caixa — with setorAlvo=balcao, only Ana's (M1) sale counts.
+    expect(computeDinamicaProgresso({ ...din, setorAlvo: 'balcao' }, sales, collaborators)).toBe(200);
+  });
+});
+
+describe('dynamicAllowsCollaborator', () => {
+  it('never restricts when setorAlvo is ambos', () => {
+    expect(dynamicAllowsCollaborator(din, { setor: 'Balcão' })).toBe(true);
+    expect(dynamicAllowsCollaborator(din, { setor: 'Caixa' })).toBe(true);
+    expect(dynamicAllowsCollaborator(din, { setor: null })).toBe(true);
+  });
+
+  it('restricts to the matching sector otherwise', () => {
+    expect(dynamicAllowsCollaborator({ ...din, setorAlvo: 'balcao' }, { setor: 'Balcão' })).toBe(true);
+    expect(dynamicAllowsCollaborator({ ...din, setorAlvo: 'balcao' }, { setor: 'Caixa' })).toBe(false);
+    expect(dynamicAllowsCollaborator({ ...din, setorAlvo: 'caixa' }, { setor: 'Caixa' })).toBe(true);
+    expect(dynamicAllowsCollaborator({ ...din, setorAlvo: 'caixa' }, { setor: 'Balcão' })).toBe(false);
   });
 });
 
