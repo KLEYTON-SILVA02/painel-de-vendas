@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { PhotoCropModal } from '../../components/PhotoCropModal';
 import { grantCollaboratorLogin } from '../../lib/collaborators';
@@ -220,12 +220,12 @@ function EditCollaboratorModal({
   const [foto, setFoto] = useState(collaborator.foto);
   const [fotoConquista, setFotoConquista] = useState(collaborator.fotoConquista ?? null);
   const [cropTarget, setCropTarget] = useState<'avatar' | 'conquista' | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const pendingFileRef = useRef<File | null>(null);
 
   function handleFileSelected(target: 'avatar' | 'conquista', file: File | undefined) {
     if (!file) return;
-    pendingFileRef.current = file;
+    setPendingFile(file);
     setCropTarget(target);
   }
 
@@ -302,9 +302,9 @@ function EditCollaboratorModal({
         </div>
       </div>
 
-      {cropTarget && pendingFileRef.current && (
+      {cropTarget && pendingFile && (
         <PhotoCropModal
-          file={pendingFileRef.current}
+          file={pendingFile}
           title={cropTarget === 'avatar' ? 'Ajustar avatar' : 'Ajustar foto da Galeria de Conquistas'}
           onCancel={() => setCropTarget(null)}
           onCropped={handleCropped}

@@ -3,6 +3,7 @@ import { Suspense, lazy, useState } from 'react';
 import { Link, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { ClosingClock } from '../components/ClosingClock';
+import { ConquistaCelebrationHost } from '../components/ConquistaCelebration';
 import { HamburgerIcon, MedalIcon, RefreshIcon } from '../components/icons/NavIcons';
 import { Sidebar } from '../components/Sidebar';
 import type { Horario } from '../lib/business/horario';
@@ -70,6 +71,7 @@ export function AppShell() {
 
   return (
     <DateRangeProvider>
+      <ConquistaCelebrationHost />
       <div className={`app-shell min-h-screen bg-slate-950 text-slate-100 ${collapsed ? 'is-collapsed' : ''} ${mobileOpen ? 'is-mobile-open' : ''}`}>
         <Sidebar
           collapsed={collapsed}
