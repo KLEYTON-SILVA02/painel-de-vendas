@@ -25,11 +25,11 @@ import { ColaboradoresPage } from '../admin/ColaboradoresPage';
 import { ConfiguracoesPage } from '../admin/ConfiguracoesPage';
 import { MinhaLojaPage } from '../admin/MinhaLojaPage';
 import { ProdutosPage } from '../admin/ProdutosPage';
-import { BioPage } from '../bio/BioPage';
 import { CategoryPage } from '../category/CategoryPage';
 import { ConquistasPage } from '../conquistas/ConquistasPage';
 import { DinamicasPage } from '../dinamicas/DinamicasPage';
 import { MetasPage } from '../metas/MetasPage';
+import { MobileBioPage } from './MobileBioPage';
 import { MobileClosingTimer } from './MobileClosingTimer';
 import { MobileDermoPage } from './MobileDermoPage';
 import { MobileExclusivasPage } from './MobileExclusivasPage';
@@ -108,7 +108,7 @@ export function MobileAdminShell() {
           <Route path="/categoria/CHIP" element={<MobileChipPage />} />
           <Route path="/metas" element={<MetasPage />} />
           <Route path="/dinamicas" element={<DinamicasPage />} />
-          <Route path="/bio" element={<BioPage />} />
+          <Route path="/bio" element={<MobileBioPage />} />
           <Route path="/conquistas" element={<ConquistasPage />} />
           <Route path="/admin" element={<AdminLandingPage />} />
           <Route path="/admin/colaboradores" element={<ColaboradoresPage />} />
