@@ -37,6 +37,14 @@ export default defineConfig({
             handler: 'NetworkOnly',
           },
         ],
+        // A new deploy would otherwise sit "waiting" until every open tab/PWA
+        // instance is fully closed before it takes over — users kept seeing
+        // stale UI/logic for days after a fix shipped. skipWaiting + clientsClaim
+        // let the new service worker activate and take control immediately;
+        // paired with the periodic update check registered in main.tsx.
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
       },
     }),
   ],
