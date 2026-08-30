@@ -1,11 +1,14 @@
 import { useState, type FormEvent } from 'react';
 import { useAuth } from '../../auth/AuthContext';
+import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { computeDinamicaProgresso, computeDinamicaRanking, dynamicStatus, type DynamicStatus } from '../../lib/business/dynamics';
 import { normalize } from '../../lib/business/normalize';
 import type { Collaborator, Dynamic, Sale } from '../../lib/business/types';
 import { todayISO } from '../../lib/dateRange';
+import { generateDinamicaCardBlob } from '../../lib/dinamicaImage';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { useCreateDynamic, useDeleteDynamic } from '../../lib/mutations';
+import { tryCopyImage } from '../../lib/rankingImage';
 import { useCollaborators, useDynamics, useSales, useStore } from '../../lib/queries';
 import { MobileDateFilter } from './MobileDateFilter';
 
@@ -435,6 +438,60 @@ function MobileDinamicaExportCardModal({
 }) {
   const collaborator = collaborators.find((c) => c.matricula === matricula);
   const today = todayISO();
+  const [generating, setGenerating] = useState(false);
+  const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
+
+  const entries = dynamics.map((d) => {
+    const isUnidade = d.metrica === 'unidade';
+    const produtosSet = d.produtos.length ? new Set(d.produtos.map((p) => normalize(p))) : null;
+    let myValor = 0;
+    let myItens = 0;
+    const porDia: Record<string, { valor: number; itens: number }> = {};
+    sales.forEach((s) => {
+      if (s.matricula !== matricula) return;
+      if (!s.dataISO || s.dataISO < d.dataInicio || s.dataISO > d.dataFim) return;
+      if (produtosSet && !produtosSet.has(normalize(s.produto))) return;
+      myValor += Number(s.valor) || 0;
+      myItens += Number(s.qtd) || 0;
+      const dia = s.dataISO;
+      if (!porDia[dia]) porDia[dia] = { valor: 0, itens: 0 };
+      porDia[dia].valor += Number(s.valor) || 0;
+      porDia[dia].itens += Number(s.qtd) || 0;
+    });
+    const myTotal = isUnidade ? myItens : myValor;
+    const pct = d.metaValor > 0 ? Math.min(999, (myTotal / d.metaValor) * 100) : 0;
+    const dias = Object.keys(porDia).sort();
+    return { din: d, isUnidade, myValor, myItens, porDia, pct, dias };
+  });
+
+  async function handleGenerateImage() {
+    setGenerating(true);
+    try {
+      const blob = await generateDinamicaCardBlob({
+        nome: collaborator?.apelido || collaborator?.nome || matricula,
+        matricula,
+        foto: collaborator?.foto ?? null,
+        lojaNome: nomeLoja,
+        dinamicas: entries.map((e) => ({
+          titulo: e.din.titulo,
+          metaLabel: e.din.metaValor > 0 ? (e.isUnidade ? `${e.din.metaValor} un.` : fmtMoney(e.din.metaValor)) : '—',
+          realizadoLabel: e.isUnidade ? `${e.myItens} un.` : fmtMoney(e.myValor),
+          pct: e.pct,
+          dias: e.dias.map((dia) => ({
+            label: fmtDateBR(dia),
+            valorLabel:
+              (e.isUnidade ? `${e.porDia[dia].itens} un.` : fmtMoney(e.porDia[dia].valor)) +
+              (e.din.metaValor > 0 ? ` · ${(((e.isUnidade ? e.porDia[dia].itens : e.porDia[dia].valor) / e.din.metaValor) * 100).toFixed(0)}%` : ''),
+          })),
+        })),
+      });
+      if (!blob) return;
+      const wasCopied = await tryCopyImage(blob);
+      setImageModal({ url: URL.createObjectURL(blob), copied: wasCopied });
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   return (
     <div
@@ -456,79 +513,62 @@ function MobileDinamicaExportCardModal({
           </div>
         </div>
 
-        {dynamics.map((d) => {
-          const isUnidade = d.metrica === 'unidade';
-          const produtosSet = d.produtos.length ? new Set(d.produtos.map((p) => normalize(p))) : null;
-          let myValor = 0;
-          let myItens = 0;
-          const porDia: Record<string, { valor: number; itens: number }> = {};
-          sales.forEach((s) => {
-            if (s.matricula !== matricula) return;
-            if (!s.dataISO || s.dataISO < d.dataInicio || s.dataISO > d.dataFim) return;
-            if (produtosSet && !produtosSet.has(normalize(s.produto))) return;
-            myValor += Number(s.valor) || 0;
-            myItens += Number(s.qtd) || 0;
-            const dia = s.dataISO;
-            if (!porDia[dia]) porDia[dia] = { valor: 0, itens: 0 };
-            porDia[dia].valor += Number(s.valor) || 0;
-            porDia[dia].itens += Number(s.qtd) || 0;
-          });
-          const myTotal = isUnidade ? myItens : myValor;
-          const pct = d.metaValor > 0 ? Math.min(999, (myTotal / d.metaValor) * 100) : 0;
-          const dias = Object.keys(porDia).sort();
-
-          return (
-            <div key={d.id} style={{ marginBottom: 10, borderTop: '1px solid rgba(255,255,255,.08)', paddingTop: 8 }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: '#fff' }}>{d.titulo}</div>
-              <div className="mv2-stat-row" style={{ marginTop: 6 }}>
-                <div className="mv2-stat">
-                  <div style={{ fontSize: 6.5, color: 'var(--mv2-texto-2)' }}>META</div>
-                  <div style={{ fontSize: 10, fontWeight: 700 }}>{d.metaValor > 0 ? (isUnidade ? `${d.metaValor} un.` : fmtMoney(d.metaValor)) : '—'}</div>
-                </div>
-                <div className="mv2-stat">
-                  <div style={{ fontSize: 6.5, color: 'var(--mv2-texto-2)' }}>REALIZADO</div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: pct >= 100 ? 'var(--mv2-verde)' : '#fff' }}>
-                    {isUnidade ? `${myItens} un.` : fmtMoney(myValor)} ({pct.toFixed(0)}%)
-                  </div>
+        {entries.map(({ din: d, isUnidade, myValor, myItens, porDia, pct, dias }) => (
+          <div key={d.id} style={{ marginBottom: 10, borderTop: '1px solid rgba(255,255,255,.08)', paddingTop: 8 }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: '#fff' }}>{d.titulo}</div>
+            <div className="mv2-stat-row" style={{ marginTop: 6 }}>
+              <div className="mv2-stat">
+                <div style={{ fontSize: 6.5, color: 'var(--mv2-texto-2)' }}>META</div>
+                <div style={{ fontSize: 10, fontWeight: 700 }}>{d.metaValor > 0 ? (isUnidade ? `${d.metaValor} un.` : fmtMoney(d.metaValor)) : '—'}</div>
+              </div>
+              <div className="mv2-stat">
+                <div style={{ fontSize: 6.5, color: 'var(--mv2-texto-2)' }}>REALIZADO</div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: pct >= 100 ? 'var(--mv2-verde)' : '#fff' }}>
+                  {isUnidade ? `${myItens} un.` : fmtMoney(myValor)} ({pct.toFixed(0)}%)
                 </div>
               </div>
-              <div style={{ height: 4, borderRadius: 2, background: '#1a1a1a', marginTop: 6, overflow: 'hidden' }}>
-                <span style={{ display: 'block', height: '100%', borderRadius: 2, width: `${Math.min(100, pct)}%`, background: pct >= 100 ? 'var(--mv2-verde)' : 'var(--mv2-ciano)' }} />
-              </div>
-              {dias.length > 0 && (
-                <div style={{ marginTop: 4 }}>
-                  {dias.map((dia) => (
-                    <div key={dia} className="mv2-day-row">
-                      <span>{fmtDateBR(dia)}</span>
-                      <span>
-                        {isUnidade ? `${porDia[dia].itens} un.` : fmtMoney(porDia[dia].valor)}
-                        {d.metaValor > 0 && ` · ${((isUnidade ? porDia[dia].itens : porDia[dia].valor) / d.metaValor * 100).toFixed(0)}%`}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
-          );
-        })}
+            <div style={{ height: 4, borderRadius: 2, background: '#1a1a1a', marginTop: 6, overflow: 'hidden' }}>
+              <span style={{ display: 'block', height: '100%', borderRadius: 2, width: `${Math.min(100, pct)}%`, background: pct >= 100 ? 'var(--mv2-verde)' : 'var(--mv2-ciano)' }} />
+            </div>
+            {dias.length > 0 && (
+              <div style={{ marginTop: 4 }}>
+                {dias.map((dia) => (
+                  <div key={dia} className="mv2-day-row">
+                    <span>{fmtDateBR(dia)}</span>
+                    <span>
+                      {isUnidade ? `${porDia[dia].itens} un.` : fmtMoney(porDia[dia].valor)}
+                      {d.metaValor > 0 && ` · ${((isUnidade ? porDia[dia].itens : porDia[dia].valor) / d.metaValor * 100).toFixed(0)}%`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
 
         <div className="mv2-footer">"Meta é compromisso, resultado é orgulho." · {fmtDateBR(today)}</div>
 
-        {/* Baixar Imagem (PNG): the ranking screens export via a bespoke
-            canvas renderer (generateRankingImageBlob) built specifically for
-            that row layout — adapting a canvas pipeline to this card's
-            different layout (header + per-dynamic breakdown + day rows) is a
-            separate implementation task, not a business-logic gap. Left
-            disabled rather than half-built — see FUNÇÕES PENDENTES. */}
         <div className="mv2-row" style={{ gap: 6, marginTop: 12 }}>
           <button className="mv2-btn-outline" style={{ flex: 1 }} onClick={onClose}>
             Fechar
           </button>
-          <button className="mv2-btn-generate" style={{ flex: 1 }} disabled title="Exportação de imagem para este cartão ainda não implementada">
-            Baixar Imagem
+          <button className="mv2-btn-generate" style={{ flex: 1 }} onClick={handleGenerateImage} disabled={generating}>
+            {generating ? 'Gerando…' : 'Gerar Imagem'}
           </button>
         </div>
       </div>
+
+      {imageModal && (
+        <RankingImageModal
+          url={imageModal.url}
+          copied={imageModal.copied}
+          onClose={() => setImageModal(null)}
+          title={`Cartão de Dinâmica — ${collaborator?.apelido || collaborator?.nome || matricula}`}
+          filename={`dinamica-${matricula}.png`}
+          alt="Cartão de dinâmica"
+        />
+      )}
     </div>
   );
 }

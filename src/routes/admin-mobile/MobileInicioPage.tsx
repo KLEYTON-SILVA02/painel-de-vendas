@@ -1,10 +1,15 @@
+import { useState } from 'react';
+import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
-import { computeChampionStars } from '../../lib/business/champion';
+import { computeChampionStars, type ChampionStar } from '../../lib/business/champion';
 import { effectiveMetaGeral, getGoal, getSuperMeta } from '../../lib/business/goals';
 import { catTotals, computeSummary } from '../../lib/business/summary';
+import type { SummaryRow } from '../../lib/business/types';
+import { generateChampionCardBlob } from '../../lib/championImage';
 import { monthFirstISO, monthLastISO } from '../../lib/dateRange';
 import { fmtMoney, monthName } from '../../lib/format';
-import { useCollaborators, useDynamics, useGoals, useSales, useSpecialLists, useStoreSettings } from '../../lib/queries';
+import { tryCopyImage } from '../../lib/rankingImage';
+import { useCollaborators, useDynamics, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { GoalGauge } from './GoalGauge';
 import { MobileDateFilter } from './MobileDateFilter';
@@ -19,6 +24,7 @@ export function MobileInicioPage() {
   const { data: storeSettings } = useStoreSettings();
   const { data: specialLists } = useSpecialLists();
   const { data: dynamics } = useDynamics();
+  const { data: store } = useStore();
   const { dashFrom, dashTo, refYear, refMonth } = useDateRange();
 
   if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !dynamics) {
@@ -93,29 +99,7 @@ export function MobileInicioPage() {
       <MobileDateFilter />
 
       {campeao && (
-        <div className="mv2-champion-card">
-          {campeao.foto ? (
-            <img src={campeao.foto} alt="" className="mv2-avatar" />
-          ) : (
-            <div className="mv2-avatar" />
-          )}
-          <div className="mv2-info">
-            <div className="mv2-badge">👑 {campeaoLabel}</div>
-            <div className="mv2-name">{campeao.apelido || campeao.nome}</div>
-          </div>
-          {campeaoStars && (
-            <div
-              className="mv2-stars"
-              title={campeaoStars.map((s) => `${s.achieved ? '✓' : '✗'} ${s.label}`).join(' · ')}
-            >
-              {campeaoStars.map((s) => (
-                <span key={s.key} style={{ opacity: s.achieved ? 1 : 0.25 }}>
-                  ★
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
+        <MobileChampionCard campeao={campeao} campeaoLabel={campeaoLabel} campeaoStars={campeaoStars} storeName={store?.nome_loja} />
       )}
 
       <div className="mv2-ranking-track">
@@ -142,6 +126,79 @@ export function MobileInicioPage() {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function MobileChampionCard({
+  campeao,
+  campeaoLabel,
+  campeaoStars,
+  storeName,
+}: {
+  campeao: SummaryRow;
+  campeaoLabel: string;
+  campeaoStars: ChampionStar[] | null;
+  storeName: string | undefined;
+}) {
+  const [generating, setGenerating] = useState(false);
+  const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
+
+  async function handleGenerateImage() {
+    setGenerating(true);
+    try {
+      const blob = await generateChampionCardBlob({
+        nome: campeao.apelido || campeao.nome,
+        label: campeaoLabel,
+        valorLabel: fmtMoney(campeao.valor),
+        itensLabel: `${campeao.itens} it.`,
+        foto: campeao.foto,
+        stars: campeaoStars ?? [],
+        storeName,
+      });
+      if (!blob) return;
+      const wasCopied = await tryCopyImage(blob);
+      setImageModal({ url: URL.createObjectURL(blob), copied: wasCopied });
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  return (
+    <div className="mv2-champion-card">
+      {campeao.foto ? <img src={campeao.foto} alt="" className="mv2-avatar" /> : <div className="mv2-avatar" />}
+      <div className="mv2-info">
+        <div className="mv2-badge">👑 {campeaoLabel}</div>
+        <div className="mv2-name">{campeao.apelido || campeao.nome}</div>
+        {campeaoStars && (
+          <div className="mv2-stars" title={campeaoStars.map((s) => `${s.achieved ? '✓' : '✗'} ${s.label}`).join(' · ')}>
+            {campeaoStars.map((s) => (
+              <span key={s.key} style={{ opacity: s.achieved ? 1 : 0.25 }}>
+                ★
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      <button
+        onClick={handleGenerateImage}
+        disabled={generating}
+        title="Gerar imagem do card de campeão"
+        style={{ background: 'var(--mv2-dourado)', color: '#080a08', border: 'none', borderRadius: 8, padding: '6px 8px', fontSize: 11, flexShrink: 0 }}
+      >
+        {generating ? '…' : '🖼️'}
+      </button>
+
+      {imageModal && (
+        <RankingImageModal
+          url={imageModal.url}
+          copied={imageModal.copied}
+          onClose={() => setImageModal(null)}
+          title={`Card de Campeão — ${campeao.apelido || campeao.nome}`}
+          filename="card-campeao.png"
+          alt="Card de campeão"
+        />
+      )}
     </div>
   );
 }

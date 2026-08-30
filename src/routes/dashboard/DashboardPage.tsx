@@ -1,14 +1,17 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { SidebarCalendarCard } from '../../components/SidebarCalendarCard';
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
+import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
-import { computeChampionStars } from '../../lib/business/champion';
+import { computeChampionStars, type ChampionStar } from '../../lib/business/champion';
 import { computeDinamicaRanking, intersectDynamicPeriod } from '../../lib/business/dynamics';
 import { effectiveMetaGeral, getGoal, getSuperMeta } from '../../lib/business/goals';
-import type { Dynamic } from '../../lib/business/types';
+import type { Dynamic, SummaryRow } from '../../lib/business/types';
 import { catTotals, computeSummary } from '../../lib/business/summary';
+import { generateChampionCardBlob } from '../../lib/championImage';
 import { monthFirstISO, monthLastISO, todayISO } from '../../lib/dateRange';
 import { fmtMoney, monthName } from '../../lib/format';
+import { tryCopyImage } from '../../lib/rankingImage';
 import { useCollaborators, useDynamics, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
 import { useDateRange, type RankFilter } from '../DateRangeContext';
 
@@ -273,43 +276,7 @@ export function DashboardPage() {
 
       <div className="flex flex-col gap-3">
         {campeao && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              borderColor: '#ffb700',
-              boxShadow: '0 0 18px rgba(255,183,0,.35)',
-              padding: '10px 12px',
-              background: '#0b0e1d',
-              border: '1px solid #ffb700',
-              borderRadius: 18,
-            }}
-          >
-            {campeao.foto ? (
-              <img src={campeao.foto} alt="" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
-            ) : (
-              <div style={{ width: 38, height: 38, borderRadius: '50%', background: '#212948', flexShrink: 0 }} />
-            )}
-            <div style={{ minWidth: 0, overflow: 'hidden' }}>
-              <div style={{ fontSize: 9, color: '#ffb700', textTransform: 'uppercase', letterSpacing: '.04em', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                👑 {campeaoLabel}
-              </div>
-              <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{campeao.apelido || campeao.nome}</div>
-              <div style={{ fontSize: 10.5, color: '#8b90bf', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {fmtMoney(campeao.valor)} · {campeao.itens} it.
-              </div>
-              {campeaoStars && (
-                <div style={{ marginTop: 2 }} title={campeaoStars.map((s) => `${s.achieved ? '✓' : '✗'} ${s.label}`).join(' · ')}>
-                  {campeaoStars.map((s) => (
-                    <span key={s.key} style={{ fontSize: 12, color: s.achieved ? '#ffb700' : '#2b3350' }}>
-                      ★
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          <ChampionCard campeao={campeao} campeaoLabel={campeaoLabel} campeaoStars={campeaoStars} storeName={store?.nome_loja} />
         )}
 
         <div className="grid grid-cols-2 gap-2">
@@ -321,6 +288,101 @@ export function DashboardPage() {
 
         <SidebarCalendarCard />
       </div>
+    </div>
+  );
+}
+
+function ChampionCard({
+  campeao,
+  campeaoLabel,
+  campeaoStars,
+  storeName,
+}: {
+  campeao: SummaryRow;
+  campeaoLabel: string;
+  campeaoStars: ChampionStar[] | null;
+  storeName: string | undefined;
+}) {
+  const [generating, setGenerating] = useState(false);
+  const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
+
+  async function handleGenerateImage() {
+    setGenerating(true);
+    try {
+      const blob = await generateChampionCardBlob({
+        nome: campeao.apelido || campeao.nome,
+        label: campeaoLabel,
+        valorLabel: fmtMoney(campeao.valor),
+        itensLabel: `${campeao.itens} it.`,
+        foto: campeao.foto,
+        stars: campeaoStars ?? [],
+        storeName,
+      });
+      if (!blob) return;
+      const wasCopied = await tryCopyImage(blob);
+      setImageModal({ url: URL.createObjectURL(blob), copied: wasCopied });
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        borderColor: '#ffb700',
+        boxShadow: '0 0 18px rgba(255,183,0,.35)',
+        padding: '10px 12px',
+        background: '#0b0e1d',
+        border: '1px solid #ffb700',
+        borderRadius: 18,
+      }}
+    >
+      {campeao.foto ? (
+        <img src={campeao.foto} alt="" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+      ) : (
+        <div style={{ width: 38, height: 38, borderRadius: '50%', background: '#212948', flexShrink: 0 }} />
+      )}
+      <div style={{ minWidth: 0, overflow: 'hidden', flex: 1 }}>
+        <div style={{ fontSize: 9, color: '#ffb700', textTransform: 'uppercase', letterSpacing: '.04em', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          👑 {campeaoLabel}
+        </div>
+        <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{campeao.apelido || campeao.nome}</div>
+        <div style={{ fontSize: 10.5, color: '#8b90bf', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {fmtMoney(campeao.valor)} · {campeao.itens} it.
+        </div>
+        {campeaoStars && (
+          <div style={{ marginTop: 2 }} title={campeaoStars.map((s) => `${s.achieved ? '✓' : '✗'} ${s.label}`).join(' · ')}>
+            {campeaoStars.map((s) => (
+              <span key={s.key} style={{ fontSize: 12, color: s.achieved ? '#ffb700' : '#2b3350' }}>
+                ★
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      <button
+        onClick={handleGenerateImage}
+        disabled={generating}
+        title="Gerar imagem do card de campeão"
+        className="rounded-lg text-slate-950 font-semibold disabled:opacity-50 flex-shrink-0"
+        style={{ background: '#ffb700', padding: '6px 10px', fontSize: 11 }}
+      >
+        {generating ? '…' : '🖼️'}
+      </button>
+
+      {imageModal && (
+        <RankingImageModal
+          url={imageModal.url}
+          copied={imageModal.copied}
+          onClose={() => setImageModal(null)}
+          title={`Card de Campeão — ${campeao.apelido || campeao.nome}`}
+          filename="card-campeao.png"
+          alt="Card de campeão"
+        />
+      )}
     </div>
   );
 }
