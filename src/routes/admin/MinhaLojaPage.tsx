@@ -27,6 +27,7 @@ export function MinhaLojaPage() {
   const [numeroLoja, setNumeroLoja] = useState('');
   const [nomeEquipe, setNomeEquipe] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
+  const [whatsappGroupLink, setWhatsappGroupLink] = useState('');
   const [metaFallback, setMetaFallback] = useState(0);
   const [corDestaque, setCorDestaque] = useState('#00f0ff');
   const [brilho, setBrilho] = useState(100);
@@ -44,6 +45,7 @@ export function MinhaLojaPage() {
     setNumeroLoja(store.numero_loja);
     setNomeEquipe(store.nome_equipe);
     setWhatsapp(store.whatsapp);
+    setWhatsappGroupLink(store.whatsapp_group_link);
     setMetaFallback(storeSettings.meta_geral_fallback);
     setCorDestaque(storeSettings.cor_destaque);
     setBrilho(storeSettings.brilho);
@@ -90,7 +92,13 @@ export function MinhaLojaPage() {
   async function handleSave() {
     setSaving(true);
     try {
-      await updateStore.mutateAsync({ nome_loja: nomeLoja, numero_loja: numeroLoja, nome_equipe: nomeEquipe, whatsapp: onlyDigits(whatsapp) });
+      await updateStore.mutateAsync({
+        nome_loja: nomeLoja,
+        numero_loja: numeroLoja,
+        nome_equipe: nomeEquipe,
+        whatsapp: onlyDigits(whatsapp),
+        whatsapp_group_link: whatsappGroupLink.trim(),
+      });
       await updateSettings.mutateAsync({
         meta_geral_fallback: metaFallback,
         cor_destaque: corDestaque,
@@ -128,9 +136,19 @@ export function MinhaLojaPage() {
               className="input"
             />
           </Field>
+          <Field label="Link do grupo do WhatsApp (opcional)">
+            <input
+              value={whatsappGroupLink}
+              onChange={(e) => setWhatsappGroupLink(e.target.value)}
+              placeholder="ex: https://chat.whatsapp.com/XXXXXXXXXXXXXXXXXXXXXX"
+              className="input"
+            />
+          </Field>
         </div>
         <p className="text-xs text-slate-500 mt-2">
-          Usado pelo botão "Enviar por WhatsApp" nas imagens de ranking, conquistas e card de campeão.
+          Usado pelo botão "Enviar por WhatsApp" nas imagens de ranking, conquistas e card de campeão. Se o link do
+          grupo for preenchido, o botão abre esse grupo diretamente em vez de uma conversa com o número da loja — a
+          imagem é copiada antes, então é só colar (Ctrl/Cmd+V) assim que o grupo abrir.
         </p>
         <div className="mt-4">
           <label className="block text-xs text-slate-400 mb-1">Logo do sistema (substitui o "GV" no menu lateral)</label>

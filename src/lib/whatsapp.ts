@@ -52,8 +52,20 @@ export type ShareOutcome = 'shared' | 'copied-and-opened' | 'failed';
 
 /** Best-effort "send this image to WhatsApp": tries the native share sheet
  * first (delivers the actual image file), otherwise copies the image and
- * opens a WhatsApp chat for the user to paste it into. */
-export async function shareImageToWhatsApp(blob: Blob, filename: string, text: string, phone: string | null | undefined): Promise<ShareOutcome> {
+ * opens a WhatsApp chat for the user to paste it into — a specific group
+ * (via its invite link) when the store has one configured, the store's own
+ * number otherwise. Group invite links (chat.whatsapp.com/...) have no
+ * query-param mechanism to pre-fill text the way wa.me/web.whatsapp.com
+ * "send" links do for an individual chat — opening one just lands in that
+ * group's conversation — so the image is still copied to the clipboard
+ * first, same as the number-based fallback, for the admin to paste in. */
+export async function shareImageToWhatsApp(
+  blob: Blob,
+  filename: string,
+  text: string,
+  phone: string | null | undefined,
+  groupLink?: string | null,
+): Promise<ShareOutcome> {
   const file = new File([blob], filename, { type: blob.type || 'image/png' });
   const nav = navigator as Navigator & { canShare?: (data: { files: File[] }) => boolean };
   if (nav.share && (!nav.canShare || nav.canShare({ files: [file] }))) {
@@ -75,6 +87,7 @@ export async function shareImageToWhatsApp(blob: Blob, filename: string, text: s
     // WhatsApp chat still opens below, just without the image pre-copied.
   }
 
-  window.open(buildWhatsAppLink(phone, text), '_blank', 'noopener,noreferrer');
+  const target = groupLink?.trim() ? groupLink.trim() : buildWhatsAppLink(phone, text);
+  window.open(target, '_blank', 'noopener,noreferrer');
   return 'copied-and-opened';
 }
