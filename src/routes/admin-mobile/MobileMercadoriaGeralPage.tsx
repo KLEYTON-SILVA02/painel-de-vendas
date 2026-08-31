@@ -26,6 +26,7 @@ export function MobileMercadoriaGeralPage() {
   const { data: goals } = useGoals();
   const { dashFrom, dashTo } = useDateRange();
   const [selectedSeller, setSelectedSeller] = useState<string | null>(null);
+  const [vendasPage, setVendasPage] = useState(0);
 
   const byMatricula = useMemo(() => {
     const map = new Map<string, Collaborator>();
@@ -50,15 +51,23 @@ export function MobileMercadoriaGeralPage() {
   const pctMeta = metaGeral > 0 ? Math.min(999, (totalValor / metaGeral) * 100) : 0;
   const pctSuper = metaSuper > 0 ? Math.min(999, (totalValor / metaSuper) * 100) : 0;
 
-  const categorySales = sales
+  // A specific vendedor selected shows their full list — no cap. With
+  // "Todos" selected (whole month), a flat slice(0, 150) used to silently
+  // drop everything past the 150th row instead of paginating.
+  const VENDAS_PAGE_SIZE = 150;
+  const categorySalesAll = sales
     .filter((s) => {
       if (s.grupo !== 'MER') return false;
       if (s.dataISO && (s.dataISO < dashFrom || s.dataISO > dashTo)) return false;
       if (selectedSeller && s.matricula !== selectedSeller) return false;
       return true;
     })
-    .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
-    .slice(0, 150);
+    .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''));
+  const vendasTotalPages = Math.max(1, Math.ceil(categorySalesAll.length / VENDAS_PAGE_SIZE));
+  const vendasPageClamped = Math.min(vendasPage, vendasTotalPages - 1);
+  const categorySales = selectedSeller
+    ? categorySalesAll
+    : categorySalesAll.slice(vendasPageClamped * VENDAS_PAGE_SIZE, (vendasPageClamped + 1) * VENDAS_PAGE_SIZE);
 
   return (
     <div>
@@ -127,7 +136,14 @@ export function MobileMercadoriaGeralPage() {
         )}
       </div>
 
-      <MobileSellerAccordion collaborators={collaborators} selected={selectedSeller} onSelect={setSelectedSeller} />
+      <MobileSellerAccordion
+        collaborators={collaborators}
+        selected={selectedSeller}
+        onSelect={(m) => {
+          setSelectedSeller(m);
+          setVendasPage(0);
+        }}
+      />
 
       <MobileSalesTable
         title="Lista de vendas — Mercadoria Geral"
@@ -136,6 +152,29 @@ export function MobileMercadoriaGeralPage() {
         showValor
         subtotalMode={selectedSeller ? 'valor' : 'none'}
       />
+      {!selectedSeller && vendasTotalPages > 1 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, margin: '0 18px 16px' }}>
+          <button
+            disabled={vendasPageClamped === 0}
+            onClick={() => setVendasPage(Math.max(0, vendasPageClamped - 1))}
+            className="mv2-btn-outline"
+            style={{ opacity: vendasPageClamped === 0 ? 0.4 : 1 }}
+          >
+            ← Anterior
+          </button>
+          <span style={{ fontSize: 10, color: 'var(--mv2-texto-2)' }}>
+            Página {vendasPageClamped + 1} de {vendasTotalPages}
+          </span>
+          <button
+            disabled={vendasPageClamped >= vendasTotalPages - 1}
+            onClick={() => setVendasPage(Math.min(vendasTotalPages - 1, vendasPageClamped + 1))}
+            className="mv2-btn-outline"
+            style={{ opacity: vendasPageClamped >= vendasTotalPages - 1 ? 0.4 : 1 }}
+          >
+            Próxima →
+          </button>
+        </div>
+      )}
     </div>
   );
 }

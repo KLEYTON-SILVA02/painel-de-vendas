@@ -59,6 +59,8 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   const [reclassifyMode, setReclassifyMode] = useState(false);
   const [selectedProdutos, setSelectedProdutos] = useState<Set<string>>(new Set());
   const [bulkCat, setBulkCat] = useState<CategoryKey>('DERM');
+  const [vendasSeller, setVendasSeller] = useState('');
+  const [vendasPage, setVendasPage] = useState(0);
   const reclassify = useReclassifyProdutos(profile?.store_id);
 
   if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !commissionRates || !catalog) {
@@ -165,12 +167,27 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
     }
   }
 
-  const categorySales = !isUnit
+  // A specific colaborador selected shows their full list for the period —
+  // no cap, it's naturally bounded to one person's sales. With "Todos"
+  // selected (e.g. Modo Geral, the whole month across every colaborador), a
+  // flat slice(0, 150) used to silently drop everything past the 150th row
+  // instead of paginating through the rest.
+  const VENDAS_PAGE_SIZE = 150;
+  const categorySalesAll = !isUnit
     ? sales
-        .filter((s) => s.grupo === catKey && (!s.dataISO || (s.dataISO >= dashFrom && s.dataISO <= dashTo)))
+        .filter(
+          (s) =>
+            s.grupo === catKey &&
+            (!s.dataISO || (s.dataISO >= dashFrom && s.dataISO <= dashTo)) &&
+            (!vendasSeller || s.matricula === vendasSeller),
+        )
         .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
-        .slice(0, 150)
     : [];
+  const vendasTotalPages = Math.max(1, Math.ceil(categorySalesAll.length / VENDAS_PAGE_SIZE));
+  const vendasPageClamped = Math.min(vendasPage, vendasTotalPages - 1);
+  const categorySales = vendasSeller
+    ? categorySalesAll
+    : categorySalesAll.slice(vendasPageClamped * VENDAS_PAGE_SIZE, (vendasPageClamped + 1) * VENDAS_PAGE_SIZE);
 
   const extractVendor = extractMatricula ? collaborators.find((c) => c.matricula === extractMatricula) : null;
   const extract = extractMatricula
@@ -232,18 +249,35 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
             <h3 className="text-sm font-semibold text-slate-300">Lista de vendas — {info.titulo}</h3>
-            <ReclassifyBar
-              active={reclassifyMode}
-              onToggle={() => {
-                setReclassifyMode((v) => !v);
-                setSelectedProdutos(new Set());
-              }}
-              selectedCount={selectedProdutos.size}
-              categoria={bulkCat}
-              onCategoriaChange={setBulkCat}
-              onApply={applyReclassify}
-              applying={reclassify.isPending}
-            />
+            <div className="flex items-center gap-2 flex-wrap">
+              <select
+                value={vendasSeller}
+                onChange={(e) => {
+                  setVendasSeller(e.target.value);
+                  setVendasPage(0);
+                }}
+                className="input !w-auto"
+              >
+                <option value="">Todos os colaboradores</option>
+                {collaborators.map((c) => (
+                  <option key={c.id} value={c.matricula}>
+                    {c.apelido || c.nome}
+                  </option>
+                ))}
+              </select>
+              <ReclassifyBar
+                active={reclassifyMode}
+                onToggle={() => {
+                  setReclassifyMode((v) => !v);
+                  setSelectedProdutos(new Set());
+                }}
+                selectedCount={selectedProdutos.size}
+                categoria={bulkCat}
+                onCategoriaChange={setBulkCat}
+                onApply={applyReclassify}
+                applying={reclassify.isPending}
+              />
+            </div>
           </div>
           {categorySales.length === 0 ? (
             <div className="text-sm text-slate-500 py-4 text-center">Nenhuma venda no período.</div>
@@ -286,6 +320,27 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
                   ))}
                 </tbody>
               </table>
+              {!vendasSeller && vendasTotalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 mt-3">
+                  <button
+                    disabled={vendasPageClamped === 0}
+                    onClick={() => setVendasPage(Math.max(0, vendasPageClamped - 1))}
+                    className="rounded-lg border border-slate-700 px-2.5 py-1 text-xs text-slate-300 disabled:opacity-40"
+                  >
+                    ← Anterior
+                  </button>
+                  <span className="text-xs text-slate-500">
+                    Página {vendasPageClamped + 1} de {vendasTotalPages}
+                  </span>
+                  <button
+                    disabled={vendasPageClamped >= vendasTotalPages - 1}
+                    onClick={() => setVendasPage(Math.min(vendasTotalPages - 1, vendasPageClamped + 1))}
+                    className="rounded-lg border border-slate-700 px-2.5 py-1 text-xs text-slate-300 disabled:opacity-40"
+                  >
+                    Próxima →
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
