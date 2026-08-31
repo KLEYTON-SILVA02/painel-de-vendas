@@ -184,6 +184,43 @@ export async function generateRankingImageBlob(
   return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), 'image/png'));
 }
 
+export interface CategoryImageSpec {
+  key: string;
+  titulo: string;
+  rows: RankingImageRow[];
+  isUnit: boolean;
+}
+
+export interface MultiImageResult {
+  key: string;
+  title: string;
+  url: string;
+  filename: string;
+}
+
+/** Generates one ranking-image PNG per category in sequence (a canvas op
+ * per category, so sequential rather than parallel keeps memory bounded)
+ * for the "todas as categorias" choice on the ranking image-share flow —
+ * used by both the Início and Ranking screens. Categories with no sales
+ * (generateRankingImageBlob's own `ranking.length === 0` case still draws
+ * an empty-state image, so every spec produces a result) are included; a
+ * spec is only dropped if canvas.toBlob itself fails. */
+export async function generateAllCategoryImages(
+  specs: CategoryImageSpec[],
+  fromDate: string,
+  toDate: string,
+  storeName?: string,
+): Promise<MultiImageResult[]> {
+  const results: MultiImageResult[] = [];
+  for (const spec of specs) {
+    const blob = await generateRankingImageBlob(spec.rows, spec.titulo, fromDate, toDate, storeName, spec.isUnit);
+    if (blob) {
+      results.push({ key: spec.key, title: spec.titulo, url: URL.createObjectURL(blob), filename: `ranking-${spec.key.toLowerCase()}.png` });
+    }
+  }
+  return results;
+}
+
 /** Tries the modern async-clipboard image write; returns whether it succeeded
  * so the caller can fall back to an on-screen preview + download link. */
 export async function tryCopyImage(blob: Blob): Promise<boolean> {
