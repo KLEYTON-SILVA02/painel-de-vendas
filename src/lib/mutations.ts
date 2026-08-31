@@ -422,3 +422,36 @@ export function useDeleteDynamic() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['dynamics'] }),
   });
 }
+
+/** Tables the "Excluir dados" danger zone (ADM > Configurações) can wipe. */
+export type BulkDeletableTable = 'sales' | 'products' | 'collaborators' | 'goals' | 'dynamics';
+
+/** Deletes every row in `table` for the caller's store, optionally scoped
+ * to a date range (only `sales` uses this, via `data_iso`). RLS's
+ * admin+store-scoped delete policies enforce the scoping server-side, same
+ * as every other delete mutation in this file — no manual store_id filter
+ * needed. Fetches ids first (Supabase requires a real predicate on delete;
+ * this also gives an exact affected-row count for the confirm prompt) and
+ * deletes in chunks to keep each request's IN-list a sane size. */
+export function useBulkDeleteTable(table: BulkDeletableTable, invalidateKey: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (range: { dateColumn?: string; from?: string; to?: string } = {}) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let query = (supabase.from(table) as any).select('id');
+      if (range.dateColumn && range.from) query = query.gte(range.dateColumn, range.from);
+      if (range.dateColumn && range.to) query = query.lte(range.dateColumn, range.to);
+      const { data, error } = await query;
+      if (error) throw error;
+      const ids: string[] = (data ?? []).map((r: { id: string }) => r.id);
+      for (let i = 0; i < ids.length; i += 500) {
+        const chunk = ids.slice(i, i + 500);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: delErr } = await (supabase.from(table) as any).delete().in('id', chunk);
+        if (delErr) throw delErr;
+      }
+      return ids.length;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [invalidateKey] }),
+  });
+}
