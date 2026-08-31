@@ -1,7 +1,11 @@
 import { useState } from 'react';
+import { useAuth } from '../../auth/AuthContext';
+import { ReclassifyBar } from '../../components/admin/ReclassifyBar';
 import type { CategoryKey } from '../../lib/business/classification';
 import type { Collaborator, Sale } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
+import { useReclassifyProdutos } from '../../lib/mutations';
+import { useCatalog, useSales } from '../../lib/queries';
 
 export const TIPO_LABEL: Record<CategoryKey, string> = {
   DERM: 'Dermocosméticos',
@@ -103,18 +107,56 @@ export function MobileSalesTable({
    * only passing 'valor'/'quantidade' in that case). */
   subtotalMode: 'valor' | 'quantidade' | 'none';
 }) {
+  const { profile } = useAuth();
+  const { data: catalog } = useCatalog();
+  const { data: allSales } = useSales();
+  const reclassify = useReclassifyProdutos(profile?.store_id);
+  const [reclassifyMode, setReclassifyMode] = useState(false);
+  const [selectedProdutos, setSelectedProdutos] = useState<Set<string>>(new Set());
+  const [bulkCat, setBulkCat] = useState<CategoryKey>('DERM');
+
   const totalValor = sales.reduce((a, s) => a + s.valor, 0);
   const totalQtd = sales.reduce((a, s) => a + s.qtd, 0);
   const totalComissao = comissaoPercentual ? (totalValor * comissaoPercentual) / 100 : 0;
-  const colCount = 5 + (showValor ? 1 : 0) + (showComissao ? 1 : 0);
+  const colCount = 5 + (showValor ? 1 : 0) + (showComissao ? 1 : 0) + (reclassifyMode ? 1 : 0);
+
+  function toggleProduto(produto: string) {
+    setSelectedProdutos((prev) => {
+      const next = new Set(prev);
+      if (next.has(produto)) next.delete(produto);
+      else next.add(produto);
+      return next;
+    });
+  }
+  async function applyReclassify() {
+    if (!catalog || !allSales) return;
+    await reclassify.mutateAsync({ produtos: Array.from(selectedProdutos), categoria: bulkCat, catalog, sales: allSales });
+    setSelectedProdutos(new Set());
+    setReclassifyMode(false);
+  }
 
   return (
     <div style={{ margin: '0 18px 16px' }}>
-      <div style={{ fontSize: 10, fontWeight: 700, marginBottom: 6 }}>{title}</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+        <div style={{ fontSize: 10, fontWeight: 700 }}>{title}</div>
+        <ReclassifyBar
+          active={reclassifyMode}
+          onToggle={() => {
+            setReclassifyMode((v) => !v);
+            setSelectedProdutos(new Set());
+          }}
+          selectedCount={selectedProdutos.size}
+          categoria={bulkCat}
+          onCategoriaChange={setBulkCat}
+          onApply={applyReclassify}
+          applying={reclassify.isPending}
+        />
+      </div>
       <div style={{ overflowX: 'auto' }}>
         <table className="mv2-data-table">
           <thead>
             <tr>
+              {reclassifyMode && <th></th>}
               <th>Data</th>
               <th>Nome do Colaborador</th>
               <th>Produto</th>
@@ -134,6 +176,11 @@ export function MobileSalesTable({
             ) : (
               sales.map((s) => (
                 <tr key={s.id}>
+                  {reclassifyMode && (
+                    <td>
+                      <input type="checkbox" checked={selectedProdutos.has(s.produto)} onChange={() => toggleProduto(s.produto)} />
+                    </td>
+                  )}
                   <td>{fmtDateBR(s.dataISO)}</td>
                   <td>{resolveVendorName(s, byMatricula)}</td>
                   <td>{s.produto}</td>
@@ -146,7 +193,7 @@ export function MobileSalesTable({
             )}
             {subtotalMode !== 'none' && sales.length > 0 && (
               <tr style={{ fontWeight: 700, borderTop: '1px solid var(--mv2-ciano-claro)' }}>
-                <td colSpan={3}>Subtotal</td>
+                <td colSpan={reclassifyMode ? 4 : 3}>Subtotal</td>
                 <td>{totalQtd}</td>
                 {showValor && <td className="mv2-valor">{subtotalMode === 'valor' ? fmtMoney(totalValor) : ''}</td>}
                 <td></td>

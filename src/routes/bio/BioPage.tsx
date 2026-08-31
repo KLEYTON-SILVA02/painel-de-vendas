@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
+import { ReclassifyBar } from '../../components/admin/ReclassifyBar';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
@@ -9,12 +10,19 @@ import {
   computeBioSummary,
   type BioSummaryRow,
 } from '../../lib/business/bio';
-import { classifyBio, normalizeGrupoImport, type BioGroupKey } from '../../lib/business/classification';
+import { classifyBio, normalizeGrupoImport, type BioGroupKey, type CategoryKey } from '../../lib/business/classification';
 import { diasRestantesNoMes } from '../../lib/business/goals';
 import type { BioGroupGoal, BioGroupsProducts, BioWeights } from '../../lib/business/types';
 import { fmtDateBR } from '../../lib/format';
-import { useAddBioProduct, useBulkInsertBioProducts, useDeleteBioProduct, useUpdateBioGroupGoal, useUpdateBioWeights } from '../../lib/mutations';
-import { useBioGroupGoals, useBioGroups, useCollaborators, useSales, useStoreSettings } from '../../lib/queries';
+import {
+  useAddBioProduct,
+  useBulkInsertBioProducts,
+  useDeleteBioProduct,
+  useReclassifyProdutos,
+  useUpdateBioGroupGoal,
+  useUpdateBioWeights,
+} from '../../lib/mutations';
+import { useBioGroupGoals, useBioGroups, useCatalog, useCollaborators, useSales, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 
 const BIO_GROUP_KEYS: BioGroupKey[] = ['G1', 'G2', 'G3', 'G4'];
@@ -37,12 +45,17 @@ export function BioPage() {
   const { data: storeSettings } = useStoreSettings();
   const { data: bioGroupRows } = useBioGroups();
   const { data: groupGoals } = useBioGroupGoals();
+  const { data: catalog } = useCatalog();
   const { dashFrom, dashTo } = useDateRange();
   const [view, setView] = useState<'ranking' | 'grupos' | 'pontos'>('ranking');
   const [bioFilter, setBioFilter] = useState<BioGroupKey | 'ALL'>('ALL');
   const [tableView, setTableView] = useState<'padrao' | 'bio'>('padrao');
+  const [reclassifyMode, setReclassifyMode] = useState(false);
+  const [selectedProdutos, setSelectedProdutos] = useState<Set<string>>(new Set());
+  const [bulkCat, setBulkCat] = useState<CategoryKey>('DERM');
+  const reclassify = useReclassifyProdutos(profile?.store_id);
 
-  if (!collaborators || !sales || !storeSettings || !bioGroupRows || !groupGoals) {
+  if (!collaborators || !sales || !storeSettings || !bioGroupRows || !groupGoals || !catalog) {
     return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
   }
 
@@ -110,6 +123,20 @@ export function BioPage() {
     },
   ];
 
+  function toggleProduto(produto: string) {
+    setSelectedProdutos((prev) => {
+      const next = new Set(prev);
+      if (next.has(produto)) next.delete(produto);
+      else next.add(produto);
+      return next;
+    });
+  }
+  async function applyReclassify() {
+    await reclassify.mutateAsync({ produtos: Array.from(selectedProdutos), categoria: bulkCat, catalog: catalog!, sales: sales! });
+    setSelectedProdutos(new Set());
+    setReclassifyMode(false);
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
@@ -154,21 +181,37 @@ export function BioPage() {
       </div>
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
           <h3 className="text-sm font-semibold">Lista de vendas — Balcão</h3>
-          <div className="flex gap-1">
-            <button
-              onClick={() => setTableView('padrao')}
-              className={`rounded-lg px-2.5 py-1 text-xs ${tableView === 'padrao' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
-            >
-              Visão Padrão
-            </button>
-            <button
-              onClick={() => setTableView('bio')}
-              className={`rounded-lg px-2.5 py-1 text-xs ${tableView === 'bio' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
-            >
-              Visão BIOSINTÉTICA
-            </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex gap-1">
+              <button
+                onClick={() => setTableView('padrao')}
+                className={`rounded-lg px-2.5 py-1 text-xs ${tableView === 'padrao' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+              >
+                Visão Padrão
+              </button>
+              <button
+                onClick={() => setTableView('bio')}
+                className={`rounded-lg px-2.5 py-1 text-xs ${tableView === 'bio' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+              >
+                Visão BIOSINTÉTICA
+              </button>
+            </div>
+            {tableView === 'padrao' && (
+              <ReclassifyBar
+                active={reclassifyMode}
+                onToggle={() => {
+                  setReclassifyMode((v) => !v);
+                  setSelectedProdutos(new Set());
+                }}
+                selectedCount={selectedProdutos.size}
+                categoria={bulkCat}
+                onCategoriaChange={setBulkCat}
+                onApply={applyReclassify}
+                applying={reclassify.isPending}
+              />
+            )}
           </div>
         </div>
         <p className="text-xs text-slate-500 mb-3">
@@ -183,6 +226,7 @@ export function BioPage() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-left text-slate-400 border-b border-slate-800">
+                  {tableView === 'padrao' && reclassifyMode && <th className="py-1.5 pr-3"></th>}
                   <th className="py-1.5 pr-3">Data</th>
                   <th className="py-1.5 pr-3">Matrícula</th>
                   <th className="py-1.5 pr-3">Vendedor</th>
@@ -198,6 +242,11 @@ export function BioPage() {
                   const outsideBalcao = tableView === 'bio' && g && !balcaoMatriculas.has(s.matricula);
                   return (
                     <tr key={s.id} className="border-b border-slate-900">
+                      {tableView === 'padrao' && reclassifyMode && (
+                        <td className="py-1.5 pr-3">
+                          <input type="checkbox" checked={selectedProdutos.has(s.produto)} onChange={() => toggleProduto(s.produto)} />
+                        </td>
+                      )}
                       <td className="py-1.5 pr-3 font-mono">{fmtDateBR(s.dataISO)}</td>
                       <td className="py-1.5 pr-3 font-mono">{s.matricula}</td>
                       <td className="py-1.5 pr-3">{s.vendedor}</td>

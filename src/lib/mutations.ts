@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CategoryKey, GoalCategoryKey } from './business/classification';
+import { normalize } from './business/normalize';
 import { normalizeMatricula } from './business/parsing';
 import { supabase } from './supabase';
 import type { TablesInsert, TablesUpdate } from '../types/database';
@@ -468,5 +469,59 @@ export function useBulkDeleteTable(table: BulkDeletableTable, invalidateKey: str
       return ids.length;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: [invalidateKey] }),
+  });
+}
+
+/** Bulk-reclassifies one or more products, store-wide. Two halves, both
+ * needed: an upsert into `catalog` per name (so future imports also get it
+ * right — this alone is what AuditoriaPage's original per-product
+ * reclassify did), and a retroactive `grupo` update on every already-
+ * imported sale for those products, which the catalog-only approach never
+ * touched — sales.grupo is written once at import time and never
+ * recomputed, so an existing sale kept its old category forever even after
+ * the product was reclassified. Product names are matched via normalize()
+ * (case/accent/whitespace-insensitive), the same rule the classifier's own
+ * exact-name tier uses. Takes the caller's already-loaded catalog/sales
+ * (both fully in memory via useCatalog()/useSales(), no extra fetch) to
+ * resolve which rows change, and chunks the sales update same as every
+ * other bulk mutation in this file. */
+export function useReclassifyProdutos(storeId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      produtos,
+      categoria,
+      catalog,
+      sales,
+    }: {
+      produtos: string[];
+      categoria: CategoryKey;
+      catalog: { id: string; nome: string }[];
+      sales: { id: string; produto: string }[];
+    }) => {
+      if (!storeId) throw new Error('store not loaded');
+      for (const nome of produtos) {
+        const existing = catalog.find((c) => normalize(c.nome) === normalize(nome));
+        if (existing) {
+          const { error } = await supabase.from('catalog').update({ categoria }).eq('id', existing.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from('catalog').insert({ store_id: storeId, nome, codigo: null, categoria });
+          if (error) throw error;
+        }
+      }
+      const targets = new Set(produtos.map((p) => normalize(p)));
+      const ids = sales.filter((s) => targets.has(normalize(s.produto))).map((s) => s.id);
+      for (let i = 0; i < ids.length; i += 500) {
+        const chunk = ids.slice(i, i + 500);
+        const { error } = await supabase.from('sales').update({ grupo: categoria }).in('id', chunk);
+        if (error) throw error;
+      }
+      return ids.length;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sales'] });
+      qc.invalidateQueries({ queryKey: ['catalog'] });
+    },
   });
 }
