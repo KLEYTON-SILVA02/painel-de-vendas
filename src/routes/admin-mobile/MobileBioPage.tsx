@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
@@ -35,12 +35,19 @@ export function MobileBioPage() {
   const { data: storeSettings } = useStoreSettings();
   const { data: bioGroupRows } = useBioGroups();
   const { data: groupGoals } = useBioGroupGoals();
-  const { dashFrom, dashTo } = useDateRange();
+  const { dashFrom, dashTo, setModoGeral } = useDateRange();
   const [view, setView] = useState<'ranking' | 'grupos' | 'pontos'>('ranking');
   const [groupFilter, setGroupFilter] = useState<BioGroupKey | 'ALL'>('ALL');
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
+
+  // Biosintética always opens in Modo Geral (mês inteiro), regardless of what
+  // date-mode was left active on another screen — the date filter is shared
+  // globally across all screens (DateRangeProvider is a single app-wide
+  // instance). Users remain free to switch to a day-specific search afterward.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => setModoGeral(), []);
 
   const byMatricula = useMemo(() => {
     const map = new Map<string, Collaborator>();
@@ -232,6 +239,7 @@ export function MobileBioPage() {
               <tr>
                 <th>Data</th>
                 <th>Nome do Colaborador</th>
+                <th>Produto</th>
                 <th>Quantidade</th>
                 <th>Tipo</th>
                 <th>Pontos</th>
@@ -240,7 +248,7 @@ export function MobileBioPage() {
             <tbody>
               {salesForTable.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ textAlign: 'center', color: 'var(--mv2-texto-2)', padding: 8 }}>
+                  <td colSpan={6} style={{ textAlign: 'center', color: 'var(--mv2-texto-2)', padding: 8 }}>
                     Nenhuma venda no período.
                   </td>
                 </tr>
@@ -263,6 +271,7 @@ export function MobileBioPage() {
                           </span>
                         )}
                       </td>
+                      <td>{s.produto}</td>
                       <td>{s.qtd}</td>
                       <td>{GROUP_LABELS[g]}</td>
                       <td>{pontos.toFixed(1)}</td>
