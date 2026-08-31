@@ -793,6 +793,7 @@ export type Database = {
           nome_loja: string
           numero_loja: string
           whatsapp: string
+          whatsapp_group_link: string
         }
         Insert: {
           admin_email: string
@@ -804,6 +805,7 @@ export type Database = {
           nome_loja?: string
           numero_loja?: string
           whatsapp?: string
+          whatsapp_group_link?: string
         }
         Update: {
           admin_email?: string
@@ -815,6 +817,7 @@ export type Database = {
           nome_loja?: string
           numero_loja?: string
           whatsapp?: string
+          whatsapp_group_link?: string
         }
         Relationships: []
       }

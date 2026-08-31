@@ -47,7 +47,7 @@ export function RankingImageModal({
     setWhatsappState('sending');
     try {
       const blob = await fetch(url).then((r) => r.blob());
-      const outcome = await shareImageToWhatsApp(blob, filename, title, store?.whatsapp);
+      const outcome = await shareImageToWhatsApp(blob, filename, title, store?.whatsapp, store?.whatsapp_group_link);
       setWhatsappState(outcome === 'failed' ? 'failed' : 'sent');
       setTimeout(() => setWhatsappState('idle'), 2500);
     } catch {
