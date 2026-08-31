@@ -221,8 +221,8 @@ export function DashboardPage() {
   const modeloRanking = storeSettings.modelo_ranking as 'escadinha' | 'lista';
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
-      <div className="flex flex-col gap-4">
+    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-4">
+      <div className="flex flex-col gap-4 min-w-0">
         <div style={{ background: 'rgba(0,0,0,.35)', border: '1px solid #00f0ff', borderRadius: 18, padding: '11px 16px' }}>
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ minWidth: 150 }}>

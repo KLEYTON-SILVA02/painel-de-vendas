@@ -77,8 +77,8 @@ export function ConquistasPage() {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
-      <div className="flex flex-col gap-4">
+    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-4">
+      <div className="flex flex-col gap-4 min-w-0">
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <h3 className="text-lg font-semibold mb-3" style={{ color: '#ffb700' }}>
             🏆 Galeria de Conquistas — {info.label}
