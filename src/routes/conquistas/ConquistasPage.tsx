@@ -1,73 +1,69 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { SidebarCalendarCard } from '../../components/SidebarCalendarCard';
-import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
-import { CONQUISTA_TIERS, computeConquistas, computeConquistasDayGallery, type ConquistaCategoria, type ConquistaRow, type SuperMetasPorMatricula } from '../../lib/business/conquistas';
+import {
+  CONQUISTA_TIERS_BY_CAT,
+  computeConquistas,
+  computeConquistasDayGallery,
+  conquistaTierLabel,
+  isUnitConquista,
+  type ConquistaCategoria,
+  type ConquistaRow,
+} from '../../lib/business/conquistas';
 import { generateConquistaImageBlob } from '../../lib/conquistaImage';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
-import { useConquistaSuperMetas, useUpsertConquistaSuperMeta } from '../../lib/mutations';
-import { useAuth } from '../../auth/AuthContext';
-import { useCollaborators, useSales, useStore } from '../../lib/queries';
+import { useCollaborators, useSales, useSpecialLists, useStore } from '../../lib/queries';
 import { tryCopyImage } from '../../lib/rankingImage';
 import { useDateRange } from '../DateRangeContext';
 
-// New feature: Galeria de Conquistas — detects achievers of any of 5 fixed
-// R$ tiers or their own Super Meta Individual, mirroring the Início screen's
-// two-column dash-grid layout (main content + sidebar date filter).
+// Galeria de Conquistas — detects achievers of any of a category's fixed
+// tiers (R$ for Dermo/Marcas Exclusivas/Genérico, unidades vendidas for
+// Levmel/Chip), mirroring the Início screen's two-column dash-grid layout
+// (main content + sidebar date filter). Individual-goal configuration
+// (formerly a "Super Meta Individual" duplicated here) now lives only in
+// ADM > Metas > Metas Individuais — the "Ajustar" button below links there
+// instead of opening its own panel.
 
 const CONQUISTA_CATS: { key: ConquistaCategoria; label: string; color: string }[] = [
   { key: 'DERM', label: 'Dermocosméticos', color: '#ff3df0' },
   { key: 'MP', label: 'Marcas Exclusivas', color: '#a82bff' },
   { key: 'GEN', label: 'Genérico', color: '#14ff00' },
+  { key: 'LEVMEL', label: 'Levmel', color: '#ffb700' },
+  { key: 'CHIP', label: 'Chip', color: '#00e5ff' },
 ];
 
-type TierFilter = 'ALL' | 'SUPER' | (typeof CONQUISTA_TIERS)[number];
+type TierFilter = 'ALL' | number;
 
 function matchesFilter(row: ConquistaRow, filter: TierFilter): boolean {
-  if (filter === 'ALL') return true;
-  if (filter === 'SUPER') return row.bateuSuper;
-  return row.tier === filter;
-}
-
-function tierLabel(row: ConquistaRow): string {
-  return row.tier > 0 ? `🏆 ${row.tier / 1000}k` : '⭐ SUPER META';
+  return filter === 'ALL' || row.tier === filter;
 }
 
 export function ConquistasPage() {
-  const { profile } = useAuth();
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
+  const { data: specialLists } = useSpecialLists();
   const { data: store } = useStore();
   const { dashFrom, dashTo, setDay } = useDateRange();
   const [catKey, setCatKey] = useState<ConquistaCategoria>('DERM');
   const [tierFilter, setTierFilter] = useState<TierFilter>('ALL');
-  const [adjustOpen, setAdjustOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
 
-  const { data: superMetaRows } = useConquistaSuperMetas(catKey);
-  const upsertSuperMeta = useUpsertConquistaSuperMeta(profile?.store_id);
-
-  if (!collaborators || !sales || !superMetaRows) {
+  if (!collaborators || !sales || !specialLists) {
     return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
   }
 
-  const superMetas: SuperMetasPorMatricula = {};
-  const byId = new Map(collaborators.map((c) => [c.id, c]));
-  superMetaRows.forEach((r) => {
-    const c = byId.get(r.collaborator_id);
-    if (c) superMetas[c.matricula] = Number(r.valor) || 0;
-  });
-
   const info = CONQUISTA_CATS.find((c) => c.key === catKey)!;
-  const rows = computeConquistas(sales, collaborators, dashFrom, dashTo, catKey, superMetas);
+  const isUnit = isUnitConquista(catKey);
+  const rows = computeConquistas(sales, collaborators, dashFrom, dashTo, catKey, specialLists);
   const filtered = rows.filter((r) => matchesFilter(r, tierFilter));
-  const dayGallery = computeConquistasDayGallery(sales, collaborators, dashFrom, dashTo, catKey, superMetas);
+  const dayGallery = computeConquistasDayGallery(sales, collaborators, dashFrom, dashTo, catKey, specialLists);
 
   async function handleCopyImage() {
     setGenerating(true);
     try {
-      const blob = await generateConquistaImageBlob(filtered, info.label, dashFrom, dashTo, store?.nome_loja);
+      const blob = await generateConquistaImageBlob(filtered, catKey, info.label, dashFrom, dashTo, store?.nome_loja);
       if (!blob) return;
       const copiedToClipboard = await tryCopyImage(blob);
       setImageModal({ url: URL.createObjectURL(blob), copied: copiedToClipboard });
@@ -88,7 +84,10 @@ export function ConquistasPage() {
             {CONQUISTA_CATS.map((c) => (
               <button
                 key={c.key}
-                onClick={() => setCatKey(c.key)}
+                onClick={() => {
+                  setCatKey(c.key);
+                  setTierFilter('ALL');
+                }}
                 style={{
                   background: catKey === c.key ? c.color : 'transparent',
                   border: `1px solid ${c.color}`,
@@ -108,7 +107,7 @@ export function ConquistasPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {(['ALL', 'SUPER', ...CONQUISTA_TIERS] as TierFilter[]).map((f) => (
+            {(['ALL', ...CONQUISTA_TIERS_BY_CAT[catKey]] as TierFilter[]).map((f) => (
               <button
                 key={String(f)}
                 onClick={() => setTierFilter(f)}
@@ -123,14 +122,22 @@ export function ConquistasPage() {
                   fontWeight: 700,
                 }}
               >
-                {f === 'ALL' ? 'Todos' : f === 'SUPER' ? '⭐ Super Meta' : `🏆 ${f / 1000}k`}
+                {f === 'ALL' ? 'Todos' : `🏆 ${conquistaTierLabel(catKey, f)}`}
               </button>
             ))}
           </div>
         </div>
 
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-          <PodiumStaircase ranking={filtered} getValue={(r) => r.valor} formatValue={(v) => fmtMoney(v)} variant="lista" getSub={tierLabel} />
+          {filtered.length === 0 ? (
+            <div className="text-sm text-slate-500 py-6 text-center">Sem conquistas para este período.</div>
+          ) : (
+            <div className="grid grid-cols-1 min-[520px]:grid-cols-2 min-[760px]:grid-cols-3 gap-4">
+              {filtered.map((r) => (
+                <ConquistaCard key={r.matricula} row={r} categoria={catKey} color={info.color} isUnit={isUnit} logoUrl={store?.logo_url} />
+              ))}
+            </div>
+          )}
           <div className="flex flex-wrap gap-2 mt-4">
             <button
               onClick={handleCopyImage}
@@ -140,23 +147,14 @@ export function ConquistasPage() {
             >
               {generating ? 'Gerando...' : '🖼️ Copiar galeria (imagem)'}
             </button>
-            <button
-              onClick={() => setAdjustOpen((v) => !v)}
+            <Link
+              to="/metas"
               className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800"
             >
-              {adjustOpen ? '✕ Fechar ajuste' : '⚙️ Ajustar cards/Super Meta'}
-            </button>
+              ⚙️ Ajustar Metas
+            </Link>
           </div>
         </div>
-
-        {adjustOpen && (
-          <SuperMetaTable
-            categoria={catKey}
-            collaborators={collaborators}
-            superMetaRows={superMetaRows}
-            onSave={(collaboratorId, valor) => upsertSuperMeta.mutateAsync({ categoria: catKey, collaboratorId, valor })}
-          />
-        )}
       </div>
 
       <div className="flex flex-col gap-3">
@@ -206,75 +204,60 @@ export function ConquistasPage() {
   );
 }
 
-function SuperMetaTable({
+/** The achievement "figurinha": collaborator photo, the store's own logo
+ * (pre-configured in ADM > Minha Loja) in a rounded badge, and a banner
+ * naming which tier was reached. This is a CSS approximation of the final
+ * design — the exact photo/logo/text mask geometry and background art are
+ * still pending the 4 reference images that define them. */
+function ConquistaCard({
+  row,
   categoria,
-  collaborators,
-  superMetaRows,
-  onSave,
+  color,
+  isUnit,
+  logoUrl,
 }: {
+  row: ConquistaRow;
   categoria: ConquistaCategoria;
-  collaborators: { id: string; nome: string; apelido: string | null; matricula: string }[];
-  superMetaRows: { collaborator_id: string; valor: number }[];
-  onSave: (collaboratorId: string, valor: number) => Promise<void>;
+  color: string;
+  isUnit: boolean;
+  logoUrl?: string | null;
 }) {
-  const byCollaborator = new Map(superMetaRows.map((r) => [r.collaborator_id, r.valor]));
-  const [edits, setEdits] = useState<Record<string, number>>({});
-  const [saving, setSaving] = useState(false);
-
-  async function handleSaveAll() {
-    setSaving(true);
-    try {
-      for (const [collaboratorId, valor] of Object.entries(edits)) {
-        await onSave(collaboratorId, valor);
-      }
-      setEdits({});
-    } finally {
-      setSaving(false);
-    }
-  }
-
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-      <h3 className="font-semibold mb-1">Super Meta Individual — {categoria}</h3>
-      <p className="text-xs text-slate-500 mb-4">
-        Um valor de venda (R$) que, se atingido por um colaborador nesta categoria, conta como conquista mesmo sem
-        bater nenhum dos degraus fixos (1k/2k/3k/5k/10k).
-      </p>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-slate-400 border-b border-slate-800">
-              <th className="py-2 pr-3">Colaborador</th>
-              <th className="py-2 pr-3">Super Meta Individual (R$)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {collaborators.map((c) => {
-              const current = edits[c.id] ?? byCollaborator.get(c.id) ?? 0;
-              return (
-                <tr key={c.id} className="border-b border-slate-900">
-                  <td className="py-2 pr-3">{c.apelido || c.nome}</td>
-                  <td className="py-2 pr-3">
-                    <input
-                      type="number"
-                      value={current}
-                      onChange={(e) => setEdits((prev) => ({ ...prev, [c.id]: Number(e.target.value) }))}
-                      className="w-28 rounded-md bg-slate-800 border border-slate-700 px-2 py-1 text-xs"
-                    />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+    <div
+      className="rounded-2xl overflow-hidden flex flex-col items-center text-center"
+      style={{
+        border: `2px solid ${color}`,
+        background: `linear-gradient(160deg, ${color}22, #0b0e1d 65%)`,
+        boxShadow: `0 0 24px -6px ${color}80`,
+      }}
+    >
+      <div className="w-full flex justify-center pt-3">
+        {logoUrl ? (
+          <img src={logoUrl} alt="" className="h-7 rounded-full object-contain bg-white/90 px-3 py-1" />
+        ) : (
+          <div className="h-7 rounded-full bg-white/10 px-4 flex items-center justify-center text-[9px] text-slate-400 uppercase tracking-wide">
+            Logo
+          </div>
+        )}
       </div>
-      <button
-        onClick={handleSaveAll}
-        disabled={saving || Object.keys(edits).length === 0}
-        className="mt-3 self-start rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm disabled:opacity-50"
+
+      {row.foto ? (
+        <img src={row.foto} alt="" className="w-24 h-24 rounded-full object-cover border-4 mt-3" style={{ borderColor: color }} />
+      ) : (
+        <div className="w-24 h-24 rounded-full bg-slate-700 border-4 mt-3" style={{ borderColor: color }} />
+      )}
+
+      <div className="mt-2 text-base font-bold truncate max-w-full px-3">{row.apelido || row.nome}</div>
+      <div className="text-sm font-mono" style={{ color: '#14ff00' }}>
+        {isUnit ? `${row.itens} un.` : fmtMoney(row.valor)}
+      </div>
+
+      <div
+        className="w-full mt-3 py-2 px-2 text-xs font-extrabold uppercase tracking-wide"
+        style={{ background: color, color: '#0b0e1d' }}
       >
-        {saving ? 'Salvando…' : 'Salvar Super Metas'}
-      </button>
+        {conquistaTierLabel(categoria, row.tier)}
+      </div>
     </div>
   );
 }

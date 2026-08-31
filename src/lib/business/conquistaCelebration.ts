@@ -10,7 +10,7 @@ export interface CelebrationCandidate {
  * repeat performance next month celebrates again instead of being silenced
  * forever by a stale "already seen" record. */
 export function celebrationKey(categoria: ConquistaCategoria, row: ConquistaRow, monthKey: string): string {
-  return `${row.matricula}|${categoria}|${row.tier || 'super'}|${monthKey}`;
+  return `${row.matricula}|${categoria}|${row.tier}|${monthKey}`;
 }
 
 /**

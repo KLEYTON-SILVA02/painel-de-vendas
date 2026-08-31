@@ -1,13 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { celebrationKey, pickNewCelebration, type CelebrationCandidate } from '../lib/business/conquistaCelebration';
-import { computeConquistas, type ConquistaCategoria, type SuperMetasPorMatricula } from '../lib/business/conquistas';
+import { computeConquistas, conquistaTierLabel, isUnitConquista, type ConquistaCategoria } from '../lib/business/conquistas';
 import { monthFirstISO, monthLastISO } from '../lib/dateRange';
 import { fmtMoney } from '../lib/format';
-import { useConquistaSuperMetas } from '../lib/mutations';
-import { useCollaborators, useSales } from '../lib/queries';
+import { useCollaborators, useSales, useSpecialLists } from '../lib/queries';
 
-const CONQUISTA_CATS: ConquistaCategoria[] = ['DERM', 'MP', 'GEN'];
-const CAT_LABEL: Record<ConquistaCategoria, string> = { DERM: 'Dermocosméticos', MP: 'Marcas Exclusivas', GEN: 'Genérico' };
+const CONQUISTA_CATS: ConquistaCategoria[] = ['DERM', 'MP', 'GEN', 'LEVMEL', 'CHIP'];
+const CAT_LABEL: Record<ConquistaCategoria, string> = {
+  DERM: 'Dermocosméticos',
+  MP: 'Marcas Exclusivas',
+  GEN: 'Genérico',
+  LEVMEL: 'Levmel',
+  CHIP: 'Chip',
+};
 const SEEN_KEY = 'conquistas_celebration_seen_v1';
 const AUTO_CLOSE_MS = 30000;
 
@@ -28,21 +33,18 @@ function saveSeen(keys: Iterable<string>) {
   }
 }
 
-/** Detects a newly-reached achievement (this month, DERM/MP/GEN) by diffing
- * against a localStorage baseline, and returns the one to celebrate now. */
+/** Detects a newly-reached achievement (this month, across every conquista
+ * category) by diffing against a localStorage baseline, and returns the one
+ * to celebrate now. */
 function useConquistaCelebration() {
   const { data: sales } = useSales();
   const { data: collaborators } = useCollaborators();
-  const { data: dermSuper } = useConquistaSuperMetas('DERM');
-  const { data: mpSuper } = useConquistaSuperMetas('MP');
-  const { data: genSuper } = useConquistaSuperMetas('GEN');
+  const { data: specialLists } = useSpecialLists();
   const [candidate, setCandidate] = useState<CelebrationCandidate | null>(null);
   const checkedRef = useRef(false);
 
-  const superByCat: Record<ConquistaCategoria, typeof dermSuper> = { DERM: dermSuper, MP: mpSuper, GEN: genSuper };
-
   useEffect(() => {
-    if (!sales || !collaborators || !dermSuper || !mpSuper || !genSuper) return;
+    if (!sales || !collaborators || !specialLists) return;
     const now = new Date();
     const from = monthFirstISO(now.getFullYear(), now.getMonth());
     const to = monthLastISO(now.getFullYear(), now.getMonth());
@@ -50,13 +52,7 @@ function useConquistaCelebration() {
 
     const candidates: CelebrationCandidate[] = [];
     CONQUISTA_CATS.forEach((cat) => {
-      const superMetas: SuperMetasPorMatricula = {};
-      const byId = new Map(collaborators.map((c) => [c.id, c]));
-      (superByCat[cat] ?? []).forEach((r) => {
-        const c = byId.get(r.collaborator_id);
-        if (c) superMetas[c.matricula] = Number(r.valor) || 0;
-      });
-      computeConquistas(sales, collaborators, from, to, cat, superMetas).forEach((row) => {
+      computeConquistas(sales, collaborators, from, to, cat, specialLists).forEach((row) => {
         candidates.push({ key: celebrationKey(cat, row, monthKey), categoria: cat, row });
       });
     });
@@ -70,7 +66,7 @@ function useConquistaCelebration() {
     // Re-checks whenever sales change (e.g. after a header refresh or a new import) —
     // that's the only signal available without a backend push channel.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sales, collaborators, dermSuper, mpSuper, genSuper]);
+  }, [sales, collaborators, specialLists]);
 
   return { candidate, dismiss: () => setCandidate(null) };
 }
@@ -143,7 +139,8 @@ function ConquistaCelebrationOverlay({ candidate, onClose }: { candidate: Celebr
   }, []);
 
   const { row, categoria } = candidate;
-  const tierText = row.tier > 0 ? `🏆 Bateu a marca de ${fmtMoney(row.tier)}` : '⭐ Bateu a Super Meta Individual';
+  const tierText = `🏆 ${conquistaTierLabel(categoria, row.tier)}`;
+  const isUnit = isUnitConquista(categoria);
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center">
@@ -175,7 +172,7 @@ function ConquistaCelebrationOverlay({ candidate, onClose }: { candidate: Celebr
           {tierText}
         </div>
         <div className="font-mono text-sm" style={{ color: '#14ff00' }}>
-          {fmtMoney(row.valor)}
+          {isUnit ? `${row.itens} un.` : fmtMoney(row.valor)}
         </div>
         <button
           onClick={onClose}
