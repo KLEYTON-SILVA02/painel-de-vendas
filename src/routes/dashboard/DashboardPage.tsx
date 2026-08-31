@@ -275,10 +275,10 @@ export function DashboardPage() {
       </div>
 
       <div className="flex flex-col gap-3">
-        {campeao && (
-          <ChampionCard campeao={campeao} campeaoLabel={campeaoLabel} campeaoStars={campeaoStars} storeName={store?.nome_loja} />
-        )}
-
+        {/* Meta/Falta/Saldo/Itens sit at the top of the sidebar, level with
+            the venda-total summary bar in the left column; the date filter
+            comes next, level with the "Ranking Geral" card; the champion
+            card moves below the date filter instead of above it. */}
         <div className="grid grid-cols-2 gap-2">
           <StatCard label={metaLabel} value={fmtMoney(metaExibida)} color="#00f0ff" badge={atingiuMeta ? 'MG ✓' : undefined} />
           <StatCard label={faltaLabel} value={fmtMoney(faltaValor)} color="#a82bff" />
@@ -287,6 +287,10 @@ export function DashboardPage() {
         </div>
 
         <SidebarCalendarCard />
+
+        {campeao && (
+          <ChampionCard campeao={campeao} campeaoLabel={campeaoLabel} campeaoStars={campeaoStars} storeName={store?.nome_loja} />
+        )}
       </div>
     </div>
   );
