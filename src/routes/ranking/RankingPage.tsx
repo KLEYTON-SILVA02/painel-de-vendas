@@ -1,9 +1,12 @@
+import { useState } from 'react';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
+import { MultiRankingImageModal } from '../../components/ranking/MultiRankingImageModal';
 import { RankingColumnCard } from '../../components/ranking/RankingColumnCard';
 import { diasRestantesNoMes, effectiveMetaGeral, getSuperMeta } from '../../lib/business/goals';
 import { computeColumnRanking } from '../../lib/business/ranking';
 import { computeSummary } from '../../lib/business/summary';
-import { fmtMoney } from '../../lib/format';
+import { fmtDateBR, fmtMoney } from '../../lib/format';
+import { generateAllCategoryImages, type MultiImageResult } from '../../lib/rankingImage';
 import { useCollaborators, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 
@@ -25,6 +28,8 @@ export function RankingPage() {
   const { data: specialLists } = useSpecialLists();
   const { data: store } = useStore();
   const { dashFrom, dashTo, refYear, refMonth } = useDateRange();
+  const [generatingAll, setGeneratingAll] = useState(false);
+  const [multiImages, setMultiImages] = useState<MultiImageResult[] | null>(null);
 
   if (!collaborators || !sales || !goals || !storeSettings || !specialLists) {
     return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
@@ -35,6 +40,28 @@ export function RankingPage() {
   const metaGeral = effectiveMetaGeral(goals, mode, sales, collaborators, storeSettings.meta_geral_fallback);
   const metaSuper = getSuperMeta(goals.MER, mode, sales, collaborators);
   const dias = diasRestantesNoMes();
+
+  const columnData = RANKING_COLS.map((c) => {
+    const isUnit = c.key === 'LEVMEL' || c.key === 'CHIP';
+    const ranking = computeColumnRanking(sales, collaborators, dashFrom, dashTo, c.key, isUnit, mode, refYear, refMonth, specialLists);
+    return { ...c, ranking, isUnit };
+  });
+
+  async function handleGenerateAllImages() {
+    setGeneratingAll(true);
+    try {
+      const specs = columnData.map((c) => ({
+        key: c.key,
+        titulo: c.titulo,
+        rows: c.isUnit ? c.ranking.map((r) => ({ ...r, valor: r.itens })) : c.ranking,
+        isUnit: c.isUnit,
+      }));
+      const results = await generateAllCategoryImages(specs, dashFrom, dashTo, store?.nome_loja);
+      setMultiImages(results);
+    } finally {
+      setGeneratingAll(false);
+    }
+  }
 
   const statCards: MfbStatCard[] = [
     ...RANKING_COLS.map((c) => {
@@ -61,36 +88,31 @@ export function RankingPage() {
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 10 }}>
-          {RANKING_COLS.map((c) => {
-            const isUnit = c.key === 'LEVMEL' || c.key === 'CHIP';
-            const ranking = computeColumnRanking(
-              sales,
-              collaborators,
-              dashFrom,
-              dashTo,
-              c.key,
-              isUnit,
-              mode,
-              refYear,
-              refMonth,
-              specialLists,
-            );
-            return (
-              <RankingColumnCard
-                key={c.key}
-                title={c.titulo}
-                icon={c.icon}
-                color={c.cor}
-                ranking={ranking}
-                isUnit={isUnit}
-                dashFrom={dashFrom}
-                dashTo={dashTo}
-                storeName={store?.nome_loja}
-              />
-            );
-          })}
+          {columnData.map((c) => (
+            <RankingColumnCard
+              key={c.key}
+              title={c.titulo}
+              icon={c.icon}
+              color={c.cor}
+              ranking={c.ranking}
+              isUnit={c.isUnit}
+              dashFrom={dashFrom}
+              dashTo={dashTo}
+              storeName={store?.nome_loja}
+              onGenerateAll={handleGenerateAllImages}
+            />
+          ))}
         </div>
+        {generatingAll && <div className="mt-3 text-xs text-slate-500 text-center">Gerando imagens de todas as categorias…</div>}
       </div>
+
+      {multiImages && (
+        <MultiRankingImageModal
+          images={multiImages}
+          text={`🏆 Ranking Geral · ${fmtDateBR(dashFrom)} a ${fmtDateBR(dashTo)}`}
+          onClose={() => setMultiImages(null)}
+        />
+      )}
     </div>
   );
 }

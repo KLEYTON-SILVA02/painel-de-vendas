@@ -50,15 +50,21 @@ export function buildWhatsAppLink(phone: string | null | undefined, text?: strin
 
 export type ShareOutcome = 'shared' | 'copied-and-opened' | 'failed';
 
-/** Best-effort "send this image to WhatsApp": tries the native share sheet
- * first (delivers the actual image file), otherwise copies the image and
- * opens a WhatsApp chat for the user to paste it into — a specific group
- * (via its invite link) when the store has one configured, the store's own
- * number otherwise. Group invite links (chat.whatsapp.com/...) have no
- * query-param mechanism to pre-fill text the way wa.me/web.whatsapp.com
+/** Best-effort "send this image to WhatsApp": copies the image and opens a
+ * WhatsApp chat for the user to paste it into — a specific group (via its
+ * invite link) when the store has one configured, the store's own number
+ * otherwise. Group invite links (chat.whatsapp.com/...) have no query-param
+ * mechanism to pre-fill text or attach a file the way wa.me/web.whatsapp.com
  * "send" links do for an individual chat — opening one just lands in that
- * group's conversation — so the image is still copied to the clipboard
- * first, same as the number-based fallback, for the admin to paste in. */
+ * group's conversation — so the image is copied to the clipboard first, for
+ * the admin to paste in.
+ *
+ * The native share sheet (`navigator.share` with a file payload) is tried
+ * first, but ONLY when no group is configured: the OS share sheet has no
+ * way to pre-select a specific WhatsApp group — it just hands the file to
+ * whichever app/contact the user picks next — so with a group link set,
+ * going through it would skip straight past the one group the store
+ * actually wants, which is the bug this order fixes. */
 export async function shareImageToWhatsApp(
   blob: Blob,
   filename: string,
@@ -68,7 +74,8 @@ export async function shareImageToWhatsApp(
 ): Promise<ShareOutcome> {
   const file = new File([blob], filename, { type: blob.type || 'image/png' });
   const nav = navigator as Navigator & { canShare?: (data: { files: File[] }) => boolean };
-  if (nav.share && (!nav.canShare || nav.canShare({ files: [file] }))) {
+  const hasGroup = !!groupLink?.trim();
+  if (!hasGroup && nav.share && (!nav.canShare || nav.canShare({ files: [file] }))) {
     try {
       await nav.share({ files: [file], text });
       return 'shared';
@@ -87,7 +94,17 @@ export async function shareImageToWhatsApp(
     // WhatsApp chat still opens below, just without the image pre-copied.
   }
 
-  const target = groupLink?.trim() ? groupLink.trim() : buildWhatsAppLink(phone, text);
+  const target = hasGroup ? groupLink!.trim() : buildWhatsAppLink(phone, text);
   window.open(target, '_blank', 'noopener,noreferrer');
   return 'copied-and-opened';
+}
+
+/** Opens the configured WhatsApp target (the store's group when set, its
+ * number chat otherwise) with no file attached — used by flows that share
+ * several images at once, where each image is copied to the clipboard
+ * individually (there's no clipboard API for multiple images in one write)
+ * and pasted into this chat one at a time after it's opened. */
+export function openWhatsAppTarget(phone: string | null | undefined, groupLink: string | null | undefined, text?: string): void {
+  const target = groupLink?.trim() ? groupLink.trim() : buildWhatsAppLink(phone, text);
+  window.open(target, '_blank', 'noopener,noreferrer');
 }

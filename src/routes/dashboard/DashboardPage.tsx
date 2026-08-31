@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { SidebarCalendarCard } from '../../components/SidebarCalendarCard';
+import { GenerateImageScopeModal } from '../../components/ranking/GenerateImageScopeModal';
+import { MultiRankingImageModal } from '../../components/ranking/MultiRankingImageModal';
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
@@ -10,11 +12,20 @@ import type { Dynamic, SummaryRow } from '../../lib/business/types';
 import { catTotals, computeSummary } from '../../lib/business/summary';
 import { generateChampionCardBlob } from '../../lib/championImage';
 import { monthFirstISO, monthLastISO, todayISO } from '../../lib/dateRange';
-import { fmtMoney, monthName } from '../../lib/format';
+import { fmtDateBR, fmtMoney, monthName } from '../../lib/format';
 import { copyText, formatRankingText } from '../../lib/clipboard';
-import { tryCopyImage } from '../../lib/rankingImage';
+import { generateAllCategoryImages, generateRankingImageBlob, tryCopyImage, type MultiImageResult } from '../../lib/rankingImage';
 import { useCollaborators, useDynamics, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
 import { useDateRange, type RankFilter } from '../DateRangeContext';
+
+const RANKING_CATEGORIES: { key: CategoryKey | 'LEVMEL' | 'CHIP'; titulo: string }[] = [
+  { key: 'DERM', titulo: 'Dermo' },
+  { key: 'GEN', titulo: 'Gen/Sim' },
+  { key: 'MP', titulo: 'Marcas Excl.' },
+  { key: 'MER', titulo: 'Merc. Geral' },
+  { key: 'LEVMEL', titulo: 'Levmel' },
+  { key: 'CHIP', titulo: 'Chip' },
+];
 
 const CAT_LABEL: Record<CategoryKey, string> = {
   DERM: 'Dermocosméticos',
@@ -150,6 +161,10 @@ function StatCard({ label, value, color, badge }: { label: string; value: string
 
 export function DashboardPage() {
   const [rankingCopied, setRankingCopied] = useState(false);
+  const [imageScopeOpen, setImageScopeOpen] = useState(false);
+  const [generatingImage, setGeneratingImage] = useState(false);
+  const [rankingImageModal, setRankingImageModal] = useState<{ url: string; copied: boolean } | null>(null);
+  const [multiImages, setMultiImages] = useState<MultiImageResult[] | null>(null);
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
   const { data: goals } = useGoals();
@@ -237,6 +252,36 @@ export function DashboardPage() {
     setTimeout(() => setRankingCopied(false), 1500);
   }
 
+  async function handleGenerateSelectedImage() {
+    setGeneratingImage(true);
+    try {
+      const rows = isUnitRanking ? rankingFilteredList.map((r) => ({ ...r, valor: r.itens })) : rankingFilteredList;
+      const blob = await generateRankingImageBlob(rows, rankFilterParams.label, rankFilterParams.from, rankFilterParams.to, store?.nome_loja, isUnitRanking);
+      if (!blob) return;
+      const copiedToClipboard = await tryCopyImage(blob);
+      setRankingImageModal({ url: URL.createObjectURL(blob), copied: copiedToClipboard });
+    } finally {
+      setGeneratingImage(false);
+    }
+  }
+
+  async function handleGenerateAllImages() {
+    setGeneratingImage(true);
+    try {
+      const salesData = sales!;
+      const collaboratorsData = collaborators!;
+      const specs = RANKING_CATEGORIES.map((c) => {
+        const isUnit = c.key === 'LEVMEL' || c.key === 'CHIP';
+        const rowsRaw = computeSummary(salesData, collaboratorsData, dashFrom, dashTo, c.key, specialLists);
+        return { key: c.key, titulo: c.titulo, rows: isUnit ? rowsRaw.map((r) => ({ ...r, valor: r.itens })) : rowsRaw, isUnit };
+      });
+      const results = await generateAllCategoryImages(specs, dashFrom, dashTo, store?.nome_loja);
+      setMultiImages(results);
+    } finally {
+      setGeneratingImage(false);
+    }
+  }
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-4">
       <div className="flex flex-col gap-4 min-w-0">
@@ -272,23 +317,42 @@ export function DashboardPage() {
             <div style={{ flex: '1 1 auto', minWidth: 200 }}>
               <RankFilterBar dynamics={dynamics} />
             </div>
-            <button
-              onClick={handleCopyRanking}
-              title="Copiar ranking de vendas p/ WhatsApp"
-              style={{
-                flexShrink: 0,
-                background: 'transparent',
-                border: '1px solid #212948',
-                color: '#8b90bf',
-                padding: '7px 13px',
-                borderRadius: 10,
-                cursor: 'pointer',
-                fontSize: 12,
-                fontWeight: 700,
-              }}
-            >
-              {rankingCopied ? '✓ Copiado!' : '📋 Copiar ranking'}
-            </button>
+            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+              <button
+                onClick={handleCopyRanking}
+                title="Copiar ranking de vendas p/ WhatsApp"
+                style={{
+                  background: 'transparent',
+                  border: '1px solid #212948',
+                  color: '#8b90bf',
+                  padding: '7px 13px',
+                  borderRadius: 10,
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: 700,
+                }}
+              >
+                {rankingCopied ? '✓ Copiado!' : '📋 Copiar ranking'}
+              </button>
+              <button
+                onClick={() => setImageScopeOpen(true)}
+                disabled={generatingImage}
+                title="Gerar imagem do ranking"
+                style={{
+                  background: 'transparent',
+                  border: '1px solid #ffb700',
+                  color: '#ffb700',
+                  padding: '7px 13px',
+                  borderRadius: 10,
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  opacity: generatingImage ? 0.5 : 1,
+                }}
+              >
+                {generatingImage ? 'Gerando…' : '🖼️ Gerar imagem'}
+              </button>
+            </div>
           </div>
           <div className="mt-3">
             <PodiumStaircase
@@ -330,6 +394,40 @@ export function DashboardPage() {
           <ChampionCard campeao={campeao} campeaoLabel={campeaoLabel} campeaoStars={campeaoStars} storeName={store?.nome_loja} />
         )}
       </div>
+
+      {imageScopeOpen && (
+        <GenerateImageScopeModal
+          categoryLabel={rankFilterParams.label}
+          onChooseSelected={() => {
+            setImageScopeOpen(false);
+            handleGenerateSelectedImage();
+          }}
+          onChooseAll={() => {
+            setImageScopeOpen(false);
+            handleGenerateAllImages();
+          }}
+          onClose={() => setImageScopeOpen(false)}
+        />
+      )}
+
+      {rankingImageModal && (
+        <RankingImageModal
+          url={rankingImageModal.url}
+          copied={rankingImageModal.copied}
+          onClose={() => setRankingImageModal(null)}
+          title={`Imagem — ${rankFilterParams.label}`}
+          filename="ranking-vendas.png"
+          alt="Ranking de vendas"
+        />
+      )}
+
+      {multiImages && (
+        <MultiRankingImageModal
+          images={multiImages}
+          text={`🏆 Ranking Geral · ${fmtDateBR(dashFrom)} a ${fmtDateBR(dashTo)}`}
+          onClose={() => setMultiImages(null)}
+        />
+      )}
     </div>
   );
 }
