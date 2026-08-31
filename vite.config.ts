@@ -10,7 +10,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg'],
+      includeAssets: ['favicon-48.png'],
       manifest: {
         name: 'Gestão de Vendas',
         short_name: 'Gestão de Vendas',
