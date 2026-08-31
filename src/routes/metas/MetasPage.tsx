@@ -8,7 +8,15 @@ import { fmtMoney } from '../../lib/format';
 import { useIndividualGoals, useUpdateCommissionRate, useUpdateGoal, useUpsertIndividualGoal } from '../../lib/mutations';
 import { useCollaborators, useCommissionRates, useGoals, useSales } from '../../lib/queries';
 
-const COMMISSION_KEYS = ['DERM', 'GEN', 'MP'] as const;
+// One editor per commission slot — Dermo/Genéricos keep a single slot (1),
+// Marcas Exclusivas registers 3 independent commissions.
+const COMMISSION_SLOTS: { categoria: 'DERM' | 'GEN' | 'MP'; slot: number; label: string }[] = [
+  { categoria: 'DERM', slot: 1, label: 'Dermocosméticos' },
+  { categoria: 'GEN', slot: 1, label: 'Genérico' },
+  { categoria: 'MP', slot: 1, label: 'Marcas Exclusivas — Comissão 1' },
+  { categoria: 'MP', slot: 2, label: 'Marcas Exclusivas — Comissão 2' },
+  { categoria: 'MP', slot: 3, label: 'Marcas Exclusivas — Comissão 3' },
+];
 
 const CAT_LABEL: Record<CategoryKey, string> = {
   DERM: 'Dermocosméticos',
@@ -444,30 +452,36 @@ function MetasComissoes() {
   const { profile } = useAuth();
   const { data: rates } = useCommissionRates();
   const updateRate = useUpdateCommissionRate(profile?.store_id);
-  const [edits, setEdits] = useState<Partial<Record<(typeof COMMISSION_KEYS)[number], { percentual: number; ativo: boolean }>>>({});
+  const [edits, setEdits] = useState<Record<string, { percentual: number; ativo: boolean }>>({});
   const [saving, setSaving] = useState(false);
 
   if (!rates) return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
 
-  function fieldValue<K extends 'percentual' | 'ativo'>(k: (typeof COMMISSION_KEYS)[number], field: K): { percentual: number; ativo: boolean }[K] {
-    const edit = edits[k]?.[field];
-    if (edit !== undefined) return edit;
-    return (rates![k]?.[field] ?? (field === 'ativo' ? false : 0)) as { percentual: number; ativo: boolean }[K];
+  function slotKey(categoria: 'DERM' | 'GEN' | 'MP', slot: number) {
+    return `${categoria}-${slot}`;
   }
-  function setField(k: (typeof COMMISSION_KEYS)[number], field: 'percentual' | 'ativo', value: number | boolean) {
+  function fieldValue<K extends 'percentual' | 'ativo'>(categoria: 'DERM' | 'GEN' | 'MP', slot: number, field: K): { percentual: number; ativo: boolean }[K] {
+    const key = slotKey(categoria, slot);
+    const edit = edits[key]?.[field];
+    if (edit !== undefined) return edit;
+    const stored = rates![categoria].find((r) => r.slot === slot);
+    return (stored?.[field] ?? (field === 'ativo' ? false : 0)) as { percentual: number; ativo: boolean }[K];
+  }
+  function setField(categoria: 'DERM' | 'GEN' | 'MP', slot: number, field: 'percentual' | 'ativo', value: number | boolean) {
+    const key = slotKey(categoria, slot);
     setEdits((prev) => ({
       ...prev,
-      [k]: { percentual: fieldValue(k, 'percentual'), ativo: fieldValue(k, 'ativo'), [field]: value },
+      [key]: { percentual: fieldValue(categoria, slot, 'percentual'), ativo: fieldValue(categoria, slot, 'ativo'), [field]: value },
     }));
   }
 
   async function handleSave() {
     setSaving(true);
     try {
-      for (const k of COMMISSION_KEYS) {
-        const patch = edits[k];
+      for (const { categoria, slot } of COMMISSION_SLOTS) {
+        const patch = edits[slotKey(categoria, slot)];
         if (!patch) continue;
-        await updateRate.mutateAsync({ categoria: k, patch: { percentual: patch.percentual, ativo: patch.ativo } });
+        await updateRate.mutateAsync({ categoria, slot, patch: { percentual: patch.percentual, ativo: patch.ativo } });
       }
       setEdits({});
     } finally {
@@ -480,24 +494,28 @@ function MetasComissoes() {
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <h3 className="font-semibold mb-1">Comissões — Dermo / Genéricos / Marcas Exclusivas</h3>
         <p className="text-xs text-slate-500 mb-4">
-          Percentual de comissão por categoria, aplicado sobre o valor de cada venda. Só aparece na tela da categoria
-          quando um vendedor específico está selecionado — com "Todos" selecionado, o valor original da venda é
-          exibido normalmente.
+          Percentual de comissão por categoria, aplicado sobre o valor de cada venda. Marcas Exclusivas aceita até 3
+          comissões independentes. "Exibir comissão" liga o botão liga/desliga correspondente na tela de detalhamento
+          da categoria — desligado, só o valor normal da venda aparece.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {COMMISSION_KEYS.map((k) => (
-            <div key={k} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-              <div className="font-semibold text-sm mb-2">{CAT_LABEL[k]}</div>
+          {COMMISSION_SLOTS.map(({ categoria, slot, label }) => (
+            <div key={slotKey(categoria, slot)} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+              <div className="font-semibold text-sm mb-2">{label}</div>
               <label className="block text-xs text-slate-400 mb-1">Percentual (%)</label>
               <input
                 type="number"
                 step="0.1"
-                value={fieldValue(k, 'percentual')}
-                onChange={(e) => setField(k, 'percentual', Number(e.target.value))}
+                value={fieldValue(categoria, slot, 'percentual')}
+                onChange={(e) => setField(categoria, slot, 'percentual', Number(e.target.value))}
                 className="w-full rounded-md bg-slate-800 border border-slate-700 px-2 py-1.5 text-sm mb-2"
               />
               <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                <input type="checkbox" checked={fieldValue(k, 'ativo')} onChange={(e) => setField(k, 'ativo', e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={fieldValue(categoria, slot, 'ativo')}
+                  onChange={(e) => setField(categoria, slot, 'ativo', e.target.checked)}
+                />
                 Exibir comissão nesta categoria
               </label>
             </div>

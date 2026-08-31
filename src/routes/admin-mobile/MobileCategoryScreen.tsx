@@ -1,11 +1,9 @@
 import { useMemo, useState } from 'react';
-import { useAuth } from '../../auth/AuthContext';
 import type { CategoryKey } from '../../lib/business/classification';
 import { getGoal, getSuperMeta } from '../../lib/business/goals';
 import { computeSummary } from '../../lib/business/summary';
 import type { Collaborator } from '../../lib/business/types';
 import { fmtMoney } from '../../lib/format';
-import { useUpdateCommissionRate } from '../../lib/mutations';
 import { useCollaborators, useCommissionRates, useGoals, useSales } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { MobileDateFilter } from './MobileDateFilter';
@@ -26,14 +24,13 @@ export function MobileCategoryScreen({
   titleClass: string;
   accent: string;
 }) {
-  const { profile } = useAuth();
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
   const { data: goals } = useGoals();
   const { data: commissionRates } = useCommissionRates();
   const { dashFrom, dashTo } = useDateRange();
   const [selectedSeller, setSelectedSeller] = useState<string | null>(null);
-  const updateCommissionRate = useUpdateCommissionRate(profile?.store_id);
+  const [activeCommissionSlot, setActiveCommissionSlot] = useState<number | null>(null);
 
   const byMatricula = useMemo(() => {
     const map = new Map<string, Collaborator>();
@@ -60,9 +57,14 @@ export function MobileCategoryScreen({
 
   // Commission only ever applies to DERM/GEN/MP (see commission_rates'
   // check constraint) and only shows once a specific seller is selected —
-  // with "Todos" selected, sales keep showing their original valor.
-  const commissionRate = catKey === 'DERM' || catKey === 'GEN' || catKey === 'MP' ? commissionRates[catKey] : undefined;
-  const showCommission = selectedSeller !== null && !!commissionRate?.ativo;
+  // with "Todos" selected, sales keep showing their original valor. Each
+  // admin-enabled rate gets its own liga/desliga button; Marcas Exclusivas
+  // can have up to 3 (one per slot). Only one can be active at a time — the
+  // buttons behave as a single-select group, clicking the active one turns
+  // it back off.
+  const availableRates = catKey === 'DERM' || catKey === 'GEN' || catKey === 'MP' ? commissionRates[catKey].filter((r) => r.ativo) : [];
+  const activeRate = activeCommissionSlot !== null ? availableRates.find((r) => r.slot === activeCommissionSlot) : undefined;
+  const showCommission = selectedSeller !== null && !!activeRate;
 
   const categorySales = sales
     .filter((s) => {
@@ -132,17 +134,29 @@ export function MobileCategoryScreen({
 
       <MobileSellerAccordion collaborators={collaborators} selected={selectedSeller} onSelect={setSelectedSeller} />
 
-      {commissionRate && (
-        <div className="mv2-commission-toggle">
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={commissionRate.ativo}
-              onChange={(e) => updateCommissionRate.mutate({ categoria: catKey as 'DERM' | 'GEN' | 'MP', patch: { ativo: e.target.checked } })}
-            />
-            <span className="mv2-rate">Exibir comissão ({commissionRate.percentual}%)</span>
-          </label>
-          {commissionRate.ativo && (
+      {availableRates.length > 0 && (
+        <div className="mv2-commission-toggle" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {availableRates.map((r) => (
+              <button
+                key={r.slot}
+                onClick={() => setActiveCommissionSlot((cur) => (cur === r.slot ? null : r.slot))}
+                style={{
+                  border: `1px solid ${accent}`,
+                  background: activeCommissionSlot === r.slot ? accent : 'transparent',
+                  color: activeCommissionSlot === r.slot ? '#080a08' : accent,
+                  borderRadius: 999,
+                  padding: '4px 10px',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                {availableRates.length > 1 ? `Comissão ${r.slot} (${r.percentual}%)` : `Comissão (${r.percentual}%)`}
+              </button>
+            ))}
+          </div>
+          {activeRate && (
             <span style={{ fontSize: 8, color: 'var(--mv2-texto-2)' }}>
               {selectedSeller ? 'Exibindo comissão do vendedor selecionado' : 'Selecione um vendedor pra ver a comissão'}
             </span>
@@ -156,7 +170,7 @@ export function MobileCategoryScreen({
         byMatricula={byMatricula}
         showValor
         showComissao={showCommission}
-        comissaoPercentual={commissionRate?.percentual}
+        comissaoPercentual={activeRate?.percentual}
         subtotalMode={selectedSeller ? 'valor' : 'none'}
       />
     </div>

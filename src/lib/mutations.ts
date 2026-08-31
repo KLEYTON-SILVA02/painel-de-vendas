@@ -89,11 +89,19 @@ export function useUpdateGoal(storeId: string | undefined) {
 export function useUpdateCommissionRate(storeId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ categoria, patch }: { categoria: 'DERM' | 'GEN' | 'MP'; patch: TablesUpdate<'commission_rates'> }) => {
+    mutationFn: async ({
+      categoria,
+      slot,
+      patch,
+    }: {
+      categoria: 'DERM' | 'GEN' | 'MP';
+      slot: number;
+      patch: TablesUpdate<'commission_rates'>;
+    }) => {
       if (!storeId) throw new Error('store not loaded');
       const { error } = await supabase
         .from('commission_rates')
-        .upsert({ ...patch, categoria, store_id: storeId }, { onConflict: 'store_id,categoria' });
+        .upsert({ ...patch, categoria, slot, store_id: storeId }, { onConflict: 'store_id,categoria,slot' });
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['commission_rates'] }),

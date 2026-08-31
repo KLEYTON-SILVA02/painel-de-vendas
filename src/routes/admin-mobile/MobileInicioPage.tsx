@@ -26,7 +26,7 @@ export function MobileInicioPage() {
   const { data: specialLists } = useSpecialLists();
   const { data: dynamics } = useDynamics();
   const { data: store } = useStore();
-  const { dashFrom, dashTo, refYear, refMonth } = useDateRange();
+  const { dashFrom, dashTo, refYear, refMonth, rankFilter } = useDateRange();
 
   if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !dynamics) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
@@ -54,13 +54,17 @@ export function MobileInicioPage() {
 
   const monthFirst = monthFirstISO(refYear, refMonth);
   const monthLast = monthLastISO(refYear, refMonth);
-  const monthRanking = computeSummary(sales, collaborators, monthFirst, monthLast);
-  const campeaoSource = modoDia ? ranking : monthRanking;
-  const campeao = campeaoSource.length && campeaoSource[0].valor > 0 ? campeaoSource[0] : null;
+  const campeaoFrom = modoDia ? dashFrom : monthFirst;
+  const campeaoTo = modoDia ? dashTo : monthLast;
+  // Follows the same shared rankFilter as the desktop dashboard's category
+  // filter — 'ALL' and dynamics fall back to the overall best seller.
+  const isUnitChampionCat = rankFilter === 'LEVMEL' || rankFilter === 'CHIP';
+  const championCatFilter = rankFilter === 'ALL' || rankFilter.startsWith('DIN:') ? undefined : (rankFilter as CategoryKey | 'LEVMEL' | 'CHIP');
+  const campeaoSource = computeSummary(sales, collaborators, campeaoFrom, campeaoTo, championCatFilter, specialLists);
+  const campeao =
+    campeaoSource.length && (isUnitChampionCat ? campeaoSource[0].itens > 0 : campeaoSource[0].valor > 0) ? campeaoSource[0] : null;
   const campeaoLabel = modoDia ? `Campeão do dia` : `Campeão — ${monthName(refMonth)}/${refYear}`;
-  const campeaoStars = campeao
-    ? computeChampionStars(campeao.matricula, sales, collaborators, goals, specialLists, modoDia ? dashFrom : monthFirst, modoDia ? dashTo : monthLast, mode)
-    : null;
+  const campeaoStars = campeao ? computeChampionStars(campeao.matricula, sales, collaborators, specialLists, campeaoFrom, campeaoTo) : null;
 
   return (
     <div>

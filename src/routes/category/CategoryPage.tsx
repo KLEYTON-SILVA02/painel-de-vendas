@@ -268,7 +268,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
           from={dashFrom}
           to={dashTo}
           extract={extract}
-          commissionRate={catKey === 'DERM' || catKey === 'GEN' || catKey === 'MP' ? commissionRates[catKey] : undefined}
+          commissionRates={catKey === 'DERM' || catKey === 'GEN' || catKey === 'MP' ? commissionRates[catKey] : []}
           onClose={() => setExtractMatricula(null)}
         />
       )}
@@ -333,23 +333,28 @@ function ExtractModal({
   from,
   to,
   extract,
-  commissionRate,
+  commissionRates,
   onClose,
 }: {
   nome: string;
   from: string;
   to: string;
   extract: ReturnType<typeof computeVendorExtract>;
-  commissionRate?: CommissionRate;
+  commissionRates: CommissionRate[];
   onClose: () => void;
 }) {
+  const [activeSlot, setActiveSlot] = useState<number | null>(null);
   const totalValor = extract.reduce((a, s) => a + s.valor, 0);
   const totalItens = extract.reduce((a, s) => a + s.qtd, 0);
   // The extract modal is always about one specific vendor (extractMatricula),
   // so this is exactly the "colaborador selecionado" moment the commission
-  // feature is scoped to — with no vendor selected there's no commission
-  // column anywhere in this screen, the sale's own valor is shown as-is.
-  const showCommission = !!commissionRate?.ativo;
+  // feature is scoped to. Each admin-enabled rate gets its own liga/desliga
+  // button (up to 3 for Marcas Exclusivas) — a single-select group: off by
+  // default (sale's own valor shown as-is), clicking the active one again
+  // turns it back off.
+  const availableRates = commissionRates.filter((r) => r.ativo);
+  const activeRate = activeSlot !== null ? availableRates.find((r) => r.slot === activeSlot) : undefined;
+  const showCommission = !!activeRate;
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50" onClick={onClose}>
       <div
@@ -364,8 +369,28 @@ function ExtractModal({
         </div>
         <p className="text-xs text-slate-500 mb-3">
           {fmtDateBR(from)} — {fmtDateBR(to)} · {totalItens} itens · {fmtMoney(totalValor)}
-          {showCommission && ` · comissão (${commissionRate!.percentual}%): ${fmtMoney((totalValor * commissionRate!.percentual) / 100)}`}
+          {showCommission && ` · comissão (${activeRate!.percentual}%): ${fmtMoney((totalValor * activeRate!.percentual) / 100)}`}
         </p>
+
+        {availableRates.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {availableRates.map((r) => (
+              <button
+                key={r.slot}
+                onClick={() => setActiveSlot((cur) => (cur === r.slot ? null : r.slot))}
+                className="rounded-full border px-3 py-1 text-[11px] font-bold"
+                style={{
+                  borderColor: '#ffb700',
+                  background: activeSlot === r.slot ? '#ffb700' : 'transparent',
+                  color: activeSlot === r.slot ? '#231a02' : '#ffb700',
+                }}
+              >
+                {availableRates.length > 1 ? `Comissão ${r.slot} (${r.percentual}%)` : `Comissão (${r.percentual}%)`}
+              </button>
+            ))}
+          </div>
+        )}
+
         {extract.length === 0 ? (
           <div className="text-sm text-slate-500 py-4 text-center">Nenhuma venda no período.</div>
         ) : (
@@ -387,7 +412,7 @@ function ExtractModal({
                   <td className="py-1.5 pr-3 font-mono">{s.qtd}</td>
                   <td className="py-1.5 pr-3 font-mono">{fmtMoney(s.valor)}</td>
                   {showCommission && (
-                    <td className="py-1.5 pr-3 font-mono text-amber-400">{fmtMoney((s.valor * commissionRate!.percentual) / 100)}</td>
+                    <td className="py-1.5 pr-3 font-mono text-amber-400">{fmtMoney((s.valor * activeRate!.percentual) / 100)}</td>
                   )}
                 </tr>
               ))}

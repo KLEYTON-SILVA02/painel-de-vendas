@@ -199,15 +199,23 @@ export function DashboardPage() {
 
   const monthFirst = monthFirstISO(refYear, refMonth);
   const monthLast = monthLastISO(refYear, refMonth);
-  const monthRanking = computeSummary(sales, collaborators, monthFirst, monthLast);
-  const campeaoSource = modoDia ? ranking : monthRanking;
-  const campeao = campeaoSource.length && campeaoSource[0].valor > 0 ? campeaoSource[0] : null;
-  const campeaoLabel = modoDia ? `Campeão do dia — ${dashFrom.split('-').reverse().join('/')}` : `Campeão — ${monthName(refMonth)}/${refYear}`;
-  const campeaoStars = campeao
-    ? computeChampionStars(campeao.matricula, sales, collaborators, goals, specialLists, modoDia ? dashFrom : monthFirst, modoDia ? dashTo : monthLast, mode)
-    : null;
-
   const rankFilterParams = resolveRankFilterParams(rankFilter, dashFrom, dashTo, dynamics);
+
+  const campeaoFrom = modoDia ? dashFrom : monthFirst;
+  const campeaoTo = modoDia ? dashTo : monthLast;
+  // The champion follows the same category filter as the "Ranking Geral"
+  // podium right above it (RankFilterBar) — 'ALL' and dynamics (no
+  // per-category "melhor vendedor" concept) fall back to the overall
+  // best seller, same as before this filter was wired in.
+  const isUnitChampionCat = rankFilter === 'LEVMEL' || rankFilter === 'CHIP';
+  const championCatFilter = rankFilter === 'ALL' || rankFilter.startsWith('DIN:') ? undefined : (rankFilter as CategoryKey | 'LEVMEL' | 'CHIP');
+  const campeaoSource = computeSummary(sales, collaborators, campeaoFrom, campeaoTo, championCatFilter, specialLists);
+  const campeao =
+    campeaoSource.length && (isUnitChampionCat ? campeaoSource[0].itens > 0 : campeaoSource[0].valor > 0) ? campeaoSource[0] : null;
+  const campeaoBase = modoDia ? `Campeão do dia — ${dashFrom.split('-').reverse().join('/')}` : `Campeão — ${monthName(refMonth)}/${refYear}`;
+  const campeaoLabel = championCatFilter ? `${campeaoBase} · ${rankFilterParams.label}` : campeaoBase;
+  const campeaoStars = campeao ? computeChampionStars(campeao.matricula, sales, collaborators, specialLists, campeaoFrom, campeaoTo) : null;
+
   const rankingFiltered = rankFilterParams.dinamica
     ? computeDinamicaRanking(
         { ...rankFilterParams.dinamica, dataInicio: rankFilterParams.from, dataFim: rankFilterParams.to },

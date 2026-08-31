@@ -1,16 +1,14 @@
-// Star rating for the champion card: one star per tracked category where
-// the champion's own sales in the period reached that category's goal
-// (Meta Diária on a single-day period, Meta Mensal otherwise — same
-// mode-aware getGoal() every other gauge in the app already uses).
-import type { GoalCategoryKey } from './classification';
-import type { GoalMode } from './goals';
-import { getGoal } from './goals';
+// Star rating for the champion card: one star per Galeria de Conquistas
+// category (Dermo/Genérico/Marcas Exclusivas/Levmel/Chip) where the
+// champion themself reached at least the first fixed tier, within the same
+// day/month window used to pick the champion — mirrors exactly what the
+// Galeria de Conquistas screen would show as an achiever for that period.
+import { computeConquistas, type ConquistaCategoria } from './conquistas';
 import type { SpecialListItem } from './summary';
-import { computeSummary } from './summary';
-import type { Collaborator, Goal, Sale } from './types';
+import type { Collaborator, Sale } from './types';
 
 export interface ChampionStar {
-  key: GoalCategoryKey;
+  key: ConquistaCategoria;
   label: string;
   achieved: boolean;
 }
@@ -20,7 +18,7 @@ export interface ChampionStar {
 // change here, no changes needed in the champion card components
 // (DashboardPage.tsx / MobileInicioPage.tsx just render whatever this
 // returns).
-export const CHAMPION_STAR_CATEGORIES: { key: GoalCategoryKey; label: string }[] = [
+export const CHAMPION_STAR_CATEGORIES: { key: ConquistaCategoria; label: string }[] = [
   { key: 'DERM', label: 'Dermocosméticos' },
   { key: 'GEN', label: 'Genérico' },
   { key: 'MP', label: 'Marcas Exclusivas' },
@@ -32,20 +30,12 @@ export function computeChampionStars(
   matricula: string,
   sales: Sale[],
   collaborators: Collaborator[],
-  goals: Partial<Record<GoalCategoryKey, Goal>>,
   specialLists: { levmel: SpecialListItem[]; chip: SpecialListItem[] } | undefined,
   from: string,
   to: string,
-  mode: GoalMode,
 ): ChampionStar[] {
   return CHAMPION_STAR_CATEGORIES.map(({ key, label }) => {
-    const goal = goals[key];
-    const meta = getGoal(goal, mode, sales, collaborators);
-    if (!goal || meta <= 0) return { key, label, achieved: false };
-    const rows = computeSummary(sales, collaborators, from, to, key, specialLists);
-    const row = rows.find((r) => r.matricula === matricula);
-    if (!row) return { key, label, achieved: false };
-    const realizado = goal.metrica === 'unidade' ? row.itens : row.valor;
-    return { key, label, achieved: realizado >= meta };
+    const achievers = computeConquistas(sales, collaborators, from, to, key, specialLists);
+    return { key, label, achieved: achievers.some((r) => r.matricula === matricula) };
   });
 }

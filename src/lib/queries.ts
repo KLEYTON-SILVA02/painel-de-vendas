@@ -89,16 +89,20 @@ export function useFunctionIcons() {
   });
 }
 
+/** All commission rates by category, as an array per category (sorted by
+ * slot) — Marcas Exclusivas can hold up to 3 independent rates, Dermo/
+ * Genéricos hold at most 1 (slot 1). A category with nothing configured
+ * yet returns an empty array. */
 export function useCommissionRates() {
   return useQuery({
     queryKey: ['commission_rates'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('commission_rates').select('*');
+      const { data, error } = await supabase.from('commission_rates').select('*').order('slot');
       if (error) throw error;
-      const byCategory = {} as Record<CommissionRate['categoria'], CommissionRate | undefined>;
+      const byCategory: Record<CommissionRate['categoria'], CommissionRate[]> = { DERM: [], GEN: [], MP: [] };
       data.forEach((row) => {
         const rate = mapCommissionRate(row);
-        byCategory[rate.categoria] = rate;
+        byCategory[rate.categoria].push(rate);
       });
       return byCategory;
     },
