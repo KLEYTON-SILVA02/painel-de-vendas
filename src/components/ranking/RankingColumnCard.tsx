@@ -60,7 +60,8 @@ export function RankingColumnCard({
   async function handleGenerateImage() {
     setGenerating(true);
     try {
-      const blob = await generateRankingImageBlob(ranking, title, dashFrom, dashTo, storeName);
+      const rows = isUnit ? ranking.map((r) => ({ ...r, valor: r.itens })) : ranking;
+      const blob = await generateRankingImageBlob(rows, title, dashFrom, dashTo, storeName, isUnit);
       if (!blob) return;
       const copiedToClipboard = await tryCopyImage(blob);
       const url = URL.createObjectURL(blob);

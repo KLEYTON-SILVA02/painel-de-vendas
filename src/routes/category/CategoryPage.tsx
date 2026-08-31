@@ -155,7 +155,8 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   async function handleGenerateImage() {
     setGenerating(true);
     try {
-      const blob = await generateRankingImageBlob(rankingList, info.titulo, dashFrom, dashTo, store?.nome_loja);
+      const rows = isUnit ? rankingList.map((r) => ({ ...r, valor: r.itens })) : rankingList;
+      const blob = await generateRankingImageBlob(rows, info.titulo, dashFrom, dashTo, store?.nome_loja, isUnit);
       if (!blob) return;
       const copiedToClipboard = await tryCopyImage(blob);
       setImageModal({ url: URL.createObjectURL(blob), copied: copiedToClipboard });
@@ -467,6 +468,16 @@ function ExtractModal({
                   )}
                 </tr>
               ))}
+              <tr className="border-t border-cyan-500/40 font-semibold">
+                <td className="py-1.5 pr-3" colSpan={2}>
+                  Subtotal
+                </td>
+                <td className="py-1.5 pr-3 font-mono">{totalItens}</td>
+                <td className="py-1.5 pr-3 font-mono">{fmtMoney(totalValor)}</td>
+                {showCommission && (
+                  <td className="py-1.5 pr-3 font-mono text-amber-400">{fmtMoney((totalValor * activeRate!.percentual) / 100)}</td>
+                )}
+              </tr>
             </tbody>
           </table>
         )}

@@ -93,7 +93,7 @@ export function MobileUnitCategoryScreen({
     setGenerating(true);
     try {
       const rows = rankingList.map((r) => ({ nome: r.nome, apelido: r.apelido, foto: r.foto, valor: r.itens }));
-      const blob = await generateRankingImageBlob(rows, title, dashFrom, dashTo, store?.nome_loja);
+      const blob = await generateRankingImageBlob(rows, title, dashFrom, dashTo, store?.nome_loja, true);
       if (!blob) return;
       const wasCopied = await tryCopyImage(blob);
       setImageModal({ url: URL.createObjectURL(blob), copied: wasCopied });
