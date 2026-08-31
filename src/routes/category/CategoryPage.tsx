@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { useAuth } from '../../auth/AuthContext';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
+import { ReclassifyBar } from '../../components/admin/ReclassifyBar';
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import type { CategoryKey } from '../../lib/business/classification';
@@ -10,7 +12,8 @@ import { computeSummary, computeVendorExtract } from '../../lib/business/summary
 import type { CommissionRate, SummaryRow } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
-import { useCollaborators, useCommissionRates, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
+import { useReclassifyProdutos } from '../../lib/mutations';
+import { useCatalog, useCollaborators, useCommissionRates, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 
 export type PageCategoryKey = CategoryKey | 'LEVMEL' | 'CHIP';
@@ -38,6 +41,7 @@ const CAT_PILL: Record<CategoryKey, { bg: string; color: string }> = {
 };
 
 export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
+  const { profile } = useAuth();
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
   const { data: goals } = useGoals();
@@ -45,14 +49,19 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   const { data: specialLists } = useSpecialLists();
   const { data: store } = useStore();
   const { data: commissionRates } = useCommissionRates();
+  const { data: catalog } = useCatalog();
   const { dashFrom, dashTo } = useDateRange();
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [extractMatricula, setExtractMatricula] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
+  const [reclassifyMode, setReclassifyMode] = useState(false);
+  const [selectedProdutos, setSelectedProdutos] = useState<Set<string>>(new Set());
+  const [bulkCat, setBulkCat] = useState<CategoryKey>('DERM');
+  const reclassify = useReclassifyProdutos(profile?.store_id);
 
-  if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !commissionRates) {
+  if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !commissionRates || !catalog) {
     return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
   }
 
@@ -167,6 +176,20 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
     ? computeVendorExtract(sales, extractMatricula, catKey, dashFrom, dashTo, specialLists)
     : [];
 
+  function toggleProduto(produto: string) {
+    setSelectedProdutos((prev) => {
+      const next = new Set(prev);
+      if (next.has(produto)) next.delete(produto);
+      else next.add(produto);
+      return next;
+    });
+  }
+  async function applyReclassify() {
+    await reclassify.mutateAsync({ produtos: Array.from(selectedProdutos), categoria: bulkCat, catalog: catalog!, sales: sales! });
+    setSelectedProdutos(new Set());
+    setReclassifyMode(false);
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
@@ -206,7 +229,21 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
 
       {!isUnit && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-          <h3 className="text-sm font-semibold mb-3 text-slate-300">Lista de vendas — {info.titulo}</h3>
+          <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+            <h3 className="text-sm font-semibold text-slate-300">Lista de vendas — {info.titulo}</h3>
+            <ReclassifyBar
+              active={reclassifyMode}
+              onToggle={() => {
+                setReclassifyMode((v) => !v);
+                setSelectedProdutos(new Set());
+              }}
+              selectedCount={selectedProdutos.size}
+              categoria={bulkCat}
+              onCategoriaChange={setBulkCat}
+              onApply={applyReclassify}
+              applying={reclassify.isPending}
+            />
+          </div>
           {categorySales.length === 0 ? (
             <div className="text-sm text-slate-500 py-4 text-center">Nenhuma venda no período.</div>
           ) : (
@@ -214,6 +251,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="text-left text-slate-400 border-b border-slate-800">
+                    {reclassifyMode && <th className="py-1.5 pr-3"></th>}
                     <th className="py-1.5 pr-3">Data</th>
                     <th className="py-1.5 pr-3">Matrícula</th>
                     <th className="py-1.5 pr-3">Vendedor</th>
@@ -225,6 +263,11 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
                 <tbody>
                   {categorySales.map((s) => (
                     <tr key={s.id} className="border-b border-slate-900">
+                      {reclassifyMode && (
+                        <td className="py-1.5 pr-3">
+                          <input type="checkbox" checked={selectedProdutos.has(s.produto)} onChange={() => toggleProduto(s.produto)} />
+                        </td>
+                      )}
                       <td className="py-1.5 pr-3 font-mono">{fmtDateBR(s.dataISO)}</td>
                       <td className="py-1.5 pr-3 font-mono">{s.matricula}</td>
                       <td className="py-1.5 pr-3">{s.vendedor}</td>

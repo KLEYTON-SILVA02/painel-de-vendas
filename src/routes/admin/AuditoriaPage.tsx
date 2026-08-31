@@ -3,7 +3,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { CAT_KEYS, classifyProductTier, type CategoryKey } from '../../lib/business/classification';
 import { buildClassificationInputs } from '../../lib/mappers';
 import { fmtMoney } from '../../lib/format';
-import { useDeleteRow, useInsertRow, useUpdateRow } from '../../lib/mutations';
+import { useDeleteRow, useReclassifyProdutos } from '../../lib/mutations';
 import { useBrandKeywords, useCatalog, useCollaborators, useExclusiveBrands, useProducts, useSales } from '../../lib/queries';
 
 const CAT_LABEL: Record<CategoryKey, string> = {
@@ -24,9 +24,8 @@ export function AuditoriaPage() {
   const { data: products } = useProducts();
   const { data: brandKeywords } = useBrandKeywords();
   const { data: exclusiveBrands } = useExclusiveBrands();
-  const insertCatalog = useInsertRow('catalog', profile?.store_id, 'catalog');
-  const updateCatalog = useUpdateRow('catalog', 'catalog');
   const deleteCatalog = useDeleteRow('catalog', 'catalog');
+  const reclassifyMutation = useReclassifyProdutos(profile?.store_id);
 
   const [tab, setTab] = useState<Tab>('pendentes');
   const [from, setFrom] = useState('');
@@ -49,11 +48,12 @@ export function AuditoriaPage() {
   const inputs = buildClassificationInputs(catalog, products, brandKeywords, exclusiveBrands);
 
   async function reclassify(produtoNomes: string[], categoria: CategoryKey) {
-    for (const nome of produtoNomes) {
-      const existing = catalog!.find((c) => c.nome.toLowerCase() === nome.toLowerCase());
-      if (existing) await updateCatalog.mutateAsync({ id: existing.id, patch: { categoria } });
-      else await insertCatalog.mutateAsync({ nome, codigo: null, categoria } as never);
-    }
+    // Also retroactively updates every already-imported sale for these
+    // products — the original version here only touched `catalog`, which
+    // fixed future imports but left sales already in the system stuck with
+    // their old category forever (sales.grupo is written once at import
+    // time and never recomputed).
+    await reclassifyMutation.mutateAsync({ produtos: produtoNomes, categoria, catalog: catalog!, sales: sales! });
     setSelected(new Set());
   }
 

@@ -1,7 +1,11 @@
 import { useMemo, useState } from 'react';
+import { useAuth } from '../../auth/AuthContext';
+import { ReclassifyBar } from '../../components/admin/ReclassifyBar';
+import type { CategoryKey } from '../../lib/business/classification';
 import type { Collaborator, Sale } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney, monthName } from '../../lib/format';
-import { useCollaborators, useSales } from '../../lib/queries';
+import { useReclassifyProdutos } from '../../lib/mutations';
+import { useCatalog, useCollaborators, useSales } from '../../lib/queries';
 
 const TIPO_LABEL: Record<string, string> = {
   DERM: 'Dermocosméticos',
@@ -64,11 +68,17 @@ function groupByMonthAndDay(sales: Sale[]): MonthGroup[] {
 }
 
 export function ListaVendasPage() {
+  const { profile } = useAuth();
   const { data: sales } = useSales();
   const { data: collaborators } = useCollaborators();
+  const { data: catalog } = useCatalog();
   const [openMonths, setOpenMonths] = useState<Set<string>>(new Set());
   const [openDays, setOpenDays] = useState<Set<string>>(new Set());
   const [dayPage, setDayPage] = useState<Record<string, number>>({});
+  const [reclassifyMode, setReclassifyMode] = useState(false);
+  const [selectedProdutos, setSelectedProdutos] = useState<Set<string>>(new Set());
+  const [bulkCat, setBulkCat] = useState<CategoryKey>('DERM');
+  const reclassify = useReclassifyProdutos(profile?.store_id);
 
   const byMatricula = useMemo(() => {
     const map = new Map<string, Collaborator>();
@@ -78,7 +88,7 @@ export function ListaVendasPage() {
 
   const months = useMemo(() => groupByMonthAndDay(sales ?? []), [sales]);
 
-  if (!sales || !collaborators) {
+  if (!sales || !collaborators || !catalog) {
     return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
   }
 
@@ -98,13 +108,41 @@ export function ListaVendasPage() {
       return next;
     });
   }
+  function toggleProduto(produto: string) {
+    setSelectedProdutos((prev) => {
+      const next = new Set(prev);
+      if (next.has(produto)) next.delete(produto);
+      else next.add(produto);
+      return next;
+    });
+  }
+  async function applyReclassify() {
+    await reclassify.mutateAsync({ produtos: Array.from(selectedProdutos), categoria: bulkCat, catalog: catalog!, sales: sales! });
+    setSelectedProdutos(new Set());
+    setReclassifyMode(false);
+  }
 
   return (
     <div className="flex flex-col gap-4">
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <h3 className="text-cyan-400 font-semibold text-sm mb-1">📋 Lista de Vendas</h3>
+        <div className="flex items-start justify-between gap-3 flex-wrap mb-1">
+          <h3 className="text-cyan-400 font-semibold text-sm">📋 Lista de Vendas</h3>
+          <ReclassifyBar
+            active={reclassifyMode}
+            onToggle={() => {
+              setReclassifyMode((v) => !v);
+              setSelectedProdutos(new Set());
+            }}
+            selectedCount={selectedProdutos.size}
+            categoria={bulkCat}
+            onCategoriaChange={setBulkCat}
+            onApply={applyReclassify}
+            applying={reclassify.isPending}
+          />
+        </div>
         <p className="text-xs text-slate-500">
           Todas as vendas importadas por planilha, separadas por mês e por dia. {sales.length.toLocaleString('pt-BR')} registro(s) no total.
+          {reclassifyMode && ' Marque um ou mais produtos abaixo para reclassificá-los — o ajuste vale para todas as vendas já importadas desse produto, em qualquer mês.'}
         </p>
       </div>
 
@@ -165,8 +203,10 @@ export function ListaVendasPage() {
                               <table className="w-full text-xs">
                                 <thead>
                                   <tr className="text-left text-slate-400 border-b border-slate-800 bg-slate-950/60">
+                                    {reclassifyMode && <th className="py-1.5 px-2"></th>}
                                     <th className="py-1.5 px-2">Data</th>
                                     <th className="py-1.5 px-2">Nome do Vendedor</th>
+                                    <th className="py-1.5 px-2">Produto</th>
                                     <th className="py-1.5 px-2">Qtd. Itens Vendidos</th>
                                     <th className="py-1.5 px-2">Valor do Produto</th>
                                     <th className="py-1.5 px-2">Tipo</th>
@@ -175,8 +215,18 @@ export function ListaVendasPage() {
                                 <tbody>
                                   {pageRows.map((s) => (
                                     <tr key={s.id} className="border-b border-slate-900">
+                                      {reclassifyMode && (
+                                        <td className="py-1.5 px-2">
+                                          <input
+                                            type="checkbox"
+                                            checked={selectedProdutos.has(s.produto)}
+                                            onChange={() => toggleProduto(s.produto)}
+                                          />
+                                        </td>
+                                      )}
                                       <td className="py-1.5 px-2 font-mono">{fmtDateBR(s.dataISO)}</td>
                                       <td className="py-1.5 px-2">{vendedorNome(s, byMatricula)}</td>
+                                      <td className="py-1.5 px-2">{s.produto}</td>
                                       <td className="py-1.5 px-2 font-mono">{s.qtd}</td>
                                       <td className="py-1.5 px-2 font-mono text-amber-400">{fmtMoney(s.valor)}</td>
                                       <td className="py-1.5 px-2">{s.grupo ? TIPO_LABEL[s.grupo] ?? s.grupo : 'Não classificado'}</td>
