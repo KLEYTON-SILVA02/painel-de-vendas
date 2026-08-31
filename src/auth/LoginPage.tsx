@@ -6,10 +6,11 @@ import whatsappQr from '../assets/brand/whatsapp-qr.jpg';
 import instagramQr from '../assets/brand/instagram-qr.jpg';
 
 type Tab = 'admin' | 'colaborador';
-type SocialModal = 'whatsapp' | 'instagram' | null;
+type SocialModal = 'whatsapp' | 'instagram' | 'email' | null;
 
 const WHATSAPP_URL = 'https://wa.me/qr/WEP75MIQBQSPB1';
 const INSTAGRAM_URL = 'https://www.instagram.com/kleytonmsilva?igsi=MWM0bnNscmtjNGkxag==';
+const EMAIL_ADDRESS = 'kleyton.silva.celular@gmail.com';
 
 // Mobile v2 reskin (see mv2-* classes in src/styles/mobile-v2.css, ported
 // 1:1 from the "Scanner Técnico" login spec). Auth logic is untouched —
@@ -49,8 +50,8 @@ export function LoginPage() {
           <button type="button" className="mv2-whatsapp" title="WhatsApp" onClick={() => setSocialModal('whatsapp')}>
             <WhatsAppIcon />
           </button>
-          <button type="button" title="QR Code" onClick={() => setSocialModal('whatsapp')}>
-            <QrIcon />
+          <button type="button" title="E-mail" onClick={() => setSocialModal('email')}>
+            <EmailIcon />
           </button>
           <button type="button" className="mv2-instagram" title="Instagram" onClick={() => setSocialModal('instagram')}>
             <InstagramIcon />
@@ -68,7 +69,7 @@ export function LoginPage() {
   );
 }
 
-function SocialQrModal({ kind, onClose }: { kind: 'whatsapp' | 'instagram'; onClose: () => void }) {
+function SocialQrModal({ kind, onClose }: { kind: 'whatsapp' | 'instagram' | 'email'; onClose: () => void }) {
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose();
@@ -77,10 +78,10 @@ function SocialQrModal({ kind, onClose }: { kind: 'whatsapp' | 'instagram'; onCl
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
-  const isWhatsapp = kind === 'whatsapp';
-  const qrImage = isWhatsapp ? whatsappQr : instagramQr;
-  const url = isWhatsapp ? WHATSAPP_URL : INSTAGRAM_URL;
-  const label = isWhatsapp ? 'WhatsApp' : 'Instagram';
+  // TODO: swap in the e-mail QR card image once it's available.
+  const qrImage = kind === 'whatsapp' ? whatsappQr : kind === 'instagram' ? instagramQr : null;
+  const url = kind === 'whatsapp' ? WHATSAPP_URL : kind === 'instagram' ? INSTAGRAM_URL : `mailto:${EMAIL_ADDRESS}`;
+  const label = kind === 'whatsapp' ? 'WhatsApp' : kind === 'instagram' ? 'Instagram' : 'E-mail';
 
   return (
     <div className="mv2-qr-modal-backdrop" onClick={onClose}>
@@ -88,8 +89,8 @@ function SocialQrModal({ kind, onClose }: { kind: 'whatsapp' | 'instagram'; onCl
         <button type="button" className="mv2-qr-modal-close" onClick={onClose} aria-label="Fechar">
           ×
         </button>
-        <img src={qrImage} alt={`QR Code do ${label}`} className="mv2-qr-modal-image" />
-        <a href={url} target="_blank" rel="noopener noreferrer" className="mv2-qr-modal-link">
+        {qrImage && <img src={qrImage} alt={`QR Code do ${label}`} className="mv2-qr-modal-image" />}
+        <a href={url} target={kind === 'email' ? undefined : '_blank'} rel="noopener noreferrer" className="mv2-qr-modal-link">
           Abrir {label}
         </a>
       </div>
@@ -104,13 +105,11 @@ function WhatsAppIcon() {
     </svg>
   );
 }
-function QrIcon() {
+function EmailIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="3" y="3" width="7" height="7" />
-      <rect x="14" y="3" width="7" height="7" />
-      <rect x="3" y="14" width="7" height="7" />
-      <path d="M14 14h3v3h-3zM19 14h2v2h-2zM14 19h2v2h-2zM19 19h2v2h-2z" />
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3 7 9 6 9-6" />
     </svg>
   );
 }
