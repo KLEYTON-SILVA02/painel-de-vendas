@@ -30,4 +30,18 @@ describe('autoMapColumns', () => {
     expect(map.data).toBe(0); // fixed fallback
     expect(map.vendedor).toBe(7); // fixed fallback (beyond header length, still returned)
   });
+
+  it('maps "vendedor" to the "Vendedor Nome" column, not the "Vendedor" código column that comes first', () => {
+    const headers = [
+      'Data', 'GO', 'GR', 'Filial', 'Filial Nome', 'PDV', 'Vendedor', 'Vendedor Nome',
+      'Matrícula', 'Código do Produto', 'Descrição do Produto', 'Quantidade Vendida', 'Valor do Produto',
+    ];
+    const map = autoMapColumns(headers);
+    expect(map.vendedor).toBe(7); // "Vendedor Nome" (H), not "Vendedor" (G, index 6)
+    expect(map.matricula).toBe(8);
+    expect(map.codigo).toBe(9);
+    expect(map.produto).toBe(10);
+    expect(map.qtd).toBe(11);
+    expect(map.valor).toBe(12);
+  });
 });
