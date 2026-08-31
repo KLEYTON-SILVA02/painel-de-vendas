@@ -426,24 +426,39 @@ export function useDeleteDynamic() {
 /** Tables the "Excluir dados" danger zone (ADM > Configurações) can wipe. */
 export type BulkDeletableTable = 'sales' | 'products' | 'collaborators' | 'goals' | 'dynamics';
 
+const DELETE_FETCH_PAGE_SIZE = 1000;
+
 /** Deletes every row in `table` for the caller's store, optionally scoped
  * to a date range (only `sales` uses this, via `data_iso`). RLS's
  * admin+store-scoped delete policies enforce the scoping server-side, same
  * as every other delete mutation in this file — no manual store_id filter
  * needed. Fetches ids first (Supabase requires a real predicate on delete;
  * this also gives an exact affected-row count for the confirm prompt) and
- * deletes in chunks to keep each request's IN-list a sane size. */
+ * deletes in chunks to keep each request's IN-list a sane size.
+ *
+ * The id fetch is paginated with `.range()` for the same reason useSales()
+ * is: PostgREST caps any single request at 1000 rows by default. Without
+ * pagination here, deleting e.g. a month of sales in a store with 1000+
+ * matching rows silently removed only the first page and left the rest in
+ * place — the exact bug this project already hit once for reading sales
+ * (see useSales' own comment), now on the delete path. */
 export function useBulkDeleteTable(table: BulkDeletableTable, invalidateKey: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (range: { dateColumn?: string; from?: string; to?: string } = {}) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let query = (supabase.from(table) as any).select('id');
-      if (range.dateColumn && range.from) query = query.gte(range.dateColumn, range.from);
-      if (range.dateColumn && range.to) query = query.lte(range.dateColumn, range.to);
-      const { data, error } = await query;
-      if (error) throw error;
-      const ids: string[] = (data ?? []).map((r: { id: string }) => r.id);
+      const ids: string[] = [];
+      let from = 0;
+      for (;;) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let query = (supabase.from(table) as any).select('id').range(from, from + DELETE_FETCH_PAGE_SIZE - 1);
+        if (range.dateColumn && range.from) query = query.gte(range.dateColumn, range.from);
+        if (range.dateColumn && range.to) query = query.lte(range.dateColumn, range.to);
+        const { data, error } = await query;
+        if (error) throw error;
+        ids.push(...(data ?? []).map((r: { id: string }) => r.id));
+        if (!data || data.length < DELETE_FETCH_PAGE_SIZE) break;
+        from += DELETE_FETCH_PAGE_SIZE;
+      }
       for (let i = 0; i < ids.length; i += 500) {
         const chunk = ids.slice(i, i + 500);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
