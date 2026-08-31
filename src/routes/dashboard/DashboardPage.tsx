@@ -11,6 +11,7 @@ import { catTotals, computeSummary } from '../../lib/business/summary';
 import { generateChampionCardBlob } from '../../lib/championImage';
 import { monthFirstISO, monthLastISO, todayISO } from '../../lib/dateRange';
 import { fmtMoney, monthName } from '../../lib/format';
+import { copyText, formatRankingText } from '../../lib/clipboard';
 import { tryCopyImage } from '../../lib/rankingImage';
 import { useCollaborators, useDynamics, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
 import { useDateRange, type RankFilter } from '../DateRangeContext';
@@ -148,6 +149,7 @@ function StatCard({ label, value, color, badge }: { label: string; value: string
 }
 
 export function DashboardPage() {
+  const [rankingCopied, setRankingCopied] = useState(false);
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
   const { data: goals } = useGoals();
@@ -228,6 +230,13 @@ export function DashboardPage() {
   const rankingFilteredList = rankingFiltered.filter((r) => r.valor > 0 || r.itens > 0);
   const modeloRanking = storeSettings.modelo_ranking as 'escadinha' | 'lista';
 
+  async function handleCopyRanking() {
+    const text = formatRankingText(rankingFilteredList, rankFilterParams.label, rankFilterParams.from, rankFilterParams.to, store?.nome_loja);
+    const ok = await copyText(text);
+    setRankingCopied(ok);
+    setTimeout(() => setRankingCopied(false), 1500);
+  }
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-4">
       <div className="flex flex-col gap-4 min-w-0">
@@ -259,7 +268,28 @@ export function DashboardPage() {
 
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <h3 className="text-cyan-400 font-semibold text-sm mb-2">🏆 Ranking Geral de Vendas — {rankFilterParams.label}</h3>
-          <RankFilterBar dynamics={dynamics} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 auto', minWidth: 200 }}>
+              <RankFilterBar dynamics={dynamics} />
+            </div>
+            <button
+              onClick={handleCopyRanking}
+              title="Copiar ranking de vendas p/ WhatsApp"
+              style={{
+                flexShrink: 0,
+                background: 'transparent',
+                border: '1px solid #212948',
+                color: '#8b90bf',
+                padding: '7px 13px',
+                borderRadius: 10,
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: 700,
+              }}
+            >
+              {rankingCopied ? '✓ Copiado!' : '📋 Copiar ranking'}
+            </button>
+          </div>
           <div className="mt-3">
             <PodiumStaircase
               ranking={rankingFilteredList}
