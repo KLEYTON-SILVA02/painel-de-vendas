@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CategoryKey, GoalCategoryKey } from './business/classification';
+import { normalizeMatricula } from './business/parsing';
 import { supabase } from './supabase';
 import type { TablesInsert, TablesUpdate } from '../types/database';
 
@@ -206,7 +207,9 @@ export function useCreateCollaborator(storeId: string | undefined) {
   return useMutation({
     mutationFn: async (input: { matricula: string; nome: string; apelido: string; setor: string }) => {
       if (!storeId) throw new Error('store not loaded');
-      const { error } = await supabase.from('collaborators').insert({ store_id: storeId, ...input });
+      const { error } = await supabase
+        .from('collaborators')
+        .insert({ store_id: storeId, ...input, matricula: normalizeMatricula(input.matricula) });
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['collaborators'] }),
@@ -215,7 +218,9 @@ export function useCreateCollaborator(storeId: string | undefined) {
 
 /** Bulk import from a spreadsheet: upserts on (store_id, matricula) so a
  * re-imported roster updates existing collaborators (nome/apelido/setor)
- * instead of failing outright on the first duplicate matrícula. */
+ * instead of failing outright on the first duplicate matrícula.
+ * normalizeMatricula() strips a source sheet's zero-padding so this
+ * always upserts onto the same row a sales import would key off of. */
 export function useBulkUpsertCollaborators(storeId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
@@ -224,7 +229,7 @@ export function useBulkUpsertCollaborators(storeId: string | undefined) {
       const { error } = await supabase
         .from('collaborators')
         .upsert(
-          rows.map((r) => ({ ...r, store_id: storeId })),
+          rows.map((r) => ({ ...r, matricula: normalizeMatricula(r.matricula), store_id: storeId })),
           { onConflict: 'store_id,matricula' },
         );
       if (error) throw error;
@@ -237,7 +242,8 @@ export function useUpdateCollaborator() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: TablesUpdate<'collaborators'> }) => {
-      const { error } = await supabase.from('collaborators').update(patch).eq('id', id);
+      const normalized = patch.matricula != null ? { ...patch, matricula: normalizeMatricula(patch.matricula) } : patch;
+      const { error } = await supabase.from('collaborators').update(normalized).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['collaborators'] }),

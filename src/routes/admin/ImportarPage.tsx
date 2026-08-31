@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import { useAuth } from '../../auth/AuthContext';
 import { classifyProductTier } from '../../lib/business/classification';
 import { autoMapColumns, detectHeaderRow, type ColumnMap, type ImportField } from '../../lib/business/importMapping';
-import { dateFromCell, idFromCell, parseNumeroBR } from '../../lib/business/parsing';
+import { dateFromCell, idFromCell, normalizeMatricula, parseNumeroBR } from '../../lib/business/parsing';
 import { buildClassificationInputs } from '../../lib/mappers';
 import { fmtMoney } from '../../lib/format';
 import { useBrandKeywords, useCatalog, useExclusiveBrands, useProducts, useSales } from '../../lib/queries';
@@ -146,7 +146,7 @@ export function ImportarPage() {
             store_id: profile.store_id,
             data_raw: dataStr,
             data_iso: dataISO,
-            matricula: sheet.map.matricula >= 0 ? idFromCell(rr[sheet.map.matricula], r[sheet.map.matricula]) : '',
+            matricula: sheet.map.matricula >= 0 ? normalizeMatricula(idFromCell(rr[sheet.map.matricula], r[sheet.map.matricula])) : '',
             vendedor: sheet.map.vendedor >= 0 ? String(r[sheet.map.vendedor] ?? '').trim() : '',
             produto,
             codigo: codigo || null,
@@ -426,7 +426,7 @@ function summarize(sheets: ParsedSheet[], inputs: ReturnType<typeof buildClassif
       const dataISO = map.data >= 0 ? dateFromCell(rr[map.data], dataStr) : null;
       if (dataISO) diasSet.add(dataISO);
 
-      const matricula = map.matricula >= 0 ? idFromCell(rr[map.matricula], r[map.matricula]) : '';
+      const matricula = map.matricula >= 0 ? normalizeMatricula(idFromCell(rr[map.matricula], r[map.matricula])) : '';
       const vendedor = map.vendedor >= 0 ? String(r[map.vendedor] ?? '').trim() : '';
       const chave = matricula || vendedor;
       if (chave && !vendedoresMap.has(chave)) vendedoresMap.set(chave, vendedor || matricula);

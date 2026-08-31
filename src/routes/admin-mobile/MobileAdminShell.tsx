@@ -21,6 +21,7 @@ import type { Horario } from '../../lib/business/horario';
 import { useStore, useStoreSettings } from '../../lib/queries';
 import { AdminLandingPage } from '../admin/AdminLandingPage';
 import { AuditoriaPage } from '../admin/AuditoriaPage';
+import { ListaVendasPage } from '../admin/ListaVendasPage';
 import { BackupPage } from '../admin/BackupPage';
 import { ColaboradoresPage } from '../admin/ColaboradoresPage';
 import { ConfiguracoesPage } from '../admin/ConfiguracoesPage';
@@ -124,6 +125,7 @@ export function MobileAdminShell() {
             }
           />
           <Route path="/admin/auditoria" element={<AuditoriaPage />} />
+          <Route path="/admin/vendas" element={<ListaVendasPage />} />
           <Route path="/admin/backup" element={<BackupPage />} />
           <Route path="/admin/minha-loja" element={<MinhaLojaPage />} />
           <Route path="/admin/configuracoes" element={<ConfiguracoesPage />} />

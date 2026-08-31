@@ -4,6 +4,7 @@ import type { BioGroupGoal, CommissionRate, Goal } from './business/types';
 import type { SpecialListItem } from './business/summary';
 import { mapBioGroupGoal, mapCollaborator, mapCommissionRate, mapDynamic, mapGoal, mapSale, mapSpecialListItem } from './mappers';
 import { supabase } from './supabase';
+import type { Tables } from '../types/database';
 
 export function useCollaborators() {
   return useQuery({
@@ -16,16 +17,40 @@ export function useCollaborators() {
   });
 }
 
+const SALES_PAGE_SIZE = 1000;
+
 /** All sales for the store. Filtering by date range happens client-side in
  * the business-logic layer (matches the legacy in-memory model and keeps a
- * single cached dataset reusable across every date-range view). */
+ * single cached dataset reusable across every date-range view).
+ *
+ * PostgREST caps any single request at a fixed row limit (1000 by default
+ * on Supabase, not overridden for this project) — a plain `select('*')`
+ * with no `.range()` silently truncates past that, newest-first per the
+ * `order()` below. A store past ~1000 sales in its most recent stretch
+ * (this one had 23k+) would then have every older date simply missing
+ * from `sales`: single-day filters on those dates found nothing, ranking
+ * totals for the month undercounted, and vendor names/values for those
+ * rows never made it into memory at all — not a filtering bug, a fetch
+ * bug. Paginates with `.range()` until a page comes back short of
+ * SALES_PAGE_SIZE, so the full table loads regardless of size. */
 export function useSales() {
   return useQuery({
     queryKey: ['sales'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('sales').select('*').order('data_iso', { ascending: false });
-      if (error) throw error;
-      return data.map(mapSale);
+      const rows: Tables<'sales'>[] = [];
+      let from = 0;
+      for (;;) {
+        const { data, error } = await supabase
+          .from('sales')
+          .select('*')
+          .order('data_iso', { ascending: false })
+          .range(from, from + SALES_PAGE_SIZE - 1);
+        if (error) throw error;
+        rows.push(...data);
+        if (data.length < SALES_PAGE_SIZE) break;
+        from += SALES_PAGE_SIZE;
+      }
+      return rows.map(mapSale);
     },
   });
 }

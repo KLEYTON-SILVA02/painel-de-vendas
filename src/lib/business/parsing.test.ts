@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dateFromCell, parseDateISO, parseNumeroBR } from './parsing';
+import { dateFromCell, normalizeMatricula, parseDateISO, parseNumeroBR } from './parsing';
 
 describe('parseNumeroBR', () => {
   it('parses BR-formatted currency', () => {
@@ -60,5 +60,31 @@ describe('dateFromCell', () => {
   it('returns null when neither a Date nor a parseable string is given', () => {
     expect(dateFromCell(undefined, '')).toBeNull();
     expect(dateFromCell(new Date('invalid'), '')).toBeNull();
+  });
+});
+
+describe('normalizeMatricula', () => {
+  // Reproduces the real bug: the sales sheet's matrícula column came in as
+  // text with a leading zero baked in ("070209751"), while the
+  // colaboradores sheet's came in as a real Excel number, already stripped
+  // to 8 digits by idFromCell ("70209751") — same employee, two different
+  // stored strings, so no sale ever matched its registered collaborator.
+  it('strips a leading zero so both sides of the same real matrícula compare equal', () => {
+    expect(normalizeMatricula('070209751')).toBe('70209751');
+    expect(normalizeMatricula('70209751')).toBe('70209751');
+  });
+
+  it('strips multiple leading zeros but keeps at least one digit', () => {
+    expect(normalizeMatricula('00000000')).toBe('0');
+    expect(normalizeMatricula('007')).toBe('7');
+  });
+
+  it('leaves non-numeric matrículas untouched', () => {
+    expect(normalizeMatricula('-')).toBe('-');
+    expect(normalizeMatricula('ABC123')).toBe('ABC123');
+  });
+
+  it('trims surrounding whitespace', () => {
+    expect(normalizeMatricula('  070004644  ')).toBe('70004644');
   });
 });

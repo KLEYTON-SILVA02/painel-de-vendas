@@ -11,6 +11,27 @@ export function idFromCell(rawVal: unknown, formattedVal: unknown): string {
   return String(formattedVal ?? '').trim();
 }
 
+/** Strips leading zeros from a matrícula/employee-ID string, so the same
+ * real person's ID always compares equal no matter which zero-padding
+ * convention the source spreadsheet used for it — this is the value that
+ * joins a sale to its registered collaborator (ranking, apelido, photo,
+ * individual goals all key off it). idFromCell already defeats a *number
+ * format mask* on a genuine numeric cell, but does nothing when the
+ * matrícula column is stored as plain text with the padding baked into
+ * the digits themselves (e.g. "070209751") — which is exactly what
+ * happened here: the sales sheet's matrícula column came in as text
+ * ("070209751", 9 digits) while the collaborators sheet's came in as a
+ * real number ("70209751", 8 digits, via idFromCell). Same person, two
+ * different stored strings, so no sale ever matched its collaborator —
+ * every one fell back to an unmatched/synthesized row instead. Applied
+ * on read (mapSale/mapCollaborator) so this self-heals for data already
+ * in the database, not just new imports. */
+export function normalizeMatricula(raw: string): string {
+  const trimmed = (raw ?? '').trim();
+  if (!/^\d+$/.test(trimmed)) return trimmed;
+  return trimmed.replace(/^0+(?=\d)/, '');
+}
+
 /** Parses a BR/US formatted number, optionally prefixed with "R$" or wrapped in
  * parentheses for negatives. Decimal separator is inferred from whichever of
  * "," or "." appears last in the string. */
