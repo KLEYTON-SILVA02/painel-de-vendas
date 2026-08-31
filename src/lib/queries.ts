@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { BioGroupKey, GoalCategoryKey } from './business/classification';
 import type { BioGroupGoal, CommissionRate, Goal } from './business/types';
 import type { SpecialListItem } from './business/summary';
+import type { CardZone, ConquistaCardTemplate } from './conquistaCardRender';
 import { mapBioGroupGoal, mapCollaborator, mapCommissionRate, mapDynamic, mapGoal, mapSale, mapSpecialListItem } from './mappers';
 import { supabase } from './supabase';
 import type { Tables } from '../types/database';
@@ -100,6 +101,32 @@ export function useCommissionRates() {
         byCategory[rate.categoria] = rate;
       });
       return byCategory;
+    },
+  });
+}
+
+export interface ConquistaCardTemplateRow extends ConquistaCardTemplate {
+  isDefault: boolean;
+}
+
+/** Admin-created Galeria de Conquistas card templates (background art +
+ * mask zone geometry), store-scoped. Empty when the admin hasn't created
+ * any yet — ConquistaCard then falls back to the built-in Hiteck template. */
+export function useConquistaCardTemplates() {
+  return useQuery({
+    queryKey: ['conquista_card_templates'],
+    queryFn: async (): Promise<ConquistaCardTemplateRow[]> => {
+      const { data, error } = await supabase.from('conquista_card_templates').select('*').order('created_at');
+      if (error) throw error;
+      return data.map((row) => ({
+        id: row.id,
+        name: row.name,
+        backgroundUrl: row.background_url,
+        foto: row.foto as unknown as CardZone,
+        logo: row.logo as unknown as CardZone,
+        texto: row.texto as unknown as CardZone,
+        isDefault: row.is_default,
+      }));
     },
   });
 }

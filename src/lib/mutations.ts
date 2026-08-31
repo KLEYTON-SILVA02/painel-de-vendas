@@ -114,6 +114,68 @@ export function useSetFunctionIcon(storeId: string | undefined) {
   });
 }
 
+/** Creates or updates a Galeria de Conquistas card template. Passing `id`
+ * updates that row (used by the manual card editor's "salvar" on an
+ * existing template); omitting it inserts a new one. */
+export function useSaveConquistaCardTemplate(storeId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      id?: string;
+      name: string;
+      backgroundUrl: string;
+      foto: TablesInsert<'conquista_card_templates'>['foto'];
+      logo: TablesInsert<'conquista_card_templates'>['logo'];
+      texto: TablesInsert<'conquista_card_templates'>['texto'];
+    }) => {
+      if (!storeId) throw new Error('store not loaded');
+      const { id, backgroundUrl, ...rest } = input;
+      if (id) {
+        const { error } = await supabase.from('conquista_card_templates').update({ ...rest, background_url: backgroundUrl }).eq('id', id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('conquista_card_templates')
+          .insert({ ...rest, background_url: backgroundUrl, store_id: storeId });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['conquista_card_templates'] }),
+  });
+}
+
+export function useDeleteConquistaCardTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('conquista_card_templates').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['conquista_card_templates'] }),
+  });
+}
+
+/** Marks one template as the default (used by the live achievement cards),
+ * clearing the flag on every other template for the store first — RLS
+ * scopes both updates to the caller's own store, so this can't touch
+ * another store's rows. */
+export function useSetDefaultConquistaCardTemplate(storeId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!storeId) throw new Error('store not loaded');
+      const { error: clearError } = await supabase
+        .from('conquista_card_templates')
+        .update({ is_default: false })
+        .eq('store_id', storeId);
+      if (clearError) throw clearError;
+      const { error } = await supabase.from('conquista_card_templates').update({ is_default: true }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['conquista_card_templates'] }),
+  });
+}
+
 export function useIndividualGoals(categoria: CategoryKey) {
   return useQuery({
     queryKey: ['individual_goals', categoria],
