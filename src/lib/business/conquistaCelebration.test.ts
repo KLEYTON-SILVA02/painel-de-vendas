@@ -13,8 +13,6 @@ function row(matricula: string, tier: ConquistaRow['tier']): ConquistaRow {
     valor: 5000,
     itens: 1,
     tier,
-    bateuSuper: false,
-    superMeta: 0,
   };
 }
 

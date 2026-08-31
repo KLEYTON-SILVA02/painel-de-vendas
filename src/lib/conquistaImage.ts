@@ -1,23 +1,22 @@
+import { conquistaTierLabel, isUnitConquista, type ConquistaCategoria, type ConquistaRow } from './business/conquistas';
 import { fmtDateBR, fmtMoney } from './format';
 import { loadImg, roundRect } from './rankingImage';
-import type { ConquistaRow } from './business/conquistas';
 
 // "Copiar galeria (imagem)" for Galeria de Conquistas — adaptive layout:
 // 1-3 achievers get large centered cards (70px avatar), 4-10 get a
 // horizontal strip of smaller cards (32px avatar) evenly distributed.
 // Reuses loadImg/roundRect from rankingImage.ts (same canvas primitives).
 
-function tierLabel(row: ConquistaRow): string {
-  return row.tier > 0 ? `🏆 ${row.tier / 1000}k` : '⭐ SUPER META';
-}
-
 export async function generateConquistaImageBlob(
   rows: ConquistaRow[],
+  categoria: ConquistaCategoria,
   catLabel: string,
   fromDate: string,
   toDate: string,
   storeName?: string,
 ): Promise<Blob | null> {
+  const isUnit = isUnitConquista(categoria);
+  const formatMetric = (r: ConquistaRow) => (isUnit ? `${r.itens} un.` : fmtMoney(r.valor));
   const achievers = rows.slice(0, 10);
 
   const W = 1000;
@@ -69,7 +68,7 @@ export async function generateConquistaImageBlob(
       ctx.fillStyle = 'rgba(255,255,255,0.04)';
       roundRect(ctx, x, cardY, cardW, cardH, 16);
       ctx.fill();
-      ctx.strokeStyle = r.bateuSuper && r.tier === 0 ? '#a82bff' : color;
+      ctx.strokeStyle = color;
       ctx.lineWidth = 2;
       roundRect(ctx, x, cardY, cardW, cardH, 16);
       ctx.stroke();
@@ -107,11 +106,11 @@ export async function generateConquistaImageBlob(
 
       ctx.fillStyle = '#14ff00';
       ctx.font = `700 ${large ? 15 : 12}px Arial`;
-      ctx.fillText(fmtMoney(r.valor), cx, avCy + avR + (large ? 48 : 36));
+      ctx.fillText(formatMetric(r), cx, avCy + avR + (large ? 48 : 36));
 
-      ctx.fillStyle = r.bateuSuper && r.tier === 0 ? '#a82bff' : '#ffb700';
+      ctx.fillStyle = '#ffb700';
       ctx.font = `800 ${large ? 14 : 11}px Arial`;
-      ctx.fillText(tierLabel(r), cx, avCy + avR + (large ? 70 : 52));
+      ctx.fillText(conquistaTierLabel(categoria, r.tier), cx, avCy + avR + (large ? 70 : 52));
     });
   }
 

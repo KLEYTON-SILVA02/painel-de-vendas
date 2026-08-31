@@ -150,46 +150,6 @@ export function useUpsertIndividualGoal(storeId: string | undefined) {
   });
 }
 
-/** Galeria de Conquistas' "Super Meta Individual" — a fixed personal
- * achievement threshold per collaborator/category, deliberately its own
- * table (not individual_goals.valor_super, which drives Metas' redistribution
- * math instead). Same query/mutation shape as useIndividualGoals above. */
-export function useConquistaSuperMetas(categoria: 'DERM' | 'GEN' | 'MP') {
-  return useQuery({
-    queryKey: ['conquista_super_metas', categoria],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('conquista_super_metas').select('*').eq('categoria', categoria);
-      if (error) throw error;
-      return data;
-    },
-  });
-}
-
-export function useUpsertConquistaSuperMeta(storeId: string | undefined) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({
-      categoria,
-      collaboratorId,
-      valor,
-    }: {
-      categoria: 'DERM' | 'GEN' | 'MP';
-      collaboratorId: string;
-      valor: number;
-    }) => {
-      if (!storeId) throw new Error('store not loaded');
-      const { error } = await supabase
-        .from('conquista_super_metas')
-        .upsert(
-          { store_id: storeId, categoria, collaborator_id: collaboratorId, valor },
-          { onConflict: 'store_id,categoria,collaborator_id' },
-        );
-      if (error) throw error;
-    },
-    onSuccess: (_data, vars) => qc.invalidateQueries({ queryKey: ['conquista_super_metas', vars.categoria] }),
-  });
-}
-
 export function useCreateDynamic(storeId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
