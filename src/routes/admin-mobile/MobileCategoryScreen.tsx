@@ -31,6 +31,7 @@ export function MobileCategoryScreen({
   const { dashFrom, dashTo } = useDateRange();
   const [selectedSeller, setSelectedSeller] = useState<string | null>(null);
   const [activeCommissionSlot, setActiveCommissionSlot] = useState<number | null>(null);
+  const [vendasPage, setVendasPage] = useState(0);
 
   const byMatricula = useMemo(() => {
     const map = new Map<string, Collaborator>();
@@ -72,15 +73,25 @@ export function MobileCategoryScreen({
   const activeRate = activeCommissionSlot !== null ? availableRates.find((r) => r.slot === activeCommissionSlot) : undefined;
   const showCommission = selectedSeller !== null && !!activeRate;
 
-  const categorySales = sales
+  // A specific vendedor selected shows their full list — no cap, it's
+  // naturally bounded to one person's sales. With "Todos" selected (whole
+  // month, potentially hundreds of rows across every vendedor), a flat
+  // slice(0, 150) used to silently drop everything past the 150th row
+  // instead of paginating — this now pages through the full set instead.
+  const VENDAS_PAGE_SIZE = 150;
+  const categorySalesAll = sales
     .filter((s) => {
       if (s.grupo !== catKey) return false;
       if (s.dataISO && (s.dataISO < dashFrom || s.dataISO > dashTo)) return false;
       if (selectedSeller && s.matricula !== selectedSeller) return false;
       return true;
     })
-    .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
-    .slice(0, 150);
+    .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''));
+  const vendasTotalPages = Math.max(1, Math.ceil(categorySalesAll.length / VENDAS_PAGE_SIZE));
+  const vendasPageClamped = Math.min(vendasPage, vendasTotalPages - 1);
+  const categorySales = selectedSeller
+    ? categorySalesAll
+    : categorySalesAll.slice(vendasPageClamped * VENDAS_PAGE_SIZE, (vendasPageClamped + 1) * VENDAS_PAGE_SIZE);
 
   return (
     <div>
@@ -138,7 +149,14 @@ export function MobileCategoryScreen({
         )}
       </div>
 
-      <MobileSellerAccordion collaborators={collaborators} selected={selectedSeller} onSelect={setSelectedSeller} />
+      <MobileSellerAccordion
+        collaborators={collaborators}
+        selected={selectedSeller}
+        onSelect={(m) => {
+          setSelectedSeller(m);
+          setVendasPage(0);
+        }}
+      />
 
       {availableRates.length > 0 && (
         <div className="mv2-commission-toggle" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -179,6 +197,29 @@ export function MobileCategoryScreen({
         comissaoPercentual={activeRate?.percentual}
         subtotalMode={selectedSeller ? 'valor' : 'none'}
       />
+      {!selectedSeller && vendasTotalPages > 1 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, margin: '0 18px 16px' }}>
+          <button
+            disabled={vendasPageClamped === 0}
+            onClick={() => setVendasPage(Math.max(0, vendasPageClamped - 1))}
+            className="mv2-btn-outline"
+            style={{ opacity: vendasPageClamped === 0 ? 0.4 : 1 }}
+          >
+            ← Anterior
+          </button>
+          <span style={{ fontSize: 10, color: 'var(--mv2-texto-2)' }}>
+            Página {vendasPageClamped + 1} de {vendasTotalPages}
+          </span>
+          <button
+            disabled={vendasPageClamped >= vendasTotalPages - 1}
+            onClick={() => setVendasPage(Math.min(vendasTotalPages - 1, vendasPageClamped + 1))}
+            className="mv2-btn-outline"
+            style={{ opacity: vendasPageClamped >= vendasTotalPages - 1 ? 0.4 : 1 }}
+          >
+            Próxima →
+          </button>
+        </div>
+      )}
     </div>
   );
 }

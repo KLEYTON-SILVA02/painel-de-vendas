@@ -36,6 +36,7 @@ export function MobileUnitCategoryScreen({
   const { data: goals } = useGoals();
   const { dashFrom, dashTo } = useDateRange();
   const [selectedSeller, setSelectedSeller] = useState<string | null>(null);
+  const [vendasPage, setVendasPage] = useState(0);
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
@@ -66,15 +67,23 @@ export function MobileUnitCategoryScreen({
   const pctDiaria = metaDiaria > 0 ? Math.min(100, (itensHoje / metaDiaria) * 100) : 0;
 
   const list = catKey === 'LEVMEL' ? specialLists.levmel : specialLists.chip;
-  const unitSales = sales
+  // A specific vendedor selected shows their full list — no cap. With
+  // "Todos" selected (whole month), a flat slice(0, 150) used to silently
+  // drop everything past the 150th row instead of paginating.
+  const VENDAS_PAGE_SIZE = 150;
+  const unitSalesAll = sales
     .filter((s) => {
       if (s.dataISO && (s.dataISO < dashFrom || s.dataISO > dashTo)) return false;
       if (!matchesSpecialList(s.produto, list)) return false;
       if (selectedSeller && s.matricula !== selectedSeller) return false;
       return true;
     })
-    .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
-    .slice(0, 150);
+    .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''));
+  const vendasTotalPages = Math.max(1, Math.ceil(unitSalesAll.length / VENDAS_PAGE_SIZE));
+  const vendasPageClamped = Math.min(vendasPage, vendasTotalPages - 1);
+  const unitSales = selectedSeller
+    ? unitSalesAll
+    : unitSalesAll.slice(vendasPageClamped * VENDAS_PAGE_SIZE, (vendasPageClamped + 1) * VENDAS_PAGE_SIZE);
 
   async function handleCopy() {
     const text = formatRankingText(
@@ -175,7 +184,14 @@ export function MobileUnitCategoryScreen({
         </div>
       </div>
 
-      <MobileSellerAccordion collaborators={collaborators} selected={selectedSeller} onSelect={setSelectedSeller} />
+      <MobileSellerAccordion
+        collaborators={collaborators}
+        selected={selectedSeller}
+        onSelect={(m) => {
+          setSelectedSeller(m);
+          setVendasPage(0);
+        }}
+      />
 
       <MobileSalesTable
         title={`Lista de vendas — ${title}`}
@@ -184,6 +200,29 @@ export function MobileUnitCategoryScreen({
         showValor={false}
         subtotalMode={selectedSeller ? 'quantidade' : 'none'}
       />
+      {!selectedSeller && vendasTotalPages > 1 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, margin: '0 18px 16px' }}>
+          <button
+            disabled={vendasPageClamped === 0}
+            onClick={() => setVendasPage(Math.max(0, vendasPageClamped - 1))}
+            className="mv2-btn-outline"
+            style={{ opacity: vendasPageClamped === 0 ? 0.4 : 1 }}
+          >
+            ← Anterior
+          </button>
+          <span style={{ fontSize: 10, color: 'var(--mv2-texto-2)' }}>
+            Página {vendasPageClamped + 1} de {vendasTotalPages}
+          </span>
+          <button
+            disabled={vendasPageClamped >= vendasTotalPages - 1}
+            onClick={() => setVendasPage(Math.min(vendasTotalPages - 1, vendasPageClamped + 1))}
+            className="mv2-btn-outline"
+            style={{ opacity: vendasPageClamped >= vendasTotalPages - 1 ? 0.4 : 1 }}
+          >
+            Próxima →
+          </button>
+        </div>
+      )}
 
       {imageModal && (
         <RankingImageModal
