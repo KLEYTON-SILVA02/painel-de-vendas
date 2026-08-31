@@ -58,11 +58,17 @@ export function MobileCategoryScreen({
   // Commission only ever applies to DERM/GEN/MP (see commission_rates'
   // check constraint) and only shows once a specific seller is selected —
   // with "Todos" selected, sales keep showing their original valor. Each
-  // admin-enabled rate gets its own liga/desliga button; Marcas Exclusivas
-  // can have up to 3 (one per slot). Only one can be active at a time — the
-  // buttons behave as a single-select group, clicking the active one turns
-  // it back off.
-  const availableRates = catKey === 'DERM' || catKey === 'GEN' || catKey === 'MP' ? commissionRates[catKey].filter((r) => r.ativo) : [];
+  // admin-enabled rate gets its own liga/desliga button. Only one can be
+  // active at a time — the buttons behave as a single-select group,
+  // clicking the active one turns it back off. Marcas Exclusivas always
+  // shows its 3 slots fixed (even one never configured, at 0%) instead of
+  // only the ones marked "ativo" in Metas > Comissões — same as desktop.
+  const availableRates =
+    catKey === 'MP'
+      ? [1, 2, 3].map((slot) => commissionRates.MP.find((r) => r.slot === slot) ?? { categoria: 'MP' as const, slot, percentual: 0, ativo: false })
+      : catKey === 'DERM' || catKey === 'GEN'
+        ? commissionRates[catKey].filter((r) => r.ativo)
+        : [];
   const activeRate = activeCommissionSlot !== null ? availableRates.find((r) => r.slot === activeCommissionSlot) : undefined;
   const showCommission = selectedSeller !== null && !!activeRate;
 
