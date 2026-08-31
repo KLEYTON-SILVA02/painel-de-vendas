@@ -61,3 +61,24 @@ export function parseDateISO(str: unknown): string | null {
   if (m2) return `${m2[1]}-${m2[2].padStart(2, '0')}-${m2[3].padStart(2, '0')}`;
   return null;
 }
+
+/** Cell value for a date column: prefers deriving the ISO date from a raw
+ * Date object's UTC calendar-date components over parsing the formatted
+ * display text. SheetJS (`cellDates: true`) formats a real Excel date cell
+ * using the *browser's local timezone* — for any timezone behind UTC (e.g.
+ * Brazil, UTC-3) that rolls a date-only value back a day: a sale on Aug 24
+ * gets formatted as "23/08/2026". Every single-day filter then misses it
+ * (wrong day), while whole-month totals still look right (still the same
+ * month, just attributed to the wrong day) — which is why this only
+ * surfaced as "single-day filters don't work". The raw cell keeps the
+ * original Date object, whose UTC getters aren't affected by that
+ * conversion. Falls back to parsing the formatted text for plain-text date
+ * cells (CSV imports, or a column already stored as text), which were
+ * never affected since no Date-object conversion happens for those. */
+export function dateFromCell(rawVal: unknown, formattedVal: unknown): string | null {
+  if (rawVal instanceof Date && !Number.isNaN(rawVal.getTime())) {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${rawVal.getUTCFullYear()}-${pad(rawVal.getUTCMonth() + 1)}-${pad(rawVal.getUTCDate())}`;
+  }
+  return parseDateISO(formattedVal);
+}
