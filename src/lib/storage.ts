@@ -37,3 +37,15 @@ export async function uploadConquistaCardBackground(storeId: string, templateId:
   const { data } = supabase.storage.from('photos').getPublicUrl(fullPath);
   return `${data.publicUrl}?t=${Date.now()}`;
 }
+
+/** Uploads a per-template logo override for a card template, under
+ * {storeId}/card-templates/{templateId}-logo.{ext} — when set, this
+ * replaces the store's default logo (Minha Loja) for that specific card. */
+export async function uploadConquistaCardLogo(storeId: string, templateId: string, file: File): Promise<string> {
+  const ext = file.name.split('.').pop() || 'png';
+  const fullPath = `${storeId}/card-templates/${templateId}-logo.${ext}`;
+  const { error } = await supabase.storage.from('photos').upload(fullPath, file, { upsert: true });
+  if (error) throw error;
+  const { data } = supabase.storage.from('photos').getPublicUrl(fullPath);
+  return `${data.publicUrl}?t=${Date.now()}`;
+}

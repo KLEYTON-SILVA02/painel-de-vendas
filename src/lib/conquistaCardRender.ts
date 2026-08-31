@@ -16,7 +16,7 @@ import { loadImg } from './rankingImage';
 //     manual card editor (there's no per-template raster mask upload tool —
 //     shapes are built by picking a primitive and dragging/scaling it).
 
-export type CardZoneShapeKind = 'image' | 'circle' | 'roundedRect' | 'pill' | 'trapezoid' | 'notched';
+export type CardZoneShapeKind = 'image' | 'circle' | 'roundedRect' | 'pill' | 'trapezoid' | 'notched' | 'polygon' | 'none';
 
 export interface CardZoneShape {
   kind: CardZoneShapeKind;
@@ -28,11 +28,16 @@ export interface CardZoneShape {
   topInset?: number;
   /** notched only: size of each corner cut, as a fraction (0-0.5) of min(w,h). */
   notch?: number;
+  /** kind 'polygon' only: a freehand-traced outline (the "pen tool"), as
+   * points normalized 0-1 against the full canvas — independent of the
+   * zone's own x/y/w/h, which for a polygon just track its bounding box
+   * (used for cover-fitting content before the exact clip is applied). */
+  points?: { x: number; y: number }[];
 }
 
 export interface CardZone {
   shape: CardZoneShape;
-  /** Normalized bounding box (0-1) within the card canvas — both where content is placed and, for non-'image' shapes, the mask geometry itself. */
+  /** Normalized bounding box (0-1) within the card canvas — both where content is placed and, for non-'image'/'polygon' shapes, the mask geometry itself. */
   x: number;
   y: number;
   w: number;
@@ -43,6 +48,11 @@ export interface ConquistaCardTemplate {
   id: string;
   name: string;
   backgroundUrl: string;
+  /** Per-template logo override — falls back to the store's own logo
+   * (ConquistaCardContent.logoUrl) when unset. */
+  logoUrl?: string | null;
+  /** Font family for the tier-text banner; defaults to Arial. */
+  textFontFamily?: string;
   foto: CardZone;
   logo: CardZone;
   texto: CardZone;
@@ -84,9 +94,22 @@ function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: n
   ctx.arcTo(x, y, x + w, y, rr);
 }
 
-function shapePath(ctx: CanvasRenderingContext2D, shape: CardZoneShape, rect: Rect) {
+function shapePath(ctx: CanvasRenderingContext2D, shape: CardZoneShape, rect: Rect, canvasW: number, canvasH: number) {
   const { x, y, w, h } = rect;
   switch (shape.kind) {
+    case 'polygon': {
+      const pts = shape.points ?? [];
+      if (pts.length < 3) {
+        // Not enough points to form a shape yet (still being drawn, or
+        // saved incomplete) — fall back to the plain rect rather than
+        // producing a fully-transparent (invisible) clip.
+        ctx.rect(x, y, w, h);
+        return;
+      }
+      ctx.moveTo(pts[0].x * canvasW, pts[0].y * canvasH);
+      pts.slice(1).forEach((p) => ctx.lineTo(p.x * canvasW, p.y * canvasH));
+      return;
+    }
     case 'circle': {
       const r = Math.min(w, h) / 2;
       ctx.arc(x + w / 2, y + h / 2, r, 0, Math.PI * 2);
@@ -119,6 +142,7 @@ function shapePath(ctx: CanvasRenderingContext2D, shape: CardZoneShape, rect: Re
       return;
     }
     case 'image':
+    case 'none':
       return;
   }
 }
@@ -201,16 +225,18 @@ async function drawZone(
   if (!octx) return;
   const rect = zoneRect(zone, w, h);
   drawContent(octx, rect);
-  octx.globalCompositeOperation = 'destination-in';
-  if (zone.shape.kind === 'image') {
-    const mask = zone.shape.imageUrl ? await getMaskAlphaCanvas(zone.shape.imageUrl) : null;
-    if (mask) octx.drawImage(mask, 0, 0, w, h);
-  } else {
-    octx.fillStyle = '#fff';
-    octx.beginPath();
-    shapePath(octx, zone.shape, rect);
-    octx.closePath();
-    octx.fill();
+  if (zone.shape.kind !== 'none') {
+    octx.globalCompositeOperation = 'destination-in';
+    if (zone.shape.kind === 'image') {
+      const mask = zone.shape.imageUrl ? await getMaskAlphaCanvas(zone.shape.imageUrl) : null;
+      if (mask) octx.drawImage(mask, 0, 0, w, h);
+    } else {
+      octx.fillStyle = '#fff';
+      octx.beginPath();
+      shapePath(octx, zone.shape, rect, w, h);
+      octx.closePath();
+      octx.fill();
+    }
   }
   ctx.drawImage(off, 0, 0);
 }
@@ -219,7 +245,8 @@ async function drawZone(
  * exactly clipped to the template's mask geometry) onto a freshly created
  * canvas at a fixed resolution matching the reference art's aspect ratio. */
 export async function renderConquistaCard(template: ConquistaCardTemplate, content: ConquistaCardContent): Promise<HTMLCanvasElement> {
-  const [bg, photo, logo] = await Promise.all([loadImg(template.backgroundUrl), loadImg(content.photoUrl), loadImg(content.logoUrl)]);
+  const effectiveLogoUrl = template.logoUrl ?? content.logoUrl;
+  const [bg, photo, logo] = await Promise.all([loadImg(template.backgroundUrl), loadImg(content.photoUrl), loadImg(effectiveLogoUrl)]);
 
   const canvas = document.createElement('canvas');
   canvas.width = CANVAS_W;
@@ -231,14 +258,21 @@ export async function renderConquistaCard(template: ConquistaCardTemplate, conte
 
   await drawZone(ctx, template.foto, CANVAS_W, CANVAS_H, (octx, rect) => drawCover(octx, photo, rect, '#334155'));
   await drawZone(ctx, template.logo, CANVAS_W, CANVAS_H, (octx, rect) => drawContain(octx, logo, rect, '#ffffff'));
-  await drawZone(ctx, template.texto, CANVAS_W, CANVAS_H, (octx, rect) => {
-    octx.fillStyle = content.color;
-    octx.fillRect(rect.x, rect.y, rect.w, rect.h);
-  });
+  // 'none' on the text zone means "just the text" — no banner box at all,
+  // not even an unclipped rectangle, so this zone isn't drawn as content.
+  if (template.texto.shape.kind !== 'none') {
+    await drawZone(ctx, template.texto, CANVAS_W, CANVAS_H, (octx, rect) => {
+      octx.fillStyle = content.color;
+      octx.fillRect(rect.x, rect.y, rect.w, rect.h);
+    });
+  }
 
   const tRect = zoneRect(template.texto, CANVAS_W, CANVAS_H);
-  ctx.fillStyle = '#0b0e1d';
-  ctx.font = `800 ${Math.round(CANVAS_H * 0.024)}px Arial`;
+  // With a filled banner the text needs to contrast against it (dark on the
+  // category color); with no banner ('none') the text sits directly on the
+  // background art, so it uses the category color itself to stay visible.
+  ctx.fillStyle = template.texto.shape.kind === 'none' ? content.color : '#0b0e1d';
+  ctx.font = `800 ${Math.round(CANVAS_H * 0.024)}px ${template.textFontFamily ?? 'Arial'}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(content.tierText.toUpperCase(), tRect.x + tRect.w / 2, tRect.y + tRect.h / 2);

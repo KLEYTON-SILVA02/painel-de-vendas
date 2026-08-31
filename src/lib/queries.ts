@@ -126,6 +126,8 @@ export function useConquistaCardTemplates() {
         id: row.id,
         name: row.name,
         backgroundUrl: row.background_url,
+        logoUrl: row.logo_url,
+        textFontFamily: row.text_font_family ?? undefined,
         foto: row.foto as unknown as CardZone,
         logo: row.logo as unknown as CardZone,
         texto: row.texto as unknown as CardZone,

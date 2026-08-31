@@ -48,13 +48,25 @@ function conquistaMetric(categoria: ConquistaCategoria, row: SummaryRow): number
   return isUnitConquista(categoria) ? row.itens : row.valor;
 }
 
+function tierForMetric(tiers: readonly number[], metric: number): number {
+  let tier = 0;
+  tiers.forEach((t) => {
+    if (metric >= t) tier = t;
+  });
+  return tier;
+}
+
 /**
  * Top 10 achievers for a category/period: anyone who reached one of that
- * category's fixed tiers, sorted by the relevant metric desc. A
- * collaborator with no sales never appears (computeSummary seeds
- * zero-value rows for every collaborator, but tier stays 0 and gets
- * filtered out). `specialLists` is only needed for LEVMEL/CHIP (matched by
- * product name, not by `sale.grupo`) — see computeSummary.
+ * category's fixed tiers **within a single day** — a tier is never reached
+ * by summing several days together (e.g. the whole month in "Modo Geral").
+ * Each day in [fromDate, toDate] is scored on its own, and a collaborator's
+ * entry is their single best day within the range (tier first, then the
+ * day's own metric as a tie-breaker between equal tiers), sorted by that
+ * best-day metric desc. A collaborator with no sales, or whose best single
+ * day never reaches the first tier, never appears. `specialLists` is only
+ * needed for LEVMEL/CHIP (matched by product name, not by `sale.grupo`) —
+ * see computeSummary.
  */
 export function computeConquistas(
   sales: Sale[],
@@ -65,22 +77,46 @@ export function computeConquistas(
   specialLists?: { levmel: SpecialListItem[]; chip: SpecialListItem[] },
 ): ConquistaRow[] {
   const collaboratorsByMatricula = new Map(collaborators.map((c) => [c.matricula, c]));
-  const rows = computeSummary(sales, collaborators, fromDate, toDate, catKey, specialLists);
   const tiers = CONQUISTA_TIERS_BY_CAT[catKey];
-  return rows
-    .map((r) => {
+
+  // No bounded range to iterate day-by-day — score the whole (unbounded)
+  // selection at once. No real caller hits this (dashFrom/dashTo are
+  // always concrete dates); kept only so the `string | null` signature
+  // stays honored.
+  if (!fromDate || !toDate) {
+    const rows = computeSummary(sales, collaborators, fromDate, toDate, catKey, specialLists);
+    return rows
+      .map((r) => {
+        const tier = tierForMetric(tiers, conquistaMetric(catKey, r));
+        const foto = collaboratorsByMatricula.get(r.matricula)?.fotoConquista || r.foto;
+        return { ...r, foto, tier };
+      })
+      .filter((r) => r.tier > 0)
+      .sort((a, b) => conquistaMetric(catKey, b) - conquistaMetric(catKey, a))
+      .slice(0, 10);
+  }
+
+  const bestByMatricula = new Map<string, ConquistaRow>();
+  for (let d = new Date(`${fromDate}T00:00:00`); d.toISOString().slice(0, 10) <= toDate; d.setDate(d.getDate() + 1)) {
+    const day = d.toISOString().slice(0, 10);
+    computeSummary(sales, collaborators, day, day, catKey, specialLists).forEach((r) => {
       const metric = conquistaMetric(catKey, r);
-      let tier = 0;
-      tiers.forEach((t) => {
-        if (metric >= t) tier = t;
-      });
-      // Cards in the Galeria de Conquistas use the collaborator's dedicated
-      // conquista photo (cropped for this card format) when set, instead of
-      // their regular avatar used everywhere else (podiums, extracts, etc).
-      const foto = collaboratorsByMatricula.get(r.matricula)?.fotoConquista || r.foto;
-      return { ...r, foto, tier };
-    })
-    .filter((r) => r.tier > 0)
+      const tier = tierForMetric(tiers, metric);
+      if (tier === 0) return;
+      const current = bestByMatricula.get(r.matricula);
+      const currentMetric = current ? conquistaMetric(catKey, current) : -1;
+      if (!current || tier > current.tier || (tier === current.tier && metric > currentMetric)) {
+        // Cards in the Galeria de Conquistas use the collaborator's
+        // dedicated conquista photo (cropped for this card format) when
+        // set, instead of their regular avatar used everywhere else
+        // (podiums, extracts, etc).
+        const foto = collaboratorsByMatricula.get(r.matricula)?.fotoConquista || r.foto;
+        bestByMatricula.set(r.matricula, { ...r, foto, tier });
+      }
+    });
+  }
+
+  return Array.from(bestByMatricula.values())
     .sort((a, b) => conquistaMetric(catKey, b) - conquistaMetric(catKey, a))
     .slice(0, 10);
 }

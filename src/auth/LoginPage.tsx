@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { supabase } from '../lib/supabase';
+import { buildWhatsAppLink } from '../lib/whatsapp';
 import '../styles/login-retro-future.css';
 import gvLogo from '../assets/brand/gv-logo.png';
 import whatsappQr from '../assets/brand/whatsapp-qr.jpg';
@@ -8,7 +9,10 @@ import instagramQr from '../assets/brand/instagram-qr.jpg';
 type Tab = 'admin' | 'colaborador';
 type SocialModal = 'whatsapp' | 'instagram' | 'email' | null;
 
-const WHATSAPP_URL = 'https://wa.me/qr/WEP75MIQBQSPB1';
+// Device-aware: opens web.whatsapp.com on desktop (skipping the native-app
+// redirect a plain wa.me link tries first) and the installed app on mobile
+// — see lib/whatsapp.ts.
+const WHATSAPP_NUMBER = '559184213634';
 const INSTAGRAM_URL = 'https://www.instagram.com/kleytonmsilva?igsi=MWM0bnNscmtjNGkxag==';
 const EMAIL_ADDRESS = 'kleyton.silva.celular@gmail.com';
 
@@ -80,7 +84,7 @@ function SocialQrModal({ kind, onClose }: { kind: 'whatsapp' | 'instagram' | 'em
 
   // TODO: swap in the e-mail QR card image once it's available.
   const qrImage = kind === 'whatsapp' ? whatsappQr : kind === 'instagram' ? instagramQr : null;
-  const url = kind === 'whatsapp' ? WHATSAPP_URL : kind === 'instagram' ? INSTAGRAM_URL : `mailto:${EMAIL_ADDRESS}`;
+  const url = kind === 'whatsapp' ? buildWhatsAppLink(WHATSAPP_NUMBER) : kind === 'instagram' ? INSTAGRAM_URL : `mailto:${EMAIL_ADDRESS}`;
   const label = kind === 'whatsapp' ? 'WhatsApp' : kind === 'instagram' ? 'Instagram' : 'E-mail';
 
   return (
