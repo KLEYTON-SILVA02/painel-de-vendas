@@ -342,13 +342,19 @@ function MobileBioGruposView({
       </div>
 
       <div style={{ margin: '0 18px 12px' }}>
+        <p style={{ fontSize: 10, color: 'var(--mv2-texto-2)', marginBottom: 6 }}>
+          A coluna "Categoria (Grupo)" é opcional: se a célula não indicar um grupo (ex.: "G1", "Grupo 2"), o produto
+          entra no grupo da aba selecionada acima ({GROUP_LABELS[tab]}).
+        </p>
         <SimpleSheetImportPanel
           title="Importar planilha de produtos Biosintética"
           columns={['Nome do produto', 'Categoria (Grupo)', 'Tipo']}
           onConfirm={async (rows) => {
+            // See BioPage.tsx (desktop) for why an unrecognized grupo cell falls
+            // back to the active tab instead of silently dropping the row.
             const parsed = rows
-              .map((r) => ({ nome: r[0]?.trim() || '', grupo: normalizeGrupoImport(r[1] || ''), palavras: [r[2]?.trim() || r[0]?.trim() || ''] }))
-              .filter((r) => r.nome && r.grupo);
+              .map((r) => ({ nome: r[0]?.trim() || '', grupo: normalizeGrupoImport(r[1] || '') ?? tab, palavras: [r[2]?.trim() || r[0]?.trim() || ''] }))
+              .filter((r) => r.nome);
             if (parsed.length === 0) return { count: 0, skipped: rows.length };
             await bulkInsertBio.mutateAsync(parsed as { grupo: BioGroupKey; nome: string; palavras: string[] }[]);
             return { count: parsed.length, skipped: rows.length - parsed.length };

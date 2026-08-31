@@ -303,13 +303,25 @@ function BioGruposView({
         </div>
       </div>
 
+      <p className="text-xs text-slate-500 -mt-2">
+        A coluna "Categoria (Grupo)" é opcional: se a célula não indicar um grupo (ex.: "G1", "Grupo 2"), o produto
+        entra no grupo da aba selecionada acima (<b>{GRUPO_LABELS[tab]}</b>).
+      </p>
+
       <SimpleSheetImportPanel
         title="Importar planilha de produtos Biosintética"
         columns={['Nome do produto', 'Categoria (Grupo)', 'Tipo']}
         onConfirm={async (rows) => {
+          // The "Categoria (Grupo)" column is optional, not required: when a row's
+          // cell doesn't resolve to G1-G4 (blank, or text the sheet's author didn't
+          // realize needed a group number), the row falls back to whichever tab
+          // (G1-G4) is currently open — same as "Cadastro manual" above, which has
+          // no grupo field at all and always adds to the active tab. Previously an
+          // unparseable cell silently dropped the whole row instead, which is what
+          // made bulk imports look like they weren't saving that group's products.
           const parsed = rows
-            .map((r) => ({ nome: r[0]?.trim() || '', grupo: normalizeGrupoImport(r[1] || ''), palavras: [r[2]?.trim() || r[0]?.trim() || ''] }))
-            .filter((r) => r.nome && r.grupo);
+            .map((r) => ({ nome: r[0]?.trim() || '', grupo: normalizeGrupoImport(r[1] || '') ?? tab, palavras: [r[2]?.trim() || r[0]?.trim() || ''] }))
+            .filter((r) => r.nome);
           if (parsed.length === 0) return { count: 0, skipped: rows.length };
           await bulkInsertBio.mutateAsync(parsed as { grupo: BioGroupKey; nome: string; palavras: string[] }[]);
           return { count: parsed.length, skipped: rows.length - parsed.length };
