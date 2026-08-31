@@ -202,6 +202,12 @@ function PendentesTab({
     setSelected(next);
   }
 
+  const allSelected = list.length > 0 && list.every((p) => selected.has(p.produto));
+
+  function toggleAll() {
+    setSelected(allSelected ? new Set() : new Set(list.map((p) => p.produto)));
+  }
+
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
       <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
@@ -233,7 +239,9 @@ function PendentesTab({
         <table className="w-full text-xs">
           <thead>
             <tr className="text-left text-slate-400 border-b border-slate-800">
-              <th className="py-1.5 pr-3"></th>
+              <th className="py-1.5 pr-3">
+                <input type="checkbox" checked={allSelected} onChange={toggleAll} title="Selecionar todos" />
+              </th>
               <th className="py-1.5 pr-3">Produto</th>
               <th className="py-1.5 pr-3">Ocorrências</th>
               <th className="py-1.5 pr-3">Qtd</th>
