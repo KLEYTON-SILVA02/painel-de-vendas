@@ -738,6 +738,7 @@ export type Database = {
           nome_equipe: string
           nome_loja: string
           numero_loja: string
+          whatsapp: string
         }
         Insert: {
           admin_email: string
@@ -748,6 +749,7 @@ export type Database = {
           nome_equipe?: string
           nome_loja?: string
           numero_loja?: string
+          whatsapp?: string
         }
         Update: {
           admin_email?: string
@@ -758,6 +760,7 @@ export type Database = {
           nome_equipe?: string
           nome_loja?: string
           numero_loja?: string
+          whatsapp?: string
         }
         Relationships: []
       }

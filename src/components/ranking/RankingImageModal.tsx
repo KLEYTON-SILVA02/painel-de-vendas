@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { tryCopyImage } from '../../lib/rankingImage';
+import { useStore } from '../../lib/queries';
+import { shareImageToWhatsApp } from '../../lib/whatsapp';
 
 // Ported 1:1 from legacy/index-original.html (#imgModalBackdrop in viewRanking()).
 // Generic enough to be reused by any "gerar imagem" flow in the app (ranking,
@@ -24,7 +26,9 @@ export function RankingImageModal({
   filename?: string;
   alt?: string;
 }) {
+  const { data: store } = useStore();
   const [copyState, setCopyState] = useState<'idle' | 'copying' | 'copied' | 'failed'>(copied ? 'copied' : 'idle');
+  const [whatsappState, setWhatsappState] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
 
   async function handleCopy() {
     setCopyState('copying');
@@ -39,6 +43,19 @@ export function RankingImageModal({
     }
   }
 
+  async function handleWhatsApp() {
+    setWhatsappState('sending');
+    try {
+      const blob = await fetch(url).then((r) => r.blob());
+      const outcome = await shareImageToWhatsApp(blob, filename, title, store?.whatsapp);
+      setWhatsappState(outcome === 'failed' ? 'failed' : 'sent');
+      setTimeout(() => setWhatsappState('idle'), 2500);
+    } catch {
+      setWhatsappState('failed');
+      setTimeout(() => setWhatsappState('idle'), 2500);
+    }
+  }
+
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50" onClick={onClose}>
       <div className="w-full max-w-xl rounded-2xl border border-slate-800 bg-slate-900 p-5" onClick={(e) => e.stopPropagation()}>
@@ -49,9 +66,11 @@ export function RankingImageModal({
           </button>
         </div>
         <p className="text-xs text-slate-500 mb-3">
-          {copyState === 'copied'
-            ? 'A imagem já foi copiada para a área de transferência — é só colar no WhatsApp.'
-            : 'Baixe a imagem ou copie pra área de transferência e cole diretamente no WhatsApp.'}
+          {whatsappState === 'sent'
+            ? 'Enviado — se a imagem não chegou anexada, ela foi copiada: é só colar (Ctrl/Cmd+V) na conversa que abriu.'
+            : copyState === 'copied'
+              ? 'A imagem já foi copiada para a área de transferência — é só colar no WhatsApp.'
+              : 'Baixe a imagem, copie pra área de transferência ou envie direto por WhatsApp.'}
         </p>
         <img src={url} alt={alt} className="w-full rounded-lg border border-slate-800" />
         <div className="flex gap-2 mt-3">
@@ -74,6 +93,14 @@ export function RankingImageModal({
             ⬇ Baixar PNG
           </a>
         </div>
+        <button
+          onClick={handleWhatsApp}
+          disabled={whatsappState === 'sending'}
+          className="w-full mt-2 rounded-lg px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          style={{ background: '#25D366' }}
+        >
+          {whatsappState === 'sent' ? '✓ Enviado' : whatsappState === 'sending' ? 'Enviando…' : whatsappState === 'failed' ? 'Falhou — tentar de novo' : '📲 Enviar por WhatsApp'}
+        </button>
       </div>
     </div>
   );
