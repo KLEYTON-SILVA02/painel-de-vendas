@@ -37,6 +37,27 @@ describe('computeConquistas', () => {
     expect(rows.find((r) => r.matricula === 'M1')!.tier).toBe(10); // 12 un. >= 10, < 15
   });
 
+  it('never accumulates across days — a tier must be reached within a single day', () => {
+    // 1800 + 1800 = 3600 would clear DERM's first tier (3000) if summed
+    // across the month, but neither day alone does.
+    const splitSales: Sale[] = [
+      { id: 'sp1', dataISO: '2026-08-01', matricula: 'M1', vendedor: 'Ana', produto: 'A', qtd: 1, valor: 1800, grupo: 'DERM' },
+      { id: 'sp2', dataISO: '2026-08-02', matricula: 'M1', vendedor: 'Ana', produto: 'A', qtd: 1, valor: 1800, grupo: 'DERM' },
+    ];
+    const rows = computeConquistas(splitSales, collaborators, '2026-08-01', '2026-08-31', 'DERM');
+    expect(rows.find((r) => r.matricula === 'M1')).toBeUndefined();
+  });
+
+  it('keeps the best single day when multiple days each reach a tier on their own', () => {
+    const multiDaySales: Sale[] = [
+      { id: 'md1', dataISO: '2026-08-01', matricula: 'M1', vendedor: 'Ana', produto: 'A', qtd: 1, valor: 3500, grupo: 'DERM' }, // tier 3000
+      { id: 'md2', dataISO: '2026-08-15', matricula: 'M1', vendedor: 'Ana', produto: 'A', qtd: 1, valor: 6000, grupo: 'DERM' }, // tier 5000, better
+    ];
+    const rows = computeConquistas(multiDaySales, collaborators, '2026-08-01', '2026-08-31', 'DERM');
+    expect(rows.find((r) => r.matricula === 'M1')!.tier).toBe(5000);
+    expect(rows.find((r) => r.matricula === 'M1')!.valor).toBe(6000);
+  });
+
   it('caps at the top 10 sorted by the category metric desc', () => {
     const many: Collaborator[] = Array.from({ length: 12 }, (_, i) => ({
       id: String(i),

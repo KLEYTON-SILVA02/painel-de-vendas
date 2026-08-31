@@ -391,8 +391,10 @@ export type Database = {
           id: string
           is_default: boolean
           logo: Json
+          logo_url: string | null
           name: string
           store_id: string
+          text_font_family: string | null
           texto: Json
         }
         Insert: {
@@ -402,8 +404,10 @@ export type Database = {
           id?: string
           is_default?: boolean
           logo: Json
+          logo_url?: string | null
           name: string
           store_id: string
+          text_font_family?: string | null
           texto: Json
         }
         Update: {
@@ -413,8 +417,10 @@ export type Database = {
           id?: string
           is_default?: boolean
           logo?: Json
+          logo_url?: string | null
           name?: string
           store_id?: string
+          text_font_family?: string | null
           texto?: Json
         }
         Relationships: [
