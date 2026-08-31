@@ -1,5 +1,6 @@
 import type { BioGroupKey, CategoryKey, ClassificationInputs, GoalCategoryKey } from './business/classification';
 import { CAT_KEYS } from './business/classification';
+import { normalizeMatricula } from './business/parsing';
 import type { BioGroupGoal, Collaborator, CommissionRate, Dynamic, Goal, Sale } from './business/types';
 import type { SpecialListItem } from './business/summary';
 import type { Tables } from '../types/database';
@@ -7,7 +8,7 @@ import type { Tables } from '../types/database';
 export function mapCollaborator(row: Tables<'collaborators'>): Collaborator {
   return {
     id: row.id,
-    matricula: row.matricula,
+    matricula: normalizeMatricula(row.matricula),
     nome: row.nome,
     apelido: row.apelido,
     foto: row.foto_url,
@@ -21,7 +22,7 @@ export function mapSale(row: Tables<'sales'>): Sale {
   return {
     id: row.id,
     dataISO: row.data_iso,
-    matricula: row.matricula,
+    matricula: normalizeMatricula(row.matricula),
     vendedor: row.vendedor,
     produto: row.produto,
     codigo: row.codigo,

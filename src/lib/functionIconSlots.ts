@@ -27,6 +27,7 @@ export const FUNCTION_ICON_SLOTS: FunctionIconSlot[] = [
   { key: 'adm_produtos', label: 'ADM · Produtos', group: 'ADM' },
   { key: 'adm_metas', label: 'ADM · Metas', group: 'ADM' },
   { key: 'adm_importar', label: 'ADM · Importar', group: 'ADM' },
+  { key: 'adm_lista_vendas', label: 'ADM · Lista de Vendas', group: 'ADM' },
   { key: 'adm_auditoria', label: 'ADM · Auditoria', group: 'ADM' },
   { key: 'adm_backup', label: 'ADM · Backup', group: 'ADM' },
   { key: 'adm_minha_loja', label: 'ADM · Minha Loja', group: 'ADM' },
