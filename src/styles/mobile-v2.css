@@ -1109,10 +1109,205 @@
 
 /* ============================================================
    Media queries — mobile-first: base styles above are the phone
-   layout; small phones stack further, and >=1024px is handled by
-   the existing desktop Sidebar shell (this stylesheet only ever
-   mounts below that breakpoint — see MobileAdminShell).
+   layout; small phones stack further. For admins, >=1024px is
+   handled by the existing desktop Sidebar shell instead (this
+   stylesheet only ever mounts below that breakpoint for them —
+   see MobileAdminShell/useIsMobileV2). Collaborators have no such
+   fallback — CollaboratorShell mounts this stylesheet at every
+   width — so section 10 below adds real desktop reflow rules of
+   its own, scoped under .mv2-collab-main so they never affect the
+   admin screens above.
    ============================================================ */
+/* ---------- 10. Colaborador — shell + reflow de desktop ----------
+   Reuses the same tokens/classes as the admin mv2 screens above
+   (mv2-metric-card, mv2-screen-title, mv2-data-table...) so the
+   collaborator experience matches visually, but adds its own
+   desktop breakpoint: admins fall back to the pre-existing desktop
+   Sidebar shell above 1024px, but collaborators have never had a
+   separate desktop UI to fall back to — this stylesheet is all
+   they get, at every width. */
+.mv2-collab-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.mv2-collab-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 16px;
+  background: #080a08;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.mv2-collab-header .mv2-collab-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.mv2-collab-header .mv2-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--mv2-ciano-claro);
+  background: var(--mv2-bg-input);
+  flex-shrink: 0;
+}
+.mv2-collab-header .mv2-collab-name {
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mv2-collab-header .mv2-collab-role {
+  font-size: 10px;
+  color: var(--mv2-texto-2);
+}
+.mv2-collab-signout {
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: #fff;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.mv2-collab-body {
+  flex: 1;
+  display: flex;
+}
+.mv2-collab-main {
+  flex: 1;
+  min-width: 0;
+  padding: 14px 0 90px;
+}
+
+/* Mobile: bottom tab bar (fixed). */
+.mv2-collab-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  background: rgba(8, 10, 8, 0.96);
+  backdrop-filter: blur(6px);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.mv2-collab-nav a {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 0 6px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--mv2-texto-2);
+  text-decoration: none;
+}
+.mv2-collab-nav a.active {
+  color: var(--mv2-ciano-claro);
+}
+
+.mv2-card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--mv2-radius-md);
+  background: #080a08;
+  padding: 14px 16px;
+  margin: 0 18px 14px;
+}
+.mv2-card-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 0 0 10px;
+}
+.mv2-chip-row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  margin: 0 18px 8px;
+  padding-bottom: 2px;
+}
+.mv2-chip {
+  flex-shrink: 0;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  border: 1px solid var(--mv2-chip-color, var(--mv2-ciano));
+  color: var(--mv2-chip-color, var(--mv2-ciano));
+  background: transparent;
+}
+.mv2-chip.active {
+  color: #04101c;
+  background: var(--mv2-chip-color, var(--mv2-ciano));
+}
+
+/* Desktop: bottom nav becomes a persistent left sidebar, and the
+   content area gets a max-width instead of running edge to edge. */
+@media (min-width: 860px) {
+  .mv2-collab-nav {
+    position: static;
+    flex-direction: column;
+    width: 200px;
+    flex-shrink: 0;
+    gap: 4px;
+    border-top: none;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 18px 10px;
+    background: #060a12;
+  }
+  .mv2-collab-nav a {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: var(--mv2-radius-sm);
+    font-size: 11px;
+  }
+  .mv2-collab-nav a.active {
+    background: rgba(107, 200, 221, 0.12);
+  }
+  .mv2-collab-main {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 22px 28px 32px;
+  }
+  /* Two stacked mv2-card sections side by side once there's room —
+     e.g. MetasVendasPage's "Valores da loja" / "Meus valores". */
+  .mv2-collab-main .mv2-two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+  .mv2-collab-main .mv2-two-col > .mv2-card {
+    margin: 0;
+  }
+}
+@media (min-width: 640px) {
+  .mv2-collab-main .mv2-metrics-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
 @media (max-width: 340px) {
   .mv2-metrics-grid,
   .mv2-goals-grid,

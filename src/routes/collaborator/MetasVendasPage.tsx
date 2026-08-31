@@ -1,11 +1,11 @@
 import { useAuth } from '../../auth/AuthContext';
-import { MobileDateFilterBar } from '../../components/collaborator/MobileDateFilterBar';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
 import { diasRestantesNoMes, effectiveMetaGeral, getSuperMeta } from '../../lib/business/goals';
 import { catTotals, computeSummary } from '../../lib/business/summary';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { useIndividualGoals } from '../../lib/mutations';
 import { useCollaborators, useGoals, useSales, useStoreSettings } from '../../lib/queries';
+import { MobileDateFilter } from '../admin-mobile/MobileDateFilter';
 import { useDateRange } from '../DateRangeContext';
 
 const CAT_LABEL: Record<CategoryKey, string> = {
@@ -40,7 +40,7 @@ export function MetasVendasPage() {
   const me = collaborators?.find((c) => c.id === profile?.collaborator_id);
 
   if (!collaborators || !sales || !goals || !storeSettings || !dermGoals || !genGoals || !mpGoals || !merGoals) {
-    return <div className="text-sm text-slate-500 p-6 text-center">Carregando…</div>;
+    return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
   const modoDia = dashFrom === dashTo;
@@ -84,44 +84,50 @@ export function MetasVendasPage() {
     .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''));
 
   return (
-    <div className="flex flex-col gap-3">
-      <MobileDateFilterBar />
+    <div>
+      <div className="mv2-screen-title" style={{ ['--mv2-accent' as string]: '#00f0ff' }}>
+        METAS/VENDAS
+      </div>
 
-      <Section title="🏪 Valores da loja" color="#00f0ff">
-        <MetricsGrid
-          realizado={storeValor}
-          itens={storeItens}
-          meta={storeMeta}
-          superMeta={storeSuper}
-          saldo={storeSaldo}
-          atingimento={storeAtingimento}
-          diasRestantes={dias}
-          falta={storeFalta}
-        />
-      </Section>
+      <MobileDateFilter />
 
-      <Section title="🙋 Meus valores" color="#a82bff">
-        <MetricsGrid
-          realizado={myValor}
-          itens={myItens}
-          meta={myMeta}
-          superMeta={mySuper}
-          saldo={mySaldo}
-          atingimento={myAtingimento}
-          diasRestantes={dias}
-          falta={myFalta}
-        />
-      </Section>
+      <div className="mv2-two-col">
+        <Section title="🏪 Valores da loja" color="#00f0ff">
+          <MetricsGrid
+            realizado={storeValor}
+            itens={storeItens}
+            meta={storeMeta}
+            superMeta={storeSuper}
+            saldo={storeSaldo}
+            atingimento={storeAtingimento}
+            diasRestantes={dias}
+            falta={storeFalta}
+          />
+        </Section>
 
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <h3 className="font-semibold text-sm mb-3">Minhas metas por categoria</h3>
-        <table className="w-full text-sm">
+        <Section title="🙋 Meus valores" color="#a82bff">
+          <MetricsGrid
+            realizado={myValor}
+            itens={myItens}
+            meta={myMeta}
+            superMeta={mySuper}
+            saldo={mySaldo}
+            atingimento={myAtingimento}
+            diasRestantes={dias}
+            falta={myFalta}
+          />
+        </Section>
+      </div>
+
+      <div className="mv2-card">
+        <div className="mv2-card-title">Minhas metas por categoria</div>
+        <table className="mv2-data-table">
           <thead>
-            <tr className="text-left text-slate-400 border-b border-slate-800">
-              <th className="py-2 pr-3">Categoria</th>
-              <th className="py-2 pr-3">Vendido</th>
-              <th className="py-2 pr-3">Minha meta</th>
-              <th className="py-2 pr-3">Atingim.</th>
+            <tr>
+              <th>Categoria</th>
+              <th>Vendido</th>
+              <th>Minha meta</th>
+              <th>Atingim.</th>
             </tr>
           </thead>
           <tbody>
@@ -131,16 +137,16 @@ export function MetasVendasPage() {
               const metaIndividual = row?.participa ? Number(row.valor_meta) || 0 : 0;
               const pct = metaIndividual > 0 ? Math.min(999, (t.valor / metaIndividual) * 100) : null;
               return (
-                <tr key={k} className="border-b border-slate-900">
-                  <td className="py-2 pr-3">
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full" style={{ background: CAT_COLOR[k] }} />
+                <tr key={k}>
+                  <td>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: CAT_COLOR[k] }} />
                       {CAT_LABEL[k]}
                     </span>
                   </td>
-                  <td className="py-2 pr-3 font-mono">{fmtMoney(t.valor)}</td>
-                  <td className="py-2 pr-3 font-mono text-slate-400">{metaIndividual > 0 ? fmtMoney(metaIndividual) : '—'}</td>
-                  <td className="py-2 pr-3 font-mono">{pct !== null ? `${pct.toFixed(0)}%` : '—'}</td>
+                  <td className="mv2-valor">{fmtMoney(t.valor)}</td>
+                  <td>{metaIndividual > 0 ? fmtMoney(metaIndividual) : '—'}</td>
+                  <td>{pct !== null ? `${pct.toFixed(0)}%` : '—'}</td>
                 </tr>
               );
             })}
@@ -148,28 +154,28 @@ export function MetasVendasPage() {
         </table>
       </div>
 
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <h3 className="font-semibold text-sm mb-3">Minhas vendas</h3>
+      <div className="mv2-card">
+        <div className="mv2-card-title">Minhas vendas</div>
         {extract.length === 0 ? (
-          <div className="text-sm text-slate-500 py-4 text-center">Nenhuma venda no período.</div>
+          <div style={{ fontSize: 10, color: 'var(--mv2-texto-2)', padding: '8px 0', textAlign: 'center' }}>Nenhuma venda no período.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+          <div style={{ overflowX: 'auto' }}>
+            <table className="mv2-data-table">
               <thead>
-                <tr className="text-left text-slate-400 border-b border-slate-800">
-                  <th className="py-1.5 pr-3">Data</th>
-                  <th className="py-1.5 pr-3">Produto</th>
-                  <th className="py-1.5 pr-3">Qtd</th>
-                  <th className="py-1.5 pr-3">Valor</th>
+                <tr>
+                  <th>Data</th>
+                  <th>Produto</th>
+                  <th>Qtd</th>
+                  <th>Valor</th>
                 </tr>
               </thead>
               <tbody>
                 {extract.map((s) => (
-                  <tr key={s.id} className="border-b border-slate-900">
-                    <td className="py-1.5 pr-3 font-mono">{fmtDateBR(s.dataISO)}</td>
-                    <td className="py-1.5 pr-3">{s.produto}</td>
-                    <td className="py-1.5 pr-3 font-mono">{s.qtd}</td>
-                    <td className="py-1.5 pr-3 font-mono">{fmtMoney(s.valor)}</td>
+                  <tr key={s.id}>
+                    <td>{fmtDateBR(s.dataISO)}</td>
+                    <td>{s.produto}</td>
+                    <td>{s.qtd}</td>
+                    <td className="mv2-valor">{fmtMoney(s.valor)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -183,10 +189,10 @@ export function MetasVendasPage() {
 
 function Section({ title, color, children }: { title: string; color: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-      <h3 className="font-semibold text-sm mb-3" style={{ color }}>
+    <div className="mv2-card">
+      <div className="mv2-card-title" style={{ color }}>
         {title}
-      </h3>
+      </div>
       {children}
     </div>
   );
@@ -212,7 +218,7 @@ function MetricsGrid({
   falta: number;
 }) {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+    <div className="mv2-metrics-grid" style={{ margin: 0 }}>
       <Metric label="Realizado" value={fmtMoney(realizado)} color="#00f0ff" />
       <Metric label="Itens" value={`${itens} un.`} color="#a82bff" />
       <Metric label="Meta Geral" value={fmtMoney(meta)} color="#ffd700" />
@@ -227,11 +233,9 @@ function MetricsGrid({
 
 function Metric({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-      <div className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">{label}</div>
-      <div className="text-sm font-mono font-bold" style={{ color }}>
-        {value}
-      </div>
+    <div className="mv2-metric-card" style={{ ['--mv2-card-color' as string]: color }}>
+      <div className="mv2-label">{label}</div>
+      <div className="mv2-value">{value}</div>
     </div>
   );
 }

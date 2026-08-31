@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { MobileDateFilterBar } from '../../components/collaborator/MobileDateFilterBar';
 import { MobileRankingBoard } from '../../components/collaborator/MobileRankingBoard';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
 import { getGoal, getSuperMeta } from '../../lib/business/goals';
 import { computeSummary } from '../../lib/business/summary';
 import { fmtMoney } from '../../lib/format';
 import { useCollaborators, useGoals, useSales } from '../../lib/queries';
+import { MobileDateFilter } from '../admin-mobile/MobileDateFilter';
 import { useDateRange } from '../DateRangeContext';
 
 const CAT_LABEL: Record<CategoryKey, string> = {
@@ -29,7 +29,7 @@ export function CollaboratorRankingPage() {
   const [catKey, setCatKey] = useState<CategoryKey | 'ALL'>('ALL');
 
   if (!collaborators || !sales || !goals) {
-    return <div className="text-sm text-slate-500 p-6 text-center">Carregando…</div>;
+    return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
   const modoDia = dashFrom === dashTo;
@@ -46,54 +46,51 @@ export function CollaboratorRankingPage() {
   const pct = metaAlvo > 0 ? Math.min(999, (totalValor / metaAlvo) * 100) : null;
 
   return (
-    <div className="flex flex-col gap-3">
-      <MobileDateFilterBar />
+    <div>
+      <div className="mv2-screen-title mv2-ranking">RANKING</div>
 
-      <div className="flex gap-1.5 overflow-x-auto pb-1">
-        <CatChip active={catKey === 'ALL'} color="#00f0ff" onClick={() => setCatKey('ALL')}>
+      <div className="mv2-chip-row">
+        <button
+          className={`mv2-chip ${catKey === 'ALL' ? 'active' : ''}`}
+          style={{ ['--mv2-chip-color' as string]: '#00f0ff' }}
+          onClick={() => setCatKey('ALL')}
+        >
           Todas
-        </CatChip>
+        </button>
         {CAT_KEYS.map((k) => (
-          <CatChip key={k} active={catKey === k} color={CAT_COLOR[k]} onClick={() => setCatKey(k)}>
+          <button
+            key={k}
+            className={`mv2-chip ${catKey === k ? 'active' : ''}`}
+            style={{ ['--mv2-chip-color' as string]: CAT_COLOR[k] }}
+            onClick={() => setCatKey(k)}
+          >
             {CAT_LABEL[k]}
-          </CatChip>
+          </button>
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
-        <MetricCard label="Total vendido" value={fmtMoney(totalValor)} color="#00f0ff" />
-        <MetricCard label="Itens vendidos" value={`${totalItens} un.`} color="#a82bff" />
-        <MetricCard label="Atingimento" value={pct !== null ? `${pct.toFixed(0)}%` : '—'} color="#14ff00" />
+      <div className="mv2-metrics-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+        <div className="mv2-metric-card" style={{ ['--mv2-card-color' as string]: '#00f0ff' }}>
+          <div className="mv2-label">Total vendido</div>
+          <div className="mv2-value">{fmtMoney(totalValor)}</div>
+        </div>
+        <div className="mv2-metric-card" style={{ ['--mv2-card-color' as string]: '#a82bff' }}>
+          <div className="mv2-label">Itens vendidos</div>
+          <div className="mv2-value">{totalItens} un.</div>
+        </div>
+        <div className="mv2-metric-card" style={{ ['--mv2-card-color' as string]: '#14ff00' }}>
+          <div className="mv2-label">Atingimento</div>
+          <div className="mv2-value">{pct !== null ? `${pct.toFixed(0)}%` : '—'}</div>
+        </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <h3 className="text-cyan-400 font-semibold text-sm mb-3">
+      <MobileDateFilter />
+
+      <div className="mv2-card">
+        <div className="mv2-card-title" style={{ color: '#00f0ff' }}>
           🏆 Ranking {catKey === 'ALL' ? 'Geral' : `— ${CAT_LABEL[catKey]}`}
-        </h3>
+        </div>
         <MobileRankingBoard ranking={rankingList} getValue={(r) => r.valor} formatValue={(v) => fmtMoney(v)} />
-      </div>
-    </div>
-  );
-}
-
-function CatChip({ active, color, onClick, children }: { active: boolean; color: string; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex-shrink-0 rounded-full px-3 py-1.5 text-xs font-bold uppercase tracking-wide border"
-      style={{ borderColor: color, color: active ? '#04101c' : color, background: active ? color : 'transparent' }}
-    >
-      {children}
-    </button>
-  );
-}
-
-function MetricCard({ label, value, color }: { label: string; value: string; color: string }) {
-  return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-      <div className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">{label}</div>
-      <div className="text-sm font-mono font-bold" style={{ color }}>
-        {value}
       </div>
     </div>
   );
