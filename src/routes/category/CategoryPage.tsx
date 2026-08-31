@@ -312,6 +312,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
           to={dashTo}
           extract={extract}
           commissionRates={catKey === 'DERM' || catKey === 'GEN' || catKey === 'MP' ? commissionRates[catKey] : []}
+          isMP={catKey === 'MP'}
           onClose={() => setExtractMatricula(null)}
         />
       )}
@@ -377,6 +378,7 @@ function ExtractModal({
   to,
   extract,
   commissionRates,
+  isMP,
   onClose,
 }: {
   nome: string;
@@ -384,6 +386,7 @@ function ExtractModal({
   to: string;
   extract: ReturnType<typeof computeVendorExtract>;
   commissionRates: CommissionRate[];
+  isMP: boolean;
   onClose: () => void;
 }) {
   const [activeSlot, setActiveSlot] = useState<number | null>(null);
@@ -392,10 +395,15 @@ function ExtractModal({
   // The extract modal is always about one specific vendor (extractMatricula),
   // so this is exactly the "colaborador selecionado" moment the commission
   // feature is scoped to. Each admin-enabled rate gets its own liga/desliga
-  // button (up to 3 for Marcas Exclusivas) — a single-select group: off by
-  // default (sale's own valor shown as-is), clicking the active one again
-  // turns it back off.
-  const availableRates = commissionRates.filter((r) => r.ativo);
+  // button — a single-select group: off by default (sale's own valor shown
+  // as-is), clicking the active one again turns it back off. Marcas
+  // Exclusivas always shows its 3 slots fixed (even one never configured,
+  // at 0%), rather than only the ones the admin happened to mark "ativo" in
+  // Metas > Comissões — a slot left unchecked there used to just vanish
+  // from this screen instead of showing up as an obvious 0% button.
+  const availableRates = isMP
+    ? [1, 2, 3].map((slot) => commissionRates.find((r) => r.slot === slot) ?? { categoria: 'MP' as const, slot, percentual: 0, ativo: false })
+    : commissionRates.filter((r) => r.ativo);
   const activeRate = activeSlot !== null ? availableRates.find((r) => r.slot === activeSlot) : undefined;
   const showCommission = !!activeRate;
   return (
