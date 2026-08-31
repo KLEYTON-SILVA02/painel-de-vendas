@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
+import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { auditBioOutsideBalcao, BALCAO_SETOR, computeBioSummary, type BioSummaryRow } from '../../lib/business/bio';
 import { classifyBio, normalizeGrupoImport, type BioGroupKey } from '../../lib/business/classification';
@@ -210,14 +211,14 @@ export function MobileBioPage() {
           )}
         </div>
       ) : (
-        <div className="mv2-ranking-track">
-          {rankingList.map((r, i) => (
-            <div key={r.matricula} className={`mv2-ranking-col ${i === 0 ? 'mv2-first' : i === 1 ? 'mv2-second' : i === 2 ? 'mv2-third' : ''}`}>
-              {r.foto ? <img src={r.foto} alt="" className="mv2-avatar" /> : <div className="mv2-avatar" />}
-              <div className="mv2-position">{i + 1}</div>
-              <div className="mv2-name">{r.apelido || r.nome}</div>
-            </div>
-          ))}
+        <div style={{ margin: '0 18px 16px' }}>
+          <PodiumStaircase
+            ranking={rankingList}
+            getValue={(r) => r.pontos}
+            formatValue={(v) => `${v.toFixed(1)} pts`}
+            getSub={(r) => `${r.itens} un.`}
+            variant="escadinha"
+          />
         </div>
       )}
 

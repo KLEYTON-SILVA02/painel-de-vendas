@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { diasRestantesNoMes } from '../../lib/business/goals';
 import { computeSummary } from '../../lib/business/summary';
@@ -147,14 +148,8 @@ export function MobileUnitCategoryScreen({
           )}
         </div>
       ) : (
-        <div className="mv2-ranking-track">
-          {rankingList.map((r, i) => (
-            <div key={r.matricula} className={`mv2-ranking-col ${i === 0 ? 'mv2-first' : i === 1 ? 'mv2-second' : i === 2 ? 'mv2-third' : ''}`}>
-              {r.foto ? <img src={r.foto} alt="" className="mv2-avatar" /> : <div className="mv2-avatar" />}
-              <div className="mv2-position">{i + 1}</div>
-              <div className="mv2-name">{r.apelido || r.nome}</div>
-            </div>
-          ))}
+        <div style={{ margin: '0 18px 16px' }}>
+          <PodiumStaircase ranking={rankingList} getValue={(r) => r.itens} formatValue={(v) => `${v} un.`} variant="escadinha" />
         </div>
       )}
 
