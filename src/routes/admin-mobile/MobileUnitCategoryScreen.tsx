@@ -1,18 +1,18 @@
-import { useState } from 'react';
-import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
+import { useMemo, useState } from 'react';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { diasRestantesNoMes } from '../../lib/business/goals';
-import { computeSummary } from '../../lib/business/summary';
+import { computeSummary, matchesSpecialList } from '../../lib/business/summary';
+import type { Collaborator } from '../../lib/business/types';
 import { copyText, formatRankingText } from '../../lib/clipboard';
 import { todayISO } from '../../lib/dateRange';
 import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
 import { useCollaborators, useGoals, useSales, useSpecialLists, useStore } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { MobileDateFilter } from './MobileDateFilter';
+import { MobileSalesTable, MobileSellerAccordion } from './MobileSellerDetail';
 
 // Shared compact mobile v2 screen for Levmel/Chip — the spec says Chip
-// reuses Levmel's structure exactly, only color/values differ. No seller
-// selector or detail table (unlike Dermo/MP/Genéricos).
+// reuses Levmel's structure exactly, only color/values differ.
 //
 // Meta Mensal/Meta Diária come from the `goals` table (categoria=LEVMEL/CHIP,
 // see ADM > Funções > Metas > Levmel/Chip) — reused via useGoals() same as
@@ -35,10 +35,16 @@ export function MobileUnitCategoryScreen({
   const { data: store } = useStore();
   const { data: goals } = useGoals();
   const { dashFrom, dashTo } = useDateRange();
-  const [view, setView] = useState<'lista' | 'colunas'>('lista');
+  const [selectedSeller, setSelectedSeller] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
+
+  const byMatricula = useMemo(() => {
+    const map = new Map<string, Collaborator>();
+    (collaborators ?? []).forEach((c) => map.set(c.matricula, c));
+    return map;
+  }, [collaborators]);
 
   if (!collaborators || !sales || !specialLists || !goals) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
@@ -58,6 +64,17 @@ export function MobileUnitCategoryScreen({
   const metaDiaria = goals[catKey]?.diaria ?? 0;
   const pctMensal = metaMensal > 0 ? Math.min(100, (totalItens / metaMensal) * 100) : 0;
   const pctDiaria = metaDiaria > 0 ? Math.min(100, (itensHoje / metaDiaria) * 100) : 0;
+
+  const list = catKey === 'LEVMEL' ? specialLists.levmel : specialLists.chip;
+  const unitSales = sales
+    .filter((s) => {
+      if (s.dataISO && (s.dataISO < dashFrom || s.dataISO > dashTo)) return false;
+      if (!matchesSpecialList(s.produto, list)) return false;
+      if (selectedSeller && s.matricula !== selectedSeller) return false;
+      return true;
+    })
+    .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
+    .slice(0, 150);
 
   async function handleCopy() {
     const text = formatRankingText(
@@ -130,38 +147,24 @@ export function MobileUnitCategoryScreen({
 
       <MobileDateFilter />
 
-      {view === 'lista' ? (
-        <div className="mv2-ranking-list-card">
-          {rankingList.length === 0 ? (
-            <div style={{ fontSize: 10, color: 'var(--mv2-texto-2)', padding: '8px 0', textAlign: 'center' }}>Sem vendas no período.</div>
-          ) : (
-            rankingList.map((r, i) => (
-              <div key={r.matricula} className="mv2-row">
-                <span className="mv2-pos" style={{ color: accent }}>
-                  {i + 1}
-                </span>
-                {r.foto ? <img src={r.foto} alt="" className="mv2-avatar" /> : <div className="mv2-avatar" />}
-                <span className="mv2-name">{r.apelido || r.nome}</span>
-                <span className="mv2-qty">{r.itens} un.</span>
-              </div>
-            ))
-          )}
-        </div>
-      ) : (
-        <div style={{ margin: '0 18px 16px' }}>
-          <PodiumStaircase ranking={rankingList} getValue={(r) => r.itens} formatValue={(v) => `${v} un.`} variant="escadinha" />
-        </div>
-      )}
+      <div className="mv2-ranking-list-card">
+        {rankingList.length === 0 ? (
+          <div style={{ fontSize: 10, color: 'var(--mv2-texto-2)', padding: '8px 0', textAlign: 'center' }}>Sem vendas no período.</div>
+        ) : (
+          rankingList.map((r, i) => (
+            <div key={r.matricula} className="mv2-row">
+              <span className="mv2-pos" style={{ color: accent }}>
+                {i + 1}
+              </span>
+              {r.foto ? <img src={r.foto} alt="" className="mv2-avatar" /> : <div className="mv2-avatar" />}
+              <span className="mv2-name">{r.apelido || r.nome}</span>
+              <span className="mv2-qty">{r.itens} un.</span>
+            </div>
+          ))
+        )}
+      </div>
 
       <div className="mv2-ranking-actions">
-        <div className="mv2-row">
-          <button className={`mv2-view-toggle ${view === 'lista' ? 'active' : ''}`} onClick={() => setView('lista')}>
-            Lista
-          </button>
-          <button className={`mv2-view-toggle ${view === 'colunas' ? 'active' : ''}`} onClick={() => setView('colunas')}>
-            Colunas
-          </button>
-        </div>
         <div className="mv2-row" style={{ gap: 6 }}>
           <button className="mv2-btn-outline" onClick={handleCopy}>
             {copied ? '✓ Copiado' : 'Copiar'}
@@ -171,6 +174,16 @@ export function MobileUnitCategoryScreen({
           </button>
         </div>
       </div>
+
+      <MobileSellerAccordion collaborators={collaborators} selected={selectedSeller} onSelect={setSelectedSeller} />
+
+      <MobileSalesTable
+        title={`Lista de vendas — ${title}`}
+        sales={unitSales}
+        byMatricula={byMatricula}
+        showValor={false}
+        subtotalMode={selectedSeller ? 'quantidade' : 'none'}
+      />
 
       {imageModal && (
         <RankingImageModal

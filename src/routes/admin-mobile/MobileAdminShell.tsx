@@ -28,7 +28,6 @@ import { ConfiguracoesPage } from '../admin/ConfiguracoesPage';
 import { IconesPage } from '../admin/IconesPage';
 import { MinhaLojaPage } from '../admin/MinhaLojaPage';
 import { ProdutosPage } from '../admin/ProdutosPage';
-import { CategoryPage } from '../category/CategoryPage';
 import { ConquistasPage } from '../conquistas/ConquistasPage';
 import { MetasPage } from '../metas/MetasPage';
 import { MobileBioPage } from './MobileBioPage';
@@ -40,6 +39,7 @@ import { MobileGenericosPage } from './MobileGenericosPage';
 import { MobileChipPage } from './MobileChipPage';
 import { MobileInicioPage } from './MobileInicioPage';
 import { MobileLevmelPage } from './MobileLevmelPage';
+import { MobileMercadoriaGeralPage } from './MobileMercadoriaGeralPage';
 import { MobileRankingPage } from './MobileRankingPage';
 
 // Mobile v2 admin shell: the spec's sticky topbar + horizontal category
@@ -94,7 +94,7 @@ export function MobileAdminShell() {
       <nav className="mv2-category-menu">
         {CATEGORIES.map((c) => (
           <NavLink key={c.to} to={c.to} end={c.end} title={c.label} className={({ isActive }) => `mv2-cat-icon ${c.cls} ${isActive ? 'active' : ''}`}>
-            <FunctionIcon slot={c.slot} fallback={c.Icon} size={16} />
+            <FunctionIcon slot={c.slot} fallback={c.Icon} size={26} />
           </NavLink>
         ))}
       </nav>
@@ -106,7 +106,7 @@ export function MobileAdminShell() {
           <Route path="/categoria/DERM" element={<MobileDermoPage />} />
           <Route path="/categoria/GEN" element={<MobileGenericosPage />} />
           <Route path="/categoria/MP" element={<MobileExclusivasPage />} />
-          <Route path="/categoria/MER" element={<CategoryPage catKey="MER" />} />
+          <Route path="/categoria/MER" element={<MobileMercadoriaGeralPage />} />
           <Route path="/categoria/LEVMEL" element={<MobileLevmelPage />} />
           <Route path="/categoria/CHIP" element={<MobileChipPage />} />
           <Route path="/metas" element={<MetasPage />} />

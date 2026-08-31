@@ -1,12 +1,11 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
-import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { auditBioOutsideBalcao, BALCAO_SETOR, computeBioSummary, type BioSummaryRow } from '../../lib/business/bio';
 import { classifyBio, normalizeGrupoImport, type BioGroupKey } from '../../lib/business/classification';
 import { diasRestantesNoMes } from '../../lib/business/goals';
-import type { BioGroupGoal, BioGroupsProducts, BioWeights } from '../../lib/business/types';
+import type { BioGroupGoal, BioGroupsProducts, BioWeights, Collaborator } from '../../lib/business/types';
 import { copyText, formatRankingText } from '../../lib/clipboard';
 import { fmtDateBR } from '../../lib/format';
 import { useAddBioProduct, useBulkInsertBioProducts, useDeleteBioProduct, useUpdateBioGroupGoal, useUpdateBioWeights } from '../../lib/mutations';
@@ -14,11 +13,11 @@ import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
 import { useBioGroupGoals, useBioGroups, useCollaborators, useSales, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { MobileDateFilter } from './MobileDateFilter';
+import { resolveVendorName } from './MobileSellerDetail';
 
 const BIO_GROUP_KEYS: BioGroupKey[] = ['G1', 'G2', 'G3', 'G4'];
 const GROUP_LABELS: Record<BioGroupKey, string> = { G1: 'Grupo 1', G2: 'Grupo 2', G3: 'Grupo 3', G4: 'Grupo 4' };
 const GROUP_COLORS: Record<BioGroupKey, string> = { G1: '#00b6da', G2: '#a82bff', G3: '#ff3df0', G4: '#f26122' };
-const CAT_LABEL_SHORT: Record<string, string> = { DERM: 'Dermo', GEN: 'Gen/Sim', MP: 'Marcas Excl.', MER: 'Merc. Geral' };
 
 function groupBioRows(rows: { grupo: string; nome: string; palavras: string[]; id: string }[] | undefined): BioGroupsProducts {
   const result: BioGroupsProducts = { G1: [], G2: [], G3: [], G4: [] };
@@ -39,11 +38,15 @@ export function MobileBioPage() {
   const { dashFrom, dashTo } = useDateRange();
   const [view, setView] = useState<'ranking' | 'grupos' | 'pontos'>('ranking');
   const [groupFilter, setGroupFilter] = useState<BioGroupKey | 'ALL'>('ALL');
-  const [rankView, setRankView] = useState<'lista' | 'colunas'>('lista');
-  const [tableView, setTableView] = useState<'padrao' | 'bio'>('padrao');
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
+
+  const byMatricula = useMemo(() => {
+    const map = new Map<string, Collaborator>();
+    (collaborators ?? []).forEach((c) => map.set(c.matricula, c));
+    return map;
+  }, [collaborators]);
 
   if (!collaborators || !sales || !storeSettings || !bioGroupRows || !groupGoals) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
@@ -93,16 +96,14 @@ export function MobileBioPage() {
     bioGroups,
   );
   const balcaoMatriculas = new Set(balcaoCollaborators.map((c) => c.matricula));
-  // "Padrão" stays Balcão-only (it's about the sector's general sales). "BIO"
-  // shows every G1-G4 sale regardless of sector — a sale by someone outside
-  // Balcão isn't hidden, just flagged with "!" in the row (see the "!" badge
-  // below), matching auditBioOutsideBalcao's own audit criteria.
+  // Always scoped to G1-G4 products only, regardless of seller's sector — a
+  // sale by someone outside Balcão isn't hidden, just flagged with "!" in
+  // the row, matching auditBioOutsideBalcao's own audit criteria.
   const salesForTable = sales
     .filter((s) => {
       if (s.dataISO && s.dataISO < dashFrom) return false;
       if (s.dataISO && s.dataISO > dashTo) return false;
-      if (tableView === 'bio') return !!classifyBio(s.produto, bioGroups);
-      return balcaoMatriculas.has(s.matricula);
+      return !!classifyBio(s.produto, bioGroups);
     })
     .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
     .slice(0, 150);
@@ -131,11 +132,11 @@ export function MobileBioPage() {
     <div>
       <div className="mv2-screen-title mv2-biosintetica">BIOSINTÉTICA</div>
 
-      <div className="mv2-row" style={{ margin: '0 18px 12px', gap: 6 }}>
-        <button className="mv2-btn-outline" style={{ flex: 1 }} onClick={() => setView('grupos')}>
+      <div className="mv2-row" style={{ margin: '0 18px 12px' }}>
+        <button className="mv2-view-toggle" onClick={() => setView('grupos')}>
           Gerenciar Grupos
         </button>
-        <button className="mv2-btn-outline" style={{ flex: 1 }} onClick={() => setView('pontos')}>
+        <button className="mv2-view-toggle" onClick={() => setView('pontos')}>
           Gerenciar Pontos
         </button>
       </div>
@@ -193,44 +194,26 @@ export function MobileBioPage() {
         ))}
       </div>
 
-      {rankView === 'lista' ? (
-        <div className="mv2-ranking-list-card">
-          {rankingList.length === 0 ? (
-            <div style={{ fontSize: 10, color: 'var(--mv2-texto-2)', padding: '8px 0', textAlign: 'center' }}>Sem vendas no período.</div>
-          ) : (
-            rankingList.map((r, i) => (
-              <div key={r.matricula} className="mv2-row">
-                <span className="mv2-pos" style={{ color: 'var(--mv2-rosa)' }}>
-                  {i + 1}
-                </span>
-                {r.foto ? <img src={r.foto} alt="" className="mv2-avatar" /> : <div className="mv2-avatar" />}
-                <span className="mv2-name">{r.apelido || r.nome}</span>
-                <span className="mv2-qty">{r.pontos.toFixed(1)} pts</span>
-              </div>
-            ))
-          )}
-        </div>
-      ) : (
-        <div style={{ margin: '0 18px 16px' }}>
-          <PodiumStaircase
-            ranking={rankingList}
-            getValue={(r) => r.pontos}
-            formatValue={(v) => `${v.toFixed(1)} pts`}
-            getSub={(r) => `${r.itens} un.`}
-            variant="escadinha"
-          />
-        </div>
-      )}
+      <div className="mv2-ranking-list-card">
+        {rankingList.length === 0 ? (
+          <div style={{ fontSize: 10, color: 'var(--mv2-texto-2)', padding: '8px 0', textAlign: 'center' }}>Sem vendas no período.</div>
+        ) : (
+          rankingList.map((r, i) => (
+            <div key={r.matricula} className="mv2-row">
+              <span className="mv2-pos" style={{ color: 'var(--mv2-rosa)' }}>
+                {i + 1}
+              </span>
+              {r.foto ? <img src={r.foto} alt="" className="mv2-avatar" /> : <div className="mv2-avatar" />}
+              <span className="mv2-name">{r.apelido || r.nome}</span>
+              <span className="mv2-qty">
+                {r.itens} un. · {r.pontos.toFixed(1)} pts
+              </span>
+            </div>
+          ))
+        )}
+      </div>
 
       <div className="mv2-ranking-actions">
-        <div className="mv2-row">
-          <button className={`mv2-view-toggle ${rankView === 'lista' ? 'active' : ''}`} onClick={() => setRankView('lista')}>
-            Lista
-          </button>
-          <button className={`mv2-view-toggle ${rankView === 'colunas' ? 'active' : ''}`} onClick={() => setRankView('colunas')}>
-            Colunas
-          </button>
-        </div>
         <div className="mv2-row" style={{ gap: 6 }}>
           <button className="mv2-btn-outline" onClick={handleCopy}>
             {copied ? '✓ Copiado' : 'Copiar'}
@@ -242,46 +225,35 @@ export function MobileBioPage() {
       </div>
 
       <div style={{ margin: '18px 18px 8px' }}>
-        <div className="mv2-row" style={{ marginBottom: 6 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, flex: 1 }}>Lista de vendas — Balcão</div>
-          <button className={`mv2-view-toggle ${tableView === 'padrao' ? 'active' : ''}`} style={{ flex: 'none', padding: '4px 10px' }} onClick={() => setTableView('padrao')}>
-            Padrão
-          </button>
-          <button className={`mv2-view-toggle ${tableView === 'bio' ? 'active' : ''}`} style={{ flex: 'none', padding: '4px 10px' }} onClick={() => setTableView('bio')}>
-            BIO
-          </button>
-        </div>
+        <div style={{ fontSize: 10, fontWeight: 700, marginBottom: 6 }}>Lista de vendas — Biosintética</div>
         <div style={{ overflowX: 'auto' }}>
           <table className="mv2-data-table">
             <thead>
               <tr>
                 <th>Data</th>
-                <th>Matrícula</th>
-                <th>Nome</th>
-                <th>Produto</th>
-                <th>Qtd</th>
+                <th>Nome do Colaborador</th>
+                <th>Quantidade</th>
                 <th>Tipo</th>
+                <th>Pontos</th>
               </tr>
             </thead>
             <tbody>
               {salesForTable.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', color: 'var(--mv2-texto-2)', padding: 8 }}>
+                  <td colSpan={5} style={{ textAlign: 'center', color: 'var(--mv2-texto-2)', padding: 8 }}>
                     Nenhuma venda no período.
                   </td>
                 </tr>
               ) : (
                 salesForTable.map((s) => {
-                  const g = classifyBio(s.produto, bioGroups);
-                  const pontos = g ? s.qtd * (bioWeights[g] || 0) : 0;
-                  const outsideBalcao = tableView === 'bio' && g && !balcaoMatriculas.has(s.matricula);
+                  const g = classifyBio(s.produto, bioGroups)!;
+                  const pontos = s.qtd * (bioWeights[g] || 0);
+                  const outsideBalcao = !balcaoMatriculas.has(s.matricula);
                   return (
                     <tr key={s.id}>
                       <td>{fmtDateBR(s.dataISO)}</td>
-                      <td>{s.matricula}</td>
-                      <td>{s.vendedor}</td>
                       <td>
-                        {s.produto}
+                        {resolveVendorName(s, byMatricula)}
                         {outsideBalcao && (
                           <span
                             title="Produto da Biosintética vendido por colaborador fora do setor Balcão — não entra no ranking."
@@ -292,7 +264,8 @@ export function MobileBioPage() {
                         )}
                       </td>
                       <td>{s.qtd}</td>
-                      <td>{tableView === 'bio' ? (g ? `[${g}] ${pontos.toFixed(1)}pts` : '—') : s.grupo ? CAT_LABEL_SHORT[s.grupo] || s.grupo : '—'}</td>
+                      <td>{GROUP_LABELS[g]}</td>
+                      <td>{pontos.toFixed(1)}</td>
                     </tr>
                   );
                 })

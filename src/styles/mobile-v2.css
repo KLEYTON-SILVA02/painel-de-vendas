@@ -316,59 +316,60 @@
 .mv2-category-menu::-webkit-scrollbar {
   display: none;
 }
+/* Icons render bare (no circle behind them) — the category color lives on
+   the glyph itself via `color`, sized up to fill the space the circle used
+   to occupy (38px) instead of the small 16px glyph that sat inside it. */
 .mv2-category-menu .mv2-cat-icon {
   flex: 0 0 auto;
   width: 38px;
   height: 38px;
-  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
-  font-size: 15px;
+  font-size: 26px;
   text-decoration: none;
   cursor: pointer;
-  border: 2px solid transparent;
+  border-bottom: 2px solid transparent;
+  opacity: 0.75;
 }
 .mv2-category-menu .mv2-cat-icon.active {
-  border-color: #fff;
+  opacity: 1;
+  border-bottom-color: currentColor;
 }
 /* cor individual por categoria */
 .mv2-cat-icon.mv2-cat-inicio {
-  background: var(--mv2-ciano);
+  color: var(--mv2-ciano);
 }
 .mv2-cat-icon.mv2-cat-ranking {
-  background: var(--mv2-dourado);
-  color: #201a00;
+  color: var(--mv2-dourado);
 }
 .mv2-cat-icon.mv2-cat-dermo {
-  background: var(--mv2-rosa);
+  color: var(--mv2-rosa);
 }
 .mv2-cat-icon.mv2-cat-generico {
-  background: var(--mv2-verde);
+  color: var(--mv2-verde);
 }
 .mv2-cat-icon.mv2-cat-exclusiva {
-  background: var(--mv2-roxo-cat);
+  color: var(--mv2-roxo-cat);
 }
 .mv2-cat-icon.mv2-cat-mercgeral {
-  background: var(--mv2-laranja);
+  color: var(--mv2-laranja);
 }
 .mv2-cat-icon.mv2-cat-levmel {
-  background: var(--mv2-ambar);
-  color: #201a00;
+  color: var(--mv2-ambar);
 }
 .mv2-cat-icon.mv2-cat-chip {
-  background: var(--mv2-dourado);
-  color: #201a00;
+  color: var(--mv2-dourado);
 }
 .mv2-cat-icon.mv2-cat-biosintetica {
-  background: var(--mv2-verde);
+  color: var(--mv2-verde);
 }
 .mv2-cat-icon.mv2-cat-dinamicas {
-  background: var(--mv2-azul-violeta);
+  color: var(--mv2-azul-violeta);
 }
 .mv2-cat-icon.mv2-cat-adm {
-  background: var(--mv2-azul-royal);
+  color: var(--mv2-azul-royal);
 }
 
 /* ---------- 3. Card geral de vendas ---------- */
@@ -679,10 +680,13 @@
 .mv2-screen-title.mv2-genericos {
   --mv2-accent: var(--mv2-laranja);
 }
+.mv2-screen-title.mv2-mercgeral {
+  --mv2-accent: var(--mv2-laranja);
+}
 .mv2-screen-title.mv2-levmel {
   --mv2-accent: var(--mv2-dourado-oliva);
 }
-.mv2-screen-title.mv2-chip {
+.mv2-screen-title.mv2-chip-cat {
   --mv2-accent: var(--mv2-dourado-oliva);
 }
 .mv2-screen-title.mv2-biosintetica {
@@ -777,8 +781,15 @@
   gap: 6px;
   margin: 0 18px 8px;
 }
-.mv2-ranking-actions .mv2-row {
+/* `.mv2-row` is used throughout as a generic flex-row helper (button pairs,
+   label/value lines, form fields laid out with gap/flex:1 on children) —
+   needs `display: flex` unconditionally, not just when nested under
+   `.mv2-ranking-actions`, or those children's flex/gap rules are inert and
+   things like the Lista/Colunas or Gerenciar Grupos/Pontos button pairs
+   shrink to their unstretched, unpadded natural size. */
+.mv2-row {
   display: flex;
+  align-items: center;
 }
 .mv2-view-toggle {
   flex: 1;
