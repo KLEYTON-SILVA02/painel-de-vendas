@@ -204,6 +204,7 @@ export type Database = {
           categoria: string
           id: string
           percentual: number
+          slot: number
           store_id: string
         }
         Insert: {
@@ -211,6 +212,7 @@ export type Database = {
           categoria: string
           id?: string
           percentual?: number
+          slot?: number
           store_id: string
         }
         Update: {
@@ -218,6 +220,7 @@ export type Database = {
           categoria?: string
           id?: string
           percentual?: number
+          slot?: number
           store_id?: string
         }
         Relationships: [

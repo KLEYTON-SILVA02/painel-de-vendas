@@ -47,6 +47,7 @@ export function mapGoal(row: Tables<'goals'>): Goal {
 export function mapCommissionRate(row: Tables<'commission_rates'>): CommissionRate {
   return {
     categoria: row.categoria as CommissionRate['categoria'],
+    slot: row.slot,
     percentual: Number(row.percentual) || 0,
     ativo: row.ativo,
   };
