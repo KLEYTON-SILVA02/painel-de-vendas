@@ -4,6 +4,7 @@ import type { BioGroupGoal, CommissionRate, Goal } from './business/types';
 import type { SpecialListItem } from './business/summary';
 import type { CardZone, ConquistaCardTemplate } from './conquistaCardRender';
 import { mapBioGroupGoal, mapCollaborator, mapCommissionRate, mapDynamic, mapGoal, mapSale, mapSpecialListItem } from './mappers';
+import type { BulkDeletableTable } from './mutations';
 import { supabase } from './supabase';
 import type { Tables } from '../types/database';
 
@@ -282,4 +283,18 @@ export function useDynamics() {
       return data.map(mapDynamic);
     },
   });
+}
+
+/** On-demand row count for the "Excluir dados" danger zone (ADM >
+ * Configurações) — a plain async lookup rather than a cached query hook,
+ * since it's only ever used right before a destructive action to show
+ * "N registros serão excluídos" and shouldn't linger in the query cache. */
+export async function countRowsInRange(table: BulkDeletableTable, dateColumn?: string, from?: string, to?: string): Promise<number> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (supabase.from(table) as any).select('id', { count: 'exact', head: true });
+  if (dateColumn && from) query = query.gte(dateColumn, from);
+  if (dateColumn && to) query = query.lte(dateColumn, to);
+  const { count, error } = await query;
+  if (error) throw error;
+  return count ?? 0;
 }

@@ -18,6 +18,7 @@ function sale(overrides: Partial<Tables<'sales'>>): Tables<'sales'> {
     data_iso: '2026-08-04',
     classification_tier: null,
     created_at: '2026-08-04T00:00:00Z',
+    import_id: null,
     ...overrides,
   };
 }

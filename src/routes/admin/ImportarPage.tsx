@@ -7,6 +7,7 @@ import { dateFromCell, idFromCell, normalizeMatricula, parseNumeroBR } from '../
 import { buildClassificationInputs } from '../../lib/mappers';
 import { fmtMoney } from '../../lib/format';
 import { useBrandKeywords, useCatalog, useExclusiveBrands, useProducts, useSales } from '../../lib/queries';
+import { findExistingImport, hashBytes, recordSalesImport, saleImportKey } from '../../lib/salesImport';
 import { supabase } from '../../lib/supabase';
 
 const MAX_SIZE = 50 * 1024 * 1024;
@@ -31,15 +32,19 @@ export function ImportarPage() {
   const { data: products } = useProducts();
   const { data: brandKeywords } = useBrandKeywords();
   const { data: exclusiveBrands } = useExclusiveBrands();
-  const { refetch: refetchSales } = useSales();
+  const { data: existingSales, refetch: refetchSales } = useSales();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>('pick');
   const [sheets, setSheets] = useState<ParsedSheet[]>([]);
+  const [fileName, setFileName] = useState('');
+  const [fileHash, setFileHash] = useState('');
   const [readPct, setReadPct] = useState<number | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [confirmResult, setConfirmResult] = useState<{ count: number; invalidDate: number; noProduto: number } | null>(null);
+  const [confirmResult, setConfirmResult] = useState<{ count: number; invalidDate: number; noProduto: number; duplicateCount: number } | null>(
+    null,
+  );
 
   if (!catalog || !products || !brandKeywords || !exclusiveBrands) {
     return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
@@ -66,8 +71,36 @@ export function ImportarPage() {
       setProgress('Processando planilha…');
       // Mirrors the legacy's own brief pause here — lets the 100% fill paint
       // before the (synchronous, can be heavy on large files) parse blocks the thread.
-      setTimeout(() => {
+      setTimeout(async () => {
         const data = new Uint8Array(ev.target!.result as ArrayBuffer);
+
+        // File-identity check — catches "uploaded the exact same spreadsheet
+        // again" before any parsing happens, so the admin gets warned early.
+        let hash = '';
+        try {
+          hash = await hashBytes(data);
+          if (profile?.store_id) {
+            const existing = await findExistingImport(profile.store_id, hash);
+            if (existing) {
+              const when = new Date(existing.createdAt).toLocaleString('pt-BR');
+              const proceed = window.confirm(
+                `Esta planilha já foi importada em ${when} (${existing.rowCount} venda(s)). Importar de novo pode gerar duplicidade se os dados não mudaram — o sistema vai ignorar automaticamente qualquer venda idêntica a uma já existente. Deseja continuar mesmo assim?`,
+              );
+              if (!proceed) {
+                setProgress(null);
+                setReadPct(null);
+                return;
+              }
+            }
+          }
+        } catch {
+          // Hashing/lookup failing (e.g. crypto.subtle unavailable) isn't
+          // fatal — the row-level dedup check in handleConfirm still protects
+          // against duplicates; the file-identity warning just gets skipped.
+        }
+        setFileName(file.name);
+        setFileHash(hash);
+
         const wb = XLSX.read(data, { type: 'array', cellDates: true });
         const parsed: ParsedSheet[] = wb.SheetNames.map((name) => {
           const sheet = wb.Sheets[name];
@@ -116,54 +149,73 @@ export function ImportarPage() {
   async function handleConfirm() {
     if (!profile?.store_id) return;
     setStep('done');
-    setProgress('Gravando vendas…');
-    let count = 0;
+    setProgress('Verificando duplicidade…');
+
+    // Every sale already in the store, keyed the same way as the rows about
+    // to be inserted — a new row matching one of these is a duplicate
+    // (already imported before, from this file or another one) and gets
+    // skipped rather than inserted again.
+    const existingKeys = new Set((existingSales ?? []).map((s) => saleImportKey({ ...s, codigo: s.codigo ?? null })));
+    const seenInBatch = new Set<string>();
+    const rows: Record<string, unknown>[] = [];
     let invalidDate = 0;
     let noProduto = 0;
-    const batch: Record<string, unknown>[] = [];
+    let duplicateCount = 0;
 
-    async function flush() {
-      if (batch.length === 0) return;
-      const { error: insertErr } = await supabase.from('sales').insert(batch.splice(0, batch.length) as never);
-      if (insertErr) throw insertErr;
+    for (const sheet of sheets) {
+      for (const [ri, r] of sheet.rows.entries()) {
+        const rr = sheet.rawRows[ri] ?? [];
+        const produto = sheet.map.produto >= 0 ? String(r[sheet.map.produto] ?? '').trim() : '';
+        if (!produto) {
+          noProduto++;
+          continue;
+        }
+        const dataStr = sheet.map.data >= 0 ? String(r[sheet.map.data] ?? '').trim() : '';
+        const dataISO = sheet.map.data >= 0 ? dateFromCell(rr[sheet.map.data], dataStr) : null;
+        if (!dataISO) invalidDate++;
+        const codigo = sheet.map.codigo >= 0 ? idFromCell(rr[sheet.map.codigo], r[sheet.map.codigo]) : '';
+        const matricula = sheet.map.matricula >= 0 ? normalizeMatricula(idFromCell(rr[sheet.map.matricula], r[sheet.map.matricula])) : '';
+        const qtd = sheet.map.qtd >= 0 ? parseNumeroBR(r[sheet.map.qtd]) : 0;
+        const valor = sheet.map.valor >= 0 ? parseNumeroBR(r[sheet.map.valor]) : 0;
+
+        const key = saleImportKey({ dataISO, matricula, produto, codigo: codigo || null, qtd, valor });
+        if (existingKeys.has(key) || seenInBatch.has(key)) {
+          duplicateCount++;
+          continue;
+        }
+        seenInBatch.add(key);
+
+        const { categoria, tier } = classifyProductTier(produto, codigo, inputs);
+        rows.push({
+          store_id: profile.store_id,
+          data_raw: dataStr,
+          data_iso: dataISO,
+          matricula,
+          vendedor: sheet.map.vendedor >= 0 ? String(r[sheet.map.vendedor] ?? '').trim() : '',
+          produto,
+          codigo: codigo || null,
+          qtd,
+          valor,
+          grupo: categoria,
+          classification_tier: tier,
+        });
+      }
     }
 
     try {
-      for (const sheet of sheets) {
-        for (const [ri, r] of sheet.rows.entries()) {
-          const rr = sheet.rawRows[ri] ?? [];
-          const produto = sheet.map.produto >= 0 ? String(r[sheet.map.produto] ?? '').trim() : '';
-          if (!produto) {
-            noProduto++;
-            continue;
-          }
-          const dataStr = sheet.map.data >= 0 ? String(r[sheet.map.data] ?? '').trim() : '';
-          const dataISO = sheet.map.data >= 0 ? dateFromCell(rr[sheet.map.data], dataStr) : null;
-          if (!dataISO) invalidDate++;
-          const codigo = sheet.map.codigo >= 0 ? idFromCell(rr[sheet.map.codigo], r[sheet.map.codigo]) : '';
-          const { categoria, tier } = classifyProductTier(produto, codigo, inputs);
-          batch.push({
-            store_id: profile.store_id,
-            data_raw: dataStr,
-            data_iso: dataISO,
-            matricula: sheet.map.matricula >= 0 ? normalizeMatricula(idFromCell(rr[sheet.map.matricula], r[sheet.map.matricula])) : '',
-            vendedor: sheet.map.vendedor >= 0 ? String(r[sheet.map.vendedor] ?? '').trim() : '',
-            produto,
-            codigo: codigo || null,
-            qtd: sheet.map.qtd >= 0 ? parseNumeroBR(r[sheet.map.qtd]) : 0,
-            valor: sheet.map.valor >= 0 ? parseNumeroBR(r[sheet.map.valor]) : 0,
-            grupo: categoria,
-            classification_tier: tier,
-          });
-          count++;
-          if (batch.length >= 500) {
-            await flush();
-            setProgress(`Gravando vendas… ${count}`);
-          }
-        }
+      const importRow = await recordSalesImport(profile.store_id, fileName, fileHash, rows.length, duplicateCount);
+      rows.forEach((row) => {
+        row.import_id = importRow.id;
+      });
+
+      setProgress(`Gravando vendas… 0/${rows.length}`);
+      for (let i = 0; i < rows.length; i += 500) {
+        const chunk = rows.slice(i, i + 500);
+        const { error: insertErr } = await supabase.from('sales').insert(chunk as never);
+        if (insertErr) throw insertErr;
+        setProgress(`Gravando vendas… ${Math.min(i + 500, rows.length)}/${rows.length}`);
       }
-      await flush();
-      setConfirmResult({ count, invalidDate, noProduto });
+      setConfirmResult({ count: rows.length, invalidDate, noProduto, duplicateCount });
       refetchSales();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao gravar vendas.');
@@ -176,6 +228,8 @@ export function ImportarPage() {
   function reset() {
     setStep('pick');
     setSheets([]);
+    setFileName('');
+    setFileHash('');
     setConfirmResult(null);
     setError(null);
     setReadPct(null);
@@ -314,9 +368,16 @@ export function ImportarPage() {
             <>
               <p className="text-sm text-green-400 mb-3">
                 {confirmResult.count} vendas importadas
+                {confirmResult.duplicateCount ? ` · ${confirmResult.duplicateCount} duplicada(s) ignorada(s)` : ''}
                 {confirmResult.invalidDate ? ` · ${confirmResult.invalidDate} com data inválida` : ''}
                 {confirmResult.noProduto ? ` · ${confirmResult.noProduto} sem produto` : ''}
               </p>
+              {confirmResult.duplicateCount > 0 && (
+                <p className="text-xs text-slate-500 mb-3">
+                  {confirmResult.duplicateCount} venda(s) da planilha já existiam no sistema (mesma data, matrícula, produto,
+                  quantidade e valor) e não foram gravadas de novo.
+                </p>
+              )}
               <button onClick={reset} className="rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm">
                 Importar outra planilha
               </button>

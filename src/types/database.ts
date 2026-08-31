@@ -608,6 +608,7 @@ export type Database = {
           data_raw: string | null
           grupo: string | null
           id: string
+          import_id: string | null
           matricula: string
           produto: string
           qtd: number
@@ -623,6 +624,7 @@ export type Database = {
           data_raw?: string | null
           grupo?: string | null
           id?: string
+          import_id?: string | null
           matricula: string
           produto: string
           qtd?: number
@@ -638,6 +640,7 @@ export type Database = {
           data_raw?: string | null
           grupo?: string | null
           id?: string
+          import_id?: string | null
           matricula?: string
           produto?: string
           qtd?: number
@@ -647,7 +650,52 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "sales_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "sales_imports"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "sales_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_imports: {
+        Row: {
+          created_at: string
+          duplicate_count: number
+          file_hash: string
+          file_name: string
+          id: string
+          row_count: number
+          store_id: string
+        }
+        Insert: {
+          created_at?: string
+          duplicate_count?: number
+          file_hash: string
+          file_name: string
+          id?: string
+          row_count?: number
+          store_id: string
+        }
+        Update: {
+          created_at?: string
+          duplicate_count?: number
+          file_hash?: string
+          file_name?: string
+          id?: string
+          row_count?: number
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_imports_store_id_fkey"
             columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "stores"
