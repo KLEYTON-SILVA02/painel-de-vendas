@@ -6,6 +6,7 @@ import { useUpdateStore, useUpdateStoreSettings } from '../../lib/mutations';
 import { useStore, useStoreSettings } from '../../lib/queries';
 import { uploadPhoto } from '../../lib/storage';
 import type { Json } from '../../types/database';
+import { onlyDigits } from '../../lib/whatsapp';
 
 const TEMAS = [
   { id: 'ciano', label: 'Ciano Padrão', cor: '#00f0ff' },
@@ -25,6 +26,7 @@ export function MinhaLojaPage() {
   const [nomeLoja, setNomeLoja] = useState('');
   const [numeroLoja, setNumeroLoja] = useState('');
   const [nomeEquipe, setNomeEquipe] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
   const [metaFallback, setMetaFallback] = useState(0);
   const [corDestaque, setCorDestaque] = useState('#00f0ff');
   const [brilho, setBrilho] = useState(100);
@@ -41,6 +43,7 @@ export function MinhaLojaPage() {
     setNomeLoja(store.nome_loja);
     setNumeroLoja(store.numero_loja);
     setNomeEquipe(store.nome_equipe);
+    setWhatsapp(store.whatsapp);
     setMetaFallback(storeSettings.meta_geral_fallback);
     setCorDestaque(storeSettings.cor_destaque);
     setBrilho(storeSettings.brilho);
@@ -87,7 +90,7 @@ export function MinhaLojaPage() {
   async function handleSave() {
     setSaving(true);
     try {
-      await updateStore.mutateAsync({ nome_loja: nomeLoja, numero_loja: numeroLoja, nome_equipe: nomeEquipe });
+      await updateStore.mutateAsync({ nome_loja: nomeLoja, numero_loja: numeroLoja, nome_equipe: nomeEquipe, whatsapp: onlyDigits(whatsapp) });
       await updateSettings.mutateAsync({
         meta_geral_fallback: metaFallback,
         cor_destaque: corDestaque,
@@ -117,7 +120,18 @@ export function MinhaLojaPage() {
           <Field label="Meta Geral de reserva (R$)">
             <input type="number" value={metaFallback} onChange={(e) => setMetaFallback(Number(e.target.value))} className="input" />
           </Field>
+          <Field label="WhatsApp da loja (com DDI e DDD)">
+            <input
+              value={whatsapp}
+              onChange={(e) => setWhatsapp(e.target.value)}
+              placeholder="ex: 5511999998888"
+              className="input"
+            />
+          </Field>
         </div>
+        <p className="text-xs text-slate-500 mt-2">
+          Usado pelo botão "Enviar por WhatsApp" nas imagens de ranking, conquistas e card de campeão.
+        </p>
         <div className="mt-4">
           <label className="block text-xs text-slate-400 mb-1">Logo do sistema (substitui o "GV" no menu lateral)</label>
           <div className="flex items-center gap-3">
