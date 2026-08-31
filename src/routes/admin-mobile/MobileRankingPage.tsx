@@ -50,7 +50,7 @@ export function MobileRankingPage() {
     setGenerating(true);
     try {
       const rows = rankingList.map((r) => ({ nome: r.nome, apelido: r.apelido, foto: r.foto, valor: isUnit ? r.itens : r.valor }));
-      const blob = await generateRankingImageBlob(rows, info.titulo, dashFrom, dashTo, store?.nome_loja);
+      const blob = await generateRankingImageBlob(rows, info.titulo, dashFrom, dashTo, store?.nome_loja, isUnit);
       if (!blob) return;
       const copied = await tryCopyImage(blob);
       setImageModal({ url: URL.createObjectURL(blob), copied });

@@ -44,9 +44,15 @@ export async function generateRankingImageBlob(
   fromDate: string,
   toDate: string,
   storeName?: string,
+  /** LEVMEL/CHIP are unit-count categories, not currency — `r.valor` on
+   * those rows is already an item count by the time it reaches this
+   * function (see each caller), but the label under each bar and the
+   * "total" box still need to know not to run it through fmtMoney. */
+  isUnit = false,
 ): Promise<Blob | null> {
   const ranking = rankingIn.filter((r) => r.valor > 0).slice(0, 10);
   const totalValor = ranking.reduce((a, r) => a + r.valor, 0);
+  const fmtValue = (v: number) => (isUnit ? `${Math.round(v)} un.` : fmtMoney(v));
 
   const W = 1000;
   const H = 620;
@@ -84,10 +90,10 @@ export async function generateRankingImageBlob(
   ctx.stroke();
   ctx.fillStyle = '#8b90bf';
   ctx.font = '600 10px Arial';
-  ctx.fillText('TOTAL VENDIDO', W - 170, 94);
+  ctx.fillText(isUnit ? 'TOTAL DE UNIDADES' : 'TOTAL VENDIDO', W - 170, 94);
   ctx.fillStyle = '#14ff00';
   ctx.font = '800 22px Arial';
-  ctx.fillText(fmtMoney(totalValor), W - 170, 118);
+  ctx.fillText(fmtValue(totalValor), W - 170, 118);
   ctx.textAlign = 'left';
 
   if (ranking.length === 0) {
@@ -166,7 +172,7 @@ export async function generateRankingImageBlob(
       ctx.fillText(nome, cx, avCy - avR - 22);
       ctx.fillStyle = '#14ff00';
       ctx.font = '700 12px Arial';
-      ctx.fillText(fmtMoney(r.valor), cx, avCy - avR - 8);
+      ctx.fillText(fmtValue(r.valor), cx, avCy - avR - 8);
     });
   }
 
