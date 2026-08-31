@@ -23,6 +23,7 @@ import { AdminLandingPage } from '../admin/AdminLandingPage';
 import { AuditoriaPage } from '../admin/AuditoriaPage';
 import { ListaVendasPage } from '../admin/ListaVendasPage';
 import { BackupPage } from '../admin/BackupPage';
+import { CardConquistaPage } from '../admin/CardConquistaPage';
 import { ColaboradoresPage } from '../admin/ColaboradoresPage';
 import { ConfiguracoesPage } from '../admin/ConfiguracoesPage';
 import { IconesPage } from '../admin/IconesPage';
@@ -130,6 +131,7 @@ export function MobileAdminShell() {
           <Route path="/admin/minha-loja" element={<MinhaLojaPage />} />
           <Route path="/admin/configuracoes" element={<ConfiguracoesPage />} />
           <Route path="/admin/icones" element={<IconesPage />} />
+          <Route path="/admin/card-conquista" element={<CardConquistaPage />} />
         </Routes>
       </main>
     </div>

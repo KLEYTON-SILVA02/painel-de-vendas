@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { SidebarCalendarCard } from '../../components/SidebarCalendarCard';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
@@ -11,9 +11,10 @@ import {
   type ConquistaCategoria,
   type ConquistaRow,
 } from '../../lib/business/conquistas';
+import { BUILT_IN_TEMPLATE, renderConquistaCard, type ConquistaCardTemplate } from '../../lib/conquistaCardRender';
 import { generateConquistaImageBlob } from '../../lib/conquistaImage';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
-import { useCollaborators, useSales, useSpecialLists, useStore } from '../../lib/queries';
+import { useCollaborators, useConquistaCardTemplates, useSales, useSpecialLists, useStore } from '../../lib/queries';
 import { tryCopyImage } from '../../lib/rankingImage';
 import { useDateRange } from '../DateRangeContext';
 
@@ -44,6 +45,7 @@ export function ConquistasPage() {
   const { data: sales } = useSales();
   const { data: specialLists } = useSpecialLists();
   const { data: store } = useStore();
+  const { data: cardTemplates } = useConquistaCardTemplates();
   const { dashFrom, dashTo, setDay } = useDateRange();
   const [catKey, setCatKey] = useState<ConquistaCategoria>('DERM');
   const [tierFilter, setTierFilter] = useState<TierFilter>('ALL');
@@ -56,6 +58,7 @@ export function ConquistasPage() {
 
   const info = CONQUISTA_CATS.find((c) => c.key === catKey)!;
   const isUnit = isUnitConquista(catKey);
+  const activeTemplate: ConquistaCardTemplate = cardTemplates?.find((t) => t.isDefault) ?? BUILT_IN_TEMPLATE;
   const rows = computeConquistas(sales, collaborators, dashFrom, dashTo, catKey, specialLists);
   const filtered = rows.filter((r) => matchesFilter(r, tierFilter));
   const dayGallery = computeConquistasDayGallery(sales, collaborators, dashFrom, dashTo, catKey, specialLists);
@@ -134,7 +137,15 @@ export function ConquistasPage() {
           ) : (
             <div className="grid grid-cols-1 min-[520px]:grid-cols-2 min-[760px]:grid-cols-3 gap-4">
               {filtered.map((r) => (
-                <ConquistaCard key={r.matricula} row={r} categoria={catKey} color={info.color} isUnit={isUnit} logoUrl={store?.logo_url} />
+                <ConquistaCard
+                  key={r.matricula}
+                  row={r}
+                  categoria={catKey}
+                  color={info.color}
+                  isUnit={isUnit}
+                  logoUrl={store?.logo_url}
+                  template={activeTemplate}
+                />
               ))}
             </div>
           )}
@@ -152,6 +163,12 @@ export function ConquistasPage() {
               className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800"
             >
               ⚙️ Ajustar Metas
+            </Link>
+            <Link
+              to="/admin/card-conquista"
+              className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800"
+            >
+              🎨 Modelos de Card
             </Link>
           </div>
         </div>
@@ -205,58 +222,50 @@ export function ConquistasPage() {
 }
 
 /** The achievement "figurinha": collaborator photo, the store's own logo
- * (pre-configured in ADM > Minha Loja) in a rounded badge, and a banner
- * naming which tier was reached. This is a CSS approximation of the final
- * design — the exact photo/logo/text mask geometry and background art are
- * still pending the 4 reference images that define them. */
+ * (pre-configured in ADM > Minha Loja) and a tier banner, each clipped to
+ * the active template's exact mask geometry via canvas `destination-in`
+ * compositing (see conquistaCardRender.ts) — not a CSS approximation. Name
+ * and value stay as plain text below the art, matching the reference cards'
+ * own layout (their masks cover only photo/logo/tier-banner). */
 function ConquistaCard({
   row,
   categoria,
   color,
   isUnit,
   logoUrl,
+  template,
 }: {
   row: ConquistaRow;
   categoria: ConquistaCategoria;
   color: string;
   isUnit: boolean;
   logoUrl?: string | null;
+  template: ConquistaCardTemplate;
 }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const tierText = conquistaTierLabel(categoria, row.tier);
+
+  useEffect(() => {
+    let active = true;
+    renderConquistaCard(template, { photoUrl: row.foto, logoUrl: logoUrl ?? null, tierText, color }).then((rendered) => {
+      if (!active) return;
+      const target = canvasRef.current;
+      if (!target) return;
+      target.width = rendered.width;
+      target.height = rendered.height;
+      target.getContext('2d')?.drawImage(rendered, 0, 0);
+    });
+    return () => {
+      active = false;
+    };
+  }, [template, row.foto, logoUrl, tierText, color]);
+
   return (
-    <div
-      className="rounded-2xl overflow-hidden flex flex-col items-center text-center"
-      style={{
-        border: `2px solid ${color}`,
-        background: `linear-gradient(160deg, ${color}22, #0b0e1d 65%)`,
-        boxShadow: `0 0 24px -6px ${color}80`,
-      }}
-    >
-      <div className="w-full flex justify-center pt-3">
-        {logoUrl ? (
-          <img src={logoUrl} alt="" className="h-7 rounded-full object-contain bg-white/90 px-3 py-1" />
-        ) : (
-          <div className="h-7 rounded-full bg-white/10 px-4 flex items-center justify-center text-[9px] text-slate-400 uppercase tracking-wide">
-            Logo
-          </div>
-        )}
-      </div>
-
-      {row.foto ? (
-        <img src={row.foto} alt="" className="w-24 h-24 rounded-full object-cover border-4 mt-3" style={{ borderColor: color }} />
-      ) : (
-        <div className="w-24 h-24 rounded-full bg-slate-700 border-4 mt-3" style={{ borderColor: color }} />
-      )}
-
+    <div className="rounded-2xl overflow-hidden flex flex-col items-center text-center" style={{ boxShadow: `0 0 24px -6px ${color}80` }}>
+      <canvas ref={canvasRef} className="w-full h-auto block" />
       <div className="mt-2 text-base font-bold truncate max-w-full px-3">{row.apelido || row.nome}</div>
       <div className="text-sm font-mono" style={{ color: '#14ff00' }}>
         {isUnit ? `${row.itens} un.` : fmtMoney(row.valor)}
-      </div>
-
-      <div
-        className="w-full mt-3 py-2 px-2 text-xs font-extrabold uppercase tracking-wide"
-        style={{ background: color, color: '#0b0e1d' }}
-      >
-        {conquistaTierLabel(categoria, row.tier)}
       </div>
     </div>
   );

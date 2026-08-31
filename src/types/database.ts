@@ -380,6 +380,50 @@ export type Database = {
           },
         ]
       }
+      conquista_card_templates: {
+        Row: {
+          background_url: string
+          created_at: string
+          foto: Json
+          id: string
+          is_default: boolean
+          logo: Json
+          name: string
+          store_id: string
+          texto: Json
+        }
+        Insert: {
+          background_url: string
+          created_at?: string
+          foto: Json
+          id?: string
+          is_default?: boolean
+          logo: Json
+          name: string
+          store_id: string
+          texto: Json
+        }
+        Update: {
+          background_url?: string
+          created_at?: string
+          foto?: Json
+          id?: string
+          is_default?: boolean
+          logo?: Json
+          name?: string
+          store_id?: string
+          texto?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conquista_card_templates_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       goals: {
         Row: {
           auto_redistribuir: boolean

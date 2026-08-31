@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { FunctionIcon } from '../../components/icons/FunctionIcon';
 import {
+  AwardIcon,
   DownloadIcon,
   HomeIcon,
   ImageIcon,
@@ -34,6 +35,7 @@ const ADMIN_CARDS = [
   { to: '/admin/minha-loja', label: 'Minha Loja', icon: HomeIcon, slot: 'adm_minha_loja' },
   { to: '/admin/configuracoes', label: 'Configurações', icon: SlidersIcon, slot: 'adm_configuracoes' },
   { to: '/admin/icones', label: 'Ícones', icon: ImageIcon, slot: null },
+  { to: '/admin/card-conquista', label: 'Modelos de Card', icon: AwardIcon, slot: null },
 ];
 
 /** Count of distinct products seen in sales that never matched a specific

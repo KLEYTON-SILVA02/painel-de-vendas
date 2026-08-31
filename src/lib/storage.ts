@@ -23,3 +23,17 @@ export async function uploadIcon(storeId: string, functionKey: string, file: Fil
   const { data } = supabase.storage.from('photos').getPublicUrl(fullPath);
   return `${data.publicUrl}?t=${Date.now()}`;
 }
+
+/** Uploads the *final* background art for a Galeria de Conquistas card
+ * template, under {storeId}/card-templates/{templateId}.{ext}. Only ever
+ * called with the finished artwork — the manual card editor's reference
+ * image (used purely for on-screen alignment while positioning the mask
+ * zones) never reaches this function and is discarded client-side. */
+export async function uploadConquistaCardBackground(storeId: string, templateId: string, file: File): Promise<string> {
+  const ext = file.name.split('.').pop() || 'jpg';
+  const fullPath = `${storeId}/card-templates/${templateId}.${ext}`;
+  const { error } = await supabase.storage.from('photos').upload(fullPath, file, { upsert: true });
+  if (error) throw error;
+  const { data } = supabase.storage.from('photos').getPublicUrl(fullPath);
+  return `${data.publicUrl}?t=${Date.now()}`;
+}
