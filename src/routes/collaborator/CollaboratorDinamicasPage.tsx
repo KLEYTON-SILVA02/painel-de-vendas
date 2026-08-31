@@ -19,7 +19,7 @@ export function CollaboratorDinamicasPage() {
   const me = collaborators?.find((c) => c.id === profile?.collaborator_id);
 
   if (!dynamics || !sales || !collaborators) {
-    return <div className="text-sm text-slate-500 p-6 text-center">Carregando…</div>;
+    return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
   const minhas = dynamics.filter(
@@ -30,37 +30,48 @@ export function CollaboratorDinamicasPage() {
   const encerradas = minhas.filter((d) => dynamicStatus(d, today) === 'encerrada').sort((a, b) => b.dataFim.localeCompare(a.dataFim));
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <h3 className="text-purple-400 font-semibold text-sm">🎯 Dinâmicas Comerciais</h3>
-        <p className="text-xs text-slate-500 mt-1">Suas metas e resultados em campanhas ativas, agendadas e encerradas.</p>
+    <div>
+      <div className="mv2-screen-title mv2-dinamicas">DINÂMICAS COMERCIAIS</div>
+
+      <div className="mv2-card" style={{ marginTop: 0 }}>
+        <p style={{ fontSize: 11, color: 'var(--mv2-texto-2)', margin: 0 }}>
+          Suas metas e resultados em campanhas ativas, agendadas e encerradas.
+        </p>
       </div>
 
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <h3 className="font-semibold text-sm mb-3">Ativas / Agendadas ({ativas.length})</h3>
-        {ativas.length === 0 ? (
-          <div className="text-sm text-slate-500 py-4 text-center">Nenhuma dinâmica ativa ou agendada.</div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {ativas.map((d) => (
-              <MyDinamicaCard key={d.id} d={d} status={dynamicStatus(d, today)} sales={sales} collaborators={collaborators} matricula={me?.matricula} />
-            ))}
-          </div>
-        )}
-      </div>
+      <div className="mv2-two-col">
+        <div className="mv2-card">
+          <div className="mv2-card-title">Ativas / Agendadas ({ativas.length})</div>
+          {ativas.length === 0 ? (
+            <div style={{ fontSize: 10, color: 'var(--mv2-texto-2)', padding: '8px 0', textAlign: 'center' }}>
+              Nenhuma dinâmica ativa ou agendada.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {ativas.map((d) => (
+                <MyDinamicaCard key={d.id} d={d} status={dynamicStatus(d, today)} sales={sales} collaborators={collaborators} matricula={me?.matricula} />
+              ))}
+            </div>
+          )}
+        </div>
 
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <h3 className="font-semibold text-sm mb-1">🖼️ Minha galeria de dinâmicas ({encerradas.length})</h3>
-        <p className="text-xs text-slate-500 mb-3">Seus resultados em dinâmicas já encerradas.</p>
-        {encerradas.length === 0 ? (
-          <div className="text-sm text-slate-500 py-4 text-center">Nenhuma dinâmica encerrada ainda.</div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {encerradas.map((d) => (
-              <MyDinamicaCard key={d.id} d={d} status="encerrada" sales={sales} collaborators={collaborators} matricula={me?.matricula} />
-            ))}
+        <div className="mv2-card">
+          <div className="mv2-card-title" style={{ marginBottom: 2 }}>
+            🖼️ Minha galeria de dinâmicas ({encerradas.length})
           </div>
-        )}
+          <p style={{ fontSize: 10, color: 'var(--mv2-texto-2)', margin: '0 0 10px' }}>Seus resultados em dinâmicas já encerradas.</p>
+          {encerradas.length === 0 ? (
+            <div style={{ fontSize: 10, color: 'var(--mv2-texto-2)', padding: '8px 0', textAlign: 'center' }}>
+              Nenhuma dinâmica encerrada ainda.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {encerradas.map((d) => (
+                <MyDinamicaCard key={d.id} d={d} status="encerrada" sales={sales} collaborators={collaborators} matricula={me?.matricula} />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { MobileDateFilterBar } from '../../components/collaborator/MobileDateFilterBar';
 import { MobileRankingBoard } from '../../components/collaborator/MobileRankingBoard';
 import { BALCAO_SETOR, computeBioSummary } from '../../lib/business/bio';
 import type { BioGroupKey } from '../../lib/business/classification';
 import type { BioGroupsProducts, BioWeights } from '../../lib/business/types';
 import { useBioGroups, useCollaborators, useSales, useStoreSettings } from '../../lib/queries';
+import { MobileDateFilter } from '../admin-mobile/MobileDateFilter';
 import { useDateRange } from '../DateRangeContext';
 
 const BIO_GROUP_KEYS: BioGroupKey[] = ['G1', 'G2', 'G3', 'G4'];
@@ -18,7 +18,7 @@ function groupBioRows(rows: { grupo: string; nome: string; palavras: string[] }[
   return result;
 }
 
-// Mobile view for Balcão collaborators — same MobileDateFilterBar +
+// Mobile view for Balcão collaborators — same MobileDateFilter +
 // MobileRankingBoard shell as CollaboratorRankingPage, but ranked by BIO
 // points instead of R$ (matches admin BioPage's ranking logic).
 export function CollaboratorBioPage() {
@@ -30,7 +30,7 @@ export function CollaboratorBioPage() {
   const [bioFilter, setBioFilter] = useState<BioGroupKey | 'ALL'>('ALL');
 
   if (!collaborators || !sales || !storeSettings || !bioGroupRows) {
-    return <div className="text-sm text-slate-500 p-6 text-center">Carregando…</div>;
+    return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
   const bioGroups = groupBioRows(bioGroupRows);
@@ -41,45 +41,43 @@ export function CollaboratorBioPage() {
   const totalItens = ranking.reduce((a, r) => a + r.itens, 0);
 
   return (
-    <div className="flex flex-col gap-3">
-      <MobileDateFilterBar />
+    <div>
+      <div className="mv2-screen-title mv2-biosintetica">BIOSINTÉTICA</div>
 
-      <div className="flex gap-1.5 overflow-x-auto pb-1">
+      <div className="mv2-chip-row">
         {(['ALL', ...BIO_GROUP_KEYS] as const).map((k) => (
           <button
             key={k}
             onClick={() => setBioFilter(k)}
-            className="flex-shrink-0 rounded-full px-3 py-1.5 text-xs font-bold uppercase tracking-wide border"
-            style={{
-              borderColor: '#14ff00',
-              color: bioFilter === k ? '#04101c' : '#14ff00',
-              background: bioFilter === k ? '#14ff00' : 'transparent',
-            }}
+            className={`mv2-chip ${bioFilter === k ? 'active' : ''}`}
+            style={{ ['--mv2-chip-color' as string]: '#14ff00' }}
           >
             {k === 'ALL' ? 'Todos' : k}
           </button>
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-          <div className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">Total de pontos</div>
-          <div className="text-sm font-mono font-bold" style={{ color: '#14ff00' }}>
-            {totalPontos.toFixed(1)} pts
-          </div>
+      <div className="mv2-metrics-grid">
+        <div className="mv2-metric-card" style={{ ['--mv2-card-color' as string]: '#14ff00' }}>
+          <div className="mv2-label">Total de pontos</div>
+          <div className="mv2-value">{totalPontos.toFixed(1)} pts</div>
         </div>
-        <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-          <div className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">Itens vendidos</div>
-          <div className="text-sm font-mono font-bold" style={{ color: '#00f0ff' }}>
-            {totalItens} un.
-          </div>
+        <div className="mv2-metric-card" style={{ ['--mv2-card-color' as string]: '#00f0ff' }}>
+          <div className="mv2-label">Itens vendidos</div>
+          <div className="mv2-value">{totalItens} un.</div>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <h3 className="text-green-400 font-semibold text-sm mb-3">🧪 BIOSINTÉTICA — Ranking Balcão</h3>
+      <MobileDateFilter />
+
+      <div className="mv2-card">
+        <div className="mv2-card-title" style={{ color: '#14ff00' }}>
+          🧪 BIOSINTÉTICA — Ranking Balcão
+        </div>
         {balcaoCount === 0 ? (
-          <div className="text-sm text-slate-500 py-4 text-center">Nenhum colaborador cadastrado no setor Balcão.</div>
+          <div style={{ fontSize: 10, color: 'var(--mv2-texto-2)', padding: '8px 0', textAlign: 'center' }}>
+            Nenhum colaborador cadastrado no setor Balcão.
+          </div>
         ) : (
           <MobileRankingBoard
             ranking={ranking}
