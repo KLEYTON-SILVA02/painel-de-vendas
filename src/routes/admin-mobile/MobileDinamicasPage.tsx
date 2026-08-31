@@ -81,19 +81,11 @@ export function MobileDinamicasPage() {
         </div>
       </div>
 
-      <div className="mv2-row" style={{ margin: '0 18px 12px', gap: 6 }}>
-        <button
-          className="mv2-btn-outline"
-          style={tab === 'ativas' ? { flex: 1, background: 'var(--mv2-ciano-claro)', color: '#000', fontWeight: 700 } : { flex: 1 }}
-          onClick={() => setTab('ativas')}
-        >
+      <div className="mv2-row" style={{ margin: '0 18px 12px' }}>
+        <button className={`mv2-view-toggle ${tab === 'ativas' ? 'active' : ''}`} onClick={() => setTab('ativas')}>
           Ativas / Agendadas
         </button>
-        <button
-          className="mv2-btn-outline"
-          style={tab === 'galeria' ? { flex: 1, background: 'var(--mv2-ciano-claro)', color: '#000', fontWeight: 700 } : { flex: 1 }}
-          onClick={() => setTab('galeria')}
-        >
+        <button className={`mv2-view-toggle ${tab === 'galeria' ? 'active' : ''}`} onClick={() => setTab('galeria')}>
           Galeria de Dinâmicas
         </button>
       </div>

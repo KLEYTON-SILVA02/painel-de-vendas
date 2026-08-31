@@ -1,39 +1,31 @@
 import { useMemo, useState } from 'react';
-import { useAuth } from '../../auth/AuthContext';
-import type { CategoryKey } from '../../lib/business/classification';
-import { getGoal, getSuperMeta } from '../../lib/business/goals';
+import { diasRestantesNoMes, getGoal, getSuperMeta } from '../../lib/business/goals';
 import { computeSummary } from '../../lib/business/summary';
 import type { Collaborator } from '../../lib/business/types';
 import { fmtMoney } from '../../lib/format';
-import { useUpdateCommissionRate } from '../../lib/mutations';
-import { useCollaborators, useCommissionRates, useGoals, useSales } from '../../lib/queries';
+import { useCollaborators, useGoals, useSales } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { MobileDateFilter } from './MobileDateFilter';
 import { MobileSalesTable, MobileSellerAccordion } from './MobileSellerDetail';
 
-// Shared mobile v2 screen for Dermo / Marcas Exclusivas / Genéricos — the
-// spec says all three reuse this exact structure, only the accent color
-// differs. Commission % comes from ADM > Funções > Metas > Comissões
-// (commission_rates table) — same source as the desktop CategoryPage.
-export function MobileCategoryScreen({
-  catKey,
-  title,
-  titleClass,
-  accent,
-}: {
-  catKey: CategoryKey;
-  title: string;
-  titleClass: string;
-  accent: string;
-}) {
-  const { profile } = useAuth();
+const ACCENT = '#f26122'; // laranja — mesma cor de mv2-cat-mercgeral
+
+// Dedicated mv2 screen for Mercadoria Geral — previously this route fell
+// back to the desktop CategoryPage (the only category that never got its
+// own mobile screen), which is why its title bar, date filter and card
+// grid all looked different from every other mobile category screen. This
+// mirrors MobileCategoryScreen's structure, with the card layout the spec
+// calls for here specifically: Total Vendido/Itens Vendidos, Falta p/
+// Meta/Dias Restantes, Meta Geral/Super Meta — each of the last pair
+// showing its own % opposite the value instead of separate "Atingimento"
+// cards. Mercadoria Geral has no commission_rates support (DB check
+// constraint limits that table to DERM/GEN/MP), so no commission bar here.
+export function MobileMercadoriaGeralPage() {
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
   const { data: goals } = useGoals();
-  const { data: commissionRates } = useCommissionRates();
   const { dashFrom, dashTo } = useDateRange();
   const [selectedSeller, setSelectedSeller] = useState<string | null>(null);
-  const updateCommissionRate = useUpdateCommissionRate(profile?.store_id);
 
   const byMatricula = useMemo(() => {
     const map = new Map<string, Collaborator>();
@@ -41,32 +33,26 @@ export function MobileCategoryScreen({
     return map;
   }, [collaborators]);
 
-  if (!collaborators || !sales || !goals || !commissionRates) {
+  if (!collaborators || !sales || !goals) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
   const mode = dashFrom === dashTo ? 'dia' : 'mes';
-  const ranking = computeSummary(sales, collaborators, dashFrom, dashTo, catKey);
+  const ranking = computeSummary(sales, collaborators, dashFrom, dashTo, 'MER');
   const rankingList = ranking.filter((r) => r.valor > 0).sort((a, b) => b.valor - a.valor);
   const totalValor = ranking.reduce((a, r) => a + r.valor, 0);
   const totalItens = ranking.reduce((a, r) => a + r.itens, 0);
+  const dias = diasRestantesNoMes();
 
-  const metaGeral = getGoal(goals[catKey], mode, sales, collaborators);
-  const metaSuper = getSuperMeta(goals[catKey], mode, sales, collaborators);
+  const metaGeral = getGoal(goals.MER, mode, sales, collaborators);
+  const metaSuper = getSuperMeta(goals.MER, mode, sales, collaborators);
   const faltaMeta = Math.max(0, metaGeral - totalValor);
-  const faltaSuper = Math.max(0, metaSuper - totalValor);
   const pctMeta = metaGeral > 0 ? Math.min(999, (totalValor / metaGeral) * 100) : 0;
   const pctSuper = metaSuper > 0 ? Math.min(999, (totalValor / metaSuper) * 100) : 0;
 
-  // Commission only ever applies to DERM/GEN/MP (see commission_rates'
-  // check constraint) and only shows once a specific seller is selected —
-  // with "Todos" selected, sales keep showing their original valor.
-  const commissionRate = catKey === 'DERM' || catKey === 'GEN' || catKey === 'MP' ? commissionRates[catKey] : undefined;
-  const showCommission = selectedSeller !== null && !!commissionRate?.ativo;
-
   const categorySales = sales
     .filter((s) => {
-      if (s.grupo !== catKey) return false;
+      if (s.grupo !== 'MER') return false;
       if (s.dataISO && (s.dataISO < dashFrom || s.dataISO > dashTo)) return false;
       if (selectedSeller && s.matricula !== selectedSeller) return false;
       return true;
@@ -76,7 +62,7 @@ export function MobileCategoryScreen({
 
   return (
     <div>
-      <div className={`mv2-screen-title ${titleClass}`}>{title.toUpperCase()}</div>
+      <div className="mv2-screen-title mv2-mercgeral">MERCADORIA GERAL</div>
 
       <MobileDateFilter />
 
@@ -91,35 +77,46 @@ export function MobileCategoryScreen({
         </div>
       </div>
 
-      <div className="mv2-dual-goal-grid">
-        <div className="mv2-goal-remaining-card" style={{ ['--mv2-card-color' as string]: accent }}>
-          <div>
-            <div className="mv2-label" style={{ fontSize: 8, color: 'var(--mv2-texto-2)', textTransform: 'uppercase' }}>
-              Falta p/ Meta
-            </div>
-            <div className="mv2-value">{fmtMoney(faltaMeta)}</div>
-          </div>
-          <div className="mv2-pct">{pctMeta.toFixed(0)}%</div>
+      <div className="mv2-metrics-grid">
+        <div className="mv2-metric-card" style={{ ['--mv2-card-color' as string]: ACCENT }}>
+          <div className="mv2-label">Falta p/ Meta</div>
+          <div className="mv2-value">{fmtMoney(faltaMeta)}</div>
         </div>
+        <div className="mv2-metric-card" style={{ ['--mv2-card-color' as string]: '#698b46' }}>
+          <div className="mv2-label">Dias Restantes</div>
+          <div className="mv2-value">{dias} dia(s)</div>
+        </div>
+      </div>
+
+      <div className="mv2-dual-goal-grid">
         <div className="mv2-goal-remaining-card" style={{ ['--mv2-card-color' as string]: '#fed400' }}>
           <div>
             <div className="mv2-label" style={{ fontSize: 8, color: 'var(--mv2-texto-2)', textTransform: 'uppercase' }}>
-              Falta p/ Super Meta
+              Meta Geral
             </div>
-            <div className="mv2-value">{fmtMoney(faltaSuper)}</div>
+            <div className="mv2-value">{fmtMoney(metaGeral)}</div>
+          </div>
+          <div className="mv2-pct">{pctMeta.toFixed(0)}%</div>
+        </div>
+        <div className="mv2-goal-remaining-card" style={{ ['--mv2-card-color' as string]: '#ff3df0' }}>
+          <div>
+            <div className="mv2-label" style={{ fontSize: 8, color: 'var(--mv2-texto-2)', textTransform: 'uppercase' }}>
+              Super Meta
+            </div>
+            <div className="mv2-value">{fmtMoney(metaSuper)}</div>
           </div>
           <div className="mv2-pct">{pctSuper.toFixed(0)}%</div>
         </div>
       </div>
 
       <div className="mv2-ranking-list-card">
-        <div style={{ fontSize: 10, fontWeight: 700, color: accent, marginBottom: 4 }}>RANKING — {title.toUpperCase()}</div>
+        <div style={{ fontSize: 10, fontWeight: 700, color: ACCENT, marginBottom: 4 }}>RANKING — MERCADORIA GERAL</div>
         {rankingList.length === 0 ? (
           <div style={{ fontSize: 10, color: 'var(--mv2-texto-2)', padding: '8px 0', textAlign: 'center' }}>Sem vendas no período.</div>
         ) : (
           rankingList.slice(0, 10).map((r, i) => (
             <div key={r.matricula} className="mv2-row">
-              <span className="mv2-pos" style={{ color: accent }}>
+              <span className="mv2-pos" style={{ color: ACCENT }}>
                 {i + 1}
               </span>
               {r.foto ? <img src={r.foto} alt="" className="mv2-avatar" /> : <div className="mv2-avatar" />}
@@ -132,31 +129,11 @@ export function MobileCategoryScreen({
 
       <MobileSellerAccordion collaborators={collaborators} selected={selectedSeller} onSelect={setSelectedSeller} />
 
-      {commissionRate && (
-        <div className="mv2-commission-toggle">
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={commissionRate.ativo}
-              onChange={(e) => updateCommissionRate.mutate({ categoria: catKey as 'DERM' | 'GEN' | 'MP', patch: { ativo: e.target.checked } })}
-            />
-            <span className="mv2-rate">Exibir comissão ({commissionRate.percentual}%)</span>
-          </label>
-          {commissionRate.ativo && (
-            <span style={{ fontSize: 8, color: 'var(--mv2-texto-2)' }}>
-              {selectedSeller ? 'Exibindo comissão do vendedor selecionado' : 'Selecione um vendedor pra ver a comissão'}
-            </span>
-          )}
-        </div>
-      )}
-
       <MobileSalesTable
-        title={`Lista de vendas — ${title}`}
+        title="Lista de vendas — Mercadoria Geral"
         sales={categorySales}
         byMatricula={byMatricula}
         showValor
-        showComissao={showCommission}
-        comissaoPercentual={commissionRate?.percentual}
         subtotalMode={selectedSeller ? 'valor' : 'none'}
       />
     </div>
