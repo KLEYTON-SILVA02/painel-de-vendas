@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseDateISO, parseNumeroBR } from './parsing';
+import { dateFromCell, parseDateISO, parseNumeroBR } from './parsing';
 
 describe('parseNumeroBR', () => {
   it('parses BR-formatted currency', () => {
@@ -37,5 +37,28 @@ describe('parseDateISO', () => {
   it('returns null for unparseable input', () => {
     expect(parseDateISO('not a date')).toBeNull();
     expect(parseDateISO('')).toBeNull();
+  });
+});
+
+describe('dateFromCell', () => {
+  // Reproduces the real bug: SheetJS formats a `cellDates:true` Excel date
+  // cell using the browser's local timezone, so in any UTC-negative zone
+  // (e.g. Brazil, UTC-3) the formatted text for an Aug 24 cell comes back
+  // as "23/08/2026" — a real Date object at 2026-08-24T02:59:59.999Z, one
+  // day off from its UTC calendar date. dateFromCell must ignore that
+  // formatted text and read the Date object's own UTC day instead.
+  const shiftedDateCell = new Date('2026-08-24T02:59:59.999Z');
+
+  it('derives the ISO date from a raw Date cell via UTC getters, ignoring a timezone-shifted formatted string', () => {
+    expect(dateFromCell(shiftedDateCell, '23/08/2026')).toBe('2026-08-24');
+  });
+
+  it('falls back to parsing the formatted text for plain-text date cells', () => {
+    expect(dateFromCell('24/08/2026', '24/08/2026')).toBe('2026-08-24');
+  });
+
+  it('returns null when neither a Date nor a parseable string is given', () => {
+    expect(dateFromCell(undefined, '')).toBeNull();
+    expect(dateFromCell(new Date('invalid'), '')).toBeNull();
   });
 });

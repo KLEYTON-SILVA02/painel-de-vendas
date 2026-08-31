@@ -97,6 +97,13 @@
   height: 26px;
   stroke: #2d1b69;
 }
+.mv2-login-page .mv2-logo-ring img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
 
 /* Título */
 .mv2-login-page .mv2-login-header h1 {
@@ -235,4 +242,73 @@
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(220, 39, 67, 0.35);
   color: #ff4da6;
+}
+
+/* QR code modal (WhatsApp / Instagram) — opened from mv2-social-row */
+.mv2-qr-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(10, 6, 24, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.mv2-qr-modal {
+  position: relative;
+  width: min(90vw, 320px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border-radius: var(--mv2-radius-lg, 20px);
+  background: rgba(18, 12, 38, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.45);
+}
+.mv2-qr-modal-image {
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+  display: block;
+}
+.mv2-qr-modal-close {
+  position: absolute;
+  top: -14px;
+  right: -14px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(18, 12, 38, 0.95);
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.mv2-qr-modal-link {
+  width: 100%;
+  text-align: center;
+  padding: 12px;
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background-image: linear-gradient(90deg, #ff2ec4, #00e5ff, #ffe600, #ff2ec4);
+  background-size: 300% 100%;
+  animation: mv2ButtonShift 3s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mv2-qr-modal-link {
+    animation: none;
+  }
 }

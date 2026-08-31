@@ -40,14 +40,31 @@ export function detectHeaderRow(rows: unknown[][]): number {
 export type ColumnMap = Record<ImportField, number>;
 
 /** Auto-maps spreadsheet headers to import fields: exact name match, then
- * substring match, then the store's fixed column layout as last resort. */
+ * substring match, then the store's fixed column layout as last resort.
+ *
+ * Candidate names for a field are tried in priority order *across all
+ * headers* before falling through to the next candidate — not the other
+ * way around. The sales sheet has both a "Vendedor" column (vendor code)
+ * and a "Vendedor Nome" column (the actual name); scanning header-by-header
+ * for any name match would resolve "vendedor" (a valid but low-priority
+ * candidate) at the first "Vendedor" column before ever reaching "Vendedor
+ * Nome", silently mapping the name field to the code column instead. */
 export function autoMapColumns(headers: unknown[]): ColumnMap {
   const norm = headers.map((h) => normalize(h as string));
   const map = {} as ColumnMap;
   (Object.keys(FIELD_NAMES) as ImportField[]).forEach((field) => {
     const names = FIELD_NAMES[field];
-    let idx = norm.findIndex((h) => names.some((n) => h === normalize(n)));
-    if (idx < 0) idx = norm.findIndex((h) => names.some((n) => h.includes(normalize(n))));
+    let idx = -1;
+    for (const n of names) {
+      idx = norm.findIndex((h) => h === normalize(n));
+      if (idx >= 0) break;
+    }
+    if (idx < 0) {
+      for (const n of names) {
+        idx = norm.findIndex((h) => h.includes(normalize(n)));
+        if (idx >= 0) break;
+      }
+    }
     if (idx < 0) idx = FIXED_COLS[field] !== undefined ? FIXED_COLS[field]! : -1;
     map[field] = idx;
   });

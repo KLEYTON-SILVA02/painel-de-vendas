@@ -33,17 +33,21 @@ export function normalizeCategoriaImport(raw: string): CategoryKey {
 }
 
 /** Maps a free-text "Categoria"/"Grupo" cell from the Biosintética
- * product-import spreadsheet ("G1", "Grupo 1", "1"...) onto a BioGroupKey.
- * Returns null when it can't be matched — the Biosintética grouping has no
+ * product-import spreadsheet ("G1", "Grupo 1", "Categoria 1", "1"...) onto
+ * a BioGroupKey. Extracts the last standalone digit 1-4 in the cell rather
+ * than matching a literal "g1" substring — "Grupo 1" normalizes to
+ * "grupo1", which does NOT contain "g1" as consecutive characters, so the
+ * previous substring check silently rejected the exact labels the UI
+ * itself uses (Grupo 1/2/3/4), making bulk import look broken. Returns
+ * null when no digit 1-4 is found — the Biosintética grouping has no
  * sensible default group to fall back to, unlike the general-products
  * import's MER fallback. */
 export function normalizeGrupoImport(raw: string): BioGroupKey | null {
-  const n = normalize(raw).replace(/\s/g, '');
-  if (n.includes('g1') || n === '1') return 'G1';
-  if (n.includes('g2') || n === '2') return 'G2';
-  if (n.includes('g3') || n === '3') return 'G3';
-  if (n.includes('g4') || n === '4') return 'G4';
-  return null;
+  const n = normalize(raw);
+  if (!n) return null;
+  const digits = n.match(/(?<!\d)[1-4](?!\d)/g);
+  if (!digits) return null;
+  return (`G${digits[digits.length - 1]}` as BioGroupKey);
 }
 
 export const EXCLUSIVE_BRANDS_DEFAULT = [

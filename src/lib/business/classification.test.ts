@@ -4,6 +4,7 @@ import {
   classifyProduct,
   classifyProductTier,
   EXCLUSIVE_BRANDS_DEFAULT,
+  normalizeGrupoImport,
   type ClassificationInputs,
 } from './classification';
 
@@ -117,5 +118,26 @@ describe('classifyBio', () => {
 
   it('returns null when no group matches', () => {
     expect(classifyBio('produto sem relacao nenhuma', bioGroups)).toBeNull();
+  });
+});
+
+describe('normalizeGrupoImport', () => {
+  it('matches the human-readable "Grupo N" labels the UI itself uses', () => {
+    expect(normalizeGrupoImport('Grupo 1')).toBe('G1');
+    expect(normalizeGrupoImport('Grupo 2')).toBe('G2');
+    expect(normalizeGrupoImport('Grupo 3')).toBe('G3');
+    expect(normalizeGrupoImport('Grupo 4')).toBe('G4');
+  });
+
+  it('matches "G1"-style and bare-number cells', () => {
+    expect(normalizeGrupoImport('G1')).toBe('G1');
+    expect(normalizeGrupoImport('g-4')).toBe('G4');
+    expect(normalizeGrupoImport('  3  ')).toBe('G3');
+    expect(normalizeGrupoImport('Categoria: 2')).toBe('G2');
+  });
+
+  it('returns null for empty or unrecognized cells', () => {
+    expect(normalizeGrupoImport('')).toBeNull();
+    expect(normalizeGrupoImport('mercadoria geral')).toBeNull();
   });
 });

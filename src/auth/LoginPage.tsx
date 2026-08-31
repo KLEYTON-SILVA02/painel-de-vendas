@@ -1,27 +1,32 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { supabase } from '../lib/supabase';
 import '../styles/login-retro-future.css';
+import gvLogo from '../assets/brand/gv-logo.png';
+import whatsappQr from '../assets/brand/whatsapp-qr.jpg';
+import instagramQr from '../assets/brand/instagram-qr.jpg';
 
 type Tab = 'admin' | 'colaborador';
+type SocialModal = 'whatsapp' | 'instagram' | null;
 
 const WHATSAPP_URL = 'https://wa.me/qr/WEP75MIQBQSPB1';
 const INSTAGRAM_URL = 'https://www.instagram.com/kleytonmsilva?igsi=MWM0bnNscmtjNGkxag==';
 
 // Mobile v2 reskin (see mv2-* classes in src/styles/mobile-v2.css, ported
 // 1:1 from the "Scanner Técnico" login spec). Auth logic is untouched —
-// only the markup/classes changed. Remember-me, "Esqueci senha", and the
-// WhatsApp/QR/Instagram contact cards are new UI the spec shows but never
-// defines behavior for — they're visually complete but inert; see the
-// FUNÇÕES PENDENTES DE DETALHAMENTO note at the bottom of this session's reply.
+// only the markup/classes changed. Remember-me and "Esqueci senha" are
+// new UI the spec shows but never defines behavior for — visually
+// complete but inert. WhatsApp/QR/Instagram open a modal with the
+// contact's real QR code and link.
 export function LoginPage() {
   const [tab, setTab] = useState<Tab>('admin');
+  const [socialModal, setSocialModal] = useState<SocialModal>(null);
 
   return (
     <div className="mv2 mv2-login-page" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div className="mv2-login-card">
         <div className="mv2-login-header">
           <div className="mv2-logo-ring">
-            <LogoMark />
+            <img src={gvLogo} alt="Gestão de Vendas" />
           </div>
           <h1>GESTÃO DE VENDAS</h1>
           <div className="mv2-subtitle">Entre para continuar</div>
@@ -41,29 +46,57 @@ export function LoginPage() {
         <div className="mv2-divider">ou</div>
 
         <div className="mv2-social-row">
-          <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="mv2-whatsapp" title="WhatsApp">
+          <button type="button" className="mv2-whatsapp" title="WhatsApp" onClick={() => setSocialModal('whatsapp')}>
             <WhatsAppIcon />
-          </a>
-          <button type="button" title="QR Code">
+          </button>
+          <button type="button" title="QR Code" onClick={() => setSocialModal('whatsapp')}>
             <QrIcon />
           </button>
-          <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="mv2-instagram" title="Instagram">
+          <button type="button" className="mv2-instagram" title="Instagram" onClick={() => setSocialModal('instagram')}>
             <InstagramIcon />
-          </a>
+          </button>
         </div>
+      </div>
+
+      {socialModal && (
+        <SocialQrModal
+          kind={socialModal}
+          onClose={() => setSocialModal(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function SocialQrModal({ kind, onClose }: { kind: 'whatsapp' | 'instagram'; onClose: () => void }) {
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
+  const isWhatsapp = kind === 'whatsapp';
+  const qrImage = isWhatsapp ? whatsappQr : instagramQr;
+  const url = isWhatsapp ? WHATSAPP_URL : INSTAGRAM_URL;
+  const label = isWhatsapp ? 'WhatsApp' : 'Instagram';
+
+  return (
+    <div className="mv2-qr-modal-backdrop" onClick={onClose}>
+      <div className="mv2-qr-modal" onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="mv2-qr-modal-close" onClick={onClose} aria-label="Fechar">
+          ×
+        </button>
+        <img src={qrImage} alt={`QR Code do ${label}`} className="mv2-qr-modal-image" />
+        <a href={url} target="_blank" rel="noopener noreferrer" className="mv2-qr-modal-link">
+          Abrir {label}
+        </a>
       </div>
     </div>
   );
 }
 
-function LogoMark() {
-  return (
-    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 17l5-5 4 4 8-8" />
-      <path d="M15 8h5v5" />
-    </svg>
-  );
-}
 function WhatsAppIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">

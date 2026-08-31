@@ -116,8 +116,20 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
       { label: 'Dias restantes', value: `${dias} dia(s)`, color: '#14ff00' },
       { label: 'Itens vendidos', value: `${totalItens} un.`, color: '#00f0ff' },
       { label: 'Vendedores ativos', value: String(ranking.filter((r) => r.itens > 0).length), color: '#a82bff' },
-      { label: 'Meta Mensal', value: metaMensal > 0 ? `${totalItens}/${metaMensal} un. (${pctMensal.toFixed(0)}%)` : '—', color: '#ffd700' },
-      { label: 'Meta Diária (hoje)', value: metaDiaria > 0 ? `${itensHoje}/${metaDiaria} un. (${pctDiaria.toFixed(0)}%)` : '—', color: '#ff3df0' },
+      // Meta Mensal/Diária values are long compound strings ("142/500 un.
+      // (28%)") — as flat compact cards they got clipped by the fixed
+      // 56px-tall card's forced nowrap+ellipsis while leaving most of that
+      // height empty. Grouped into a stack card instead, same as every
+      // other category screen already does for its own longer meta values
+      // (Meta Geral/Super Meta/Dias restantes) — gives them the stack's
+      // taller row and un-truncated width, and evens out the whole row's
+      // height to match.
+      {
+        stack: [
+          { label: 'Meta Mensal', value: metaMensal > 0 ? `${totalItens}/${metaMensal} un. (${pctMensal.toFixed(0)}%)` : '—', color: '#ffd700' },
+          { label: 'Meta Diária (hoje)', value: metaDiaria > 0 ? `${itensHoje}/${metaDiaria} un. (${pctDiaria.toFixed(0)}%)` : '—', color: '#ff3df0' },
+        ],
+      },
     ];
   }
 

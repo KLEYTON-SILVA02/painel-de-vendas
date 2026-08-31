@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import { useAuth } from '../../auth/AuthContext';
 import { classifyProductTier } from '../../lib/business/classification';
 import { autoMapColumns, detectHeaderRow, type ColumnMap, type ImportField } from '../../lib/business/importMapping';
-import { idFromCell, parseDateISO, parseNumeroBR } from '../../lib/business/parsing';
+import { dateFromCell, idFromCell, parseNumeroBR } from '../../lib/business/parsing';
 import { buildClassificationInputs } from '../../lib/mappers';
 import { fmtMoney } from '../../lib/format';
 import { useBrandKeywords, useCatalog, useExclusiveBrands, useProducts, useSales } from '../../lib/queries';
@@ -138,7 +138,7 @@ export function ImportarPage() {
             continue;
           }
           const dataStr = sheet.map.data >= 0 ? String(r[sheet.map.data] ?? '').trim() : '';
-          const dataISO = parseDateISO(dataStr);
+          const dataISO = sheet.map.data >= 0 ? dateFromCell(rr[sheet.map.data], dataStr) : null;
           if (!dataISO) invalidDate++;
           const codigo = sheet.map.codigo >= 0 ? idFromCell(rr[sheet.map.codigo], r[sheet.map.codigo]) : '';
           const { categoria, tier } = classifyProductTier(produto, codigo, inputs);
@@ -423,7 +423,7 @@ function summarize(sheets: ParsedSheet[], inputs: ReturnType<typeof buildClassif
       valorTotal += valor;
 
       const dataStr = map.data >= 0 ? String(r[map.data] ?? '').trim() : '';
-      const dataISO = parseDateISO(dataStr);
+      const dataISO = map.data >= 0 ? dateFromCell(rr[map.data], dataStr) : null;
       if (dataISO) diasSet.add(dataISO);
 
       const matricula = map.matricula >= 0 ? idFromCell(rr[map.matricula], r[map.matricula]) : '';
