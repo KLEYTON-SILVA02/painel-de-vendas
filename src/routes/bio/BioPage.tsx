@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { ReclassifyBar } from '../../components/admin/ReclassifyBar';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
@@ -46,7 +46,7 @@ export function BioPage() {
   const { data: bioGroupRows } = useBioGroups();
   const { data: groupGoals } = useBioGroupGoals();
   const { data: catalog } = useCatalog();
-  const { dashFrom, dashTo } = useDateRange();
+  const { dashFrom, dashTo, setModoGeral } = useDateRange();
   const [view, setView] = useState<'ranking' | 'grupos' | 'pontos'>('ranking');
   const [bioFilter, setBioFilter] = useState<BioGroupKey | 'ALL'>('ALL');
   const [tableView, setTableView] = useState<'padrao' | 'bio'>('padrao');
@@ -54,6 +54,13 @@ export function BioPage() {
   const [selectedProdutos, setSelectedProdutos] = useState<Set<string>>(new Set());
   const [bulkCat, setBulkCat] = useState<CategoryKey>('DERM');
   const reclassify = useReclassifyProdutos(profile?.store_id);
+
+  // Biosintética always opens in Modo Geral (mês inteiro), regardless of what
+  // date-mode was left active on another screen — the date filter is shared
+  // globally across all screens (DateRangeProvider is a single app-wide
+  // instance). Users remain free to switch to a day-specific search afterward.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => setModoGeral(), []);
 
   if (!collaborators || !sales || !storeSettings || !bioGroupRows || !groupGoals || !catalog) {
     return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
