@@ -63,6 +63,27 @@ describe('classifyProductTier', () => {
     expect(classifyProductTier('paracetamol generico multilab', '', inputs)).toEqual({ categoria: 'GEN', tier: 3 });
   });
 
+  it('tier 2: a keyword that is just the category code itself (bulk-import data-entry mistake) is ignored, falling back to the product name', () => {
+    // Real incident: every GEN/MP product in a live store had palavras
+    // === [categoria] (e.g. ['GEN']) instead of a real keyword, from a
+    // bulk-import column mix-up. Left unfixed, "gen" (3 chars, meets the
+    // tier-2 threshold) would match almost any product name containing it
+    // ("colageno", "oxigenio"...), and the actual GEN products would never
+    // match on their own name at all since palavras took priority over nome.
+    const inputs: ClassificationInputs = {
+      ...emptyInputs,
+      productsByCategory: {
+        ...emptyInputs.productsByCategory,
+        GEN: [{ nome: 'aciclovir 400mg cpd/30 gn-ems', palavras: ['GEN'] }],
+      },
+    };
+    // An unrelated product that merely contains "gen" must NOT be pulled into GEN.
+    expect(classifyProductTier('colageno hidrolisado 300g', '', inputs)).toEqual({ categoria: 'MER', tier: 5 });
+    // The actual registered product still matches — by its own name, once
+    // the junk keyword is discarded.
+    expect(classifyProductTier('ACICLOVIR 400MG CPD/30 GN-EMS', '', inputs)).toEqual({ categoria: 'GEN', tier: 2 });
+  });
+
   it('tier 4: heuristics catch known brand terms', () => {
     expect(classifyProductTier('protetor solar la roche posay fps 60', '', emptyInputs)).toEqual({
       categoria: 'DERM',
@@ -118,6 +139,24 @@ describe('classifyBio', () => {
 
   it('returns null when no group matches', () => {
     expect(classifyBio('produto sem relacao nenhuma', bioGroups)).toBeNull();
+  });
+
+  it('a keyword that is just the group code itself (bulk-import mistake) is ignored, falling back to the product name', () => {
+    // Real incident: most Biosintética products in a live store had
+    // palavras === ['G1']/['G2']/... instead of a real keyword. Left
+    // unfixed, any sale whose product name happened to contain "g1"
+    // anywhere (compressed SKU codes like "MG120ML" or "AG32X7") got
+    // pulled into the Biosintética ranking, none of which are actually
+    // Biosintética products.
+    const groups = {
+      G1: [{ nome: 'AQUARELA 10MG CPD/30', palavras: ['G1'] }],
+      G2: [],
+      G3: [],
+      G4: [],
+    };
+    expect(classifyBio('SERINGA SOL CARE LUER 3ML C/ AG30X7', groups)).toBeNull();
+    expect(classifyBio('FOSF SOD PREDNISOLONA3MG120MLGN-BIO', groups)).toBeNull();
+    expect(classifyBio('AQUARELA 10MG CPD/30', groups)).toBe('G1');
   });
 });
 
