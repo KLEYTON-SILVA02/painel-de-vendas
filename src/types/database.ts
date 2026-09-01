@@ -670,6 +670,88 @@ export type Database = {
           },
         ]
       }
+      sales_archive_categories: {
+        Row: {
+          categoria: string
+          created_at: string
+          id: string
+          itens_total: number
+          store_id: string
+          valor_total: number
+          vendas_total: number
+          year_month: string
+        }
+        Insert: {
+          categoria: string
+          created_at?: string
+          id?: string
+          itens_total?: number
+          store_id: string
+          valor_total?: number
+          vendas_total?: number
+          year_month: string
+        }
+        Update: {
+          categoria?: string
+          created_at?: string
+          id?: string
+          itens_total?: number
+          store_id?: string
+          valor_total?: number
+          vendas_total?: number
+          year_month?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_archive_categories_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_archive_collaborators: {
+        Row: {
+          created_at: string
+          id: string
+          itens_total: number
+          matricula: string
+          nome: string
+          store_id: string
+          valor_total: number
+          year_month: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          itens_total?: number
+          matricula: string
+          nome: string
+          store_id: string
+          valor_total?: number
+          year_month: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          itens_total?: number
+          matricula?: string
+          nome?: string
+          store_id?: string
+          valor_total?: number
+          year_month?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_archive_collaborators_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sales_imports: {
         Row: {
           created_at: string
@@ -836,6 +918,7 @@ export type Database = {
       current_role: { Args: never; Returns: string }
       current_store_id: { Args: never; Returns: string }
       is_admin: { Args: never; Returns: boolean }
+      remove_inactive_collaborators: { Args: never; Returns: undefined }
       resolve_collaborator_email: {
         Args: { p_matricula: string }
         Returns: string

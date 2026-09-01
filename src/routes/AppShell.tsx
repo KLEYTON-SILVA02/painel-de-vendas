@@ -9,6 +9,7 @@ import { Sidebar } from '../components/Sidebar';
 import type { Horario } from '../lib/business/horario';
 import { supabase } from '../lib/supabase';
 import { useIsMobileV2 } from '../lib/useIsMobileV2';
+import { useAutoArchiveOldSales } from '../lib/archival';
 import { useStoreSettings } from '../lib/queries';
 import { MobileAdminShell } from './admin-mobile/MobileAdminShell';
 import { AdminLandingPage } from './admin/AdminLandingPage';
@@ -21,6 +22,7 @@ import { ConfiguracoesPage } from './admin/ConfiguracoesPage';
 import { IconesPage } from './admin/IconesPage';
 import { MinhaLojaPage } from './admin/MinhaLojaPage';
 import { ProdutosPage } from './admin/ProdutosPage';
+import { VendasArquivadasPage } from './admin/VendasArquivadasPage';
 
 // xlsx is a large parsing library — only the Importar screen needs it, so it
 // gets its own chunk instead of bloating everyone else's initial load.
@@ -37,6 +39,7 @@ import { RankingPage } from './ranking/RankingPage';
 
 export function AppShell() {
   const { profile, signOut } = useAuth();
+  useAutoArchiveOldSales();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [refreshed, setRefreshed] = useState(false);
@@ -172,6 +175,7 @@ export function AppShell() {
             />
             <Route path="/admin/auditoria" element={<AuditoriaPage />} />
             <Route path="/admin/vendas" element={<ListaVendasPage />} />
+            <Route path="/admin/vendas-arquivadas" element={<VendasArquivadasPage />} />
             <Route path="/admin/backup" element={<BackupPage />} />
             <Route path="/admin/minha-loja" element={<MinhaLojaPage />} />
             <Route path="/admin/configuracoes" element={<ConfiguracoesPage />} />

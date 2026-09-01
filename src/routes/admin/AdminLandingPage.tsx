@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { FunctionIcon } from '../../components/icons/FunctionIcon';
 import {
+  ArchiveIcon,
   AwardIcon,
   DownloadIcon,
   HomeIcon,
@@ -30,6 +31,7 @@ const ADMIN_CARDS = [
   { to: '/metas', label: 'Metas', icon: TargetIcon, slot: 'adm_metas' },
   { to: '/admin/importar', label: 'Importar', icon: UploadIcon, slot: 'adm_importar' },
   { to: '/admin/vendas', label: 'Lista de Vendas', icon: ListIcon, slot: 'adm_lista_vendas' },
+  { to: '/admin/vendas-arquivadas', label: 'Vendas Arquivadas', icon: ArchiveIcon, slot: null },
   { to: '/admin/auditoria', label: 'Auditoria', icon: SearchIcon, slot: 'adm_auditoria' },
   { to: '/admin/backup', label: 'Backup', icon: DownloadIcon, slot: 'adm_backup' },
   { to: '/admin/minha-loja', label: 'Minha Loja', icon: HomeIcon, slot: 'adm_minha_loja' },
