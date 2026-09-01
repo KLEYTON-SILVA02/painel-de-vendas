@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
-import { ReclassifyBar } from '../../components/admin/ReclassifyBar';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
@@ -10,24 +9,16 @@ import {
   computeBioSummary,
   type BioSummaryRow,
 } from '../../lib/business/bio';
-import { classifyBio, normalizeGrupoImport, type BioGroupKey, type CategoryKey } from '../../lib/business/classification';
+import { classifyBio, normalizeGrupoImport, type BioGroupKey } from '../../lib/business/classification';
 import { diasRestantesNoMes } from '../../lib/business/goals';
 import type { BioGroupGoal, BioGroupsProducts, BioWeights } from '../../lib/business/types';
 import { fmtDateBR } from '../../lib/format';
-import {
-  useAddBioProduct,
-  useBulkInsertBioProducts,
-  useDeleteBioProduct,
-  useReclassifyProdutos,
-  useUpdateBioGroupGoal,
-  useUpdateBioWeights,
-} from '../../lib/mutations';
-import { useBioGroupGoals, useBioGroups, useCatalog, useCollaborators, useSales, useStoreSettings } from '../../lib/queries';
+import { useAddBioProduct, useBulkInsertBioProducts, useDeleteBioProduct, useUpdateBioGroupGoal, useUpdateBioWeights } from '../../lib/mutations';
+import { useBioGroupGoals, useBioGroups, useCollaborators, useSales, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 
 const BIO_GROUP_KEYS: BioGroupKey[] = ['G1', 'G2', 'G3', 'G4'];
 const GRUPO_LABELS: Record<BioGroupKey, string> = { G1: 'Grupo 1', G2: 'Grupo 2', G3: 'Grupo 3', G4: 'Grupo 4' };
-const CAT_LABEL_SHORT: Record<string, string> = { DERM: 'Dermo', GEN: 'Gen/Sim', MP: 'Marcas Excl.', MER: 'Merc. Geral' };
 
 function groupBioRows(rows: { grupo: string; nome: string; palavras: string[]; id: string }[] | undefined): BioGroupsProducts {
   const result: BioGroupsProducts = { G1: [], G2: [], G3: [], G4: [] };
@@ -45,15 +36,10 @@ export function BioPage() {
   const { data: storeSettings } = useStoreSettings();
   const { data: bioGroupRows } = useBioGroups();
   const { data: groupGoals } = useBioGroupGoals();
-  const { data: catalog } = useCatalog();
   const { dashFrom, dashTo, setModoGeral } = useDateRange();
   const [view, setView] = useState<'ranking' | 'grupos' | 'pontos'>('ranking');
   const [bioFilter, setBioFilter] = useState<BioGroupKey | 'ALL'>('ALL');
-  const [tableView, setTableView] = useState<'padrao' | 'bio'>('padrao');
-  const [reclassifyMode, setReclassifyMode] = useState(false);
-  const [selectedProdutos, setSelectedProdutos] = useState<Set<string>>(new Set());
-  const [bulkCat, setBulkCat] = useState<CategoryKey>('DERM');
-  const reclassify = useReclassifyProdutos(profile?.store_id);
+  const [foraDoBalcaoOpen, setForaDoBalcaoOpen] = useState(false);
 
   // Biosintética always opens in Modo Geral (mês inteiro), regardless of what
   // date-mode was left active on another screen — the date filter is shared
@@ -62,7 +48,7 @@ export function BioPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => setModoGeral(), []);
 
-  if (!collaborators || !sales || !storeSettings || !bioGroupRows || !groupGoals || !catalog) {
+  if (!collaborators || !sales || !storeSettings || !bioGroupRows || !groupGoals) {
     return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
   }
 
@@ -100,15 +86,15 @@ export function BioPage() {
     bioGroups,
   );
   const balcaoMatriculas = new Set(collaborators.filter((c) => c.setor === BALCAO_SETOR).map((c) => c.matricula));
-  // "Visão Padrão" stays Balcão-only (it's about the sector's general sales).
-  // "Visão BIOSINTÉTICA" shows every G1-G4 sale regardless of sector — a sale
-  // by someone outside Balcão isn't hidden, just flagged with "!" in the row.
+  // Only Biosintética products (G1-G4) matter on this screen — every sale
+  // shown here is G1-G4, regardless of the seller's sector. A sale by
+  // someone outside Balcão isn't hidden, just flagged with "!" in the row
+  // (see the pink alert bar above the table).
   const salesForTable = sales
     .filter((s) => {
       if (s.dataISO && s.dataISO < dashFrom) return false;
       if (s.dataISO && s.dataISO > dashTo) return false;
-      if (tableView === 'bio') return !!classifyBio(s.produto, bioGroups);
-      return balcaoMatriculas.has(s.matricula);
+      return !!classifyBio(s.produto, bioGroups);
     })
     .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
     .slice(0, 150);
@@ -130,20 +116,6 @@ export function BioPage() {
     },
   ];
 
-  function toggleProduto(produto: string) {
-    setSelectedProdutos((prev) => {
-      const next = new Set(prev);
-      if (next.has(produto)) next.delete(produto);
-      else next.add(produto);
-      return next;
-    });
-  }
-  async function applyReclassify() {
-    await reclassify.mutateAsync({ produtos: Array.from(selectedProdutos), categoria: bulkCat, catalog: catalog!, sales: sales! });
-    setSelectedProdutos(new Set());
-    setReclassifyMode(false);
-  }
-
   return (
     <div className="flex flex-col gap-4">
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
@@ -152,12 +124,41 @@ export function BioPage() {
       </div>
 
       {foraDoBalcao.length > 0 && (
-        <div className="rounded-xl border border-pink-500/40 bg-pink-500/5 p-3 text-xs text-pink-300 flex items-center gap-2">
-          <span>⚠️</span>
-          <span>
-            Existem <b>{foraDoBalcao.length} venda(s)</b> de produtos G1–G4 registradas por colaboradores fora do setor
-            Balcão neste período. Elas não entram neste ranking.
-          </span>
+        <div className="rounded-xl border border-pink-500/40 bg-pink-500/5 text-xs text-pink-300">
+          <button onClick={() => setForaDoBalcaoOpen((v) => !v)} className="w-full flex items-center gap-2 p-3 text-left">
+            <span>⚠️</span>
+            <span className="flex-1">
+              Existem <b>{foraDoBalcao.length} venda(s)</b> de produtos G1–G4 registradas por colaboradores fora do setor
+              Balcão neste período. Elas não entram neste ranking. <b>Toque para ver detalhes.</b>
+            </span>
+            <span>{foraDoBalcaoOpen ? '▲' : '▼'}</span>
+          </button>
+          {foraDoBalcaoOpen && (
+            <div className="border-t border-pink-500/30 px-3 py-2 overflow-x-auto">
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr className="text-left text-pink-300/70">
+                    <th className="py-1 pr-3">Data</th>
+                    <th className="py-1 pr-3">Colaborador</th>
+                    <th className="py-1 pr-3">Setor</th>
+                    <th className="py-1 pr-3">Produto</th>
+                    <th className="py-1 pr-3">Grupo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {foraDoBalcao.map((a, i) => (
+                    <tr key={i} className="border-t border-pink-500/10">
+                      <td className="py-1 pr-3 font-mono">{fmtDateBR(a.dataISO)}</td>
+                      <td className="py-1 pr-3">{a.vendedor}</td>
+                      <td className="py-1 pr-3">{a.setor || '—'}</td>
+                      <td className="py-1 pr-3">{a.produto}</td>
+                      <td className="py-1 pr-3">{a.grupo}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -188,44 +189,8 @@ export function BioPage() {
       </div>
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
-          <h3 className="text-sm font-semibold">Lista de vendas — Balcão</h3>
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex gap-1">
-              <button
-                onClick={() => setTableView('padrao')}
-                className={`rounded-lg px-2.5 py-1 text-xs ${tableView === 'padrao' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
-              >
-                Visão Padrão
-              </button>
-              <button
-                onClick={() => setTableView('bio')}
-                className={`rounded-lg px-2.5 py-1 text-xs ${tableView === 'bio' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
-              >
-                Visão BIOSINTÉTICA
-              </button>
-            </div>
-            {tableView === 'padrao' && (
-              <ReclassifyBar
-                active={reclassifyMode}
-                onToggle={() => {
-                  setReclassifyMode((v) => !v);
-                  setSelectedProdutos(new Set());
-                }}
-                selectedCount={selectedProdutos.size}
-                categoria={bulkCat}
-                onCategoriaChange={setBulkCat}
-                onApply={applyReclassify}
-                applying={reclassify.isPending}
-              />
-            )}
-          </div>
-        </div>
-        <p className="text-xs text-slate-500 mb-3">
-          {tableView === 'bio'
-            ? 'Mostra só as vendas de produtos dos grupos G1-G4, com a pontuação calculada.'
-            : 'Mostra todas as vendas do setor Balcão no período, com a categoria de cada produto.'}
-        </p>
+        <h3 className="text-sm font-semibold mb-1">Lista de vendas — Biosintética</h3>
+        <p className="text-xs text-slate-500 mb-3">Mostra as vendas de produtos dos grupos G1-G4 no período, com a pontuação calculada.</p>
         {salesForTable.length === 0 ? (
           <div className="text-sm text-slate-500 py-4 text-center">Nenhuma venda no período.</div>
         ) : (
@@ -233,7 +198,6 @@ export function BioPage() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-left text-slate-400 border-b border-slate-800">
-                  {tableView === 'padrao' && reclassifyMode && <th className="py-1.5 pr-3"></th>}
                   <th className="py-1.5 pr-3">Data</th>
                   <th className="py-1.5 pr-3">Matrícula</th>
                   <th className="py-1.5 pr-3">Vendedor</th>
@@ -246,14 +210,9 @@ export function BioPage() {
                 {salesForTable.map((s) => {
                   const g = classifyBio(s.produto, bioGroups);
                   const pontos = g ? s.qtd * (bioWeights[g] || 0) : 0;
-                  const outsideBalcao = tableView === 'bio' && g && !balcaoMatriculas.has(s.matricula);
+                  const outsideBalcao = g && !balcaoMatriculas.has(s.matricula);
                   return (
                     <tr key={s.id} className="border-b border-slate-900">
-                      {tableView === 'padrao' && reclassifyMode && (
-                        <td className="py-1.5 pr-3">
-                          <input type="checkbox" checked={selectedProdutos.has(s.produto)} onChange={() => toggleProduto(s.produto)} />
-                        </td>
-                      )}
                       <td className="py-1.5 pr-3 font-mono">{fmtDateBR(s.dataISO)}</td>
                       <td className="py-1.5 pr-3 font-mono">{s.matricula}</td>
                       <td className="py-1.5 pr-3">{s.vendedor}</td>
@@ -270,18 +229,12 @@ export function BioPage() {
                       </td>
                       <td className="py-1.5 pr-3 font-mono">{s.qtd}</td>
                       <td className="py-1.5 pr-3">
-                        {tableView === 'bio' ? (
-                          g ? (
-                            <span className="text-[10px] bg-green-500/20 text-green-400 rounded-full px-2 py-0.5">
-                              [{g}] {pontos.toFixed(1)}pts
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-slate-500">—</span>
-                          )
-                        ) : (
-                          <span className="text-[10px] bg-slate-800 text-slate-300 rounded-full px-2 py-0.5">
-                            {s.grupo ? CAT_LABEL_SHORT[s.grupo] : '—'}
+                        {g ? (
+                          <span className="text-[10px] bg-green-500/20 text-green-400 rounded-full px-2 py-0.5">
+                            [{g}] {pontos.toFixed(1)}pts
                           </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-500">—</span>
                         )}
                       </td>
                     </tr>
