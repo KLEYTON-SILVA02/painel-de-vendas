@@ -382,6 +382,7 @@
   border-radius: var(--mv2-radius-sm);
   padding: 10px 14px;
   margin: 8px 18px;
+  container-type: inline-size;
 }
 .mv2-sales-summary .mv2-label {
   font-size: 8px;
@@ -389,11 +390,15 @@
   text-transform: uppercase;
 }
 .mv2-sales-summary .mv2-value {
-  font-size: 18px;
+  font-size: clamp(13px, 8cqi, 20px);
   font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .mv2-sales-summary .mv2-target {
   text-align: right;
+  min-width: 0;
 }
 .mv2-sales-summary .mv2-target .mv2-value {
   color: var(--mv2-verde);
@@ -411,6 +416,7 @@
   border: 1px solid var(--mv2-card-color, var(--mv2-ciano));
   border-radius: var(--mv2-radius-sm);
   padding: 8px 10px;
+  container-type: inline-size;
 }
 .mv2-metric-card .mv2-label {
   font-size: 7px;
@@ -418,9 +424,12 @@
   text-transform: uppercase;
 }
 .mv2-metric-card .mv2-value {
-  font-size: 15px;
+  font-size: clamp(11px, 13cqi, 17px);
   font-weight: 700;
   color: var(--mv2-card-color, var(--mv2-texto));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .mv2-metric-card.mv2-meta {
   --mv2-card-color: var(--mv2-azul-royal);
@@ -640,6 +649,7 @@
 }
 .mv2-goals-grid .mv2-goal-item {
   text-align: center;
+  container-type: inline-size;
 }
 .mv2-goals-grid .mv2-goal-item .mv2-goal-name {
   font-size: 10px;
@@ -647,8 +657,12 @@
   margin-top: 4px;
 }
 .mv2-goals-grid .mv2-goal-item .mv2-goal-value {
-  font-size: 9px;
+  font-size: clamp(7px, 8cqi, 11px);
   color: var(--mv2-texto-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
 }
 
 /* ============================================================

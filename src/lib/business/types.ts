@@ -25,6 +25,9 @@ export interface Collaborator {
   fotoConquista?: string | null;
   setor: string | null;
   metaIndividual: number;
+  /** Optional for the same reason as `fotoConquista` above — most tests
+   * don't exercise it. */
+  dataNascimento?: string | null;
 }
 
 export interface SummaryRow {

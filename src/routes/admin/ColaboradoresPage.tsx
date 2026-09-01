@@ -227,12 +227,12 @@ function EditCollaboratorModal({
   collaborator: Collaborator;
   storeId: string | undefined;
   onClose: () => void;
-  onSave: (patch: { nome: string; apelido: string; setor: string; meta_individual: number; foto_url?: string; foto_conquista_url?: string }) => void;
+  onSave: (patch: { nome: string; apelido: string; setor: string; data_nascimento: string | null; foto_url?: string; foto_conquista_url?: string }) => void;
 }) {
   const [nome, setNome] = useState(collaborator.nome);
   const [apelido, setApelido] = useState(collaborator.apelido || '');
   const [setor, setSetor] = useState(collaborator.setor || SETORES[0]);
-  const [meta, setMeta] = useState(collaborator.metaIndividual);
+  const [dataNascimento, setDataNascimento] = useState(collaborator.dataNascimento || '');
   const [foto, setFoto] = useState(collaborator.foto);
   const [fotoConquista, setFotoConquista] = useState(collaborator.fotoConquista ?? null);
   const [cropTarget, setCropTarget] = useState<'avatar' | 'conquista' | null>(null);
@@ -292,8 +292,8 @@ function EditCollaboratorModal({
             </select>
           </div>
           <div>
-            <label className="block text-xs text-slate-400 mb-1">Meta individual (R$/mês)</label>
-            <input type="number" value={meta} onChange={(e) => setMeta(Number(e.target.value))} className="input" />
+            <label className="block text-xs text-slate-400 mb-1">Data de nascimento</label>
+            <input type="date" value={dataNascimento} onChange={(e) => setDataNascimento(e.target.value)} className="input" />
           </div>
         </div>
         <div className="flex gap-2 mt-4">
@@ -306,7 +306,7 @@ function EditCollaboratorModal({
                 nome,
                 apelido,
                 setor,
-                meta_individual: meta,
+                data_nascimento: dataNascimento || null,
                 ...(foto !== collaborator.foto && { foto_url: foto ?? undefined }),
                 ...(fotoConquista !== collaborator.fotoConquista && { foto_conquista_url: fotoConquista ?? undefined }),
               })

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 import { SidebarCalendarCard } from '../../components/SidebarCalendarCard';
 import { GenerateImageScopeModal } from '../../components/ranking/GenerateImageScopeModal';
 import { MultiRankingImageModal } from '../../components/ranking/MultiRankingImageModal';
@@ -120,7 +120,7 @@ function SubtabButton({ active, onClick, children }: { active: boolean; onClick:
 function CategoryGauge({ label, valor, goal, color }: { label: string; valor: number; goal: number; color: string }) {
   const pct = goal > 0 ? Math.min(100, (valor / goal) * 100) : 0;
   return (
-    <div style={{ textAlign: 'center' }}>
+    <div style={{ textAlign: 'center', containerType: 'inline-size' } as CSSProperties}>
       <div style={{ width: '100%', maxWidth: 88, aspectRatio: '2/1', overflow: 'hidden', position: 'relative', margin: '0 auto' }}>
         <div
           style={{
@@ -135,17 +135,34 @@ function CategoryGauge({ label, valor, goal, color }: { label: string; valor: nu
           <div style={{ position: 'absolute', inset: '12%', borderRadius: '50%', background: '#0b0e1d' }} />
         </div>
       </div>
-      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700, marginTop: 4, color }}>{pct.toFixed(0)}%</div>
+      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'clamp(11px, 15cqi, 16px)', fontWeight: 700, marginTop: 4, color }}>
+        {pct.toFixed(0)}%
+      </div>
       <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.03em', fontWeight: 700, marginTop: 2 }}>{label}</div>
-      <div style={{ fontSize: 10.5, color: '#8b90bf' }}>{fmtMoney(valor)}</div>
-      <div style={{ fontSize: 10.5, color: '#8b90bf' }}>meta {fmtMoney(goal)}</div>
+      <div style={{ fontSize: 'clamp(8.5px, 11cqi, 11px)', color: '#8b90bf', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {fmtMoney(valor)}
+      </div>
+      <div style={{ fontSize: 'clamp(8.5px, 11cqi, 11px)', color: '#8b90bf', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        meta {fmtMoney(goal)}
+      </div>
     </div>
   );
 }
 
 function StatCard({ label, value, color, badge }: { label: string; value: string; color: string; badge?: string }) {
   return (
-    <div style={{ background: '#0b0e1d', border: `1px solid ${color}`, borderRadius: 14, padding: '9px 10px', height: '100%' }}>
+    <div
+      style={
+        {
+          background: '#0b0e1d',
+          border: `1px solid ${color}`,
+          borderRadius: 14,
+          padding: '9px 10px',
+          height: '100%',
+          containerType: 'inline-size',
+        } as CSSProperties
+      }
+    >
       <div style={{ fontSize: 9, color: '#8b90bf', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 4, fontWeight: 700 }}>
         {label}
         {badge && (
@@ -154,7 +171,19 @@ function StatCard({ label, value, color, badge }: { label: string; value: string
           </span>
         )}
       </div>
-      <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color }}>{value}</div>
+      <div
+        style={{
+          fontSize: 'clamp(9px, 11cqi, 17px)',
+          fontWeight: 700,
+          fontFamily: "'JetBrains Mono', monospace",
+          color,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+      >
+        {value}
+      </div>
     </div>
   );
 }

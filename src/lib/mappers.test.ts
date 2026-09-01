@@ -34,6 +34,7 @@ function collaborator(overrides: Partial<Tables<'collaborators'>>): Tables<'coll
     foto_conquista_url: null,
     setor: 'Balcão',
     meta_individual: 0,
+    data_nascimento: null,
     created_at: '2026-08-01T00:00:00Z',
     ...overrides,
   };

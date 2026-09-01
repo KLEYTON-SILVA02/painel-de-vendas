@@ -90,6 +90,7 @@ function StatCard({ c, compact, hasStack }: { c: MfbStat; compact: boolean; hasS
         flexDirection: 'column',
         justifyContent: 'flex-start',
         boxSizing: 'border-box',
+        containerType: 'inline-size',
       }}
     >
       <div
@@ -108,12 +109,12 @@ function StatCard({ c, compact, hasStack }: { c: MfbStat; compact: boolean; hasS
       <div
         style={{
           fontFamily: "'JetBrains Mono', monospace",
-          fontSize: compact ? 13 : 26,
+          fontSize: compact ? 'clamp(10px, 15cqi, 15px)' : 'clamp(15px, 15cqi, 28px)',
           fontWeight: 800,
           marginTop: compact ? 4 : 10,
-          whiteSpace: compact ? 'nowrap' : undefined,
-          overflow: compact ? 'hidden' : undefined,
-          textOverflow: compact ? 'ellipsis' : undefined,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
           color: c.color,
         }}
       >
