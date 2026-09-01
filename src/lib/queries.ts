@@ -57,6 +57,22 @@ export function useSales() {
   });
 }
 
+/** History panel for Importar Vendas — every spreadsheet ever uploaded for
+ * this store, newest first. RLS already scopes rows to the caller's store. */
+export function useSalesImports() {
+  return useQuery({
+    queryKey: ['sales_imports'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('sales_imports')
+        .select('id, file_name, row_count, duplicate_count, created_at')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
 export function useGoals() {
   return useQuery({
     queryKey: ['goals'],
