@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
+import { MoneyInput } from '../../components/MoneyInput';
 import { CAT_KEYS, GOAL_UNIT_KEYS, type CategoryKey, type GoalCategoryKey } from '../../lib/business/classification';
 import { computeMetaDiariaRedistribuida } from '../../lib/business/goals';
 import { distributeIndividualGoalsAuto } from '../../lib/business/individualGoals';
@@ -169,12 +170,20 @@ function MetasPorCategoria() {
                       </select>
                     </td>
                     <td className="py-2 pr-3">
-                      <input
-                        type="number"
-                        value={fieldValue(k, 'mensal')}
-                        onChange={(e) => setField(k, 'mensal', Number(e.target.value))}
-                        className="w-28 rounded-md bg-slate-800 border border-slate-700 px-2 py-1 text-xs"
-                      />
+                      {metrica === 'unidade' ? (
+                        <input
+                          type="number"
+                          value={fieldValue(k, 'mensal')}
+                          onChange={(e) => setField(k, 'mensal', Number(e.target.value))}
+                          className="w-28 rounded-md bg-slate-800 border border-slate-700 px-2 py-1 text-xs"
+                        />
+                      ) : (
+                        <MoneyInput
+                          value={fieldValue(k, 'mensal')}
+                          onChange={(v) => setField(k, 'mensal', v)}
+                          className="w-28 rounded-md bg-slate-800 border border-slate-700 px-2 py-1 text-xs"
+                        />
+                      )}
                     </td>
                     <td className="py-2 pr-3">
                       <label className="flex items-center gap-1.5 text-xs cursor-pointer">
@@ -193,12 +202,20 @@ function MetasPorCategoria() {
                       </label>
                     </td>
                     <td className="py-2 pr-3">
-                      <input
-                        type="number"
-                        value={fieldValue(k, 'superMeta')}
-                        onChange={(e) => setField(k, 'superMeta', Number(e.target.value))}
-                        className="w-28 rounded-md bg-slate-800 border border-slate-700 px-2 py-1 text-xs"
-                      />
+                      {metrica === 'unidade' ? (
+                        <input
+                          type="number"
+                          value={fieldValue(k, 'superMeta')}
+                          onChange={(e) => setField(k, 'superMeta', Number(e.target.value))}
+                          className="w-28 rounded-md bg-slate-800 border border-slate-700 px-2 py-1 text-xs"
+                        />
+                      ) : (
+                        <MoneyInput
+                          value={fieldValue(k, 'superMeta')}
+                          onChange={(v) => setField(k, 'superMeta', v)}
+                          className="w-28 rounded-md bg-slate-800 border border-slate-700 px-2 py-1 text-xs"
+                        />
+                      )}
                     </td>
                     <td className="py-2 pr-3">
                       <label className="flex items-center gap-1.5 text-xs cursor-pointer">
@@ -425,15 +442,25 @@ function MetasIndividuais() {
                   </td>
                   <td className="py-2 pr-3">{c.apelido || c.nome}</td>
                   <td className="py-2 pr-3">
-                    <input
-                      type="number"
-                      defaultValue={campo === 'valor_meta' ? row?.valor_meta ?? 0 : row?.valor_super ?? 0}
-                      key={`${c.id}-${catKey}-${alvo}-${campo === 'valor_meta' ? row?.valor_meta : row?.valor_super}`}
-                      onBlur={(e) =>
-                        upsert.mutate({ categoria: catKey, collaboratorId: c.id, patch: { [campo]: Number(e.target.value) } })
-                      }
-                      className="w-28 rounded-md bg-slate-800 border border-slate-700 px-2 py-1 text-xs"
-                    />
+                    {isUnidade ? (
+                      <input
+                        type="number"
+                        defaultValue={campo === 'valor_meta' ? row?.valor_meta ?? 0 : row?.valor_super ?? 0}
+                        key={`${c.id}-${catKey}-${alvo}-${campo === 'valor_meta' ? row?.valor_meta : row?.valor_super}`}
+                        onBlur={(e) =>
+                          upsert.mutate({ categoria: catKey, collaboratorId: c.id, patch: { [campo]: Number(e.target.value) } })
+                        }
+                        className="w-28 rounded-md bg-slate-800 border border-slate-700 px-2 py-1 text-xs"
+                      />
+                    ) : (
+                      <MoneyInput
+                        value={campo === 'valor_meta' ? row?.valor_meta ?? 0 : row?.valor_super ?? 0}
+                        key={`${c.id}-${catKey}-${alvo}-${campo === 'valor_meta' ? row?.valor_meta : row?.valor_super}`}
+                        commitOn="blur"
+                        onChange={(v) => upsert.mutate({ categoria: catKey, collaboratorId: c.id, patch: { [campo]: v } })}
+                        className="w-28 rounded-md bg-slate-800 border border-slate-700 px-2 py-1 text-xs"
+                      />
+                    )}
                   </td>
                 </tr>
               );

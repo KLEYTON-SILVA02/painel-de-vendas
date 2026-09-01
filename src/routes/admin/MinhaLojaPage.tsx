@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { useAuth } from '../../auth/AuthContext';
+import { MoneyInput } from '../../components/MoneyInput';
 import { DIA_KEYS, DIA_LABELS, type DiaKey, type Horario } from '../../lib/business/horario';
 import { fmtDateBR } from '../../lib/format';
 import { useUpdateStore, useUpdateStoreSettings } from '../../lib/mutations';
@@ -126,7 +127,7 @@ export function MinhaLojaPage() {
             <input value={nomeEquipe} onChange={(e) => setNomeEquipe(e.target.value)} className="input" />
           </Field>
           <Field label="Meta Geral de reserva (R$)">
-            <input type="number" value={metaFallback} onChange={(e) => setMetaFallback(Number(e.target.value))} className="input" />
+            <MoneyInput value={metaFallback} onChange={setMetaFallback} className="input" />
           </Field>
           <Field label="WhatsApp da loja (com DDI e DDD)">
             <input

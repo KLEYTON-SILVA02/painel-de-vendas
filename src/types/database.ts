@@ -9,6 +9,8 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
@@ -155,6 +157,7 @@ export type Database = {
         Row: {
           apelido: string | null
           created_at: string
+          data_nascimento: string | null
           foto_conquista_url: string | null
           foto_url: string | null
           id: string
@@ -167,6 +170,7 @@ export type Database = {
         Insert: {
           apelido?: string | null
           created_at?: string
+          data_nascimento?: string | null
           foto_conquista_url?: string | null
           foto_url?: string | null
           id?: string
@@ -179,6 +183,7 @@ export type Database = {
         Update: {
           apelido?: string | null
           created_at?: string
+          data_nascimento?: string | null
           foto_conquista_url?: string | null
           foto_url?: string | null
           id?: string
@@ -226,6 +231,56 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "commission_rates_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conquista_card_templates: {
+        Row: {
+          background_url: string
+          created_at: string
+          foto: Json
+          id: string
+          is_default: boolean
+          logo: Json
+          logo_url: string | null
+          name: string
+          store_id: string
+          text_font_family: string | null
+          texto: Json
+        }
+        Insert: {
+          background_url: string
+          created_at?: string
+          foto: Json
+          id?: string
+          is_default?: boolean
+          logo: Json
+          logo_url?: string | null
+          name: string
+          store_id: string
+          text_font_family?: string | null
+          texto: Json
+        }
+        Update: {
+          background_url?: string
+          created_at?: string
+          foto?: Json
+          id?: string
+          is_default?: boolean
+          logo?: Json
+          logo_url?: string | null
+          name?: string
+          store_id?: string
+          text_font_family?: string | null
+          texto?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conquista_card_templates_store_id_fkey"
             columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "stores"
@@ -376,56 +431,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "function_icons_store_id_fkey"
-            columns: ["store_id"]
-            isOneToOne: false
-            referencedRelation: "stores"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      conquista_card_templates: {
-        Row: {
-          background_url: string
-          created_at: string
-          foto: Json
-          id: string
-          is_default: boolean
-          logo: Json
-          logo_url: string | null
-          name: string
-          store_id: string
-          text_font_family: string | null
-          texto: Json
-        }
-        Insert: {
-          background_url: string
-          created_at?: string
-          foto: Json
-          id?: string
-          is_default?: boolean
-          logo: Json
-          logo_url?: string | null
-          name: string
-          store_id: string
-          text_font_family?: string | null
-          texto: Json
-        }
-        Update: {
-          background_url?: string
-          created_at?: string
-          foto?: Json
-          id?: string
-          is_default?: boolean
-          logo?: Json
-          logo_url?: string | null
-          name?: string
-          store_id?: string
-          text_font_family?: string | null
-          texto?: Json
-        }
-        Relationships: [
-          {
-            foreignKeyName: "conquista_card_templates_store_id_fkey"
             columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "stores"
