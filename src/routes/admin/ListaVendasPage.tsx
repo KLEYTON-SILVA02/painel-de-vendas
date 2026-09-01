@@ -72,6 +72,7 @@ export function ListaVendasPage() {
   const { data: sales } = useSales();
   const { data: collaborators } = useCollaborators();
   const { data: catalog } = useCatalog();
+  const [tab, setTab] = useState<'todas' | 'outros'>('todas');
   const [openMonths, setOpenMonths] = useState<Set<string>>(new Set());
   const [openDays, setOpenDays] = useState<Set<string>>(new Set());
   const [dayPage, setDayPage] = useState<Record<string, number>>({});
@@ -86,7 +87,14 @@ export function ListaVendasPage() {
     return map;
   }, [collaborators]);
 
-  const months = useMemo(() => groupByMonthAndDay(sales ?? []), [sales]);
+  // "OUTROS": vendas cuja matrícula não bate com nenhum colaborador
+  // cadastrado — inclui quem foi removido automaticamente por inatividade
+  // (REGRA 6) e vendedores que nunca chegaram a ser cadastrados. O nome
+  // exibido vem direto da planilha (vendedorNome já cai em s.vendedor
+  // quando não há colaborador correspondente).
+  const outrosSales = useMemo(() => (sales ?? []).filter((s) => !byMatricula.has(s.matricula)), [sales, byMatricula]);
+  const salesForTab = tab === 'outros' ? outrosSales : sales ?? [];
+  const months = useMemo(() => groupByMonthAndDay(salesForTab), [salesForTab]);
 
   if (!sales || !collaborators || !catalog) {
     return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
@@ -140,15 +148,31 @@ export function ListaVendasPage() {
             applying={reclassify.isPending}
           />
         </div>
+        <div className="flex gap-1 mb-2">
+          <button
+            onClick={() => setTab('todas')}
+            className={`rounded-lg px-3 py-1.5 text-xs ${tab === 'todas' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+          >
+            Todas
+          </button>
+          <button
+            onClick={() => setTab('outros')}
+            className={`rounded-lg px-3 py-1.5 text-xs ${tab === 'outros' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+          >
+            OUTROS {outrosSales.length > 0 && `(${outrosSales.length.toLocaleString('pt-BR')})`}
+          </button>
+        </div>
         <p className="text-xs text-slate-500">
-          Todas as vendas importadas por planilha, separadas por mês e por dia. {sales.length.toLocaleString('pt-BR')} registro(s) no total.
+          {tab === 'outros'
+            ? 'Vendas cuja matrícula não corresponde a nenhum colaborador cadastrado no momento — inclui quem foi removido automaticamente por 60+ dias sem vender e vendedores nunca cadastrados. O nome vem direto da planilha importada.'
+            : `Todas as vendas importadas por planilha, separadas por mês e por dia. ${sales.length.toLocaleString('pt-BR')} registro(s) no total.`}
           {reclassifyMode && ' Marque um ou mais produtos abaixo para reclassificá-los — o ajuste vale para todas as vendas já importadas desse produto, em qualquer mês.'}
         </p>
       </div>
 
       {months.length === 0 ? (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 text-center text-sm text-slate-500">
-          Nenhuma venda importada ainda.
+          {tab === 'outros' ? 'Nenhuma venda de vendedor não cadastrado no momento.' : 'Nenhuma venda importada ainda.'}
         </div>
       ) : (
         months.map((month) => {
