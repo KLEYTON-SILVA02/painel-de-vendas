@@ -98,8 +98,26 @@ export interface ClassificationResult {
   tier: 1 | 2 | 3 | 4 | 5;
 }
 
-function keywordsOf(item: KeywordItem): string[] {
-  return item.palavras && item.palavras.length ? item.palavras : [item.padrao || item.nome];
+/** A bulk-imported product/BIO-group row's own "Tipo"/"Categoria" cell
+ * sometimes ends up as its ONLY keyword — e.g. a row for a specific GEN
+ * product gets `palavras: ['GEN']` instead of a real product-identifying
+ * keyword, or a Biosintética product gets `palavras: ['G1']`. Once that
+ * happens, `n.includes(pad)` matches essentially any sale whose product
+ * name happens to contain that 2-3 letter substring anywhere — a real
+ * production incident: every GEN and MP product in this store's catalog
+ * had exactly this corruption (palavras === [categoria]), turning "does
+ * this contain 'gen'?" into the de facto GEN rule and pulling in unrelated
+ * sales (syringes, needles, dermo creams — anything with "g1"/"g2"/... in
+ * a compressed SKU code) into the Biosintética G1-G4 lists. A keyword that
+ * exactly equals the category/group code it's filed under is never a real
+ * product identifier, so it's discarded here and the product's own name is
+ * used instead — the same fallback used when `palavras` is empty. */
+function keywordsOf(item: KeywordItem, categoryCode?: string): string[] {
+  const raw = item.palavras && item.palavras.length ? item.palavras : [item.padrao || item.nome];
+  if (!categoryCode) return raw;
+  const codeNorm = normalize(categoryCode);
+  const cleaned = raw.filter((kw) => normalize(kw) !== codeNorm);
+  return cleaned.length ? cleaned : [item.nome];
 }
 
 /**
@@ -138,7 +156,7 @@ export function classifyProductTier(
     const matches: { k: CategoryKey; len: number }[] = [];
     CAT_KEYS.forEach((k) => {
       (inputs.productsByCategory[k] || []).forEach((p) => {
-        keywordsOf(p).forEach((kw) => {
+        keywordsOf(p, k).forEach((kw) => {
           const pad = normalize(kw);
           if (pad && pad.length >= 3 && n.includes(pad)) matches.push({ k, len: pad.length });
         });
@@ -222,9 +240,12 @@ export function classifyBio(
   const matches: { g: BioGroupKey; len: number }[] = [];
   BIO_GROUP_KEYS.forEach((g) => {
     (bioGroups[g] || []).forEach((p) => {
-      keywordsOf(p).forEach((kw) => {
+      keywordsOf(p, g).forEach((kw) => {
         const pad = normalize(kw);
-        if (pad && pad.length >= 2 && n.includes(pad)) matches.push({ g, len: pad.length });
+        // >= 3, matching classifyProductTier's tier-2 threshold — a 2-char
+        // keyword ("g1", "mp"...) is exactly the pattern the corrupted-data
+        // incident above produced, and is never a real product identifier.
+        if (pad && pad.length >= 3 && n.includes(pad)) matches.push({ g, len: pad.length });
       });
     });
   });
