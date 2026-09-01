@@ -61,6 +61,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   const [bulkCat, setBulkCat] = useState<CategoryKey>('DERM');
   const [vendasSeller, setVendasSeller] = useState('');
   const [vendasPage, setVendasPage] = useState(0);
+  const [vendasCommissionSlot, setVendasCommissionSlot] = useState<number | null>(null);
   const reclassify = useReclassifyProdutos(profile?.store_id);
 
   if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !commissionRates || !catalog) {
@@ -194,6 +195,23 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
     ? computeVendorExtract(sales, extractMatricula, catKey, dashFrom, dashTo, specialLists)
     : [];
 
+  // Same liga/desliga commission toggle as the "Detalhamento por vendedor"
+  // extrato (and mobile's MobileCategoryScreen) — but wired to the "Lista de
+  // vendas" table's own colaborador filter, which previously had a
+  // `vendasSeller` dropdown with no commission UI attached to it at all: a
+  // colaborador filtered there had no way to see commission values change
+  // in that specific table (only the separate Detalhamento modal did).
+  const vendasAvailableRates =
+    catKey === 'MP'
+      ? [1, 2, 3].map((slot) => commissionRates.MP.find((r) => r.slot === slot) ?? { categoria: 'MP' as const, slot, percentual: 0, ativo: false })
+      : catKey === 'DERM' || catKey === 'GEN'
+        ? commissionRates[catKey].filter((r) => r.ativo)
+        : [];
+  const vendasActiveRate =
+    vendasCommissionSlot !== null ? vendasAvailableRates.find((r) => r.slot === vendasCommissionSlot) : undefined;
+  const showVendasCommission = !!vendasSeller && !!vendasActiveRate;
+  const vendasTotalComissao = vendasActiveRate ? (categorySales.reduce((a, s) => a + s.valor, 0) * vendasActiveRate.percentual) / 100 : 0;
+
   function toggleProduto(produto: string) {
     setSelectedProdutos((prev) => {
       const next = new Set(prev);
@@ -279,6 +297,27 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
               />
             </div>
           </div>
+          {vendasAvailableRates.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              {vendasAvailableRates.map((r) => (
+                <button
+                  key={r.slot}
+                  onClick={() => setVendasCommissionSlot((cur) => (cur === r.slot ? null : r.slot))}
+                  className="rounded-full border px-3 py-1 text-[11px] font-bold"
+                  style={{
+                    borderColor: '#ffb700',
+                    background: vendasCommissionSlot === r.slot ? '#ffb700' : 'transparent',
+                    color: vendasCommissionSlot === r.slot ? '#231a02' : '#ffb700',
+                  }}
+                >
+                  {vendasAvailableRates.length > 1 ? `Comissão ${r.slot} (${r.percentual}%)` : `Comissão (${r.percentual}%)`}
+                </button>
+              ))}
+              {vendasActiveRate && !vendasSeller && (
+                <span className="text-xs text-slate-500">Selecione um colaborador acima pra ver a comissão</span>
+              )}
+            </div>
+          )}
           {categorySales.length === 0 ? (
             <div className="text-sm text-slate-500 py-4 text-center">Nenhuma venda no período.</div>
           ) : (
@@ -293,6 +332,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
                     <th className="py-1.5 pr-3">Produto</th>
                     <th className="py-1.5 pr-3">Qtd</th>
                     <th className="py-1.5 pr-3">Tipo</th>
+                    {showVendasCommission && <th className="py-1.5 pr-3">Comissão</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -316,8 +356,21 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
                           {CAT_PLAIN_LABEL[catKey as CategoryKey]}
                         </span>
                       </td>
+                      {showVendasCommission && (
+                        <td className="py-1.5 pr-3 font-mono text-amber-400">{fmtMoney((s.valor * vendasActiveRate!.percentual) / 100)}</td>
+                      )}
                     </tr>
                   ))}
+                  {showVendasCommission && (
+                    <tr className="border-t border-cyan-500/40 font-semibold">
+                      <td className="py-1.5 pr-3" colSpan={reclassifyMode ? 5 : 4}>
+                        Subtotal
+                      </td>
+                      <td className="py-1.5 pr-3 font-mono">{categorySales.reduce((a, s) => a + s.qtd, 0)}</td>
+                      <td className="py-1.5 pr-3"></td>
+                      <td className="py-1.5 pr-3 font-mono text-amber-400">{fmtMoney(vendasTotalComissao)}</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
               {!vendasSeller && vendasTotalPages > 1 && (
