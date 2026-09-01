@@ -285,7 +285,22 @@ export function DashboardPage() {
     setGeneratingImage(true);
     try {
       const rows = isUnitRanking ? rankingFilteredList.map((r) => ({ ...r, valor: r.itens })) : rankingFilteredList;
-      const blob = await generateRankingImageBlob(rows, rankFilterParams.label, rankFilterParams.from, rankFilterParams.to, store?.nome_loja, isUnitRanking);
+      // 'ALL' (and dynamics, which also resolve to 'ALL') has no single
+      // category's own goal to fall back on — use the store-wide daily goal
+      // (same one "Meta Diária" at the top of this page already tracks).
+      const metaDiariaValor =
+        rankFilterParams.catFilter === 'ALL'
+          ? effectiveMetaGeral(goals!, 'dia', sales!, collaborators!, storeSettings!.meta_geral_fallback)
+          : getGoal(goals![rankFilterParams.catFilter], 'dia', sales!, collaborators!);
+      const blob = await generateRankingImageBlob(
+        rows,
+        rankFilterParams.label,
+        rankFilterParams.from,
+        rankFilterParams.to,
+        store?.nome_loja,
+        isUnitRanking,
+        metaDiariaValor,
+      );
       if (!blob) return;
       const copiedToClipboard = await tryCopyImage(blob);
       setRankingImageModal({ url: URL.createObjectURL(blob), copied: copiedToClipboard });
@@ -302,7 +317,14 @@ export function DashboardPage() {
       const specs = RANKING_CATEGORIES.map((c) => {
         const isUnit = c.key === 'LEVMEL' || c.key === 'CHIP';
         const rowsRaw = computeSummary(salesData, collaboratorsData, dashFrom, dashTo, c.key, specialLists);
-        return { key: c.key, titulo: c.titulo, rows: isUnit ? rowsRaw.map((r) => ({ ...r, valor: r.itens })) : rowsRaw, isUnit };
+        const metaDiariaValor = getGoal(goals![c.key], 'dia', salesData, collaboratorsData);
+        return {
+          key: c.key,
+          titulo: c.titulo,
+          rows: isUnit ? rowsRaw.map((r) => ({ ...r, valor: r.itens })) : rowsRaw,
+          isUnit,
+          metaDiaria: metaDiariaValor,
+        };
       });
       const results = await generateAllCategoryImages(specs, dashFrom, dashTo, store?.nome_loja);
       setMultiImages(results);

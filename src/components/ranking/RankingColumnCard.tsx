@@ -34,6 +34,7 @@ export function RankingColumnCard({
   color,
   ranking,
   isUnit,
+  metaDiaria,
   dashFrom,
   dashTo,
   storeName,
@@ -44,6 +45,8 @@ export function RankingColumnCard({
   color: string;
   ranking: ColumnRankingRow[];
   isUnit: boolean;
+  /** This category's daily goal, for the generated image's "Atingimento" box. */
+  metaDiaria?: number;
   dashFrom: string;
   dashTo: string;
   storeName?: string;
@@ -68,7 +71,7 @@ export function RankingColumnCard({
     setGenerating(true);
     try {
       const rows = isUnit ? ranking.map((r) => ({ ...r, valor: r.itens })) : ranking;
-      const blob = await generateRankingImageBlob(rows, title, dashFrom, dashTo, storeName, isUnit);
+      const blob = await generateRankingImageBlob(rows, title, dashFrom, dashTo, storeName, isUnit, metaDiaria);
       if (!blob) return;
       const copiedToClipboard = await tryCopyImage(blob);
       const url = URL.createObjectURL(blob);

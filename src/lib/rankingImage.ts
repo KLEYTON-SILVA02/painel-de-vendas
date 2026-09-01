@@ -49,13 +49,22 @@ export async function generateRankingImageBlob(
    * function (see each caller), but the label under each bar and the
    * "total" box still need to know not to run it through fmtMoney. */
   isUnit = false,
+  /** Daily goal (same unit as `r.valor` — R$, or item count when isUnit) for
+   * the category/scope this image represents. When provided (and > 0), an
+   * extra "Atingimento" box shows what % of it the image's own total
+   * represents — the same total already drawn in the "TOTAL VENDIDO" box. */
+  metaDiaria?: number,
 ): Promise<Blob | null> {
   const ranking = rankingIn.filter((r) => r.valor > 0).slice(0, 10);
   const totalValor = ranking.reduce((a, r) => a + r.valor, 0);
   const fmtValue = (v: number) => (isUnit ? `${Math.round(v)} un.` : fmtMoney(v));
+  const pctAtingimento = metaDiaria && metaDiaria > 0 ? Math.min(999, (totalValor / metaDiaria) * 100) : null;
 
   const W = 1000;
-  const H = 620;
+  // Tall enough to fit the 3-box info stack (date/total/atingimento) with
+  // comfortable headroom above the tallest bar even at the largest avatar
+  // size (few columns) — see the colW-driven avR/barW formulas below.
+  const H = 660;
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
@@ -94,6 +103,19 @@ export async function generateRankingImageBlob(
   ctx.fillStyle = '#14ff00';
   ctx.font = '800 22px Arial';
   ctx.fillText(fmtValue(totalValor), W - 170, 118);
+
+  if (pctAtingimento !== null) {
+    const atingimentoColor = pctAtingimento >= 100 ? '#14ff00' : '#ffb700';
+    ctx.strokeStyle = atingimentoColor;
+    roundRect(ctx, W - 300, 138, 260, 54, 10);
+    ctx.stroke();
+    ctx.fillStyle = '#8b90bf';
+    ctx.font = '600 10px Arial';
+    ctx.fillText('ATINGIM. META DIÁRIA', W - 170, 156);
+    ctx.fillStyle = atingimentoColor;
+    ctx.font = '800 22px Arial';
+    ctx.fillText(`${pctAtingimento.toFixed(0)}%`, W - 170, 180);
+  }
   ctx.textAlign = 'left';
 
   if (ranking.length === 0) {
@@ -110,7 +132,14 @@ export async function generateRankingImageBlob(
     const areaBottom = H - 50;
     const baseY = areaBottom;
     const colW = (areaRight - areaLeft) / n;
-    const barW = Math.min(70, colW * 0.6);
+    // Column contents (avatar circle + bar) scale with the column's own
+    // width instead of a fixed size — fewer collaborators means wider
+    // columns and a proportionally bigger avatar/bar; more collaborators
+    // (up to the top-10 cap) means narrower columns and a smaller,
+    // still-legible avatar/bar, instead of everything staying a fixed size
+    // and looking cramped once there are more than a handful of columns.
+    const avR = Math.max(18, Math.min(44, colW * 0.28));
+    const barW = Math.max(24, Math.min(80, colW * 0.55));
     const maxBarH = 260;
     const colors = ['#ffb700', '#c9d3e6', '#ff6a00'];
 
@@ -127,7 +156,6 @@ export async function generateRankingImageBlob(
       roundRect(ctx, cx - barW / 2, barTop, barW, barH, 8);
       ctx.fill();
 
-      const avR = 30;
       const avCy = barTop - avR - 6;
       ctx.save();
       ctx.beginPath();
@@ -143,22 +171,26 @@ export async function generateRankingImageBlob(
         ctx.drawImage(imgs[i]!, cx - avR, avCy - avR, avR * 2, avR * 2);
       } else {
         ctx.fillStyle = color;
-        ctx.font = '700 22px Arial';
+        ctx.font = `700 ${Math.round(avR * 0.73)}px Arial`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText((r.apelido || r.nome || '?').charAt(0).toUpperCase(), cx, avCy);
       }
       ctx.restore();
 
+      // Position badge scales with the avatar so it stays proportional at
+      // every column width instead of a fixed size that looks tiny on a
+      // large avatar or oversized on a small one.
+      const badgeR = Math.max(8, avR * 0.37);
       ctx.beginPath();
-      ctx.arc(cx, avCy + avR - 2, 11, 0, Math.PI * 2);
+      ctx.arc(cx, avCy + avR - 2, badgeR, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.fill();
       ctx.strokeStyle = '#0d1428';
       ctx.lineWidth = 2;
       ctx.stroke();
       ctx.fillStyle = '#04121a';
-      ctx.font = '800 11px Arial';
+      ctx.font = `800 ${Math.round(badgeR * 0.95)}px Arial`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(String(i + 1), cx, avCy + avR - 1);
@@ -189,6 +221,9 @@ export interface CategoryImageSpec {
   titulo: string;
   rows: RankingImageRow[];
   isUnit: boolean;
+  /** Same as generateRankingImageBlob's `metaDiaria` — that category's own
+   * daily goal, so each generated image gets its own "Atingimento" box. */
+  metaDiaria?: number;
 }
 
 export interface MultiImageResult {
@@ -213,7 +248,7 @@ export async function generateAllCategoryImages(
 ): Promise<MultiImageResult[]> {
   const results: MultiImageResult[] = [];
   for (const spec of specs) {
-    const blob = await generateRankingImageBlob(spec.rows, spec.titulo, fromDate, toDate, storeName, spec.isUnit);
+    const blob = await generateRankingImageBlob(spec.rows, spec.titulo, fromDate, toDate, storeName, spec.isUnit, spec.metaDiaria);
     if (blob) {
       results.push({ key: spec.key, title: spec.titulo, url: URL.createObjectURL(blob), filename: `ranking-${spec.key.toLowerCase()}.png` });
     }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
 import { MultiRankingImageModal } from '../../components/ranking/MultiRankingImageModal';
 import { RankingColumnCard } from '../../components/ranking/RankingColumnCard';
-import { diasRestantesNoMes, effectiveMetaGeral, getSuperMeta } from '../../lib/business/goals';
+import { diasRestantesNoMes, effectiveMetaGeral, getGoal, getSuperMeta } from '../../lib/business/goals';
 import { computeColumnRanking } from '../../lib/business/ranking';
 import { computeSummary } from '../../lib/business/summary';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
@@ -49,7 +49,12 @@ export function RankingPage() {
     // (effectiveMetaGeral always pulls from goals.MER).
     const columnFilter = c.key === 'MER' ? 'ALL' : c.key;
     const ranking = computeColumnRanking(sales, collaborators, dashFrom, dashTo, columnFilter, isUnit, mode, refYear, refMonth, specialLists);
-    return { ...c, ranking, isUnit };
+    // Always the registered daily goal, regardless of the page's own
+    // dia/mês date-range mode — the generated image's "Atingimento" box is
+    // fixed to "Meta Diária" per column (MER's own goal already represents
+    // the whole store, matching its now-total column above).
+    const metaDiaria = getGoal(goals[c.key], 'dia', sales, collaborators);
+    return { ...c, ranking, isUnit, metaDiaria };
   });
 
   async function handleGenerateAllImages() {
@@ -60,6 +65,7 @@ export function RankingPage() {
         titulo: c.titulo,
         rows: c.isUnit ? c.ranking.map((r) => ({ ...r, valor: r.itens })) : c.ranking,
         isUnit: c.isUnit,
+        metaDiaria: c.metaDiaria,
       }));
       const results = await generateAllCategoryImages(specs, dashFrom, dashTo, store?.nome_loja);
       setMultiImages(results);
@@ -101,6 +107,7 @@ export function RankingPage() {
               color={c.cor}
               ranking={c.ranking}
               isUnit={c.isUnit}
+              metaDiaria={c.metaDiaria}
               dashFrom={dashFrom}
               dashTo={dashTo}
               storeName={store?.nome_loja}

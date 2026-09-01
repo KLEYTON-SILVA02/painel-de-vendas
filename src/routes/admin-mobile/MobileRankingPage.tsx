@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
+import { getGoal } from '../../lib/business/goals';
 import { computeSummary } from '../../lib/business/summary';
 import { copyText, formatRankingText } from '../../lib/clipboard';
 import { fmtMoney } from '../../lib/format';
 import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
-import { useCollaborators, useSales, useSpecialLists, useStore } from '../../lib/queries';
+import { useCollaborators, useGoals, useSales, useSpecialLists, useStore } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { MobileDateFilter } from './MobileDateFilter';
 
@@ -20,6 +21,7 @@ const RANKING_COLS = [
 export function MobileRankingPage() {
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
+  const { data: goals } = useGoals();
   const { data: specialLists } = useSpecialLists();
   const { data: store } = useStore();
   const { dashFrom, dashTo } = useDateRange();
@@ -28,7 +30,7 @@ export function MobileRankingPage() {
   const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
   const [copied, setCopied] = useState(false);
 
-  if (!collaborators || !sales || !specialLists) {
+  if (!collaborators || !sales || !goals || !specialLists) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
@@ -50,7 +52,8 @@ export function MobileRankingPage() {
     setGenerating(true);
     try {
       const rows = rankingList.map((r) => ({ nome: r.nome, apelido: r.apelido, foto: r.foto, valor: isUnit ? r.itens : r.valor }));
-      const blob = await generateRankingImageBlob(rows, info.titulo, dashFrom, dashTo, store?.nome_loja, isUnit);
+      const metaDiariaValor = getGoal(goals![catKey], 'dia', sales!, collaborators!);
+      const blob = await generateRankingImageBlob(rows, info.titulo, dashFrom, dashTo, store?.nome_loja, isUnit, metaDiariaValor);
       if (!blob) return;
       const copied = await tryCopyImage(blob);
       setImageModal({ url: URL.createObjectURL(blob), copied });
