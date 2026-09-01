@@ -41,6 +41,7 @@ export function MobileBioPage() {
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
+  const [foraDoBalcaoOpen, setForaDoBalcaoOpen] = useState(false);
 
   // Biosintética always opens in Modo Geral (mês inteiro), regardless of what
   // date-mode was left active on another screen — the date filter is shared
@@ -184,10 +185,30 @@ export function MobileBioPage() {
             color: 'var(--mv2-rosa)',
             border: '1px solid var(--mv2-rosa)',
             borderRadius: 'var(--mv2-radius-sm)',
-            padding: 8,
+            overflow: 'hidden',
           }}
         >
-          ⚠ {foraDoBalcao.length} venda(s) de produtos G1-G4 fora do setor Balcão não entram neste ranking.
+          <button
+            onClick={() => setForaDoBalcaoOpen((v) => !v)}
+            style={{ width: '100%', background: 'none', border: 'none', color: 'inherit', textAlign: 'left', padding: 8, fontSize: 9 }}
+          >
+            ⚠ {foraDoBalcao.length} venda(s) de produtos G1-G4 fora do setor Balcão não entram neste ranking. Toque para ver detalhes.{' '}
+            {foraDoBalcaoOpen ? '▲' : '▼'}
+          </button>
+          {foraDoBalcaoOpen && (
+            <div style={{ borderTop: '1px solid var(--mv2-rosa)', padding: '6px 8px', overflowX: 'auto' }}>
+              {foraDoBalcao.map((a, i) => (
+                <div key={i} style={{ padding: '4px 0', borderBottom: i < foraDoBalcao.length - 1 ? '1px solid rgba(255,255,255,.08)' : 'none' }}>
+                  <div style={{ fontWeight: 700 }}>
+                    {a.vendedor} · {fmtDateBR(a.dataISO)}
+                  </div>
+                  <div style={{ color: 'var(--mv2-texto-2)' }}>
+                    {a.produto} · {a.setor || '—'} · [{a.grupo}]
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
