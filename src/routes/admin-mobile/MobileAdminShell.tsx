@@ -29,6 +29,7 @@ import { ConfiguracoesPage } from '../admin/ConfiguracoesPage';
 import { IconesPage } from '../admin/IconesPage';
 import { MinhaLojaPage } from '../admin/MinhaLojaPage';
 import { ProdutosPage } from '../admin/ProdutosPage';
+import { VendasArquivadasPage } from '../admin/VendasArquivadasPage';
 import { ConquistasPage } from '../conquistas/ConquistasPage';
 import { MetasPage } from '../metas/MetasPage';
 import { MobileBioPage } from './MobileBioPage';
@@ -127,6 +128,7 @@ export function MobileAdminShell() {
           />
           <Route path="/admin/auditoria" element={<AuditoriaPage />} />
           <Route path="/admin/vendas" element={<ListaVendasPage />} />
+          <Route path="/admin/vendas-arquivadas" element={<VendasArquivadasPage />} />
           <Route path="/admin/backup" element={<BackupPage />} />
           <Route path="/admin/minha-loja" element={<MinhaLojaPage />} />
           <Route path="/admin/configuracoes" element={<ConfiguracoesPage />} />

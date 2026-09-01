@@ -73,6 +73,37 @@ export function useSalesImports() {
   });
 }
 
+/** REGRA 2 archived-months report — reads the aggregates computed by
+ * useAutoArchiveOldSales() (src/lib/archival.ts) for months whose raw sales
+ * rows were already deleted after passing the 3-month retention window. */
+export function useSalesArchiveCategories() {
+  return useQuery({
+    queryKey: ['sales_archive_categories'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('sales_archive_categories')
+        .select('*')
+        .order('year_month', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useSalesArchiveCollaborators() {
+  return useQuery({
+    queryKey: ['sales_archive_collaborators'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('sales_archive_collaborators')
+        .select('*')
+        .order('year_month', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
 export function useGoals() {
   return useQuery({
     queryKey: ['goals'],
