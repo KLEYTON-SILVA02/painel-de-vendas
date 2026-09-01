@@ -133,7 +133,12 @@ export function MetasVendasPage() {
           <tbody>
             {CAT_KEYS.map((k) => {
               const row = goalsByCategoria[k]?.find((r) => r.collaborator_id === me?.id);
-              const t = catTotals(mySales, dashFrom, dashTo, k);
+              // Mercadoria Geral is my grand total, not its own exclusive
+              // bucket — this row reflects everything I sold, not just what
+              // got tagged MER (myValor is already my sum across every
+              // category, computed above). The other rows keep their normal
+              // exclusive per-category total.
+              const t = k === 'MER' ? { valor: myValor, qtd: myItens } : catTotals(mySales, dashFrom, dashTo, k);
               const metaIndividual = row?.participa ? Number(row.valor_meta) || 0 : 0;
               const pct = metaIndividual > 0 ? Math.min(999, (t.valor / metaIndividual) * 100) : null;
               return (

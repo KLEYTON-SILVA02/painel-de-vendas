@@ -34,7 +34,9 @@ export function CollaboratorRankingPage() {
 
   const modoDia = dashFrom === dashTo;
   const mode = modoDia ? 'dia' : 'mes';
-  const ranking = computeSummary(sales, collaborators, dashFrom, dashTo, catKey);
+  // Mercadoria Geral is the store's grand total, not its own exclusive
+  // bucket — filtering by it shows the same ranking as "Todas".
+  const ranking = computeSummary(sales, collaborators, dashFrom, dashTo, catKey === 'MER' ? 'ALL' : catKey);
   const rankingList = ranking.filter((r) => r.valor > 0);
   const totalValor = ranking.reduce((a, r) => a + r.valor, 0);
   const totalItens = ranking.reduce((a, r) => a + r.itens, 0);

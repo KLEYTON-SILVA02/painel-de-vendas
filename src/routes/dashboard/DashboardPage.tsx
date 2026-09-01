@@ -397,7 +397,10 @@ export function DashboardPage() {
           <h3 className="text-cyan-400 font-semibold text-sm mb-3">Vendas por Categoria</h3>
           <div className="grid grid-cols-2 min-[1051px]:grid-cols-4 gap-1.5">
             {CAT_KEYS.map((k) => {
-              const t = catTotals(sales, dashFrom, dashTo, k);
+              // Mercadoria Geral is the store's grand total, not its own
+              // exclusive bucket — reuse the already-computed all-categories
+              // totalValor/totalItens instead of catTotals' MER-only sum.
+              const t = k === 'MER' ? { valor: totalValor, qtd: totalItens } : catTotals(sales, dashFrom, dashTo, k);
               const goal = getGoal(goals[k], mode, sales, collaborators);
               return <CategoryGauge key={k} label={CAT_LABEL[k]} valor={t.valor} goal={goal} color={CAT_COLOR[k]} />;
             })}
