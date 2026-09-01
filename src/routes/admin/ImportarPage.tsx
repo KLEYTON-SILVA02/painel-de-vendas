@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../auth/AuthContext';
+import { Spinner } from '../../components/Spinner';
 import { classifyProductTier } from '../../lib/business/classification';
 import { autoMapColumns, detectHeaderRow, type ColumnMap, type ImportField } from '../../lib/business/importMapping';
 import { dateFromCell, idFromCell, normalizeMatricula, parseNumeroBR } from '../../lib/business/parsing';
@@ -437,7 +438,12 @@ export function ImportarPage() {
 
       {step === 'done' && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-          {progress && <p className="text-sm text-cyan-400">{progress}</p>}
+          {progress && (
+            <p className="text-sm text-cyan-400 flex items-center gap-2">
+              <Spinner size={16} color={NEON_CYAN} />
+              {progress}
+            </p>
+          )}
           {confirmResult && (
             <>
               <p className="text-sm text-green-400 mb-3">
