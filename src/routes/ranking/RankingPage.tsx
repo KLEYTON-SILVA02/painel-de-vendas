@@ -43,7 +43,12 @@ export function RankingPage() {
 
   const columnData = RANKING_COLS.map((c) => {
     const isUnit = c.key === 'LEVMEL' || c.key === 'CHIP';
-    const ranking = computeColumnRanking(sales, collaborators, dashFrom, dashTo, c.key, isUnit, mode, refYear, refMonth, specialLists);
+    // Mercadoria Geral is the store's grand total, not its own exclusive
+    // bucket — its column/stat card reflect every sale regardless of
+    // category, same as the Meta Geral it's already compared against
+    // (effectiveMetaGeral always pulls from goals.MER).
+    const columnFilter = c.key === 'MER' ? 'ALL' : c.key;
+    const ranking = computeColumnRanking(sales, collaborators, dashFrom, dashTo, columnFilter, isUnit, mode, refYear, refMonth, specialLists);
     return { ...c, ranking, isUnit };
   });
 
@@ -66,7 +71,7 @@ export function RankingPage() {
   const statCards: MfbStatCard[] = [
     ...RANKING_COLS.map((c) => {
       const isUnit = c.key === 'LEVMEL' || c.key === 'CHIP';
-      const rows = computeSummary(sales, collaborators, dashFrom, dashTo, c.key, specialLists);
+      const rows = computeSummary(sales, collaborators, dashFrom, dashTo, c.key === 'MER' ? 'ALL' : c.key, specialLists);
       const total = isUnit ? rows.reduce((a, r) => a + r.itens, 0) : rows.reduce((a, r) => a + r.valor, 0);
       return { label: `Total ${c.titulo}`, value: isUnit ? `${total} un.` : fmtMoney(total), color: c.cor };
     }),

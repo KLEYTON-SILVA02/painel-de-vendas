@@ -72,8 +72,15 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   const isUnit = catKey === 'LEVMEL' || catKey === 'CHIP';
   const modoDia = dashFrom === dashTo;
   const mode = modoDia ? 'dia' : 'mes';
+  // Mercadoria Geral is the store's grand total, not its own exclusive
+  // bucket — its screen (ranking, stat cards, Lista de vendas, extrato)
+  // reflects every sale regardless of category, same as "Meta Geral"
+  // elsewhere in the app already compares the whole-store total against
+  // the goal registered for MER (effectiveMetaGeral). Every other category
+  // keeps its normal exclusive filter.
+  const summaryFilter = catKey === 'MER' ? 'ALL' : catKey;
 
-  const ranking = computeSummary(sales, collaborators, dashFrom, dashTo, catKey, specialLists);
+  const ranking = computeSummary(sales, collaborators, dashFrom, dashTo, summaryFilter, specialLists);
   const totalValor = ranking.reduce((a, r) => a + r.valor, 0);
   const totalItens = ranking.reduce((a, r) => a + r.itens, 0);
   const dias = diasRestantesNoMes();
@@ -178,7 +185,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
     ? sales
         .filter(
           (s) =>
-            s.grupo === catKey &&
+            (catKey === 'MER' ? true : s.grupo === catKey) &&
             (!s.dataISO || (s.dataISO >= dashFrom && s.dataISO <= dashTo)) &&
             (!vendasSeller || s.matricula === vendasSeller),
         )
@@ -192,7 +199,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
 
   const extractVendor = extractMatricula ? collaborators.find((c) => c.matricula === extractMatricula) : null;
   const extract = extractMatricula
-    ? computeVendorExtract(sales, extractMatricula, catKey, dashFrom, dashTo, specialLists)
+    ? computeVendorExtract(sales, extractMatricula, summaryFilter, dashFrom, dashTo, specialLists)
     : [];
 
   // Same liga/desliga commission toggle as the "Detalhamento por vendedor"
@@ -349,12 +356,22 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
                       <td className="py-1.5 pr-3">{s.produto}</td>
                       <td className="py-1.5 pr-3 font-mono">{s.qtd}</td>
                       <td className="py-1.5 pr-3">
-                        <span
-                          className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide"
-                          style={{ background: CAT_PILL[catKey as CategoryKey].bg, color: CAT_PILL[catKey as CategoryKey].color }}
-                        >
-                          {CAT_PLAIN_LABEL[catKey as CategoryKey]}
-                        </span>
+                        {/* On the Mercadoria Geral screen this list spans every
+                            category (it's the store total, not an exclusive
+                            bucket) — show each sale's own actual grupo instead
+                            of forcing every row to the "Mercadoria Geral" pill. */}
+                        {s.grupo ? (
+                          <span
+                            className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide"
+                            style={{ background: CAT_PILL[s.grupo].bg, color: CAT_PILL[s.grupo].color }}
+                          >
+                            {CAT_PLAIN_LABEL[s.grupo]}
+                          </span>
+                        ) : (
+                          <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-slate-700 text-slate-300">
+                            Não classificado
+                          </span>
+                        )}
                       </td>
                       {showVendasCommission && (
                         <td className="py-1.5 pr-3 font-mono text-amber-400">{fmtMoney((s.valor * vendasActiveRate!.percentual) / 100)}</td>

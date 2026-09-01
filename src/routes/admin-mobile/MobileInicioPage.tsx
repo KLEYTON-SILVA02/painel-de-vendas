@@ -113,7 +113,10 @@ export function MobileInicioPage() {
 
       <div className="mv2-goals-grid">
         {CAT_KEYS.map((k) => {
-          const t = catTotals(sales, dashFrom, dashTo, k);
+          // Mercadoria Geral is the store's grand total, not its own
+          // exclusive bucket — reuse the already-computed all-categories
+          // totalValor/totalItens instead of catTotals' MER-only sum.
+          const t = k === 'MER' ? { valor: totalValor, qtd: totalItens } : catTotals(sales, dashFrom, dashTo, k);
           const goal = getGoal(goals[k], mode, sales, collaborators);
           const gaugePct = goal > 0 ? Math.min(100, (t.valor / goal) * 100) : 0;
           return (

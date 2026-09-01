@@ -39,7 +39,11 @@ export function MobileMercadoriaGeralPage() {
   }
 
   const mode = dashFrom === dashTo ? 'dia' : 'mes';
-  const ranking = computeSummary(sales, collaborators, dashFrom, dashTo, 'MER');
+  // Mercadoria Geral is the store's grand total, not its own exclusive
+  // bucket — this screen reflects every sale regardless of category, same
+  // as the desktop CategoryPage and "Meta Geral" elsewhere in the app
+  // (effectiveMetaGeral always pulls its target from goals.MER).
+  const ranking = computeSummary(sales, collaborators, dashFrom, dashTo, 'ALL');
   const rankingList = ranking.filter((r) => r.valor > 0).sort((a, b) => b.valor - a.valor);
   const totalValor = ranking.reduce((a, r) => a + r.valor, 0);
   const totalItens = ranking.reduce((a, r) => a + r.itens, 0);
@@ -57,7 +61,6 @@ export function MobileMercadoriaGeralPage() {
   const VENDAS_PAGE_SIZE = 150;
   const categorySalesAll = sales
     .filter((s) => {
-      if (s.grupo !== 'MER') return false;
       if (s.dataISO && (s.dataISO < dashFrom || s.dataISO > dashTo)) return false;
       if (selectedSeller && s.matricula !== selectedSeller) return false;
       return true;

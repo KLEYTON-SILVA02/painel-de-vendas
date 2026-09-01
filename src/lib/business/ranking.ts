@@ -18,7 +18,7 @@ export function computeColumnRanking(
   collaborators: Collaborator[],
   fromDate: string | null,
   toDate: string | null,
-  catFilter: CategoryKey | 'LEVMEL' | 'CHIP',
+  catFilter: CategoryKey | 'LEVMEL' | 'CHIP' | 'ALL',
   isUnit: boolean,
   mode: 'dia' | 'mes',
   refYear: number,
