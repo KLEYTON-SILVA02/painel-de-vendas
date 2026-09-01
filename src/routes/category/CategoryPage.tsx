@@ -166,7 +166,11 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
     setGenerating(true);
     try {
       const rows = isUnit ? rankingList.map((r) => ({ ...r, valor: r.itens })) : rankingList;
-      const blob = await generateRankingImageBlob(rows, info.titulo, dashFrom, dashTo, store?.nome_loja, isUnit);
+      // Same daily goal already driving this category's own "Meta
+      // Diária"/"Falta p/ Meta" cards on screen — the generated image's new
+      // "Atingimento" box is that same total against that same goal.
+      const metaDiariaValor = getGoal(goals![catKey], 'dia', sales!, collaborators!);
+      const blob = await generateRankingImageBlob(rows, info.titulo, dashFrom, dashTo, store?.nome_loja, isUnit, metaDiariaValor);
       if (!blob) return;
       const copiedToClipboard = await tryCopyImage(blob);
       setImageModal({ url: URL.createObjectURL(blob), copied: copiedToClipboard });
