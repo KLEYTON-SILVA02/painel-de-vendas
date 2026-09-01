@@ -6,7 +6,7 @@ import { autoMapColumns, detectHeaderRow, type ColumnMap, type ImportField } fro
 import { dateFromCell, idFromCell, normalizeMatricula, parseNumeroBR } from '../../lib/business/parsing';
 import { buildClassificationInputs } from '../../lib/mappers';
 import { fmtMoney } from '../../lib/format';
-import { useBrandKeywords, useCatalog, useExclusiveBrands, useProducts, useSales } from '../../lib/queries';
+import { useBrandKeywords, useCatalog, useExclusiveBrands, useProducts, useSales, useSalesImports } from '../../lib/queries';
 import { findExistingImport, hashBytes, recordSalesImport, saleImportKey } from '../../lib/salesImport';
 import { supabase } from '../../lib/supabase';
 
@@ -24,7 +24,13 @@ interface ParsedSheet {
 }
 
 
-type Step = 'pick' | 'map' | 'verify' | 'done';
+type Step = 'pick' | 'map' | 'analyze' | 'verify' | 'done';
+
+interface AnalysisOptions {
+  produtos: boolean;
+  vendedores: boolean;
+  listaVendas: boolean;
+}
 
 export function ImportarPage() {
   const { profile } = useAuth();
@@ -33,6 +39,7 @@ export function ImportarPage() {
   const { data: brandKeywords } = useBrandKeywords();
   const { data: exclusiveBrands } = useExclusiveBrands();
   const { data: existingSales, refetch: refetchSales } = useSales();
+  const { data: pastImports } = useSalesImports();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>('pick');
@@ -45,6 +52,8 @@ export function ImportarPage() {
   const [confirmResult, setConfirmResult] = useState<{ count: number; invalidDate: number; noProduto: number; duplicateCount: number } | null>(
     null,
   );
+  const [analysisOptions, setAnalysisOptions] = useState<AnalysisOptions>({ produtos: true, vendedores: true, listaVendas: true });
+  const [summary, setSummary] = useState<SheetSummary | null>(null);
 
   if (!catalog || !products || !brandKeywords || !exclusiveBrands) {
     return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
@@ -234,11 +243,24 @@ export function ImportarPage() {
     setError(null);
     setReadPct(null);
     setProgress(null);
+    setSummary(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
+  function runAnalysis() {
+    setStep('analyze');
+    // Same brief-pause pattern as the file read step: lets the "Analisando…"
+    // bar paint before the (synchronous) reclassification pass, which can be
+    // heavy on large files, blocks the thread.
+    setTimeout(() => {
+      setSummary(summarize(sheets, inputs));
+      setStep('verify');
+    }, 250);
+  }
+
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col lg:flex-row gap-4 items-start">
+      <div className="flex flex-col gap-4 flex-1 min-w-0 w-full">
       {step === 'pick' && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <h3 className="font-semibold mb-1 text-sm">Importar planilha de vendas</h3>
@@ -346,19 +368,71 @@ export function ImportarPage() {
               </div>
             </div>
           ))}
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+            <p className="text-xs text-slate-400 mb-2">O que a 2ª verificação deve analisar antes de gravar:</p>
+            <div className="flex flex-col gap-2">
+              <label className="flex items-center gap-2 text-xs text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={analysisOptions.produtos}
+                  onChange={(e) => setAnalysisOptions((o) => ({ ...o, produtos: e.target.checked }))}
+                />
+                Identificação e categorização de produtos (recomendado)
+              </label>
+              <label className="flex items-center gap-2 text-xs text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={analysisOptions.vendedores}
+                  onChange={(e) => setAnalysisOptions((o) => ({ ...o, vendedores: e.target.checked }))}
+                />
+                Vendedores encontrados na planilha
+              </label>
+              <label className="flex items-center gap-2 text-xs text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={analysisOptions.listaVendas}
+                  onChange={(e) => setAnalysisOptions((o) => ({ ...o, listaVendas: e.target.checked }))}
+                />
+                Pré-visualizar lista de vendas antes de salvar
+              </label>
+            </div>
+          </div>
+
           <div className="flex gap-2">
             <button onClick={reset} className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300">
               Cancelar
             </button>
-            <button onClick={() => setStep('verify')} className="rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm">
+            <button onClick={runAnalysis} className="rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm">
               Analisar e revisar classificação
             </button>
           </div>
         </>
       )}
 
-      {step === 'verify' && (
-        <VerifyStep sheets={sheets} inputs={inputs} onBack={() => setStep('map')} onConfirm={handleConfirm} error={error} />
+      {step === 'analyze' && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+          <h3 className="font-semibold mb-1 text-sm">🔍 Analisando produtos…</h3>
+          <p className="text-xs text-slate-500 mb-3">
+            Conferindo a categorização de cada produto e preparando a pré-visualização.
+          </p>
+          <div style={{ width: '100%', height: 14, borderRadius: 8, background: '#080818', border: '1px solid #212948', overflow: 'hidden' }}>
+            <div
+              style={{
+                height: '100%',
+                width: '100%',
+                borderRadius: 8,
+                background: `linear-gradient(90deg, ${NEON_CYAN}, ${NEON_PURPLE})`,
+                animation: 'importar-analyze-pulse 1s ease-in-out infinite',
+              }}
+            />
+          </div>
+          <style>{`@keyframes importar-analyze-pulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }`}</style>
+        </div>
+      )}
+
+      {step === 'verify' && summary && (
+        <VerifyStep summary={summary} options={analysisOptions} onBack={() => setStep('map')} onConfirm={handleConfirm} error={error} />
       )}
 
       {step === 'done' && (
@@ -383,6 +457,36 @@ export function ImportarPage() {
               </button>
             </>
           )}
+        </div>
+      )}
+      </div>
+
+      <ImportHistoryPanel imports={pastImports ?? []} />
+    </div>
+  );
+}
+
+function ImportHistoryPanel({ imports }: { imports: { id: string; file_name: string; row_count: number; duplicate_count: number; created_at: string }[] }) {
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 w-full lg:w-80 lg:shrink-0 lg:sticky lg:top-4">
+      <h3 className="font-semibold mb-1 text-sm">Planilhas já importadas</h3>
+      <p className="text-xs text-slate-500 mb-3">Histórico de todas as importações desta loja, mais recente primeiro.</p>
+      {imports.length === 0 ? (
+        <p className="text-xs text-slate-500">Nenhuma planilha importada ainda.</p>
+      ) : (
+        <div className="flex flex-col gap-2 max-h-[70vh] overflow-y-auto">
+          {imports.map((imp) => (
+            <div key={imp.id} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+              <div className="text-xs font-medium text-slate-200 truncate" title={imp.file_name}>
+                {imp.file_name}
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5">{new Date(imp.created_at).toLocaleString('pt-BR')}</div>
+              <div className="text-[11px] text-cyan-400 mt-1">
+                {imp.row_count} venda(s) gravada(s)
+                {imp.duplicate_count ? ` · ${imp.duplicate_count} duplicada(s) ignorada(s)` : ''}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -441,12 +545,16 @@ interface SheetSummary {
   total: number;
   baixaConfianca: number;
   produtosNovos: number;
+  produtosNovosNomes: string[];
   itensTotais: number;
   valorTotal: number;
   diasDistintos: number;
   vendedores: { chave: string; nome: string }[];
   amostras: { produto: string; categoria: string; tier: number }[];
+  previewRows: { data: string; vendedor: string; produto: string; qtd: number; valor: number }[];
 }
+
+const PREVIEW_ROWS_LIMIT = 200;
 
 function summarize(sheets: ParsedSheet[], inputs: ReturnType<typeof buildClassificationInputs>): SheetSummary {
   let total = 0;
@@ -457,6 +565,7 @@ function summarize(sheets: ParsedSheet[], inputs: ReturnType<typeof buildClassif
   const diasSet = new Set<string>();
   const vendedoresMap = new Map<string, string>();
   const amostras: { produto: string; categoria: string; tier: number }[] = [];
+  const previewRows: { data: string; vendedor: string; produto: string; qtd: number; valor: number }[] = [];
 
   sheets.forEach((sheet) => {
     const map = sheet.map;
@@ -491,6 +600,10 @@ function summarize(sheets: ParsedSheet[], inputs: ReturnType<typeof buildClassif
       const vendedor = map.vendedor >= 0 ? String(r[map.vendedor] ?? '').trim() : '';
       const chave = matricula || vendedor;
       if (chave && !vendedoresMap.has(chave)) vendedoresMap.set(chave, vendedor || matricula);
+
+      if (previewRows.length < PREVIEW_ROWS_LIMIT) {
+        previewRows.push({ data: dataISO ?? dataStr, vendedor: vendedor || matricula, produto, qtd, valor });
+      }
     });
   });
 
@@ -498,28 +611,29 @@ function summarize(sheets: ParsedSheet[], inputs: ReturnType<typeof buildClassif
     total,
     baixaConfianca,
     produtosNovos: produtosNovosSet.size,
+    produtosNovosNomes: Array.from(produtosNovosSet).slice(0, 30),
     itensTotais,
     valorTotal,
     diasDistintos: diasSet.size,
     vendedores: Array.from(vendedoresMap.entries()).map(([chave, nome]) => ({ chave, nome })),
     amostras,
+    previewRows,
   };
 }
 
 function VerifyStep({
-  sheets,
-  inputs,
+  summary: s,
+  options,
   onBack,
   onConfirm,
   error,
 }: {
-  sheets: ParsedSheet[];
-  inputs: ReturnType<typeof buildClassificationInputs>;
+  summary: SheetSummary;
+  options: AnalysisOptions;
   onBack: () => void;
   onConfirm: () => void;
   error: string | null;
 }) {
-  const s = summarize(sheets, inputs);
   const [showVendedores, setShowVendedores] = useState(false);
 
   return (
@@ -543,11 +657,18 @@ function VerifyStep({
 
       <p className="text-xs text-slate-500 mb-2">Detalhamento da planilha:</p>
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
-        <button onClick={() => setShowVendedores((v) => !v)} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-left hover:border-cyan-500">
-          <div className="text-xs text-slate-400">Vendedores encontrados</div>
-          <div className="text-lg font-mono font-semibold text-cyan-400">{s.vendedores.length}</div>
-          <div className="text-[10px] text-slate-500">{showVendedores ? 'ocultar nomes ▲' : 'ver nomes ▼'}</div>
-        </button>
+        {options.vendedores ? (
+          <button onClick={() => setShowVendedores((v) => !v)} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-left hover:border-cyan-500">
+            <div className="text-xs text-slate-400">Vendedores encontrados</div>
+            <div className="text-lg font-mono font-semibold text-cyan-400">{s.vendedores.length}</div>
+            <div className="text-[10px] text-slate-500">{showVendedores ? 'ocultar nomes ▲' : 'ver nomes ▼'}</div>
+          </button>
+        ) : (
+          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+            <div className="text-xs text-slate-400">Vendedores encontrados</div>
+            <div className="text-lg font-mono font-semibold text-cyan-400">{s.vendedores.length}</div>
+          </div>
+        )}
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
           <div className="text-xs text-slate-400">Itens totais</div>
           <div className="text-lg font-mono font-semibold">{s.itensTotais}</div>
@@ -561,20 +682,31 @@ function VerifyStep({
           <div className="text-lg font-mono font-semibold">{s.diasDistintos}</div>
         </div>
         <div className="rounded-xl border border-amber-700/60 bg-slate-950/60 p-3">
-          <div className="text-xs text-slate-400">Produtos novos</div>
+          <div className="text-xs text-slate-400">Produtos não reconhecidos</div>
           <div className="text-lg font-mono font-semibold text-amber-400">{s.produtosNovos}</div>
         </div>
       </div>
 
-      {s.produtosNovos > 0 && (
-        <p className="text-xs text-slate-500 mb-3">
-          {s.produtosNovos} produto(s) sem regra de classificação cadastrada serão importados normalmente (com a
-          categoria padrão) e ficarão sinalizados em <b>ADM → Auditoria → Pendentes de Revisão</b> pra classificação
-          futura.
-        </p>
+      {options.produtos && s.produtosNovos > 0 && (
+        <>
+          <p className="text-xs text-slate-500 mb-2">
+            {s.produtosNovos} produto(s) sem regra de classificação cadastrada serão importados normalmente (com a
+            categoria padrão) e ficarão sinalizados em <b>ADM → Auditoria → Pendentes de Revisão</b> pra classificação
+            futura:
+          </p>
+          <div className="rounded-xl border border-amber-700/40 bg-slate-950/60 p-3 mb-3 max-h-32 overflow-y-auto">
+            <div className="flex flex-wrap gap-1.5">
+              {s.produtosNovosNomes.map((p) => (
+                <span key={p} className="text-xs bg-amber-900/40 text-amber-200 rounded-full px-2.5 py-1">
+                  {p}
+                </span>
+              ))}
+            </div>
+          </div>
+        </>
       )}
 
-      {showVendedores && (
+      {showVendedores && options.vendedores && (
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 mb-3 max-h-48 overflow-y-auto">
           <div className="flex flex-wrap gap-1.5">
             {s.vendedores.map((v) => (
@@ -586,7 +718,7 @@ function VerifyStep({
         </div>
       )}
 
-      {s.amostras.length > 0 && (
+      {options.produtos && s.amostras.length > 0 && (
         <>
           <p className="text-xs text-slate-500 mb-2">Amostra de produtos com baixa confiança (revise depois em Auditoria se necessário):</p>
           <div className="overflow-x-auto mb-3">
@@ -604,6 +736,38 @@ function VerifyStep({
                     <td className="py-1.5 pr-3">
                       <span className="bg-slate-800 rounded-full px-2 py-0.5">{a.categoria}</span>
                     </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {options.listaVendas && s.previewRows.length > 0 && (
+        <>
+          <p className="text-xs text-slate-500 mb-2">
+            Lista de vendas (prévia das primeiras {s.previewRows.length} de {s.total}):
+          </p>
+          <div className="overflow-x-auto mb-3 max-h-64 overflow-y-auto rounded-xl border border-slate-800">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-slate-950">
+                <tr className="text-left text-slate-400 border-b border-slate-800">
+                  <th className="py-1.5 px-3">Data</th>
+                  <th className="py-1.5 px-3">Vendedor</th>
+                  <th className="py-1.5 px-3">Produto</th>
+                  <th className="py-1.5 px-3 text-right">Qtd</th>
+                  <th className="py-1.5 px-3 text-right">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {s.previewRows.map((row, i) => (
+                  <tr key={i} className="border-b border-slate-900">
+                    <td className="py-1.5 px-3 whitespace-nowrap">{row.data || '—'}</td>
+                    <td className="py-1.5 px-3">{row.vendedor || '—'}</td>
+                    <td className="py-1.5 px-3">{row.produto}</td>
+                    <td className="py-1.5 px-3 text-right">{row.qtd}</td>
+                    <td className="py-1.5 px-3 text-right whitespace-nowrap">{fmtMoney(row.valor)}</td>
                   </tr>
                 ))}
               </tbody>
