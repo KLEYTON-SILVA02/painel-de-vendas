@@ -192,6 +192,7 @@ export function DashboardPage() {
   const [rankingCopied, setRankingCopied] = useState(false);
   const [imageScopeOpen, setImageScopeOpen] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
+  const [generatingProgress, setGeneratingProgress] = useState({ done: 0, total: 0 });
   const [rankingImageModal, setRankingImageModal] = useState<{ url: string; copied: boolean } | null>(null);
   const [multiImages, setMultiImages] = useState<MultiImageResult[] | null>(null);
   const { data: collaborators } = useCollaborators();
@@ -283,6 +284,28 @@ export function DashboardPage() {
     [rankFilterParams.dinamica, rankFilterParams.from, rankFilterParams.to, rankFilterParams.catFilter, salesData, collaboratorsData, specialLists],
   );
 
+  // "Todas as categorias" image specs — 6 computeSummary passes over the
+  // full `sales` array. This used to run inline inside
+  // handleGenerateAllImages on every click instead of being memoized like
+  // every other full-array pass on this page, so clicking the button froze
+  // the tab for as long as those 6 synchronous passes over a large `sales`
+  // array took, on top of the (now-parallelized, see rankingImage.ts) image
+  // generation itself.
+  const allCategorySpecs = useMemo(() => {
+    if (!goals) return [];
+    return RANKING_CATEGORIES.map((c) => {
+      const isUnit = c.key === 'LEVMEL' || c.key === 'CHIP';
+      const rowsRaw = computeSummary(salesData, collaboratorsData, dashFrom, dashTo, c.key, specialLists);
+      return {
+        key: c.key,
+        titulo: c.titulo,
+        rows: isUnit ? rowsRaw.map((r) => ({ ...r, valor: r.itens })) : rowsRaw,
+        isUnit,
+        metaDiaria: getGoal(goals[c.key], 'dia', salesData, collaboratorsData),
+      };
+    });
+  }, [salesData, collaboratorsData, goals, dashFrom, dashTo, specialLists]);
+
   if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !dynamics) {
     return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
   }
@@ -361,23 +384,15 @@ export function DashboardPage() {
 
   async function handleGenerateAllImages() {
     setGeneratingImage(true);
+    setGeneratingProgress({ done: 0, total: allCategorySpecs.length });
     try {
-      const specs = RANKING_CATEGORIES.map((c) => {
-        const isUnit = c.key === 'LEVMEL' || c.key === 'CHIP';
-        const rowsRaw = computeSummary(salesData, collaboratorsData, dashFrom, dashTo, c.key, specialLists);
-        const metaDiariaValor = getGoal(goals![c.key], 'dia', salesData, collaboratorsData);
-        return {
-          key: c.key,
-          titulo: c.titulo,
-          rows: isUnit ? rowsRaw.map((r) => ({ ...r, valor: r.itens })) : rowsRaw,
-          isUnit,
-          metaDiaria: metaDiariaValor,
-        };
-      });
-      const results = await generateAllCategoryImages(specs, dashFrom, dashTo, store?.nome_loja);
+      const results = await generateAllCategoryImages(allCategorySpecs, dashFrom, dashTo, store?.nome_loja, (done, total) =>
+        setGeneratingProgress({ done, total }),
+      );
       setMultiImages(results);
     } finally {
       setGeneratingImage(false);
+      setGeneratingProgress({ done: 0, total: 0 });
     }
   }
 
@@ -458,7 +473,11 @@ export function DashboardPage() {
                   opacity: generatingImage ? 0.5 : 1,
                 }}
               >
-                {generatingImage ? 'Gerando…' : '🖼️ Gerar imagem'}
+                {generatingImage
+                  ? generatingProgress.total > 0
+                    ? `Gerando… (${generatingProgress.done}/${generatingProgress.total})`
+                    : 'Gerando…'
+                  : '🖼️ Gerar imagem'}
               </button>
             </div>
           </div>

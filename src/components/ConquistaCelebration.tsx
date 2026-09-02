@@ -3,7 +3,7 @@ import { celebrationKey, pickNewCelebration, type CelebrationCandidate } from '.
 import { computeConquistas, conquistaTierLabel, isUnitConquista, type ConquistaCategoria } from '../lib/business/conquistas';
 import { monthFirstISO, monthLastISO } from '../lib/dateRange';
 import { fmtMoney } from '../lib/format';
-import { useCollaborators, useSales, useSpecialLists } from '../lib/queries';
+import { useCollaborators, useCurrentMonthSales, useSpecialLists } from '../lib/queries';
 
 const CONQUISTA_CATS: ConquistaCategoria[] = ['DERM', 'MP', 'GEN', 'LEVMEL', 'CHIP'];
 const CAT_LABEL: Record<ConquistaCategoria, string> = {
@@ -37,7 +37,11 @@ function saveSeen(keys: Iterable<string>) {
  * category) by diffing against a localStorage baseline, and returns the one
  * to celebrate now. */
 function useConquistaCelebration() {
-  const { data: sales } = useSales();
+  // Only this month's sales — this host is mounted globally (both admin
+  // shells render it on every route, not just Ranking/Início), and it only
+  // ever scores the current month anyway, so the full multi-thousand-row
+  // useSales() history would be pure waste here.
+  const { data: sales } = useCurrentMonthSales();
   const { data: collaborators } = useCollaborators();
   const { data: specialLists } = useSpecialLists();
   const [candidate, setCandidate] = useState<CelebrationCandidate | null>(null);

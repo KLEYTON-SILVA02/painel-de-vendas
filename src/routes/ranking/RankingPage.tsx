@@ -28,6 +28,7 @@ export function RankingPage() {
   const { data: store } = useStore();
   const { dashFrom, dashTo, refYear, refMonth } = useDateRange();
   const [generatingAll, setGeneratingAll] = useState(false);
+  const [generatingProgress, setGeneratingProgress] = useState({ done: 0, total: 0 });
   const [multiImages, setMultiImages] = useState<MultiImageResult[] | null>(null);
 
   const modoDia = dashFrom === dashTo;
@@ -85,6 +86,7 @@ export function RankingPage() {
 
   async function handleGenerateAllImages() {
     setGeneratingAll(true);
+    setGeneratingProgress({ done: 0, total: columnData.length });
     try {
       const specs = columnData.map((c) => ({
         key: c.key,
@@ -93,7 +95,9 @@ export function RankingPage() {
         isUnit: c.isUnit,
         metaDiaria: c.metaDiaria,
       }));
-      const results = await generateAllCategoryImages(specs, dashFrom, dashTo, store?.nome_loja);
+      const results = await generateAllCategoryImages(specs, dashFrom, dashTo, store?.nome_loja, (done, total) =>
+        setGeneratingProgress({ done, total }),
+      );
       setMultiImages(results);
     } finally {
       setGeneratingAll(false);
@@ -142,7 +146,11 @@ export function RankingPage() {
             />
           ))}
         </div>
-        {generatingAll && <div className="mt-3 text-xs text-slate-500 text-center">Gerando imagens de todas as categorias…</div>}
+        {generatingAll && (
+          <div className="mt-3 text-xs text-slate-500 text-center">
+            Gerando imagens de todas as categorias… ({generatingProgress.done}/{generatingProgress.total})
+          </div>
+        )}
       </div>
 
       {multiImages && (

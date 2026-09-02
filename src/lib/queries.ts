@@ -3,9 +3,11 @@ import type { BioGroupKey, GoalCategoryKey } from './business/classification';
 import type { BioGroupGoal, CommissionRate, Goal } from './business/types';
 import type { SpecialListItem } from './business/summary';
 import type { CardZone, ConquistaCardTemplate } from './conquistaCardRender';
+import { monthFirstISO, monthLastISO } from './dateRange';
 import { mapBioGroupGoal, mapCollaborator, mapCommissionRate, mapDynamic, mapGoal, mapSale, mapSpecialListItem } from './mappers';
 import type { BulkDeletableTable } from './mutations';
 import { supabase } from './supabase';
+import type { Tables } from '../types/database';
 
 export function useCollaborators() {
   return useQuery({
@@ -20,48 +22,69 @@ export function useCollaborators() {
 
 const SALES_PAGE_SIZE = 1000;
 
+/** Pages through `sales` with `.range()`, optionally restricted to a
+ * `data_iso` window, in growing parallel batches (1, then 2, then 4... pages
+ * fired at once) instead of a single serial page-by-page walk. Stops the
+ * moment a page comes back short of SALES_PAGE_SIZE — no upfront row count
+ * needed, unlike the previous approach: a `count: 'exact'` HEAD request
+ * duplicates a full COUNT(*) scan of the (RLS-filtered) table on every
+ * fetch, which on a store past ~30k rows was slow enough to occasionally
+ * time out (PostgREST returning a 503 instead of the count). Capped at 12
+ * batches (well past a million rows at this doubling rate) purely as a
+ * safety net against an unexpected always-full-page response looping
+ * forever. */
+async function fetchSalesPages(range?: { fromISO: string; toISO: string }) {
+  const pages: Tables<'sales'>[][] = [];
+  let nextStart = 0;
+  let batchSize = 1;
+  for (let iteration = 0; iteration < 12; iteration++) {
+    const starts = Array.from({ length: batchSize }, (_, i) => nextStart + i * SALES_PAGE_SIZE);
+    // eslint-disable-next-line no-await-in-loop
+    const batch = await Promise.all(
+      starts.map(async (from) => {
+        let query = supabase.from('sales').select('*').order('data_iso', { ascending: false });
+        if (range) query = query.gte('data_iso', range.fromISO).lte('data_iso', range.toISO);
+        const { data, error } = await query.range(from, from + SALES_PAGE_SIZE - 1);
+        if (error) throw error;
+        return data;
+      }),
+    );
+    batch.forEach((page) => pages.push(page));
+    const lastPage = batch[batch.length - 1];
+    if (!lastPage || lastPage.length < SALES_PAGE_SIZE) break;
+    nextStart += batchSize * SALES_PAGE_SIZE;
+    batchSize *= 2;
+  }
+  return pages.flat();
+}
+
 /** All sales for the store. Filtering by date range happens client-side in
  * the business-logic layer (matches the legacy in-memory model and keeps a
- * single cached dataset reusable across every date-range view).
- *
- * PostgREST caps any single request at a fixed row limit (1000 by default
- * on Supabase, not overridden for this project) — a plain `select('*')`
- * with no `.range()` silently truncates past that, newest-first per the
- * `order()` below. A store past ~1000 sales in its most recent stretch
- * (this one had 23k+) would then have every older date simply missing
- * from `sales`: single-day filters on those dates found nothing, ranking
- * totals for the month undercounted, and vendor names/values for those
- * rows never made it into memory at all — not a filtering bug, a fetch
- * bug. Paginates with `.range()` to load the full table regardless of size.
- *
- * Pages are fetched in parallel (count first, then every `.range()` request
- * fired at once) rather than one at a time — with 30k+ rows now on file,
- * sequential paging meant 30+ round trips awaited back-to-back on every
- * fetch, which is what made the app feel slow to load. */
+ * single cached dataset reusable across every date-range view) — screens
+ * that only ever need a bounded window (see `useCurrentMonthSales` below)
+ * should fetch that window directly instead of pulling this full history. */
 export function useSales() {
   return useQuery({
     queryKey: ['sales'],
-    queryFn: async () => {
-      const { count, error: countError } = await supabase.from('sales').select('*', { count: 'exact', head: true });
-      if (countError) throw countError;
-      const total = count ?? 0;
-      const pageStarts: number[] = [];
-      for (let from = 0; from < total; from += SALES_PAGE_SIZE) pageStarts.push(from);
-      if (pageStarts.length === 0) return [];
+    queryFn: async () => (await fetchSalesPages()).map(mapSale),
+  });
+}
 
-      const pages = await Promise.all(
-        pageStarts.map(async (from) => {
-          const { data, error } = await supabase
-            .from('sales')
-            .select('*')
-            .order('data_iso', { ascending: false })
-            .range(from, from + SALES_PAGE_SIZE - 1);
-          if (error) throw error;
-          return data;
-        }),
-      );
-      return pages.flat().map(mapSale);
-    },
+/** Only the current calendar month's sales, fetched with a `data_iso` range
+ * filter instead of `useSales()`'s full multi-thousand-row history — for
+ * callers (the achievement-celebration check) that only ever look at this
+ * month regardless of what page they're mounted on. Mounting something that
+ * needs `useSales()`'s complete history in a component every route renders
+ * (as the celebration host is, in both the desktop and mobile admin shells)
+ * meant every page load — including ones with nothing to do with sales,
+ * like Categorias — paid for downloading the entire sales table first. */
+export function useCurrentMonthSales() {
+  const now = new Date();
+  const fromISO = monthFirstISO(now.getFullYear(), now.getMonth());
+  const toISO = monthLastISO(now.getFullYear(), now.getMonth());
+  return useQuery({
+    queryKey: ['sales', 'month', fromISO, toISO],
+    queryFn: async () => (await fetchSalesPages({ fromISO, toISO })).map(mapSale),
   });
 }
 
