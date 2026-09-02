@@ -6,7 +6,6 @@ import type { CardZone, ConquistaCardTemplate } from './conquistaCardRender';
 import { mapBioGroupGoal, mapCollaborator, mapCommissionRate, mapDynamic, mapGoal, mapSale, mapSpecialListItem } from './mappers';
 import type { BulkDeletableTable } from './mutations';
 import { supabase } from './supabase';
-import type { Tables } from '../types/database';
 
 export function useCollaborators() {
   return useQuery({
@@ -33,26 +32,35 @@ const SALES_PAGE_SIZE = 1000;
  * from `sales`: single-day filters on those dates found nothing, ranking
  * totals for the month undercounted, and vendor names/values for those
  * rows never made it into memory at all — not a filtering bug, a fetch
- * bug. Paginates with `.range()` until a page comes back short of
- * SALES_PAGE_SIZE, so the full table loads regardless of size. */
+ * bug. Paginates with `.range()` to load the full table regardless of size.
+ *
+ * Pages are fetched in parallel (count first, then every `.range()` request
+ * fired at once) rather than one at a time — with 30k+ rows now on file,
+ * sequential paging meant 30+ round trips awaited back-to-back on every
+ * fetch, which is what made the app feel slow to load. */
 export function useSales() {
   return useQuery({
     queryKey: ['sales'],
     queryFn: async () => {
-      const rows: Tables<'sales'>[] = [];
-      let from = 0;
-      for (;;) {
-        const { data, error } = await supabase
-          .from('sales')
-          .select('*')
-          .order('data_iso', { ascending: false })
-          .range(from, from + SALES_PAGE_SIZE - 1);
-        if (error) throw error;
-        rows.push(...data);
-        if (data.length < SALES_PAGE_SIZE) break;
-        from += SALES_PAGE_SIZE;
-      }
-      return rows.map(mapSale);
+      const { count, error: countError } = await supabase.from('sales').select('*', { count: 'exact', head: true });
+      if (countError) throw countError;
+      const total = count ?? 0;
+      const pageStarts: number[] = [];
+      for (let from = 0; from < total; from += SALES_PAGE_SIZE) pageStarts.push(from);
+      if (pageStarts.length === 0) return [];
+
+      const pages = await Promise.all(
+        pageStarts.map(async (from) => {
+          const { data, error } = await supabase
+            .from('sales')
+            .select('*')
+            .order('data_iso', { ascending: false })
+            .range(from, from + SALES_PAGE_SIZE - 1);
+          if (error) throw error;
+          return data;
+        }),
+      );
+      return pages.flat().map(mapSale);
     },
   });
 }
@@ -247,12 +255,29 @@ export function useCatalog() {
   });
 }
 
+// PostgREST caps a single request at 1000 rows — same truncation bug as
+// useSales had (see its comment above) but for the keyword-based product
+// classification list, which has grown past that cap too.
+const PRODUCTS_PAGE_SIZE = 1000;
+
 export function useProducts() {
   return useQuery({
     queryKey: ['products'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('products').select('*').order('nome');
-      if (error) throw error;
+      const { count, error: countError } = await supabase.from('products').select('*', { count: 'exact', head: true });
+      if (countError) throw countError;
+      const total = count ?? 0;
+      const pageStarts: number[] = [];
+      for (let from = 0; from < total; from += PRODUCTS_PAGE_SIZE) pageStarts.push(from);
+      if (pageStarts.length === 0) return [];
+      const pages = await Promise.all(
+        pageStarts.map(async (from) => {
+          const { data, error } = await supabase.from('products').select('*').order('nome').range(from, from + PRODUCTS_PAGE_SIZE - 1);
+          if (error) throw error;
+          return data;
+        }),
+      );
+      const data = pages.flat();
       return data;
     },
   });
