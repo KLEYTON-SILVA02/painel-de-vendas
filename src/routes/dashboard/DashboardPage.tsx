@@ -335,8 +335,14 @@ export function DashboardPage() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-4">
-      <div className="flex flex-col gap-3 min-w-0">
-        <div style={{ background: 'rgba(0,0,0,.35)', border: '1px solid #00f0ff', borderRadius: 18, padding: '11px 16px' }}>
+      {/* Each left/right pair below shares an explicit lg:row-start, so the
+          grid's default align-items:stretch makes both cells in a row match
+          height — their top and bottom edges line up, instead of two
+          independently-flowing flex-col stacks that only coincidentally
+          matched before. DOM order stays left-column-first so the mobile
+          single-column layout (no lg: placement) keeps its original stacking
+          order. */}
+      <div className="lg:col-start-1 lg:row-start-1 min-w-0" style={{ background: 'rgba(0,0,0,.35)', border: '1px solid #00f0ff', borderRadius: 18, padding: '11px 16px' }}>
           {/* Saudação, venda total e atingimento share one row instead of the
               venda total sitting in its own stacked row below — same info,
               less vertical footprint. */}
@@ -365,7 +371,7 @@ export function DashboardPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+        <div className="lg:col-start-1 lg:row-start-2 min-w-0 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <h3 className="text-cyan-400 font-semibold text-sm mb-2">🏆 Ranking Geral de Vendas — {rankFilterParams.label}</h3>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
             <div style={{ flex: '1 1 auto', minWidth: 200 }}>
@@ -418,7 +424,7 @@ export function DashboardPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+        <div className="lg:col-start-1 lg:row-start-3 min-w-0 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <h3 className="text-cyan-400 font-semibold text-sm mb-3">Vendas por Categoria</h3>
           <div className="grid grid-cols-2 min-[1051px]:grid-cols-4 gap-1.5">
             {CAT_KEYS.map((k) => {
@@ -431,26 +437,27 @@ export function DashboardPage() {
             })}
           </div>
         </div>
-      </div>
 
-      <div className="flex flex-col gap-3">
         {/* Meta/Falta/Saldo/Itens sit at the top of the sidebar, level with
             the venda-total summary bar in the left column; the date filter
             comes next, level with the "Ranking Geral" card; the champion
             card moves below the date filter instead of above it. */}
-        <div className="grid grid-cols-2 gap-2">
+        <div className="lg:col-start-2 lg:row-start-1 grid grid-cols-2 gap-2">
           <StatCard label={metaLabel} value={fmtMoney(metaExibida)} color="#00f0ff" badge={atingiuMeta ? 'MG ✓' : undefined} />
           <StatCard label={faltaLabel} value={fmtMoney(faltaValor)} color="#a82bff" />
           <StatCard label="Saldo" value={`${saldo >= 0 ? '' : '-'}${fmtMoney(Math.abs(saldo))}`} color={saldo >= 0 ? '#ffb700' : '#ff3df0'} />
           <StatCard label="Itens Vendidos" value={`${totalItens} un.`} color="#14ff00" />
         </div>
 
-        <SidebarCalendarCard />
+        <div className="lg:col-start-2 lg:row-start-2">
+          <SidebarCalendarCard />
+        </div>
 
         {campeao && (
-          <ChampionCard campeao={campeao} campeaoLabel={campeaoLabel} campeaoStars={campeaoStars} storeName={store?.nome_loja} />
+          <div className="lg:col-start-2 lg:row-start-3">
+            <ChampionCard campeao={campeao} campeaoLabel={campeaoLabel} campeaoStars={campeaoStars} storeName={store?.nome_loja} />
+          </div>
         )}
-      </div>
 
       {imageScopeOpen && (
         <GenerateImageScopeModal
@@ -535,6 +542,8 @@ function ChampionCard({
         background: '#0b0e1d',
         border: '1px solid #ffb700',
         borderRadius: 18,
+        height: '100%',
+        boxSizing: 'border-box',
       }}
     >
       {campeao.foto ? (
