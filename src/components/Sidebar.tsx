@@ -27,7 +27,13 @@ import {
 // 'award') where a distinct, purpose-matched icon reads better while these
 // are still stand-ins: Trophy for the leaderboard, Pill for generic/similar
 // medicine, Hexagon (honeycomb) for the honey-based Levmel line, Cpu for the
-// literal Chip category, Leaf for BIOSINTÉTICA's bio/organic angle.
+// literal Chip category.
+//
+// BIOSINTÉTICA is deliberately NOT listed here: it's the one legacy
+// partnership category still wired to its own dedicated /bio route (instead
+// of the generic /categoria-parceria/:chave every ADM-created category
+// uses) and only exists for the store it was seeded for at migration time —
+// see the `extraCategories`/bioCategory split below.
 const CAT_NAV: {
   key: string;
   label: string;
@@ -47,7 +53,6 @@ const CAT_NAV: {
   { key: 'LEVMEL', label: 'Levmel', color: '#ffb700', icon: HexagonIcon, slot: 'levmel', grupo: 'Categorias', to: '/categoria/LEVMEL', end: false },
   { key: 'CHIP', label: 'Chip', color: '#00f0ff', icon: CpuIcon, slot: 'chip', grupo: 'Categorias', to: '/categoria/CHIP', end: false },
   { key: 'DINAMICA', label: 'Dinâmicas', color: '#a82bff', icon: TargetIcon, slot: 'dinamicas', grupo: 'Programas', to: '/dinamicas', end: false },
-  { key: 'BIO', label: 'Biosintética', color: '#14ff00', icon: LeafIcon, slot: 'biosintetica', grupo: 'Programas', to: '/bio', end: false },
   { key: 'ADM', label: 'ADM', color: '#00f0ff', icon: SettingsIcon, slot: 'adm', grupo: 'Sistema', to: '/admin', end: false },
 ];
 
@@ -65,11 +70,16 @@ export function Sidebar({
   /** Called on any nav-item / import-button click, so the mobile drawer can close itself. */
   onNavigate?: () => void;
 }) {
-  // Every ADM-created partnership category (Gerenciar Categorias) beyond
-  // BIOSINTÉTICA itself gets its own button here, right under Biosintética —
-  // same "Programas" group, pointing at the generic /categoria-parceria/:chave
-  // screen instead of Biosintética's dedicated /bio route.
+  // BIOSINTÉTICA only shows up here when this store actually has a
+  // category_types row for it — new stores don't get one seeded
+  // automatically, so without this check every store would see a dead
+  // "Biosintética" link regardless of whether they ever created it.
+  // Every OTHER ADM-created partnership category (Gerenciar Categorias)
+  // gets its own button too, pointing at the generic
+  // /categoria-parceria/:chave screen instead of Biosintética's dedicated
+  // /bio route.
   const { data: categoryTypes } = useCategoryTypes();
+  const bioCategory = (categoryTypes ?? []).find((c) => c.chave === 'biosintetica');
   const extraCategories = (categoryTypes ?? []).filter((c) => c.chave !== 'biosintetica');
 
   return (
@@ -105,6 +115,18 @@ export function Sidebar({
                 <span className="sb-label">{c.label}</span>
               </NavLink>
             ))}
+            {g === 'Programas' && bioCategory && (
+              <NavLink
+                to="/bio"
+                end={false}
+                onClick={onNavigate}
+                style={{ '--sbc': '#14ff00' } as React.CSSProperties}
+                className={({ isActive }) => (isActive ? 'active' : '')}
+              >
+                <FunctionIcon slot="biosintetica" fallback={LeafIcon} size={18} />
+                <span className="sb-label">{bioCategory.nome}</span>
+              </NavLink>
+            )}
             {g === 'Programas' &&
               extraCategories.map((c) => (
                 <NavLink
