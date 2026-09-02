@@ -23,7 +23,7 @@ export function MobileRankingBoard<T extends StaircaseRow>({
   const rest = ranking.slice(3);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <PodiumStaircase ranking={top3} getValue={getValue} formatValue={formatValue} variant="escadinha" />
       {rest.length > 0 && <PodiumStaircase ranking={rest} getValue={getValue} formatValue={formatValue} variant="lista" getSub={getSub} />}
     </div>

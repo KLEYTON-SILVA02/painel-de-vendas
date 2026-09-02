@@ -113,7 +113,7 @@ export function MinhaLojaPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <h3 className="text-cyan-400 font-semibold mb-3">🏬 Identidade da loja</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl">

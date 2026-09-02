@@ -45,7 +45,7 @@ export function MetasPage() {
   const [tab, setTab] = useState<'categoria' | 'individuais' | 'unidade' | 'comissoes'>('categoria');
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="flex gap-1">
         <button
           onClick={() => setTab('categoria')}
@@ -130,7 +130,7 @@ function MetasPorCategoria() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <h3 className="font-semibold mb-1">Metas por categoria</h3>
         <p className="text-xs text-slate-500 mb-4">
@@ -289,7 +289,7 @@ function MetasUnidade() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <h3 className="font-semibold mb-1">Metas — Levmel / Chip</h3>
         <p className="text-xs text-slate-500 mb-4">
@@ -517,7 +517,7 @@ function MetasComissoes() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <h3 className="font-semibold mb-1">Comissões — Dermo / Genéricos / Marcas Exclusivas</h3>
         <p className="text-xs text-slate-500 mb-4">

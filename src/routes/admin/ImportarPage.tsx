@@ -261,7 +261,7 @@ export function ImportarPage() {
 
   return (
     <div className="flex flex-col lg:flex-row gap-4 items-start">
-      <div className="flex flex-col gap-4 flex-1 min-w-0 w-full">
+      <div className="flex flex-col gap-3 flex-1 min-w-0 w-full">
       {step === 'pick' && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <h3 className="font-semibold mb-1 text-sm">Importar planilha de vendas</h3>
