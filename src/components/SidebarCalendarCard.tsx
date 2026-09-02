@@ -27,7 +27,7 @@ export function SidebarCalendarCard() {
   }
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+    <div className="h-full rounded-2xl border border-slate-800 bg-slate-900/60 p-4 box-border">
       <div style={{ fontSize: 10, color: '#8b90bf', textTransform: 'uppercase', letterSpacing: '.06em', fontWeight: 700, marginBottom: 6 }}>
         📅 Período rápido {refYear}
       </div>

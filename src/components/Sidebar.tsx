@@ -9,7 +9,6 @@ import {
   HexagonIcon,
   HomeIcon,
   LeafIcon,
-  MedalIcon,
   PillIcon,
   SettingsIcon,
   TagIcon,
@@ -48,7 +47,6 @@ const CAT_NAV: {
   { key: 'CHIP', label: 'Chip', color: '#00f0ff', icon: CpuIcon, slot: 'chip', grupo: 'Categorias', to: '/categoria/CHIP', end: false },
   { key: 'DINAMICA', label: 'Dinâmicas', color: '#a82bff', icon: TargetIcon, slot: 'dinamicas', grupo: 'Programas', to: '/dinamicas', end: false },
   { key: 'BIO', label: 'Biosintética', color: '#14ff00', icon: LeafIcon, slot: 'biosintetica', grupo: 'Programas', to: '/bio', end: false },
-  { key: 'CONQUISTAS', label: 'Conquistas', color: '#ffb700', icon: MedalIcon, slot: 'conquistas', grupo: 'Programas', to: '/conquistas', end: false },
   { key: 'ADM', label: 'ADM', color: '#00f0ff', icon: SettingsIcon, slot: 'adm', grupo: 'Sistema', to: '/admin', end: false },
 ];
 
