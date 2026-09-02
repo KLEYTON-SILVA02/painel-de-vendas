@@ -81,6 +81,40 @@ const TEXT_KIND_COLOR: Record<CardTextKind, string> = {
 const TEXT_KIND_ORDER: CardTextKind[] = ['tier', 'categoria', 'custom'];
 const MAX_TEXT_LAYERS = 3;
 
+/** Collapsible/expandable bar used as the outer shell for every function
+ * group in the editor (name, uploads, zones, text layers) — click the
+ * header to toggle. `headerRight` renders extra controls (e.g. a "Remover"
+ * button) beside the toggle, outside the collapsible area so they stay
+ * reachable even when collapsed. */
+function CollapsibleBox({
+  title,
+  colorDot,
+  defaultOpen = true,
+  headerRight,
+  children,
+}: {
+  title: string;
+  colorDot?: string;
+  defaultOpen?: boolean;
+  headerRight?: ReactNode;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="rounded-lg border border-slate-800 overflow-hidden">
+      <div className="w-full flex items-center gap-2 px-2.5 py-2">
+        <button type="button" onClick={() => setOpen((o) => !o)} className="flex items-center gap-2 flex-1 min-w-0 text-left">
+          {colorDot && <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: colorDot }} />}
+          <span className="text-xs font-semibold text-slate-300 truncate">{title}</span>
+          <span className={`ml-auto text-slate-500 transition-transform shrink-0 ${open ? '' : '-rotate-90'}`}>▾</span>
+        </button>
+        {headerRight}
+      </div>
+      {open && <div className="px-2.5 pb-2.5 flex flex-col gap-2">{children}</div>}
+    </div>
+  );
+}
+
 interface EditorState {
   id: string;
   isNew: boolean;
@@ -109,10 +143,12 @@ function newTextLayer(kind: CardTextKind, zone: CardZone): CardTextLayer {
     text: kind === 'custom' ? 'Texto livre' : '',
     zone,
     fontFamily: 'Arial',
+    fontSize: 0.024,
     color: '#0b0e1d',
     useGradient: false,
     gradientFrom: '#ffb700',
     gradientTo: '#ff3df0',
+    gradientAngle: 45,
   };
 }
 
@@ -159,6 +195,12 @@ function blankEditor(): EditorState {
   };
 }
 
+// Undo/redo snapshots are coalesced within this window so dragging a range
+// slider (which fires dozens of onChange events) produces one history step,
+// not one per pixel of movement.
+const HISTORY_DEBOUNCE_MS = 600;
+const HISTORY_LIMIT = 50;
+
 export function CardConquistaPage() {
   const { profile } = useAuth();
   const { data: store } = useStore();
@@ -167,7 +209,10 @@ export function CardConquistaPage() {
   const deleteTemplate = useDeleteConquistaCardTemplate();
   const setDefault = useSetDefaultConquistaCardTemplate(profile?.store_id);
 
-  const [editing, setEditing] = useState<EditorState | null>(null);
+  const [editing, setEditingRaw] = useState<EditorState | null>(null);
+  const [history, setHistory] = useState<EditorState[]>([]);
+  const [redoStack, setRedoStack] = useState<EditorState[]>([]);
+  const lastPushRef = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -178,15 +223,55 @@ export function CardConquistaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  function resetHistory() {
+    setHistory([]);
+    setRedoStack([]);
+    lastPushRef.current = 0;
+  }
+
+  /** Replaces the editor state, pushing the previous one onto the undo
+   * history — unless the last push was under HISTORY_DEBOUNCE_MS ago, so a
+   * slider drag collapses into a single undo step. */
+  function commitEdit(next: EditorState) {
+    if (editing) {
+      const now = Date.now();
+      if (now - lastPushRef.current > HISTORY_DEBOUNCE_MS) {
+        setHistory((h) => [...h.slice(-(HISTORY_LIMIT - 1)), editing]);
+        setRedoStack([]);
+      }
+      lastPushRef.current = now;
+    }
+    setEditingRaw(next);
+  }
+
+  function undo() {
+    if (!editing || history.length === 0) return;
+    const prevState = history[history.length - 1];
+    setHistory(history.slice(0, -1));
+    setRedoStack([...redoStack, editing]);
+    setEditingRaw(prevState);
+    lastPushRef.current = 0;
+  }
+
+  function redo() {
+    if (!editing || redoStack.length === 0) return;
+    const nextState = redoStack[redoStack.length - 1];
+    setRedoStack(redoStack.slice(0, -1));
+    setHistory([...history, editing]);
+    setEditingRaw(nextState);
+    lastPushRef.current = 0;
+  }
+
   function startNew() {
     setError(null);
-    setEditing(blankEditor());
+    setEditingRaw(blankEditor());
+    resetHistory();
   }
 
   function startEdit(t: ConquistaCardTemplateRow) {
     setError(null);
     const textLayers = t.textLayers && t.textLayers.length > 0 ? t.textLayers : synthesizeTextLayersFromLegacy(t.texto, t.textFontFamily);
-    setEditing({
+    setEditingRaw({
       id: t.id,
       isNew: false,
       name: t.name,
@@ -200,6 +285,7 @@ export function CardConquistaPage() {
       logo: t.logo,
       textLayers,
     });
+    resetHistory();
   }
 
   /** The built-in Hiteck template is bundled code, not a DB row — there's
@@ -213,7 +299,7 @@ export function CardConquistaPage() {
    * uploads their own before saving. */
   function startEditBuiltIn() {
     setError(null);
-    setEditing({
+    setEditingRaw({
       id: crypto.randomUUID(),
       isNew: true,
       name: `${BUILT_IN_TEMPLATE.name} (cópia)`,
@@ -227,48 +313,50 @@ export function CardConquistaPage() {
       logo: BUILT_IN_TEMPLATE.logo,
       textLayers: synthesizeTextLayersFromLegacy(BUILT_IN_TEMPLATE.texto, BUILT_IN_TEMPLATE.textFontFamily),
     });
+    resetHistory();
   }
 
   function closeEditor() {
     if (editing?.referenceObjectUrl) URL.revokeObjectURL(editing.referenceObjectUrl);
-    setEditing(null);
+    setEditingRaw(null);
     setError(null);
+    resetHistory();
   }
 
   async function handleBackgroundUpload(file: File) {
     if (!profile?.store_id || !editing) return;
-    setEditing({ ...editing, uploadingBackground: true });
+    setEditingRaw({ ...editing, uploadingBackground: true });
     try {
       const url = await uploadConquistaCardBackground(profile.store_id, editing.id, file);
-      setEditing((ed) => (ed ? { ...ed, backgroundUrl: url, uploadingBackground: false } : ed));
+      setEditingRaw((ed) => (ed ? { ...ed, backgroundUrl: url, uploadingBackground: false } : ed));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Falha ao enviar o plano de fundo.');
-      setEditing((ed) => (ed ? { ...ed, uploadingBackground: false } : ed));
+      setEditingRaw((ed) => (ed ? { ...ed, uploadingBackground: false } : ed));
     }
   }
 
   async function handleLogoUpload(file: File) {
     if (!profile?.store_id || !editing) return;
-    setEditing({ ...editing, uploadingLogo: true });
+    setEditingRaw({ ...editing, uploadingLogo: true });
     try {
       const url = await uploadConquistaCardLogo(profile.store_id, editing.id, file);
-      setEditing((ed) => (ed ? { ...ed, logoUrl: url, uploadingLogo: false } : ed));
+      setEditingRaw((ed) => (ed ? { ...ed, logoUrl: url, uploadingLogo: false } : ed));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Falha ao enviar a logo.');
-      setEditing((ed) => (ed ? { ...ed, uploadingLogo: false } : ed));
+      setEditingRaw((ed) => (ed ? { ...ed, uploadingLogo: false } : ed));
     }
   }
 
   function handleReferenceUpload(file: File) {
     if (!editing) return;
     if (editing.referenceObjectUrl) URL.revokeObjectURL(editing.referenceObjectUrl);
-    setEditing({ ...editing, referenceObjectUrl: URL.createObjectURL(file) });
+    setEditingRaw({ ...editing, referenceObjectUrl: URL.createObjectURL(file) });
   }
 
   function removeReference() {
     if (!editing?.referenceObjectUrl) return;
     URL.revokeObjectURL(editing.referenceObjectUrl);
-    setEditing({ ...editing, referenceObjectUrl: null });
+    setEditingRaw({ ...editing, referenceObjectUrl: null });
   }
 
   async function handleSave() {
@@ -379,16 +467,20 @@ export function CardConquistaPage() {
       {editing && (
         <TemplateEditor
           editing={editing}
-          setEditing={setEditing}
+          setEditing={commitEdit}
           logoUrl={store?.logo_url}
           saving={saving}
           onCancel={closeEditor}
           onSave={handleSave}
           onUploadBackground={handleBackgroundUpload}
           onUploadLogo={handleLogoUpload}
-          onRemoveLogo={() => setEditing({ ...editing, logoUrl: null })}
+          onRemoveLogo={() => commitEdit({ ...editing, logoUrl: null })}
           onUploadReference={handleReferenceUpload}
           onRemoveReference={removeReference}
+          onUndo={undo}
+          onRedo={redo}
+          canUndo={history.length > 0}
+          canRedo={redoStack.length > 0}
         />
       )}
     </div>
@@ -428,6 +520,10 @@ function TemplateEditor({
   onRemoveLogo,
   onUploadReference,
   onRemoveReference,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
 }: {
   editing: EditorState;
   setEditing: (s: EditorState) => void;
@@ -440,6 +536,10 @@ function TemplateEditor({
   onRemoveLogo: () => void;
   onUploadReference: (file: File) => void;
   onRemoveReference: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Freehand "pen" tool for the photo cutout: null = not drawing; an array
@@ -557,236 +657,255 @@ function TemplateEditor({
   const previewCursor = penPoints !== null || wandTarget ? 'crosshair' : undefined;
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 flex flex-col lg:flex-row gap-5">
-      <div className="flex flex-col gap-3 lg:w-[360px] shrink-0">
-        <label className="text-xs text-slate-400">
-          Nome do modelo
-          <input
-            value={editing.name}
-            onChange={(e) => setEditing({ ...editing, name: e.target.value })}
-            placeholder="Ex.: Card Hiteck roxo"
-            className="mt-1 w-full rounded-lg bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm text-slate-100"
-          />
-        </label>
-
-        <div className="rounded-lg border border-slate-800 p-2.5 flex flex-col gap-2">
-          <div className="text-xs font-semibold text-slate-300">Plano de fundo final (salvo)</div>
-          <label className="w-full">
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) onUploadBackground(f);
-                e.target.value = '';
-              }}
-            />
-            <span className="block text-center rounded-lg border border-slate-700 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800 cursor-pointer">
-              {editing.uploadingBackground ? 'Enviando…' : editing.backgroundUrl ? 'Substituir plano de fundo' : 'Carregar plano de fundo'}
-            </span>
-          </label>
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex gap-2">
+          <button
+            onClick={onUndo}
+            disabled={!canUndo}
+            className="rounded-lg border border-slate-700 px-3 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:hover:bg-transparent"
+          >
+            ↶ Voltar uma etapa
+          </button>
+          <button
+            onClick={onRedo}
+            disabled={!canRedo}
+            className="rounded-lg border border-slate-700 px-3 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:hover:bg-transparent"
+          >
+            Avançar uma etapa ↷
+          </button>
         </div>
-
-        <div className="rounded-lg border border-slate-800 p-2.5 flex flex-col gap-2">
-          <div className="text-xs font-semibold text-slate-300">Logo deste card (opcional)</div>
-          <p className="text-[11px] text-slate-500">Substitui a logo da loja só neste modelo. Sem upload, usa a logo cadastrada em Minha Loja.</p>
-          <label className="w-full">
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) onUploadLogo(f);
-                e.target.value = '';
-              }}
-            />
-            <span className="block text-center rounded-lg border border-slate-700 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800 cursor-pointer">
-              {editing.uploadingLogo ? 'Enviando…' : editing.logoUrl ? 'Substituir logo' : 'Carregar logo própria'}
-            </span>
-          </label>
-          {editing.logoUrl && (
-            <button onClick={onRemoveLogo} className="text-[11px] text-slate-500 hover:text-rose-400">
-              Usar a logo da loja
-            </button>
-          )}
-          <label className="text-[11px] text-slate-400">
-            Escala da logo dentro da área ({Math.round(editing.logoScale * 100)}%)
-            <input
-              type="range"
-              min={30}
-              max={150}
-              value={Math.round(editing.logoScale * 100)}
-              onChange={(e) => setEditing({ ...editing, logoScale: Number(e.target.value) / 100 })}
-              className="w-full"
-            />
-          </label>
-        </div>
-
-        <div className="rounded-lg border border-slate-800 p-2.5 flex flex-col gap-2">
-          <div className="text-xs font-semibold text-slate-300">Imagem de referência (só nesta tela)</div>
-          <p className="text-[11px] text-slate-500">
-            Carregue um print/rascunho para servir de guia enquanto você posiciona as formas abaixo (a varinha mágica e a caneta também
-            traçam sobre ela quando presente). Ela nunca é salva — some ao trocar ou ao sair da edição.
-          </p>
-          <label className="w-full">
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) onUploadReference(f);
-                e.target.value = '';
-              }}
-            />
-            <span className="block text-center rounded-lg border border-slate-700 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800 cursor-pointer">
-              {editing.referenceObjectUrl ? 'Substituir referência' : 'Carregar referência'}
-            </span>
-          </label>
-          {editing.referenceObjectUrl && (
-            <button onClick={onRemoveReference} className="text-[11px] text-slate-500 hover:text-rose-400">
-              Remover referência
-            </button>
-          )}
-        </div>
-
-        <ZoneControls
-          label={ZONE_LABELS.foto}
-          color={ZONE_COLORS.foto}
-          zone={editing.foto}
-          onChange={(z) => setEditing({ ...editing, foto: z })}
-          pen={{
-            active: penPoints !== null,
-            pointCount: penPoints?.length ?? 0,
-            onStart: () => {
-              setWandTarget(null);
-              setPenPoints([]);
-            },
-            onFinish: finishPen,
-            onCancel: () => setPenPoints(null),
-            onClearCustom: () => setEditing({ ...editing, foto: DEFAULT_FOTO_ZONE() }),
-          }}
-          wand={{
-            active: wandTarget === 'foto',
-            busy: wandBusy && wandTarget === 'foto',
-            tolerance: wandTolerance,
-            error: wandTarget === 'foto' ? wandError : null,
-            onToleranceChange: setWandTolerance,
-            onStart: () => {
-              setPenPoints(null);
-              setWandError(null);
-              setWandTarget('foto');
-            },
-            onCancel: () => {
-              setWandTarget(null);
-              setWandError(null);
-            },
-          }}
-        />
-        <ZoneControls
-          label={ZONE_LABELS.logo}
-          color={ZONE_COLORS.logo}
-          zone={editing.logo}
-          onChange={(z) => setEditing({ ...editing, logo: z })}
-          wand={{
-            active: wandTarget === 'logo',
-            busy: wandBusy && wandTarget === 'logo',
-            tolerance: wandTolerance,
-            error: wandTarget === 'logo' ? wandError : null,
-            onToleranceChange: setWandTolerance,
-            onStart: () => {
-              setPenPoints(null);
-              setWandError(null);
-              setWandTarget('logo');
-            },
-            onCancel: () => {
-              setWandTarget(null);
-              setWandError(null);
-            },
-          }}
-        >
-          <label className="text-[11px] text-slate-400">
-            Escala da logo dentro da área ({Math.round(editing.logoScale * 100)}%)
-            <input
-              type="range"
-              min={30}
-              max={150}
-              value={Math.round(editing.logoScale * 100)}
-              onChange={(e) => setEditing({ ...editing, logoScale: Number(e.target.value) / 100 })}
-              className="w-full"
-            />
-          </label>
-        </ZoneControls>
-
-        <div className="flex flex-col gap-2">
-          <div className="text-xs font-semibold text-slate-300">Textos do card ({editing.textLayers.length}/{MAX_TEXT_LAYERS})</div>
-          {editing.textLayers.map((layer) => (
-            <TextLayerEditor
-              key={layer.id}
-              layer={layer}
-              label={TEXT_KIND_LABEL[layer.kind]}
-              color={TEXT_KIND_COLOR[layer.kind]}
-              onChange={(patch) => updateTextLayer(layer.id, patch)}
-              onRemove={() => removeTextLayer(layer.id)}
-            />
-          ))}
-          {editing.textLayers.length < MAX_TEXT_LAYERS && (
-            <button onClick={addNextTextLayer} className="rounded-lg border border-slate-700 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800">
-              + Adicionar texto
-            </button>
-          )}
-        </div>
-
-        <div className="flex gap-2 mt-1">
+        <div className="flex gap-2 ml-auto">
           <button
             onClick={onSave}
             disabled={saving}
-            className="flex-1 rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wide disabled:opacity-50"
+            className="rounded-lg px-4 py-1.5 text-xs font-bold uppercase tracking-wide disabled:opacity-50"
             style={{ background: '#14ff00', color: '#04210a' }}
           >
             {saving ? 'Salvando…' : 'Salvar modelo'}
           </button>
-          <button onClick={onCancel} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800">
+          <button onClick={onCancel} className="rounded-lg border border-slate-700 px-4 py-1.5 text-xs text-slate-300 hover:bg-slate-800">
             Cancelar
           </button>
         </div>
       </div>
 
-      <div className="flex-1 flex items-start justify-center">
-        <div className="relative w-full max-w-[420px]">
-          <div className="relative" onClick={handlePreviewClick} style={{ cursor: previewCursor }}>
-            <canvas ref={canvasRef} className="w-full h-auto block rounded-xl" />
-            {editing.referenceObjectUrl && (
-              <img
-                src={editing.referenceObjectUrl}
-                alt=""
-                className="absolute inset-0 w-full h-full object-fill rounded-xl pointer-events-none"
-                style={{ opacity: 0.45 }}
+      <div className="flex flex-col lg:flex-row gap-5">
+        <div className="flex flex-col sm:flex-row gap-3 flex-1 min-w-0">
+          <div className="flex flex-col gap-3 flex-1 min-w-0">
+            <CollapsibleBox title="Nome do modelo">
+              <input
+                value={editing.name}
+                onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                placeholder="Ex.: Card Hiteck roxo"
+                className="w-full rounded-lg bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm text-slate-100"
               />
-            )}
-            {editing.foto.shape.kind !== 'polygon' && <ZoneOutline zone={editing.foto} color={ZONE_COLORS.foto} />}
-            <ZoneOutline zone={editing.logo} color={ZONE_COLORS.logo} />
-            {editing.textLayers.map((l) => (
-              <ZoneOutline key={l.id} zone={l.zone} color={TEXT_KIND_COLOR[l.kind]} />
-            ))}
-            {editing.foto.shape.kind === 'polygon' && penPoints === null && (
-              <PolygonOutline points={editing.foto.shape.points ?? []} color={ZONE_COLORS.foto} />
-            )}
-            {penPoints !== null && <PolygonOutline points={penPoints} color={ZONE_COLORS.foto} inProgress />}
+            </CollapsibleBox>
+
+            <CollapsibleBox title="Plano de fundo final (salvo)">
+              <label className="w-full">
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) onUploadBackground(f);
+                    e.target.value = '';
+                  }}
+                />
+                <span className="block text-center rounded-lg border border-slate-700 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800 cursor-pointer">
+                  {editing.uploadingBackground ? 'Enviando…' : editing.backgroundUrl ? 'Substituir plano de fundo' : 'Carregar plano de fundo'}
+                </span>
+              </label>
+            </CollapsibleBox>
+
+            <CollapsibleBox title="Logo deste card (opcional)">
+              <p className="text-[11px] text-slate-500">Substitui a logo da loja só neste modelo. Sem upload, usa a logo cadastrada em Minha Loja.</p>
+              <label className="w-full">
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) onUploadLogo(f);
+                    e.target.value = '';
+                  }}
+                />
+                <span className="block text-center rounded-lg border border-slate-700 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800 cursor-pointer">
+                  {editing.uploadingLogo ? 'Enviando…' : editing.logoUrl ? 'Substituir logo' : 'Carregar logo própria'}
+                </span>
+              </label>
+              {editing.logoUrl && (
+                <button onClick={onRemoveLogo} className="text-[11px] text-slate-500 hover:text-rose-400">
+                  Usar a logo da loja
+                </button>
+              )}
+              <label className="text-[11px] text-slate-400">
+                Escala da logo dentro da área ({Math.round(editing.logoScale * 100)}%)
+                <input
+                  type="range"
+                  min={30}
+                  max={150}
+                  value={Math.round(editing.logoScale * 100)}
+                  onChange={(e) => setEditing({ ...editing, logoScale: Number(e.target.value) / 100 })}
+                  className="w-full"
+                />
+              </label>
+            </CollapsibleBox>
+
+            <CollapsibleBox title="Imagem de referência (só nesta tela)" defaultOpen={false}>
+              <p className="text-[11px] text-slate-500">
+                Carregue um print/rascunho para servir de guia enquanto você posiciona as formas abaixo (a varinha mágica e a caneta
+                também traçam sobre ela quando presente). Ela nunca é salva — some ao trocar ou ao sair da edição.
+              </p>
+              <label className="w-full">
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) onUploadReference(f);
+                    e.target.value = '';
+                  }}
+                />
+                <span className="block text-center rounded-lg border border-slate-700 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800 cursor-pointer">
+                  {editing.referenceObjectUrl ? 'Substituir referência' : 'Carregar referência'}
+                </span>
+              </label>
+              {editing.referenceObjectUrl && (
+                <button onClick={onRemoveReference} className="text-[11px] text-slate-500 hover:text-rose-400">
+                  Remover referência
+                </button>
+              )}
+            </CollapsibleBox>
           </div>
-          {penPoints !== null && (
-            <p className="text-[11px] text-amber-400 mt-2">
-              Clique na imagem para marcar os pontos do recorte da foto ({penPoints.length} até agora — mínimo 3, depois clique em
-              "Concluir forma" na coluna ao lado).
-            </p>
-          )}
-          {wandTarget && (
-            <p className="text-[11px] text-amber-400 mt-2">
-              {wandBusy ? 'Detectando…' : `Clique na imagem sobre a área da ${wandTarget === 'foto' ? 'foto' : 'logo'} para detectá-la automaticamente.`}
-            </p>
-          )}
+
+          <div className="flex flex-col gap-3 flex-1 min-w-0">
+            <ZoneControls
+              label={ZONE_LABELS.foto}
+              color={ZONE_COLORS.foto}
+              zone={editing.foto}
+              onChange={(z) => setEditing({ ...editing, foto: z })}
+              pen={{
+                active: penPoints !== null,
+                pointCount: penPoints?.length ?? 0,
+                onStart: () => {
+                  setWandTarget(null);
+                  setPenPoints([]);
+                },
+                onFinish: finishPen,
+                onCancel: () => setPenPoints(null),
+                onClearCustom: () => setEditing({ ...editing, foto: DEFAULT_FOTO_ZONE() }),
+              }}
+              wand={{
+                active: wandTarget === 'foto',
+                busy: wandBusy && wandTarget === 'foto',
+                tolerance: wandTolerance,
+                error: wandTarget === 'foto' ? wandError : null,
+                onToleranceChange: setWandTolerance,
+                onStart: () => {
+                  setPenPoints(null);
+                  setWandError(null);
+                  setWandTarget('foto');
+                },
+                onCancel: () => {
+                  setWandTarget(null);
+                  setWandError(null);
+                },
+              }}
+            />
+            <ZoneControls
+              label={ZONE_LABELS.logo}
+              color={ZONE_COLORS.logo}
+              zone={editing.logo}
+              onChange={(z) => setEditing({ ...editing, logo: z })}
+              wand={{
+                active: wandTarget === 'logo',
+                busy: wandBusy && wandTarget === 'logo',
+                tolerance: wandTolerance,
+                error: wandTarget === 'logo' ? wandError : null,
+                onToleranceChange: setWandTolerance,
+                onStart: () => {
+                  setPenPoints(null);
+                  setWandError(null);
+                  setWandTarget('logo');
+                },
+                onCancel: () => {
+                  setWandTarget(null);
+                  setWandError(null);
+                },
+              }}
+            >
+              <label className="text-[11px] text-slate-400">
+                Escala da logo dentro da área ({Math.round(editing.logoScale * 100)}%)
+                <input
+                  type="range"
+                  min={30}
+                  max={150}
+                  value={Math.round(editing.logoScale * 100)}
+                  onChange={(e) => setEditing({ ...editing, logoScale: Number(e.target.value) / 100 })}
+                  className="w-full"
+                />
+              </label>
+            </ZoneControls>
+
+            <CollapsibleBox title={`Textos do card (${editing.textLayers.length}/${MAX_TEXT_LAYERS})`}>
+              {editing.textLayers.map((layer) => (
+                <TextLayerEditor
+                  key={layer.id}
+                  layer={layer}
+                  label={TEXT_KIND_LABEL[layer.kind]}
+                  color={TEXT_KIND_COLOR[layer.kind]}
+                  onChange={(patch) => updateTextLayer(layer.id, patch)}
+                  onRemove={() => removeTextLayer(layer.id)}
+                />
+              ))}
+              {editing.textLayers.length < MAX_TEXT_LAYERS && (
+                <button onClick={addNextTextLayer} className="rounded-lg border border-slate-700 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800">
+                  + Adicionar texto
+                </button>
+              )}
+            </CollapsibleBox>
+          </div>
+        </div>
+
+        <div className="lg:w-[380px] shrink-0 flex items-start justify-center">
+          <div className="relative w-full max-w-[420px]">
+            <div className="relative" onClick={handlePreviewClick} style={{ cursor: previewCursor }}>
+              <canvas ref={canvasRef} className="w-full h-auto block rounded-xl" />
+              {editing.referenceObjectUrl && (
+                <img
+                  src={editing.referenceObjectUrl}
+                  alt=""
+                  className="absolute inset-0 w-full h-full object-fill rounded-xl pointer-events-none"
+                  style={{ opacity: 0.45 }}
+                />
+              )}
+              {editing.foto.shape.kind !== 'polygon' && <ZoneOutline zone={editing.foto} color={ZONE_COLORS.foto} />}
+              <ZoneOutline zone={editing.logo} color={ZONE_COLORS.logo} />
+              {editing.textLayers.map((l) => (
+                <ZoneOutline key={l.id} zone={l.zone} color={TEXT_KIND_COLOR[l.kind]} />
+              ))}
+              {editing.foto.shape.kind === 'polygon' && penPoints === null && (
+                <PolygonOutline points={editing.foto.shape.points ?? []} color={ZONE_COLORS.foto} />
+              )}
+              {penPoints !== null && <PolygonOutline points={penPoints} color={ZONE_COLORS.foto} inProgress />}
+            </div>
+            {penPoints !== null && (
+              <p className="text-[11px] text-amber-400 mt-2">
+                Clique na imagem para marcar os pontos do recorte da foto ({penPoints.length} até agora — mínimo 3, depois clique em
+                "Concluir forma" na coluna ao lado).
+              </p>
+            )}
+            {wandTarget && (
+              <p className="text-[11px] text-amber-400 mt-2">
+                {wandBusy ? 'Detectando…' : `Clique na imagem sobre a área da ${wandTarget === 'foto' ? 'foto' : 'logo'} para detectá-la automaticamente.`}
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -845,17 +964,15 @@ function TextLayerEditor({
   onRemove: () => void;
 }) {
   return (
-    <div className="rounded-lg border border-slate-800 p-2.5 flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
-          <span className="text-[11px] font-semibold text-slate-300 truncate">{label}</span>
-        </div>
+    <CollapsibleBox
+      title={label}
+      colorDot={color}
+      headerRight={
         <button onClick={onRemove} className="text-[10px] text-slate-500 hover:text-rose-400 shrink-0">
           Remover
         </button>
-      </div>
-
+      }
+    >
       {layer.kind === 'custom' && (
         <label className="text-[11px] text-slate-400">
           Texto
@@ -885,6 +1002,18 @@ function TextLayerEditor({
         </select>
       </label>
 
+      <label className="text-[11px] text-slate-400">
+        Tamanho do texto ({(Math.round((layer.fontSize ?? 0.024) * 1000) / 10).toFixed(1)}%)
+        <input
+          type="range"
+          min={10}
+          max={60}
+          value={Math.round((layer.fontSize ?? 0.024) * 1000)}
+          onChange={(e) => onChange({ fontSize: Number(e.target.value) / 1000 })}
+          className="w-full"
+        />
+      </label>
+
       <label className="flex items-center gap-1.5 text-[11px] text-slate-400">
         <input type="checkbox" checked={layer.useGradient} onChange={(e) => onChange({ useGradient: e.target.checked })} />
         Degradê entre duas cores
@@ -896,28 +1025,41 @@ function TextLayerEditor({
           <input type="color" value={layer.color} onChange={(e) => onChange({ color: e.target.value })} className="w-8 h-6 rounded border border-slate-700 bg-transparent" />
         </label>
       ) : (
-        <div className="flex gap-4">
-          <label className="text-[11px] text-slate-400 flex items-center gap-2">
-            De
+        <>
+          <div className="flex gap-4">
+            <label className="text-[11px] text-slate-400 flex items-center gap-2">
+              De
+              <input
+                type="color"
+                value={layer.gradientFrom}
+                onChange={(e) => onChange({ gradientFrom: e.target.value })}
+                className="w-8 h-6 rounded border border-slate-700 bg-transparent"
+              />
+            </label>
+            <label className="text-[11px] text-slate-400 flex items-center gap-2">
+              Para
+              <input
+                type="color"
+                value={layer.gradientTo}
+                onChange={(e) => onChange({ gradientTo: e.target.value })}
+                className="w-8 h-6 rounded border border-slate-700 bg-transparent"
+              />
+            </label>
+          </div>
+          <label className="text-[11px] text-slate-400">
+            Orientação do degradê ({layer.gradientAngle ?? 45}°)
             <input
-              type="color"
-              value={layer.gradientFrom}
-              onChange={(e) => onChange({ gradientFrom: e.target.value })}
-              className="w-8 h-6 rounded border border-slate-700 bg-transparent"
+              type="range"
+              min={0}
+              max={359}
+              value={layer.gradientAngle ?? 45}
+              onChange={(e) => onChange({ gradientAngle: Number(e.target.value) })}
+              className="w-full"
             />
           </label>
-          <label className="text-[11px] text-slate-400 flex items-center gap-2">
-            Para
-            <input
-              type="color"
-              value={layer.gradientTo}
-              onChange={(e) => onChange({ gradientTo: e.target.value })}
-              className="w-8 h-6 rounded border border-slate-700 bg-transparent"
-            />
-          </label>
-        </div>
+        </>
       )}
-    </div>
+    </CollapsibleBox>
   );
 }
 
@@ -968,12 +1110,7 @@ function ZoneControls({
   }
 
   return (
-    <div className="rounded-lg border border-slate-800 p-2.5 flex flex-col gap-2">
-      <div className="flex items-center gap-2">
-        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
-        <span className="text-xs font-semibold text-slate-300">{label}</span>
-      </div>
-
+    <CollapsibleBox title={label} colorDot={color}>
       {wand && !wand.active && (
         <button onClick={wand.onStart} className="rounded-lg border border-amber-700 px-2 py-1 text-[11px] text-amber-300 hover:bg-amber-950">
           🪄 Varinha mágica (detectar área)
@@ -1095,6 +1232,6 @@ function ZoneControls({
         <p className="text-[10px] text-slate-500">Posição e tamanho seguem os pontos desenhados — use "Redesenhar" pra ajustar.</p>
       )}
       {children}
-    </div>
+    </CollapsibleBox>
   );
 }

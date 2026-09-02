@@ -60,11 +60,19 @@ export interface CardTextLayer {
    * just the text on the raw background art). */
   zone: CardZone;
   fontFamily: string;
+  /** Font size as a fraction of the canvas height (same convention as the
+   * previous hardcoded 0.024 ratio). Falls back to 0.024 when unset, for
+   * templates saved before this control existed. */
+  fontSize?: number;
   /** Used when `useGradient` is false. */
   color: string;
   useGradient: boolean;
   gradientFrom: string;
   gradientTo: string;
+  /** Gradient direction in degrees (0 = left→right, 90 = top→bottom,
+   * measured clockwise). Falls back to 45 (the previous fixed diagonal)
+   * when unset. Only meaningful when `useGradient` is true. */
+  gradientAngle?: number;
 }
 
 export interface ConquistaCardTemplate {
@@ -129,6 +137,20 @@ type Rect = { x: number; y: number; w: number; h: number };
 
 function zoneRect(zone: CardZone, w: number, h: number): Rect {
   return { x: zone.x * w, y: zone.y * h, w: zone.w * w, h: zone.h * h };
+}
+
+/** Endpoints of a gradient line through the rect's center, long enough
+ * (half the rect's diagonal in each direction) to span the full rect at
+ * any angle. `angleDeg` is clockwise from the positive x-axis (0 = left→
+ * right, 90 = top→bottom), matching a standard CSS-like orientation. */
+function gradientEndpoints(rect: Rect, angleDeg: number): { x0: number; y0: number; x1: number; y1: number } {
+  const angleRad = (angleDeg * Math.PI) / 180;
+  const cx = rect.x + rect.w / 2;
+  const cy = rect.y + rect.h / 2;
+  const halfLen = Math.sqrt(rect.w * rect.w + rect.h * rect.h) / 2;
+  const dx = Math.cos(angleRad) * halfLen;
+  const dy = Math.sin(angleRad) * halfLen;
+  return { x0: cx - dx, y0: cy - dy, x1: cx + dx, y1: cy + dy };
 }
 
 function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
@@ -301,11 +323,12 @@ async function drawTextLayer(ctx: CanvasRenderingContext2D, layer: CardTextLayer
   }
   if (!text) return;
   const rect = zoneRect(layer.zone, w, h);
-  ctx.font = `800 ${Math.round(h * 0.024)}px ${fontStack(layer.fontFamily || 'Arial')}`;
+  ctx.font = `800 ${Math.round(h * (layer.fontSize ?? 0.024))}px ${fontStack(layer.fontFamily || 'Arial')}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   if (layer.useGradient) {
-    const grad = ctx.createLinearGradient(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h);
+    const { x0, y0, x1, y1 } = gradientEndpoints(rect, layer.gradientAngle ?? 45);
+    const grad = ctx.createLinearGradient(x0, y0, x1, y1);
     grad.addColorStop(0, layer.gradientFrom);
     grad.addColorStop(1, layer.gradientTo);
     ctx.fillStyle = grad;
