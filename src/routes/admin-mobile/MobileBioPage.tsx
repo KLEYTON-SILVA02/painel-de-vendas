@@ -49,14 +49,72 @@ export function MobileBioPage() {
     return map;
   }, [collaborators]);
 
+  // Safe stand-ins so the useMemo calls below always run in the same order
+  // (Rules of Hooks) whether or not every query has resolved yet, and
+  // regardless of which of Ranking/Grupos/Pontos is showing — the
+  // "Carregando…" guard and the view-specific early returns both come
+  // after them, not before.
+  const salesData = sales ?? [];
+  const collaboratorsData = collaborators ?? [];
+  const bioWeightsData = (storeSettings?.bio_weights ?? {}) as unknown as BioWeights;
+  const setoresElegiveisData = bioCategoryType?.setores_elegiveis ?? [];
+
+  // groupBioRows builds a fresh object every call — memoized so the
+  // useMemo calls below (which depend on it) don't recompute on every
+  // render just because this reference changed underneath them.
+  const bioGroups = useMemo(() => groupBioRows(bioGroupRows), [bioGroupRows]);
+
+  // computeBioSummary/auditBioOutsideBalcao/classifyBio-per-sale are all
+  // O(sales) with keyword matching per row — noticeably heavier per item
+  // than a plain field comparison, and this screen is the one Balcão
+  // collaborators land on by default on mobile.
+  const demonstrativo = useMemo(
+    () => computeBioSummary(salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, 'ALL', setoresElegiveisData),
+    [salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, setoresElegiveisData],
+  );
+  const ranking = useMemo(
+    () => computeBioSummary(salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, groupFilter, setoresElegiveisData),
+    [salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, groupFilter, setoresElegiveisData],
+  );
+  // Per-group mini cards always reflect the full G1-G4 split, independent of
+  // which tab is selected below (matches the spec: they let you compare
+  // groups "antes mesmo de abrir o ranking") — same underlying query as
+  // `demonstrativo` above (groupFilter='ALL'), reused instead of a third
+  // identical O(sales) pass.
+  const allRanking = demonstrativo;
+  const foraDoBalcao = useMemo(
+    () =>
+      auditBioOutsideBalcao(
+        salesData.filter((s) => !s.dataISO || (s.dataISO >= dashFrom && s.dataISO <= dashTo)),
+        collaboratorsData,
+        bioGroups,
+        setoresElegiveisData,
+      ),
+    [salesData, collaboratorsData, bioGroups, setoresElegiveisData, dashFrom, dashTo],
+  );
+  // Always scoped to G1-G4 products only, regardless of seller's sector — a
+  // sale by someone outside Balcão isn't hidden, just flagged with "!" in
+  // the row, matching auditBioOutsideBalcao's own audit criteria.
+  const salesForTable = useMemo(
+    () =>
+      salesData
+        .filter((s) => {
+          if (s.dataISO && s.dataISO < dashFrom) return false;
+          if (s.dataISO && s.dataISO > dashTo) return false;
+          return !!classifyBio(s.produto, bioGroups);
+        })
+        .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
+        .slice(0, 150),
+    [salesData, bioGroups, dashFrom, dashTo],
+  );
+
   if (!collaborators || !sales || !storeSettings || !bioCategoryType || !bioGroupRows || !groupGoals) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
-  const bioGroups = groupBioRows(bioGroupRows);
-  const bioWeights = storeSettings.bio_weights as unknown as BioWeights;
-  const setoresElegiveis = bioCategoryType.setores_elegiveis;
+  const bioWeights = bioWeightsData;
   const balcaoCollaborators = collaborators.filter((c) => c.setor === BALCAO_SETOR);
+  const dias = diasRestantesNoMes();
 
   if (view === 'grupos') {
     return (
@@ -70,8 +128,6 @@ export function MobileBioPage() {
     );
   }
   if (view === 'pontos') {
-    // computeBioSummary already scopes its rows to the category's eligible sector(s).
-    const demonstrativo = computeBioSummary(sales, collaborators, bioGroups, bioWeights, dashFrom, dashTo, 'ALL', setoresElegiveis);
     return (
       <MobileBioPontosView
         storeId={profile?.store_id}
@@ -84,39 +140,14 @@ export function MobileBioPage() {
     );
   }
 
-  const ranking = computeBioSummary(sales, collaborators, bioGroups, bioWeights, dashFrom, dashTo, groupFilter, setoresElegiveis);
   const rankingList = ranking.filter((r) => r.itens > 0).sort((a, b) => b.pontos - a.pontos);
   const totalItensBio = ranking.reduce((a, r) => a + r.itens, 0);
   const vendedoresAtivos = ranking.filter((r) => r.itens > 0).length;
-  const dias = diasRestantesNoMes();
-
-  // Per-group mini cards always reflect the full G1-G4 split, independent of
-  // which tab is selected below (matches the spec: they let you compare
-  // groups "antes mesmo de abrir o ranking").
-  const allRanking = computeBioSummary(sales, collaborators, bioGroups, bioWeights, dashFrom, dashTo, 'ALL', setoresElegiveis);
   const groupTotals = Object.fromEntries(BIO_GROUP_KEYS.map((g) => [g, allRanking.reduce((a, r) => a + (r.qtd[g] || 0), 0)])) as Record<
     BioGroupKey,
     number
   >;
-
-  const foraDoBalcao = auditBioOutsideBalcao(
-    sales.filter((s) => !s.dataISO || (s.dataISO >= dashFrom && s.dataISO <= dashTo)),
-    collaborators,
-    bioGroups,
-    setoresElegiveis,
-  );
   const balcaoMatriculas = new Set(balcaoCollaborators.map((c) => c.matricula));
-  // Always scoped to G1-G4 products only, regardless of seller's sector — a
-  // sale by someone outside Balcão isn't hidden, just flagged with "!" in
-  // the row, matching auditBioOutsideBalcao's own audit criteria.
-  const salesForTable = sales
-    .filter((s) => {
-      if (s.dataISO && s.dataISO < dashFrom) return false;
-      if (s.dataISO && s.dataISO > dashTo) return false;
-      return !!classifyBio(s.produto, bioGroups);
-    })
-    .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
-    .slice(0, 150);
 
   async function handleCopy() {
     const text = formatRankingText(rankingList.map((r) => ({ ...r, valor: r.pontos })), 'Biosintética', dashFrom, dashTo);

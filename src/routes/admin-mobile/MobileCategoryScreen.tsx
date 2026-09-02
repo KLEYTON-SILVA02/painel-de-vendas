@@ -39,12 +39,40 @@ export function MobileCategoryScreen({
     return map;
   }, [collaborators]);
 
+  // Safe stand-ins so the useMemo calls below always run in the same order
+  // (Rules of Hooks) whether or not every query has resolved yet — the
+  // "Carregando…" guard comes after them, not before.
+  const salesData = sales ?? [];
+  const collaboratorsData = collaborators ?? [];
+
+  const ranking = useMemo(
+    () => computeSummary(salesData, collaboratorsData, dashFrom, dashTo, catKey),
+    [salesData, collaboratorsData, dashFrom, dashTo, catKey],
+  );
+
+  // A specific vendedor selected shows their full list — no cap, it's
+  // naturally bounded to one person's sales. With "Todos" selected (whole
+  // month, potentially hundreds of rows across every vendedor), a flat
+  // slice(0, 150) used to silently drop everything past the 150th row
+  // instead of paginating — this now pages through the full set instead.
+  const categorySalesAll = useMemo(
+    () =>
+      salesData
+        .filter((s) => {
+          if (s.grupo !== catKey) return false;
+          if (s.dataISO && (s.dataISO < dashFrom || s.dataISO > dashTo)) return false;
+          if (selectedSeller && s.matricula !== selectedSeller) return false;
+          return true;
+        })
+        .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || '')),
+    [salesData, catKey, dashFrom, dashTo, selectedSeller],
+  );
+
   if (!collaborators || !sales || !goals || !commissionRates) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
   const mode = dashFrom === dashTo ? 'dia' : 'mes';
-  const ranking = computeSummary(sales, collaborators, dashFrom, dashTo, catKey);
   const rankingList = ranking.filter((r) => r.valor > 0).sort((a, b) => b.valor - a.valor);
   const totalValor = ranking.reduce((a, r) => a + r.valor, 0);
   const totalItens = ranking.reduce((a, r) => a + r.itens, 0);
@@ -73,20 +101,7 @@ export function MobileCategoryScreen({
   const activeRate = activeCommissionSlot !== null ? availableRates.find((r) => r.slot === activeCommissionSlot) : undefined;
   const showCommission = selectedSeller !== null && !!activeRate;
 
-  // A specific vendedor selected shows their full list — no cap, it's
-  // naturally bounded to one person's sales. With "Todos" selected (whole
-  // month, potentially hundreds of rows across every vendedor), a flat
-  // slice(0, 150) used to silently drop everything past the 150th row
-  // instead of paginating — this now pages through the full set instead.
   const VENDAS_PAGE_SIZE = 150;
-  const categorySalesAll = sales
-    .filter((s) => {
-      if (s.grupo !== catKey) return false;
-      if (s.dataISO && (s.dataISO < dashFrom || s.dataISO > dashTo)) return false;
-      if (selectedSeller && s.matricula !== selectedSeller) return false;
-      return true;
-    })
-    .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''));
   const vendasTotalPages = Math.max(1, Math.ceil(categorySalesAll.length / VENDAS_PAGE_SIZE));
   const vendasPageClamped = Math.min(vendasPage, vendasTotalPages - 1);
   const categorySales = selectedSeller

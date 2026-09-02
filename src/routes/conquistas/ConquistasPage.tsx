@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { SidebarCalendarCard } from '../../components/SidebarCalendarCard';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
@@ -52,6 +52,20 @@ export function ConquistasPage() {
   const [generating, setGenerating] = useState(false);
   const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
 
+  // Safe stand-ins so the useMemo calls below always run in the same order
+  // (Rules of Hooks) whether or not every query has resolved yet — the
+  // "Carregando…" guard comes after them, not before.
+  const salesData = sales ?? [];
+  const collaboratorsData = collaborators ?? [];
+  const rows = useMemo(
+    () => computeConquistas(salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists),
+    [salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists],
+  );
+  const dayGallery = useMemo(
+    () => computeConquistasDayGallery(salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists),
+    [salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists],
+  );
+
   if (!collaborators || !sales || !specialLists) {
     return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
   }
@@ -59,9 +73,7 @@ export function ConquistasPage() {
   const info = CONQUISTA_CATS.find((c) => c.key === catKey)!;
   const isUnit = isUnitConquista(catKey);
   const activeTemplate: ConquistaCardTemplate = cardTemplates?.find((t) => t.isDefault) ?? BUILT_IN_TEMPLATE;
-  const rows = computeConquistas(sales, collaborators, dashFrom, dashTo, catKey, specialLists);
   const filtered = rows.filter((r) => matchesFilter(r, tierFilter));
-  const dayGallery = computeConquistasDayGallery(sales, collaborators, dashFrom, dashTo, catKey, specialLists);
 
   async function handleCopyImage() {
     setGenerating(true);

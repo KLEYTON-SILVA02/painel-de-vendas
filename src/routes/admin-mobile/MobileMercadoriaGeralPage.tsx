@@ -34,16 +34,41 @@ export function MobileMercadoriaGeralPage() {
     return map;
   }, [collaborators]);
 
+  // Safe stand-ins so the useMemo calls below always run in the same order
+  // (Rules of Hooks) whether or not every query has resolved yet — the
+  // "Carregando…" guard comes after them, not before.
+  const salesData = sales ?? [];
+  const collaboratorsData = collaborators ?? [];
+
+  // Mercadoria Geral is the store's grand total, not its own exclusive
+  // bucket — this screen reflects every sale regardless of category, same
+  // as the desktop CategoryPage and "Meta Geral" elsewhere in the app
+  // (effectiveMetaGeral always pulls its target from goals.MER).
+  const ranking = useMemo(
+    () => computeSummary(salesData, collaboratorsData, dashFrom, dashTo, 'ALL'),
+    [salesData, collaboratorsData, dashFrom, dashTo],
+  );
+
+  // A specific vendedor selected shows their full list — no cap. With
+  // "Todos" selected (whole month), a flat slice(0, 150) used to silently
+  // drop everything past the 150th row instead of paginating.
+  const categorySalesAll = useMemo(
+    () =>
+      salesData
+        .filter((s) => {
+          if (s.dataISO && (s.dataISO < dashFrom || s.dataISO > dashTo)) return false;
+          if (selectedSeller && s.matricula !== selectedSeller) return false;
+          return true;
+        })
+        .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || '')),
+    [salesData, dashFrom, dashTo, selectedSeller],
+  );
+
   if (!collaborators || !sales || !goals) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
   const mode = dashFrom === dashTo ? 'dia' : 'mes';
-  // Mercadoria Geral is the store's grand total, not its own exclusive
-  // bucket — this screen reflects every sale regardless of category, same
-  // as the desktop CategoryPage and "Meta Geral" elsewhere in the app
-  // (effectiveMetaGeral always pulls its target from goals.MER).
-  const ranking = computeSummary(sales, collaborators, dashFrom, dashTo, 'ALL');
   const rankingList = ranking.filter((r) => r.valor > 0).sort((a, b) => b.valor - a.valor);
   const totalValor = ranking.reduce((a, r) => a + r.valor, 0);
   const totalItens = ranking.reduce((a, r) => a + r.itens, 0);
@@ -55,17 +80,7 @@ export function MobileMercadoriaGeralPage() {
   const pctMeta = metaGeral > 0 ? Math.min(999, (totalValor / metaGeral) * 100) : 0;
   const pctSuper = metaSuper > 0 ? Math.min(999, (totalValor / metaSuper) * 100) : 0;
 
-  // A specific vendedor selected shows their full list — no cap. With
-  // "Todos" selected (whole month), a flat slice(0, 150) used to silently
-  // drop everything past the 150th row instead of paginating.
   const VENDAS_PAGE_SIZE = 150;
-  const categorySalesAll = sales
-    .filter((s) => {
-      if (s.dataISO && (s.dataISO < dashFrom || s.dataISO > dashTo)) return false;
-      if (selectedSeller && s.matricula !== selectedSeller) return false;
-      return true;
-    })
-    .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''));
   const vendasTotalPages = Math.max(1, Math.ceil(categorySalesAll.length / VENDAS_PAGE_SIZE));
   const vendasPageClamped = Math.min(vendasPage, vendasTotalPages - 1);
   const categorySales = selectedSeller

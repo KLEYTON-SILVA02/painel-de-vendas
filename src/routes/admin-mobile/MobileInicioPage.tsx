@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
@@ -28,17 +28,61 @@ export function MobileInicioPage() {
   const { data: store } = useStore();
   const { dashFrom, dashTo, refYear, refMonth, rankFilter } = useDateRange();
 
-  if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !dynamics) {
-    return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
-  }
+  // Safe stand-ins so the useMemo calls below always run in the same order
+  // (Rules of Hooks) whether or not every query has resolved yet — the
+  // "Carregando…" guard comes after them, not before. Mobile CPUs feel the
+  // cost of these full `sales` scans much more than desktop does, so
+  // keeping them out of every unrelated render (a toast, a modal) matters
+  // more here, not less.
+  const salesData = sales ?? [];
+  const collaboratorsData = collaborators ?? [];
 
   const modoDia = dashFrom === dashTo;
   const mode = modoDia ? 'dia' : 'mes';
+  const monthFirst = monthFirstISO(refYear, refMonth);
+  const monthLast = monthLastISO(refYear, refMonth);
+  const campeaoFrom = modoDia ? dashFrom : monthFirst;
+  const campeaoTo = modoDia ? dashTo : monthLast;
+  // Follows the same shared rankFilter as the desktop dashboard's category
+  // filter — 'ALL' and dynamics fall back to the overall best seller.
+  const isUnitChampionCat = rankFilter === 'LEVMEL' || rankFilter === 'CHIP';
+  const championCatFilter = rankFilter === 'ALL' || rankFilter.startsWith('DIN:') ? undefined : (rankFilter as CategoryKey | 'LEVMEL' | 'CHIP');
 
-  const ranking = computeSummary(sales, collaborators, dashFrom, dashTo, undefined, specialLists);
+  const ranking = useMemo(
+    () => computeSummary(salesData, collaboratorsData, dashFrom, dashTo, undefined, specialLists),
+    [salesData, collaboratorsData, dashFrom, dashTo, specialLists],
+  );
   const totalValor = ranking.reduce((a, r) => a + r.valor, 0);
   const totalItens = ranking.reduce((a, r) => a + r.itens, 0);
   const rankingList = ranking.filter((r) => r.valor > 0).slice(0, 10);
+
+  const gaugeData = useMemo(() => {
+    if (!goals) return [];
+    return CAT_KEYS.map((k) => {
+      const t = k === 'MER' ? { valor: totalValor, qtd: totalItens } : catTotals(salesData, dashFrom, dashTo, k);
+      const goal = getGoal(goals[k], mode, salesData, collaboratorsData);
+      return { key: k, valor: t.valor, goal };
+    });
+  }, [salesData, collaboratorsData, goals, dashFrom, dashTo, mode, totalValor, totalItens]);
+
+  const campeaoSource = useMemo(
+    () => computeSummary(salesData, collaboratorsData, campeaoFrom, campeaoTo, championCatFilter, specialLists),
+    [salesData, collaboratorsData, campeaoFrom, campeaoTo, championCatFilter, specialLists],
+  );
+  const campeao =
+    campeaoSource.length && (isUnitChampionCat ? campeaoSource[0].itens > 0 : campeaoSource[0].valor > 0) ? campeaoSource[0] : null;
+  const campeaoMatricula = campeao?.matricula;
+  const campeaoStars = useMemo(
+    () =>
+      campeaoMatricula
+        ? computeChampionStars(campeaoMatricula, salesData, collaboratorsData, specialLists, campeaoFrom, campeaoTo)
+        : null,
+    [campeaoMatricula, salesData, collaboratorsData, specialLists, campeaoFrom, campeaoTo],
+  );
+
+  if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !dynamics) {
+    return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
+  }
 
   const metaGeral = effectiveMetaGeral(goals, mode, sales, collaborators, storeSettings.meta_geral_fallback);
   const metaSuper = getSuperMeta(goals.MER, mode, sales, collaborators);
@@ -52,19 +96,7 @@ export function MobileInicioPage() {
     faltaValor = Math.max(0, metaSuper - totalValor);
   }
 
-  const monthFirst = monthFirstISO(refYear, refMonth);
-  const monthLast = monthLastISO(refYear, refMonth);
-  const campeaoFrom = modoDia ? dashFrom : monthFirst;
-  const campeaoTo = modoDia ? dashTo : monthLast;
-  // Follows the same shared rankFilter as the desktop dashboard's category
-  // filter — 'ALL' and dynamics fall back to the overall best seller.
-  const isUnitChampionCat = rankFilter === 'LEVMEL' || rankFilter === 'CHIP';
-  const championCatFilter = rankFilter === 'ALL' || rankFilter.startsWith('DIN:') ? undefined : (rankFilter as CategoryKey | 'LEVMEL' | 'CHIP');
-  const campeaoSource = computeSummary(sales, collaborators, campeaoFrom, campeaoTo, championCatFilter, specialLists);
-  const campeao =
-    campeaoSource.length && (isUnitChampionCat ? campeaoSource[0].itens > 0 : campeaoSource[0].valor > 0) ? campeaoSource[0] : null;
   const campeaoLabel = modoDia ? `Campeão do dia` : `Campeão — ${monthName(refMonth)}/${refYear}`;
-  const campeaoStars = campeao ? computeChampionStars(campeao.matricula, sales, collaborators, specialLists, campeaoFrom, campeaoTo) : null;
 
   return (
     <div>
@@ -112,18 +144,13 @@ export function MobileInicioPage() {
       </div>
 
       <div className="mv2-goals-grid">
-        {CAT_KEYS.map((k) => {
-          // Mercadoria Geral is the store's grand total, not its own
-          // exclusive bucket — reuse the already-computed all-categories
-          // totalValor/totalItens instead of catTotals' MER-only sum.
-          const t = k === 'MER' ? { valor: totalValor, qtd: totalItens } : catTotals(sales, dashFrom, dashTo, k);
-          const goal = getGoal(goals[k], mode, sales, collaborators);
-          const gaugePct = goal > 0 ? Math.min(100, (t.valor / goal) * 100) : 0;
+        {gaugeData.map((g) => {
+          const gaugePct = g.goal > 0 ? Math.min(100, (g.valor / g.goal) * 100) : 0;
           return (
-            <div key={k} className="mv2-goal-item">
-              <GoalGauge pct={gaugePct} color={CAT_COLOR[k]} />
-              <div className="mv2-goal-name">{CAT_LABEL[k]}</div>
-              <div className="mv2-goal-value">{fmtMoney(t.valor)}</div>
+            <div key={g.key} className="mv2-goal-item">
+              <GoalGauge pct={gaugePct} color={CAT_COLOR[g.key]} />
+              <div className="mv2-goal-name">{CAT_LABEL[g.key]}</div>
+              <div className="mv2-goal-value">{fmtMoney(g.valor)}</div>
             </div>
           );
         })}
