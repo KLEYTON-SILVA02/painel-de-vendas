@@ -4,7 +4,20 @@ import { AuthProvider, useAuth } from './auth/AuthContext';
 import { LoginPage } from './auth/LoginPage';
 import { AppShell } from './routes/AppShell';
 
-const queryClient = new QueryClient();
+// Defaults (staleTime 0, refetchOnWindowFocus true) meant every navigation
+// and every tab/app focus re-ran every mounted query in the background —
+// including the 30k+-row sales fetch — which is what made the app feel
+// heavy. Cached data now stays fresh for a couple of minutes; the header's
+// manual refresh button already calls invalidateQueries() when the user
+// actually wants the latest numbers.
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 2 * 60 * 1000,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 function Root() {
   const { session, loading } = useAuth();

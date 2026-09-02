@@ -11,31 +11,36 @@ import { supabase } from '../lib/supabase';
 import { useIsMobileV2 } from '../lib/useIsMobileV2';
 import { useAutoArchiveOldSales } from '../lib/archival';
 import { useStoreSettings } from '../lib/queries';
-import { MobileAdminShell } from './admin-mobile/MobileAdminShell';
 import { AdminLandingPage } from './admin/AdminLandingPage';
-import { AuditoriaPage } from './admin/AuditoriaPage';
-import { ListaVendasPage } from './admin/ListaVendasPage';
-import { BackupPage } from './admin/BackupPage';
-import { CardConquistaPage } from './admin/CardConquistaPage';
-import { ColaboradoresPage } from './admin/ColaboradoresPage';
-import { ConfiguracoesPage } from './admin/ConfiguracoesPage';
-import { IconesPage } from './admin/IconesPage';
-import { MinhaLojaPage } from './admin/MinhaLojaPage';
-import { ProdutosPage } from './admin/ProdutosPage';
-import { VendasArquivadasPage } from './admin/VendasArquivadasPage';
-
-// xlsx is a large parsing library — only the Importar screen needs it, so it
-// gets its own chunk instead of bloating everyone else's initial load.
-const ImportarPage = lazy(() => import('./admin/ImportarPage').then((m) => ({ default: m.ImportarPage })));
 import { BioPage } from './bio/BioPage';
 import { CategoryPage } from './category/CategoryPage';
-import { CollaboratorShell } from './collaborator/CollaboratorShell';
 import { ConquistasPage } from './conquistas/ConquistasPage';
 import { DashboardPage } from './dashboard/DashboardPage';
 import { DateRangeProvider } from './DateRangeContext';
 import { DinamicasPage } from './dinamicas/DinamicasPage';
 import { MetasPage } from './metas/MetasPage';
 import { RankingPage } from './ranking/RankingPage';
+
+// Any one session only ever renders exactly one of these three trees
+// (desktop admin routes below, or one of the shells here) — splitting them
+// out means a collaborator's phone never downloads the desktop ADM screens,
+// a desktop admin never downloads the mobile-v2 shell, etc. Same for the
+// individual /admin/* maintenance screens: rarely visited relative to
+// Início/Ranking/Categoria, so each gets its own chunk instead of bloating
+// every user's initial load.
+const CollaboratorShell = lazy(() => import('./collaborator/CollaboratorShell').then((m) => ({ default: m.CollaboratorShell })));
+const MobileAdminShell = lazy(() => import('./admin-mobile/MobileAdminShell').then((m) => ({ default: m.MobileAdminShell })));
+const ColaboradoresPage = lazy(() => import('./admin/ColaboradoresPage').then((m) => ({ default: m.ColaboradoresPage })));
+const ProdutosPage = lazy(() => import('./admin/ProdutosPage').then((m) => ({ default: m.ProdutosPage })));
+const ImportarPage = lazy(() => import('./admin/ImportarPage').then((m) => ({ default: m.ImportarPage })));
+const AuditoriaPage = lazy(() => import('./admin/AuditoriaPage').then((m) => ({ default: m.AuditoriaPage })));
+const ListaVendasPage = lazy(() => import('./admin/ListaVendasPage').then((m) => ({ default: m.ListaVendasPage })));
+const VendasArquivadasPage = lazy(() => import('./admin/VendasArquivadasPage').then((m) => ({ default: m.VendasArquivadasPage })));
+const BackupPage = lazy(() => import('./admin/BackupPage').then((m) => ({ default: m.BackupPage })));
+const MinhaLojaPage = lazy(() => import('./admin/MinhaLojaPage').then((m) => ({ default: m.MinhaLojaPage })));
+const ConfiguracoesPage = lazy(() => import('./admin/ConfiguracoesPage').then((m) => ({ default: m.ConfiguracoesPage })));
+const IconesPage = lazy(() => import('./admin/IconesPage').then((m) => ({ default: m.IconesPage })));
+const CardConquistaPage = lazy(() => import('./admin/CardConquistaPage').then((m) => ({ default: m.CardConquistaPage })));
 
 export function AppShell() {
   const { profile, signOut } = useAuth();
@@ -73,7 +78,9 @@ export function AppShell() {
   if (profile.role !== 'admin') {
     return (
       <DateRangeProvider>
-        <CollaboratorShell />
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-400 text-sm">Carregando…</div>}>
+          <CollaboratorShell />
+        </Suspense>
       </DateRangeProvider>
     );
   }
@@ -83,7 +90,9 @@ export function AppShell() {
   if (isMobileV2) {
     return (
       <DateRangeProvider>
-        <MobileAdminShell />
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-400 text-sm">Carregando…</div>}>
+          <MobileAdminShell />
+        </Suspense>
       </DateRangeProvider>
     );
   }
@@ -163,24 +172,26 @@ export function AppShell() {
             <Route path="/bio" element={<BioPage />} />
             <Route path="/conquistas" element={<ConquistasPage />} />
             <Route path="/admin" element={<AdminLandingPage />} />
-            <Route path="/admin/colaboradores" element={<ColaboradoresPage />} />
-            <Route path="/admin/produtos" element={<ProdutosPage />} />
             <Route
-              path="/admin/importar"
+              path="/admin/*"
               element={
                 <Suspense fallback={<div className="text-sm text-slate-500 p-6">Carregando…</div>}>
-                  <ImportarPage />
+                  <Routes>
+                    <Route path="colaboradores" element={<ColaboradoresPage />} />
+                    <Route path="produtos" element={<ProdutosPage />} />
+                    <Route path="importar" element={<ImportarPage />} />
+                    <Route path="auditoria" element={<AuditoriaPage />} />
+                    <Route path="vendas" element={<ListaVendasPage />} />
+                    <Route path="vendas-arquivadas" element={<VendasArquivadasPage />} />
+                    <Route path="backup" element={<BackupPage />} />
+                    <Route path="minha-loja" element={<MinhaLojaPage />} />
+                    <Route path="configuracoes" element={<ConfiguracoesPage />} />
+                    <Route path="icones" element={<IconesPage />} />
+                    <Route path="card-conquista" element={<CardConquistaPage />} />
+                  </Routes>
                 </Suspense>
               }
             />
-            <Route path="/admin/auditoria" element={<AuditoriaPage />} />
-            <Route path="/admin/vendas" element={<ListaVendasPage />} />
-            <Route path="/admin/vendas-arquivadas" element={<VendasArquivadasPage />} />
-            <Route path="/admin/backup" element={<BackupPage />} />
-            <Route path="/admin/minha-loja" element={<MinhaLojaPage />} />
-            <Route path="/admin/configuracoes" element={<ConfiguracoesPage />} />
-            <Route path="/admin/icones" element={<IconesPage />} />
-            <Route path="/admin/card-conquista" element={<CardConquistaPage />} />
           </Routes>
           </main>
         </div>
