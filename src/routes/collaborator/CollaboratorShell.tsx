@@ -2,7 +2,7 @@ import { NavLink, Route, Routes } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { HomeIcon, LeafIcon, TargetIcon, TrophyIcon } from '../../components/icons/NavIcons';
 import { BALCAO_SETOR } from '../../lib/business/bio';
-import { useCollaborators } from '../../lib/queries';
+import { useCategoryTypes, useCollaborators } from '../../lib/queries';
 import '../../styles/mobile-v2.css';
 import { CollaboratorBioPage } from './CollaboratorBioPage';
 import { CollaboratorDinamicasPage } from './CollaboratorDinamicasPage';
@@ -22,13 +22,18 @@ import { MetasVendasPage } from './MetasVendasPage';
 export function CollaboratorShell() {
   const { profile, signOut } = useAuth();
   const { data: collaborators } = useCollaborators();
+  const { data: categoryTypes } = useCategoryTypes();
   const me = collaborators?.find((c) => c.id === profile?.collaborator_id);
   const isBalcao = me?.setor === BALCAO_SETOR;
+  // Biosintética isn't seeded for new stores (see Sidebar.tsx) — a Balcão
+  // collaborator at a store that never created it shouldn't get a tab
+  // pointing at a screen that has nothing to show.
+  const hasBio = (categoryTypes ?? []).some((c) => c.chave === 'biosintetica');
 
   const tabs = [
     { to: '/', end: true, label: 'Metas/Vendas', icon: HomeIcon },
     { to: '/ranking', end: false, label: 'Ranking', icon: TrophyIcon },
-    ...(isBalcao ? [{ to: '/bio', end: false, label: 'Biosintética', icon: LeafIcon }] : []),
+    ...(isBalcao && hasBio ? [{ to: '/bio', end: false, label: 'Biosintética', icon: LeafIcon }] : []),
     { to: '/dinamicas', end: false, label: 'Dinâmicas', icon: TargetIcon },
   ];
 
@@ -61,7 +66,7 @@ export function CollaboratorShell() {
           <Routes>
             <Route path="/" element={<MetasVendasPage />} />
             <Route path="/ranking" element={<CollaboratorRankingPage />} />
-            {isBalcao && <Route path="/bio" element={<CollaboratorBioPage />} />}
+            {isBalcao && hasBio && <Route path="/bio" element={<CollaboratorBioPage />} />}
             <Route path="/dinamicas" element={<CollaboratorDinamicasPage />} />
           </Routes>
         </main>

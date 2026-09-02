@@ -18,7 +18,7 @@ import {
   TrophyIcon,
 } from '../../components/icons/NavIcons';
 import type { Horario } from '../../lib/business/horario';
-import { useStore, useStoreSettings } from '../../lib/queries';
+import { useCategoryTypes, useStore, useStoreSettings } from '../../lib/queries';
 import { AdminLandingPage } from '../admin/AdminLandingPage';
 import { AuditoriaPage } from '../admin/AuditoriaPage';
 import { ListaVendasPage } from '../admin/ListaVendasPage';
@@ -51,7 +51,12 @@ import { MobileRankingPage } from './MobileRankingPage';
 // existing desktop component to a dedicated mv2-styled one as it's
 // redesigned — until then the route falls back to the desktop page so
 // navigation always works, just not yet in the new visual style.
-const CATEGORIES = [
+// BIOSINTÉTICA's icon is inserted conditionally in the component body below
+// (only when this store has a category_types row for it) instead of being
+// listed here — same reasoning as Sidebar.tsx's desktop menu: it's not
+// seeded for new stores, so an unconditional entry would be a dead icon for
+// every store that never created it.
+const CATEGORIES_BEFORE_BIO = [
   { to: '/', end: true, cls: 'mv2-cat-inicio', Icon: HomeIcon, label: 'Início', slot: 'inicio' },
   { to: '/ranking', end: false, cls: 'mv2-cat-ranking', Icon: TrophyIcon, label: 'Ranking', slot: 'ranking' },
   { to: '/categoria/DERM', end: false, cls: 'mv2-cat-dermo', Icon: DropletIcon, label: 'Dermo', slot: 'dermo' },
@@ -60,7 +65,11 @@ const CATEGORIES = [
   { to: '/categoria/MER', end: false, cls: 'mv2-cat-mercgeral', Icon: BagIcon, label: 'Merc. Geral', slot: 'mercadoria_geral' },
   { to: '/categoria/LEVMEL', end: false, cls: 'mv2-cat-levmel', Icon: HexagonIcon, label: 'Levmel', slot: 'levmel' },
   { to: '/categoria/CHIP', end: false, cls: 'mv2-cat-chip', Icon: CpuIcon, label: 'Chip', slot: 'chip' },
-  { to: '/bio', end: false, cls: 'mv2-cat-biosintetica', Icon: LeafIcon, label: 'Biosintética', slot: 'biosintetica' },
+] as const;
+
+const BIO_CATEGORY = { to: '/bio', end: false, cls: 'mv2-cat-biosintetica', Icon: LeafIcon, label: 'Biosintética', slot: 'biosintetica' } as const;
+
+const CATEGORIES_AFTER_BIO = [
   { to: '/dinamicas', end: false, cls: 'mv2-cat-dinamicas', Icon: TargetIcon, label: 'Dinâmicas', slot: 'dinamicas' },
   { to: '/admin', end: false, cls: 'mv2-cat-adm', Icon: SettingsIcon, label: 'ADM', slot: 'adm' },
 ] as const;
@@ -73,6 +82,9 @@ export function MobileAdminShell() {
   const { signOut } = useAuth();
   const { data: store } = useStore();
   const { data: storeSettings } = useStoreSettings();
+  const { data: categoryTypes } = useCategoryTypes();
+  const hasBio = (categoryTypes ?? []).some((c) => c.chave === 'biosintetica');
+  const categories = hasBio ? [...CATEGORIES_BEFORE_BIO, BIO_CATEGORY, ...CATEGORIES_AFTER_BIO] : [...CATEGORIES_BEFORE_BIO, ...CATEGORIES_AFTER_BIO];
 
   return (
     <div className="mv2" style={{ minHeight: '100vh' }}>
@@ -95,7 +107,7 @@ export function MobileAdminShell() {
       </header>
 
       <nav className="mv2-category-menu">
-        {CATEGORIES.map((c) => (
+        {categories.map((c) => (
           <NavLink key={c.to} to={c.to} end={c.end} title={c.label} className={({ isActive }) => `mv2-cat-icon ${c.cls} ${isActive ? 'active' : ''}`}>
             <FunctionIcon slot={c.slot} fallback={c.Icon} size={26} />
           </NavLink>
