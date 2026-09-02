@@ -1,13 +1,30 @@
 // Ported 1:1 from legacy/index-original.html (computeBioSummary).
 // BIOSINTÉTICA ranking is deliberately restricted to the "Balcão" sector —
 // sales by G1-G4 products registered under any other sector are a data-quality
-// alert (see auditBioOutsideBalcao), not part of the ranking.
+// alert (see auditBioOutsideBalcao), not part of the ranking. Other category
+// types define their own eligible sector(s) (category_types.setores_elegiveis)
+// instead of this constant — BALCAO_SETOR is BIOSINTÉTICA's own default.
 import { classifyBio } from './classification';
 import type { BioGroupKey } from './classification';
 import { firstName } from './normalize';
 import type { BioGroupsProducts, BioWeights, Collaborator, Sale } from './types';
 
 export const BALCAO_SETOR = 'Balcão';
+
+/** Groups a flat list of group/product rows (as stored in `bio_groups`) into
+ * the `{ [grupo]: KeywordItem[] }` shape classifyBio/computeBioSummary need —
+ * shared by every screen that reads bio_groups (desktop, mobile v2,
+ * collaborator) instead of each re-implementing it. Builds its keys from
+ * whatever `grupo` values are actually present, so it works for any
+ * category's own group set, not just a hardcoded G1-G4. */
+export function groupBioRows(rows: { grupo: string; nome: string; palavras: string[] }[] | undefined): BioGroupsProducts {
+  const result: BioGroupsProducts = {};
+  (rows ?? []).forEach((r) => {
+    if (!result[r.grupo]) result[r.grupo] = [];
+    result[r.grupo].push({ nome: r.nome, palavras: r.palavras });
+  });
+  return result;
+}
 
 export interface BioSummaryRow {
   matricula: string;
@@ -27,16 +44,22 @@ export function computeBioSummary(
   fromDate: string | null,
   toDate: string | null,
   groupFilter?: BioGroupKey | 'ALL' | null,
+  /** Which sector(s) may participate in this category's ranking — defaults
+   * to BIOSINTÉTICA's own Balcão-only rule for existing callers that don't
+   * pass one yet. */
+  setoresElegiveis: string[] = [BALCAO_SETOR],
 ): BioSummaryRow[] {
-  const balcao = collaborators.filter((c) => c.setor === BALCAO_SETOR);
+  const eligible = new Set(setoresElegiveis);
+  const zeroQtd = Object.fromEntries(Object.keys(bioGroups).map((g) => [g, 0]));
+  const elegiveis = collaborators.filter((c) => c.setor !== null && eligible.has(c.setor));
   const map: Record<string, BioSummaryRow> = {};
-  balcao.forEach((c) => {
+  elegiveis.forEach((c) => {
     map[c.matricula] = {
       matricula: c.matricula,
       nome: c.nome,
       apelido: c.apelido || firstName(c.nome),
       foto: c.foto,
-      qtd: { G1: 0, G2: 0, G3: 0, G4: 0 },
+      qtd: { ...zeroQtd },
       pontos: 0,
       itens: 0,
     };
@@ -45,7 +68,7 @@ export function computeBioSummary(
   sales.forEach((s) => {
     if (fromDate && s.dataISO && s.dataISO < fromDate) return;
     if (toDate && s.dataISO && s.dataISO > toDate) return;
-    if (!map[s.matricula]) return; // BIO only counts Balcão-sector collaborators
+    if (!map[s.matricula]) return; // only counts collaborators in an eligible sector
     const g = classifyBio(s.produto, bioGroups);
     if (!g) return;
     if (groupFilter && groupFilter !== 'ALL' && g !== groupFilter) return;
@@ -67,19 +90,22 @@ export interface BioOutsideAlert {
   dataISO: string | null;
 }
 
-/** Flags G1-G4 sales recorded by collaborators outside the Balcão sector. */
+/** Flags sales of this category's products made by collaborators outside
+ * its eligible sector(s). */
 export function auditBioOutsideBalcao(
   sales: Sale[],
   collaborators: Collaborator[],
   bioGroups: BioGroupsProducts,
+  setoresElegiveis: string[] = [BALCAO_SETOR],
 ): BioOutsideAlert[] {
+  const eligible = new Set(setoresElegiveis);
   const byMatricula = new Map(collaborators.map((c) => [c.matricula, c]));
   const alerts: BioOutsideAlert[] = [];
   sales.forEach((s) => {
     const g = classifyBio(s.produto, bioGroups);
     if (!g) return;
     const collaborator = byMatricula.get(s.matricula);
-    if (collaborator && collaborator.setor === BALCAO_SETOR) return;
+    if (collaborator && collaborator.setor !== null && eligible.has(collaborator.setor)) return;
     alerts.push({
       matricula: s.matricula,
       vendedor: collaborator?.nome || s.vendedor,

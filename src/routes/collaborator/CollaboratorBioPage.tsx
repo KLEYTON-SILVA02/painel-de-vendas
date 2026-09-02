@@ -1,22 +1,13 @@
 import { useState } from 'react';
 import { MobileRankingBoard } from '../../components/collaborator/MobileRankingBoard';
-import { BALCAO_SETOR, computeBioSummary } from '../../lib/business/bio';
+import { BALCAO_SETOR, computeBioSummary, groupBioRows } from '../../lib/business/bio';
 import type { BioGroupKey } from '../../lib/business/classification';
-import type { BioGroupsProducts, BioWeights } from '../../lib/business/types';
-import { useBioGroups, useCollaborators, useSales, useStoreSettings } from '../../lib/queries';
+import type { BioWeights } from '../../lib/business/types';
+import { useBioGroups, useCategoryTypes, useCollaborators, useSales, useStoreSettings } from '../../lib/queries';
 import { MobileDateFilter } from '../admin-mobile/MobileDateFilter';
 import { useDateRange } from '../DateRangeContext';
 
 const BIO_GROUP_KEYS: BioGroupKey[] = ['G1', 'G2', 'G3', 'G4'];
-
-function groupBioRows(rows: { grupo: string; nome: string; palavras: string[] }[] | undefined): BioGroupsProducts {
-  const result: BioGroupsProducts = { G1: [], G2: [], G3: [], G4: [] };
-  (rows ?? []).forEach((r) => {
-    const g = r.grupo as BioGroupKey;
-    if (result[g]) result[g].push({ nome: r.nome, palavras: r.palavras });
-  });
-  return result;
-}
 
 // Mobile view for Balcão collaborators — same MobileDateFilter +
 // MobileRankingBoard shell as CollaboratorRankingPage, but ranked by BIO
@@ -25,18 +16,22 @@ export function CollaboratorBioPage() {
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
   const { data: storeSettings } = useStoreSettings();
-  const { data: bioGroupRows } = useBioGroups();
+  const { data: categoryTypes } = useCategoryTypes();
+  const bioCategoryType = categoryTypes?.find((c) => c.chave === 'biosintetica');
+  const { data: bioGroupRows } = useBioGroups(bioCategoryType?.id);
   const { dashFrom, dashTo } = useDateRange();
   const [bioFilter, setBioFilter] = useState<BioGroupKey | 'ALL'>('ALL');
 
-  if (!collaborators || !sales || !storeSettings || !bioGroupRows) {
+  if (!collaborators || !sales || !storeSettings || !bioCategoryType || !bioGroupRows) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
   const bioGroups = groupBioRows(bioGroupRows);
   const bioWeights = storeSettings.bio_weights as unknown as BioWeights;
   const balcaoCount = collaborators.filter((c) => c.setor === BALCAO_SETOR).length;
-  const ranking = computeBioSummary(sales, collaborators, bioGroups, bioWeights, dashFrom, dashTo, bioFilter).filter((r) => r.itens > 0);
+  const ranking = computeBioSummary(sales, collaborators, bioGroups, bioWeights, dashFrom, dashTo, bioFilter, bioCategoryType.setores_elegiveis).filter(
+    (r) => r.itens > 0,
+  );
   const totalPontos = ranking.reduce((a, r) => a + r.pontos, 0);
   const totalItens = ranking.reduce((a, r) => a + r.itens, 0);
 

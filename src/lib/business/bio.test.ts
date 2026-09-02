@@ -44,3 +44,38 @@ describe('auditBioOutsideBalcao', () => {
     expect(alerts[0].grupo).toBe('G2');
   });
 });
+
+describe('generic category-type support', () => {
+  // A hypothetical second category with its own arbitrary group codes (not
+  // G1-G4) and its own eligible sector — proves computeBioSummary/
+  // auditBioOutsideBalcao/classifyBio are no longer hardcoded to
+  // BIOSINTÉTICA's specific shape.
+  const otherGroups: BioGroupsProducts = {
+    OURO: [{ nome: 'Kit Ouro', palavras: ['kit ouro'] }],
+    PRATA: [{ nome: 'Kit Prata', palavras: ['kit prata'] }],
+  };
+  const otherWeights: BioWeights = { OURO: 3, PRATA: 1 };
+  const otherCollaborators: Collaborator[] = [
+    { id: '3', matricula: 'M3', nome: 'Carla', apelido: 'Carla', foto: null, setor: 'Caixa', metaIndividual: 0 },
+    { id: '4', matricula: 'M4', nome: 'Davi', apelido: 'Davi', foto: null, setor: 'Balcão', metaIndividual: 0 },
+  ];
+  const otherSales: Sale[] = [
+    { id: 'o1', dataISO: '2026-08-01', matricula: 'M3', vendedor: 'Carla', produto: 'Kit Ouro Premium', qtd: 2, valor: 200, grupo: 'MER' },
+    { id: 'o2', dataISO: '2026-08-02', matricula: 'M4', vendedor: 'Davi', produto: 'Kit Prata Simples', qtd: 4, valor: 80, grupo: 'MER' },
+  ];
+
+  it('computeBioSummary honors an arbitrary group set and a non-Balcão eligible sector', () => {
+    const rows = computeBioSummary(otherSales, otherCollaborators, otherGroups, otherWeights, null, null, 'ALL', ['Caixa']);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].matricula).toBe('M3');
+    expect(rows[0].qtd.OURO).toBe(2);
+    expect(rows[0].pontos).toBeCloseTo(2 * 3);
+  });
+
+  it('auditBioOutsideBalcao flags sales outside the given eligible sector(s), not just Balcão', () => {
+    const alerts = auditBioOutsideBalcao(otherSales, otherCollaborators, otherGroups, ['Caixa']);
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].matricula).toBe('M4');
+    expect(alerts[0].grupo).toBe('PRATA');
+  });
+});

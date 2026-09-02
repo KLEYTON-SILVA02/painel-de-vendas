@@ -8,7 +8,11 @@ export const CAT_KEYS = ['DERM', 'GEN', 'MP', 'MER'] as const;
 export type CategoryKey = (typeof CAT_KEYS)[number];
 
 export const BIO_GROUP_KEYS = ['G1', 'G2', 'G3', 'G4'] as const;
-export type BioGroupKey = (typeof BIO_GROUP_KEYS)[number];
+/** A free-text group code, scoped to one category_type — BIOSINTÉTICA's own
+ * groups happen to always be G1-G4 today (BIO_GROUP_KEYS), but the type
+ * itself no longer assumes that: a different category type can define
+ * however many groups it wants, with whatever codes it wants. */
+export type BioGroupKey = string;
 
 /** Levmel/Chip aren't CategoryKeys — they're classified at runtime via
  * special_lists keyword matching, not the sale.grupo field like DERM/GEN/MP/
@@ -228,8 +232,11 @@ export function classifyProduct(
 }
 
 /**
- * Independent BIOSINTÉTICA classification — links a product to a G1-G4 group,
- * or null when it doesn't belong to any of them. Longest keyword match wins.
+ * Independent partnership-category classification (BIOSINTÉTICA today) —
+ * links a product to one of `bioGroups`' own keys, or null when it doesn't
+ * belong to any of them. Longest keyword match wins. Iterates whatever
+ * group codes are actually present in `bioGroups` rather than a fixed
+ * G1-G4 list, so it works for any category's own group set.
  */
 export function classifyBio(
   nome: string,
@@ -238,7 +245,7 @@ export function classifyBio(
   const n = normalize(nome);
   if (!n) return null;
   const matches: { g: BioGroupKey; len: number }[] = [];
-  BIO_GROUP_KEYS.forEach((g) => {
+  Object.keys(bioGroups).forEach((g) => {
     (bioGroups[g] || []).forEach((p) => {
       keywordsOf(p, g).forEach((kw) => {
         const pad = normalize(kw);
