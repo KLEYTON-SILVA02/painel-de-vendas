@@ -611,6 +611,17 @@ function TemplateEditor({
               Usar a logo da loja
             </button>
           )}
+          <label className="text-[11px] text-slate-400">
+            Escala da logo dentro da área ({Math.round(editing.logoScale * 100)}%)
+            <input
+              type="range"
+              min={30}
+              max={150}
+              value={Math.round(editing.logoScale * 100)}
+              onChange={(e) => setEditing({ ...editing, logoScale: Number(e.target.value) / 100 })}
+              className="w-full"
+            />
+          </label>
         </div>
 
         <div className="rounded-lg border border-slate-800 p-2.5 flex flex-col gap-2">
