@@ -8,10 +8,11 @@
 // they don't need archiving here.
 import { useEffect, useRef } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { groupBioRows } from './business/bio';
 import { classifyBio, CAT_KEYS, type BioGroupKey } from './business/classification';
 import { matchesSpecialList, type SpecialListItem } from './business/summary';
 import type { BioGroupsProducts, Sale } from './business/types';
-import { useBioGroups, useSales, useSpecialLists } from './queries';
+import { useBioGroups, useCategoryTypes, useSales, useSpecialLists } from './queries';
 import { supabase } from './supabase';
 
 const RETENTION_MONTHS = 3;
@@ -156,15 +157,6 @@ export async function archiveOldSalesForStore(
   return { archivedMonths, deletedCount: ids.length };
 }
 
-function groupBioRows(rows: { grupo: string; nome: string; palavras: string[] }[] | undefined): BioGroupsProducts {
-  const result: BioGroupsProducts = { G1: [], G2: [], G3: [], G4: [] };
-  (rows ?? []).forEach((r) => {
-    const g = r.grupo as BioGroupKey;
-    if (result[g]) result[g].push({ nome: r.nome, palavras: r.palavras });
-  });
-  return result;
-}
-
 /** Runs the REGRA 2 archival automatically — no admin action needed — once
  * per store per day, the first time an admin session has all the data it
  * needs loaded. Safe to call unconditionally on every render: it no-ops
@@ -176,13 +168,15 @@ export function useAutoArchiveOldSales(): void {
   const { profile } = useAuth();
   const { data: sales, refetch: refetchSales } = useSales();
   const { data: specialLists } = useSpecialLists();
-  const { data: bioGroupRows } = useBioGroups();
+  const { data: categoryTypes } = useCategoryTypes();
+  const bioCategoryType = categoryTypes?.find((c) => c.chave === 'biosintetica');
+  const { data: bioGroupRows } = useBioGroups(bioCategoryType?.id);
   const ranRef = useRef(false);
 
   useEffect(() => {
     if (ranRef.current) return;
     if (!profile || profile.role !== 'admin' || !profile.store_id) return;
-    if (!sales || !specialLists || !bioGroupRows) return;
+    if (!sales || !specialLists || !bioCategoryType || !bioGroupRows) return;
 
     const storageKey = `archive_last_run_${profile.store_id}`;
     const today = new Date().toISOString().slice(0, 10);
@@ -212,5 +206,5 @@ export function useAutoArchiveOldSales(): void {
       .catch((err) => {
         console.error('Falha ao arquivar vendas antigas automaticamente:', err);
       });
-  }, [profile, sales, specialLists, bioGroupRows, refetchSales]);
+  }, [profile, sales, specialLists, bioCategoryType, bioGroupRows, refetchSales]);
 }

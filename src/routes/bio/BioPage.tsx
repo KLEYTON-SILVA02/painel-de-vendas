@@ -7,6 +7,7 @@ import {
   auditBioOutsideBalcao,
   BALCAO_SETOR,
   computeBioSummary,
+  groupBioRows,
   type BioSummaryRow,
 } from '../../lib/business/bio';
 import { classifyBio, normalizeGrupoImport, type BioGroupKey } from '../../lib/business/classification';
@@ -14,28 +15,21 @@ import { diasRestantesNoMes } from '../../lib/business/goals';
 import type { BioGroupGoal, BioGroupsProducts, BioWeights } from '../../lib/business/types';
 import { fmtDateBR } from '../../lib/format';
 import { useAddBioProduct, useBulkInsertBioProducts, useDeleteBioProduct, useUpdateBioGroupGoal, useUpdateBioWeights } from '../../lib/mutations';
-import { useBioGroupGoals, useBioGroups, useCollaborators, useSales, useStoreSettings } from '../../lib/queries';
+import { useBioGroupGoals, useBioGroups, useCategoryTypes, useCollaborators, useSales, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 
 const BIO_GROUP_KEYS: BioGroupKey[] = ['G1', 'G2', 'G3', 'G4'];
 const GRUPO_LABELS: Record<BioGroupKey, string> = { G1: 'Grupo 1', G2: 'Grupo 2', G3: 'Grupo 3', G4: 'Grupo 4' };
-
-function groupBioRows(rows: { grupo: string; nome: string; palavras: string[]; id: string }[] | undefined): BioGroupsProducts {
-  const result: BioGroupsProducts = { G1: [], G2: [], G3: [], G4: [] };
-  (rows ?? []).forEach((r) => {
-    const g = r.grupo as BioGroupKey;
-    if (result[g]) result[g].push({ nome: r.nome, palavras: r.palavras });
-  });
-  return result;
-}
 
 export function BioPage() {
   const { profile } = useAuth();
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
   const { data: storeSettings } = useStoreSettings();
-  const { data: bioGroupRows } = useBioGroups();
-  const { data: groupGoals } = useBioGroupGoals();
+  const { data: categoryTypes } = useCategoryTypes();
+  const bioCategoryType = categoryTypes?.find((c) => c.chave === 'biosintetica');
+  const { data: bioGroupRows } = useBioGroups(bioCategoryType?.id);
+  const { data: groupGoals } = useBioGroupGoals(bioCategoryType?.id);
   const { dashFrom, dashTo, setModoGeral } = useDateRange();
   const [view, setView] = useState<'ranking' | 'grupos' | 'pontos'>('ranking');
   const [bioFilter, setBioFilter] = useState<BioGroupKey | 'ALL'>('ALL');
@@ -48,17 +42,19 @@ export function BioPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => setModoGeral(), []);
 
-  if (!collaborators || !sales || !storeSettings || !bioGroupRows || !groupGoals) {
+  if (!collaborators || !sales || !storeSettings || !bioCategoryType || !bioGroupRows || !groupGoals) {
     return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
   }
 
   const bioGroups = groupBioRows(bioGroupRows);
   const bioWeights = storeSettings.bio_weights as unknown as BioWeights;
+  const setoresElegiveis = bioCategoryType.setores_elegiveis;
 
   if (view === 'grupos') {
     return (
       <BioGruposView
         storeId={profile?.store_id}
+        categoryTypeId={bioCategoryType.id}
         bioGroups={bioGroups}
         rows={bioGroupRows}
         onBack={() => setView('ranking')}
@@ -66,11 +62,12 @@ export function BioPage() {
     );
   }
   if (view === 'pontos') {
-    // computeBioSummary already scopes its rows to the Balcão sector.
-    const demonstrativo = computeBioSummary(sales, collaborators, bioGroups, bioWeights, dashFrom, dashTo, 'ALL');
+    // computeBioSummary already scopes its rows to the category's eligible sector(s).
+    const demonstrativo = computeBioSummary(sales, collaborators, bioGroups, bioWeights, dashFrom, dashTo, 'ALL', setoresElegiveis);
     return (
       <BioPontosView
         storeId={profile?.store_id}
+        categoryTypeId={bioCategoryType.id}
         bioWeights={bioWeights}
         groupGoals={groupGoals}
         demonstrativo={demonstrativo}
@@ -79,11 +76,12 @@ export function BioPage() {
     );
   }
 
-  const ranking = computeBioSummary(sales, collaborators, bioGroups, bioWeights, dashFrom, dashTo, bioFilter);
+  const ranking = computeBioSummary(sales, collaborators, bioGroups, bioWeights, dashFrom, dashTo, bioFilter, setoresElegiveis);
   const foraDoBalcao = auditBioOutsideBalcao(
     sales.filter((s) => (!s.dataISO || (s.dataISO >= dashFrom && s.dataISO <= dashTo))),
     collaborators,
     bioGroups,
+    setoresElegiveis,
   );
   const balcaoMatriculas = new Set(collaborators.filter((c) => c.setor === BALCAO_SETOR).map((c) => c.matricula));
   // Only Biosintética products (G1-G4) matter on this screen — every sale
@@ -251,19 +249,21 @@ export function BioPage() {
 
 function BioGruposView({
   storeId,
+  categoryTypeId,
   bioGroups,
   rows,
   onBack,
 }: {
   storeId: string | undefined;
+  categoryTypeId: string;
   bioGroups: BioGroupsProducts;
   rows: { id: string; grupo: string; nome: string; palavras: string[] }[];
   onBack: () => void;
 }) {
   const [tab, setTab] = useState<BioGroupKey>('G1');
   const [nome, setNome] = useState('');
-  const addProduct = useAddBioProduct(storeId);
-  const bulkInsertBio = useBulkInsertBioProducts(storeId);
+  const addProduct = useAddBioProduct(storeId, categoryTypeId);
+  const bulkInsertBio = useBulkInsertBioProducts(storeId, categoryTypeId);
   const deleteProduct = useDeleteBioProduct();
 
   function handleAdd() {
@@ -362,12 +362,14 @@ function BioGruposView({
 
 function BioPontosView({
   storeId,
+  categoryTypeId,
   bioWeights,
   groupGoals,
   demonstrativo,
   onBack,
 }: {
   storeId: string | undefined;
+  categoryTypeId: string;
   bioWeights: BioWeights;
   groupGoals: Partial<Record<BioGroupKey, BioGroupGoal>>;
   demonstrativo: BioSummaryRow[];
@@ -383,7 +385,7 @@ function BioPontosView({
     G4: [groupGoals.G4?.meta1 ?? 0, groupGoals.G4?.meta2 ?? 0, groupGoals.G4?.meta3 ?? 0],
   });
   const updateWeights = useUpdateBioWeights(storeId);
-  const updateGroupGoal = useUpdateBioGroupGoal(storeId);
+  const updateGroupGoal = useUpdateBioGroupGoal(storeId, categoryTypeId);
   const [saving, setSaving] = useState(false);
 
   function setMeta(g: BioGroupKey, idx: 0 | 1 | 2, value: number) {
@@ -470,7 +472,7 @@ function BioPontosView({
                   <tr key={r.matricula} className="border-b border-slate-900">
                     <td className="py-2 pr-3">{r.apelido || r.nome}</td>
                     {BIO_GROUP_KEYS.map((g) => {
-                      const pontosGrupo = r.qtd[g] * (bioWeights[g] || 0);
+                      const pontosGrupo = (r.qtd[g] || 0) * (bioWeights[g] || 0);
                       const meta1 = groupGoals[g]?.meta1 ?? 0;
                       const pct = meta1 > 0 ? Math.min(999, (pontosGrupo / meta1) * 100) : null;
                       return (

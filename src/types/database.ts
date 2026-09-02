@@ -18,6 +18,7 @@ export type Database = {
     Tables: {
       bio_group_goals: {
         Row: {
+          category_type_id: string
           grupo: string
           id: string
           meta1: number
@@ -26,6 +27,7 @@ export type Database = {
           store_id: string
         }
         Insert: {
+          category_type_id: string
           grupo: string
           id?: string
           meta1?: number
@@ -34,6 +36,7 @@ export type Database = {
           store_id: string
         }
         Update: {
+          category_type_id?: string
           grupo?: string
           id?: string
           meta1?: number
@@ -42,6 +45,13 @@ export type Database = {
           store_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "bio_group_goals_category_type_id_fkey"
+            columns: ["category_type_id"]
+            isOneToOne: false
+            referencedRelation: "category_types"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "bio_group_goals_store_id_fkey"
             columns: ["store_id"]
@@ -53,6 +63,7 @@ export type Database = {
       }
       bio_groups: {
         Row: {
+          category_type_id: string
           created_at: string
           grupo: string
           id: string
@@ -61,6 +72,7 @@ export type Database = {
           store_id: string
         }
         Insert: {
+          category_type_id: string
           created_at?: string
           grupo: string
           id?: string
@@ -69,6 +81,7 @@ export type Database = {
           store_id: string
         }
         Update: {
+          category_type_id?: string
           created_at?: string
           grupo?: string
           id?: string
@@ -77,6 +90,13 @@ export type Database = {
           store_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "bio_groups_category_type_id_fkey"
+            columns: ["category_type_id"]
+            isOneToOne: false
+            referencedRelation: "category_types"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "bio_groups_store_id_fkey"
             columns: ["store_id"]
@@ -146,6 +166,50 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "catalog_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      category_types: {
+        Row: {
+          ativo: boolean
+          chave: string
+          created_at: string
+          icone_url: string | null
+          id: string
+          nome: string
+          setores_elegiveis: string[]
+          sistema: boolean
+          store_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          chave: string
+          created_at?: string
+          icone_url?: string | null
+          id?: string
+          nome: string
+          setores_elegiveis?: string[]
+          sistema?: boolean
+          store_id: string
+        }
+        Update: {
+          ativo?: boolean
+          chave?: string
+          created_at?: string
+          icone_url?: string | null
+          id?: string
+          nome?: string
+          setores_elegiveis?: string[]
+          sistema?: boolean
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "category_types_store_id_fkey"
             columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "stores"

@@ -345,29 +345,33 @@ export function useDeleteSpecialListProduct() {
   });
 }
 
-/** Bulk import of Biosintética products from a spreadsheet — same shape as
+/** Bulk import of a category's products from a spreadsheet — same shape as
  * useAddBioProduct's single insert, just batched. No upsert: like the
  * manual "Adicionar" flow, re-importing the same name creates another row
  * rather than silently merging (bio_groups has no unique constraint to
  * upsert against, and duplicate keyword rows are harmless for matching). */
-export function useBulkInsertBioProducts(storeId: string | undefined) {
+export function useBulkInsertBioProducts(storeId: string | undefined, categoryTypeId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (rows: { grupo: 'G1' | 'G2' | 'G3' | 'G4'; nome: string; palavras: string[] }[]) => {
-      if (!storeId) throw new Error('store not loaded');
-      const { error } = await supabase.from('bio_groups').insert(rows.map((r) => ({ ...r, store_id: storeId })));
+    mutationFn: async (rows: { grupo: string; nome: string; palavras: string[] }[]) => {
+      if (!storeId || !categoryTypeId) throw new Error('store/category not loaded');
+      const { error } = await supabase
+        .from('bio_groups')
+        .insert(rows.map((r) => ({ ...r, store_id: storeId, category_type_id: categoryTypeId })));
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['bio_groups'] }),
   });
 }
 
-export function useAddBioProduct(storeId: string | undefined) {
+export function useAddBioProduct(storeId: string | undefined, categoryTypeId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ grupo, nome }: { grupo: 'G1' | 'G2' | 'G3' | 'G4'; nome: string }) => {
-      if (!storeId) throw new Error('store not loaded');
-      const { error } = await supabase.from('bio_groups').insert({ store_id: storeId, grupo, nome, palavras: [nome] });
+    mutationFn: async ({ grupo, nome }: { grupo: string; nome: string }) => {
+      if (!storeId || !categoryTypeId) throw new Error('store/category not loaded');
+      const { error } = await supabase
+        .from('bio_groups')
+        .insert({ store_id: storeId, category_type_id: categoryTypeId, grupo, nome, palavras: [nome] });
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['bio_groups'] }),
@@ -388,7 +392,7 @@ export function useDeleteBioProduct() {
 export function useUpdateBioWeights(storeId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (weights: Record<'G1' | 'G2' | 'G3' | 'G4', number>) => {
+    mutationFn: async (weights: Record<string, number>) => {
       if (!storeId) throw new Error('store not loaded');
       const { error } = await supabase.from('store_settings').update({ bio_weights: weights }).eq('store_id', storeId);
       if (error) throw error;
@@ -398,15 +402,18 @@ export function useUpdateBioWeights(storeId: string | undefined) {
 }
 
 /** Upsert, same reasoning as useUpdateGoal/useUpdateCommissionRate — no row
- * exists per group until the admin first sets one. */
-export function useUpdateBioGroupGoal(storeId: string | undefined) {
+ * exists per group until the admin first sets one. onConflict stays scoped
+ * to `store_id,grupo` (not category_type_id) because only one category type
+ * exists per store today; a second category reusing a group code becomes
+ * possible once the generic groups UI (and this upsert target) gets built. */
+export function useUpdateBioGroupGoal(storeId: string | undefined, categoryTypeId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ grupo, patch }: { grupo: 'G1' | 'G2' | 'G3' | 'G4'; patch: TablesUpdate<'bio_group_goals'> }) => {
-      if (!storeId) throw new Error('store not loaded');
+    mutationFn: async ({ grupo, patch }: { grupo: string; patch: TablesUpdate<'bio_group_goals'> }) => {
+      if (!storeId || !categoryTypeId) throw new Error('store/category not loaded');
       const { error } = await supabase
         .from('bio_group_goals')
-        .upsert({ ...patch, grupo, store_id: storeId }, { onConflict: 'store_id,grupo' });
+        .upsert({ ...patch, grupo, store_id: storeId, category_type_id: categoryTypeId }, { onConflict: 'store_id,grupo' });
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['bio_group_goals'] }),

@@ -305,11 +305,29 @@ export function useExclusiveBrands() {
   });
 }
 
-export function useBioGroupGoals() {
+/** Partnership category types (BIOSINTÉTICA is the first/only one today) —
+ * small table, always fetched whole for the store. Pages resolve the one
+ * they need by `chave` (e.g. 'biosintetica'). */
+export function useCategoryTypes() {
   return useQuery({
-    queryKey: ['bio_group_goals'],
+    queryKey: ['category_types'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('bio_group_goals').select('*');
+      const { data, error } = await supabase.from('category_types').select('*').order('created_at');
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+/** Scoped by `categoryTypeId` so each partnership category has its own
+ * independent goal set — BIOSINTÉTICA's bio_group_goals rows today, another
+ * category's tomorrow. `undefined` while the category type isn't resolved
+ * yet keeps this disabled rather than fetching everyone's rows. */
+export function useBioGroupGoals(categoryTypeId: string | undefined) {
+  return useQuery({
+    queryKey: ['bio_group_goals', categoryTypeId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('bio_group_goals').select('*').eq('category_type_id', categoryTypeId!);
       if (error) throw error;
       const byGroup = {} as Record<BioGroupKey, BioGroupGoal | undefined>;
       data.forEach((row) => {
@@ -318,17 +336,20 @@ export function useBioGroupGoals() {
       });
       return byGroup;
     },
+    enabled: !!categoryTypeId,
   });
 }
 
-export function useBioGroups() {
+/** Scoped by `categoryTypeId` — see useBioGroupGoals above. */
+export function useBioGroups(categoryTypeId: string | undefined) {
   return useQuery({
-    queryKey: ['bio_groups'],
+    queryKey: ['bio_groups', categoryTypeId],
     queryFn: async () => {
-      const { data, error } = await supabase.from('bio_groups').select('*').order('nome');
+      const { data, error } = await supabase.from('bio_groups').select('*').eq('category_type_id', categoryTypeId!).order('nome');
       if (error) throw error;
       return data;
     },
+    enabled: !!categoryTypeId,
   });
 }
 
