@@ -41,6 +41,8 @@ const MinhaLojaPage = lazy(() => import('./admin/MinhaLojaPage').then((m) => ({ 
 const ConfiguracoesPage = lazy(() => import('./admin/ConfiguracoesPage').then((m) => ({ default: m.ConfiguracoesPage })));
 const IconesPage = lazy(() => import('./admin/IconesPage').then((m) => ({ default: m.IconesPage })));
 const CardConquistaPage = lazy(() => import('./admin/CardConquistaPage').then((m) => ({ default: m.CardConquistaPage })));
+const CategoriasPage = lazy(() => import('./admin/CategoriasPage').then((m) => ({ default: m.CategoriasPage })));
+const CategoryTypePage = lazy(() => import('./category-type/CategoryTypePage').then((m) => ({ default: m.CategoryTypePage })));
 
 export function AppShell() {
   const { profile, signOut } = useAuth();
@@ -171,6 +173,14 @@ export function AppShell() {
             <Route path="/dinamicas" element={<DinamicasPage />} />
             <Route path="/bio" element={<BioPage />} />
             <Route path="/conquistas" element={<ConquistasPage />} />
+            <Route
+              path="/categoria-parceria/:chave"
+              element={
+                <Suspense fallback={<div className="text-sm text-slate-500 p-6">Carregando…</div>}>
+                  <CategoryTypePage />
+                </Suspense>
+              }
+            />
             <Route path="/admin" element={<AdminLandingPage />} />
             <Route
               path="/admin/*"
@@ -188,6 +198,7 @@ export function AppShell() {
                     <Route path="configuracoes" element={<ConfiguracoesPage />} />
                     <Route path="icones" element={<IconesPage />} />
                     <Route path="card-conquista" element={<CardConquistaPage />} />
+                    <Route path="categorias" element={<CategoriasPage />} />
                   </Routes>
                 </Suspense>
               }

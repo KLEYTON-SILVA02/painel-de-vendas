@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CategoryKey, GoalCategoryKey } from './business/classification';
 import { normalize } from './business/normalize';
 import { normalizeMatricula } from './business/parsing';
+import { uploadCategoryIcon } from './storage';
 import { supabase } from './supabase';
 import type { TablesInsert, TablesUpdate } from '../types/database';
 
@@ -402,10 +403,11 @@ export function useUpdateBioWeights(storeId: string | undefined) {
 }
 
 /** Upsert, same reasoning as useUpdateGoal/useUpdateCommissionRate — no row
- * exists per group until the admin first sets one. onConflict stays scoped
- * to `store_id,grupo` (not category_type_id) because only one category type
- * exists per store today; a second category reusing a group code becomes
- * possible once the generic groups UI (and this upsert target) gets built. */
+ * exists per group until the admin first sets one (including the very act
+ * of creating a group in the generic Grupos UI, which is just this upsert
+ * with zeroed meta1-3). Scoped to (store_id, category_type_id, grupo) so
+ * two different categories can each have their own "grupo 1" without
+ * colliding. */
 export function useUpdateBioGroupGoal(storeId: string | undefined, categoryTypeId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
@@ -413,10 +415,49 @@ export function useUpdateBioGroupGoal(storeId: string | undefined, categoryTypeI
       if (!storeId || !categoryTypeId) throw new Error('store/category not loaded');
       const { error } = await supabase
         .from('bio_group_goals')
-        .upsert({ ...patch, grupo, store_id: storeId, category_type_id: categoryTypeId }, { onConflict: 'store_id,grupo' });
+        .upsert(
+          { ...patch, grupo, store_id: storeId, category_type_id: categoryTypeId },
+          { onConflict: 'store_id,category_type_id,grupo' },
+        );
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['bio_group_goals'] }),
+  });
+}
+
+/** Slugs a category name into a `chave` — lowercase, accent-stripped,
+ * non-alphanumeric runs collapsed to `_` — then appends a short
+ * time-based suffix so two categories with the same/similar name (or an
+ * empty one) never collide on the `unique(store_id, chave)` constraint. */
+function slugifyCategoryChave(nome: string): string {
+  const base = normalize(nome).replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'categoria';
+  return `${base}_${Date.now().toString(36).slice(-4)}`;
+}
+
+/** Creates a new partnership category (Gerenciar Categorias, ADM) — the
+ * generic system Biosintética itself now runs on (see category_types).
+ * Uploads the icon (if provided) after the row exists, since the storage
+ * path is keyed by the new row's id, then patches icone_url onto it. */
+export function useCreateCategoryType(storeId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ nome, setoresElegiveis, iconFile }: { nome: string; setoresElegiveis: string[]; iconFile: File | null }) => {
+      if (!storeId) throw new Error('store not loaded');
+      const chave = slugifyCategoryChave(nome);
+      const { data, error } = await supabase
+        .from('category_types')
+        .insert({ store_id: storeId, chave, nome, setores_elegiveis: setoresElegiveis, sistema: false })
+        .select()
+        .single();
+      if (error) throw error;
+      if (iconFile) {
+        const url = await uploadCategoryIcon(storeId, data.id, iconFile);
+        const { error: updateError } = await supabase.from('category_types').update({ icone_url: url }).eq('id', data.id);
+        if (updateError) throw updateError;
+      }
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['category_types'] }),
   });
 }
 

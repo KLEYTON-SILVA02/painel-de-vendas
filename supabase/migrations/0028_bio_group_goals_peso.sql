@@ -1,0 +1,11 @@
+-- Part A, stage 4: BIOSINTÉTICA's per-group weight lives in
+-- store_settings.bio_weights — one JSON blob per STORE, shared across every
+-- category. That's fine while BIOSINTÉTICA is the only category (its own
+-- G1-G4 keys never collide with anything), but a second category with its
+-- own groups would either collide on a shared key or just mix scoring
+-- across unrelated categories in one blob. New categories store their
+-- weight scoped per (category_type_id, grupo) instead, right on the
+-- bio_group_goals row that already carries that group's meta1-3.
+-- BIOSINTÉTICA itself keeps reading/writing store_settings.bio_weights
+-- unchanged for now — unifying the two is a follow-up, not this stage.
+alter table public.bio_group_goals add column peso numeric not null default 0;

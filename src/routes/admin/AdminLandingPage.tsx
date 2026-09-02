@@ -10,6 +10,7 @@ import {
   PackageIcon,
   SearchIcon,
   SlidersIcon,
+  TagIcon,
   TargetIcon,
   UploadIcon,
   UsersIcon,
@@ -38,6 +39,7 @@ const ADMIN_CARDS = [
   { to: '/admin/configuracoes', label: 'Configurações', icon: SlidersIcon, slot: 'adm_configuracoes' },
   { to: '/admin/icones', label: 'Ícones', icon: ImageIcon, slot: null },
   { to: '/admin/card-conquista', label: 'Modelos de Card', icon: AwardIcon, slot: null },
+  { to: '/admin/categorias', label: 'Categorias', icon: TagIcon, slot: null },
 ];
 
 /** Count of distinct products seen in sales that never matched a specific

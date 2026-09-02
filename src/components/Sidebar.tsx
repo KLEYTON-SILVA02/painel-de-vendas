@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { useCategoryTypes } from '../lib/queries';
 import './Sidebar.css';
 import { FunctionIcon } from './icons/FunctionIcon';
 import {
@@ -64,6 +65,13 @@ export function Sidebar({
   /** Called on any nav-item / import-button click, so the mobile drawer can close itself. */
   onNavigate?: () => void;
 }) {
+  // Every ADM-created partnership category (Gerenciar Categorias) beyond
+  // BIOSINTÉTICA itself gets its own button here, right under Biosintética —
+  // same "Programas" group, pointing at the generic /categoria-parceria/:chave
+  // screen instead of Biosintética's dedicated /bio route.
+  const { data: categoryTypes } = useCategoryTypes();
+  const extraCategories = (categoryTypes ?? []).filter((c) => c.chave !== 'biosintetica');
+
   return (
     <aside className="sidebar">
       <div className="sb-header">
@@ -97,6 +105,24 @@ export function Sidebar({
                 <span className="sb-label">{c.label}</span>
               </NavLink>
             ))}
+            {g === 'Programas' &&
+              extraCategories.map((c) => (
+                <NavLink
+                  key={c.id}
+                  to={`/categoria-parceria/${c.chave}`}
+                  end={false}
+                  onClick={onNavigate}
+                  style={{ '--sbc': '#00c2ff' } as React.CSSProperties}
+                  className={({ isActive }) => (isActive ? 'active' : '')}
+                >
+                  {c.icone_url ? (
+                    <img src={c.icone_url} alt="" width={18} height={18} style={{ objectFit: 'contain' }} />
+                  ) : (
+                    <TagIcon width={18} height={18} />
+                  )}
+                  <span className="sb-label">{c.nome}</span>
+                </NavLink>
+              ))}
           </div>
         ))}
       </nav>
