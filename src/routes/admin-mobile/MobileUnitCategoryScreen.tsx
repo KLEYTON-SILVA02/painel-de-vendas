@@ -47,17 +47,47 @@ export function MobileUnitCategoryScreen({
     return map;
   }, [collaborators]);
 
+  // Safe stand-ins so the useMemo calls below always run in the same order
+  // (Rules of Hooks) whether or not every query has resolved yet — the
+  // "Carregando…" guard comes after them, not before.
+  const salesData = sales ?? [];
+  const collaboratorsData = collaborators ?? [];
+  const today = todayISO();
+
+  const ranking = useMemo(
+    () => computeSummary(salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists),
+    [salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists],
+  );
+  const todayRanking = useMemo(
+    () => computeSummary(salesData, collaboratorsData, today, today, catKey, specialLists),
+    [salesData, collaboratorsData, today, catKey, specialLists],
+  );
+
+  const list = specialLists ? (catKey === 'LEVMEL' ? specialLists.levmel : specialLists.chip) : undefined;
+  // A specific vendedor selected shows their full list — no cap. With
+  // "Todos" selected (whole month), a flat slice(0, 150) used to silently
+  // drop everything past the 150th row instead of paginating.
+  const unitSalesAll = useMemo(
+    () =>
+      salesData
+        .filter((s) => {
+          if (s.dataISO && (s.dataISO < dashFrom || s.dataISO > dashTo)) return false;
+          if (!matchesSpecialList(s.produto, list)) return false;
+          if (selectedSeller && s.matricula !== selectedSeller) return false;
+          return true;
+        })
+        .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || '')),
+    [salesData, dashFrom, dashTo, list, selectedSeller],
+  );
+
   if (!collaborators || !sales || !specialLists || !goals) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
-  const ranking = computeSummary(sales, collaborators, dashFrom, dashTo, catKey, specialLists);
   const rankingList = ranking.filter((r) => r.itens > 0).sort((a, b) => b.itens - a.itens);
   const totalItens = ranking.reduce((a, r) => a + r.itens, 0);
   const dias = diasRestantesNoMes();
 
-  const today = todayISO();
-  const todayRanking = computeSummary(sales, collaborators, today, today, catKey, specialLists);
   const itensHoje = todayRanking.reduce((a, r) => a + r.itens, 0);
   const vendedoresAtivosHoje = todayRanking.filter((r) => r.itens > 0).length;
 
@@ -66,19 +96,7 @@ export function MobileUnitCategoryScreen({
   const pctMensal = metaMensal > 0 ? Math.min(100, (totalItens / metaMensal) * 100) : 0;
   const pctDiaria = metaDiaria > 0 ? Math.min(100, (itensHoje / metaDiaria) * 100) : 0;
 
-  const list = catKey === 'LEVMEL' ? specialLists.levmel : specialLists.chip;
-  // A specific vendedor selected shows their full list — no cap. With
-  // "Todos" selected (whole month), a flat slice(0, 150) used to silently
-  // drop everything past the 150th row instead of paginating.
   const VENDAS_PAGE_SIZE = 150;
-  const unitSalesAll = sales
-    .filter((s) => {
-      if (s.dataISO && (s.dataISO < dashFrom || s.dataISO > dashTo)) return false;
-      if (!matchesSpecialList(s.produto, list)) return false;
-      if (selectedSeller && s.matricula !== selectedSeller) return false;
-      return true;
-    })
-    .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''));
   const vendasTotalPages = Math.max(1, Math.ceil(unitSalesAll.length / VENDAS_PAGE_SIZE));
   const vendasPageClamped = Math.min(vendasPage, vendasTotalPages - 1);
   const unitSales = selectedSeller

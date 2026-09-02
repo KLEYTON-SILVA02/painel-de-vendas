@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { MobileRankingBoard } from '../../components/collaborator/MobileRankingBoard';
 import { BALCAO_SETOR, computeBioSummary, groupBioRows } from '../../lib/business/bio';
 import type { BioGroupKey } from '../../lib/business/classification';
@@ -22,16 +22,30 @@ export function CollaboratorBioPage() {
   const { dashFrom, dashTo } = useDateRange();
   const [bioFilter, setBioFilter] = useState<BioGroupKey | 'ALL'>('ALL');
 
+  // Safe stand-ins so the useMemo calls below always run in the same order
+  // (Rules of Hooks) whether or not every query has resolved yet — the
+  // "Carregando…" guard comes after them, not before.
+  const salesData = sales ?? [];
+  const collaboratorsData = collaborators ?? [];
+  const bioWeightsData = (storeSettings?.bio_weights ?? {}) as unknown as BioWeights;
+  const setoresElegiveisData = bioCategoryType?.setores_elegiveis ?? [];
+  // groupBioRows builds a fresh object every call — memoized so the
+  // useMemo below doesn't recompute on every render just because this
+  // reference changed underneath it.
+  const bioGroups = useMemo(() => groupBioRows(bioGroupRows), [bioGroupRows]);
+  const ranking = useMemo(
+    () =>
+      computeBioSummary(salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, bioFilter, setoresElegiveisData).filter(
+        (r) => r.itens > 0,
+      ),
+    [salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, bioFilter, setoresElegiveisData],
+  );
+
   if (!collaborators || !sales || !storeSettings || !bioCategoryType || !bioGroupRows) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
-  const bioGroups = groupBioRows(bioGroupRows);
-  const bioWeights = storeSettings.bio_weights as unknown as BioWeights;
   const balcaoCount = collaborators.filter((c) => c.setor === BALCAO_SETOR).length;
-  const ranking = computeBioSummary(sales, collaborators, bioGroups, bioWeights, dashFrom, dashTo, bioFilter, bioCategoryType.setores_elegiveis).filter(
-    (r) => r.itens > 0,
-  );
   const totalPontos = ranking.reduce((a, r) => a + r.pontos, 0);
   const totalItens = ranking.reduce((a, r) => a + r.itens, 0);
 

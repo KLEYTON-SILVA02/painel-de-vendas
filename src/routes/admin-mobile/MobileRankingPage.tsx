@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { getGoal } from '../../lib/business/goals';
 import { computeSummary } from '../../lib/business/summary';
@@ -30,13 +30,22 @@ export function MobileRankingPage() {
   const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Safe stand-ins so the useMemo below always runs in the same order
+  // (Rules of Hooks) whether or not every query has resolved yet — the
+  // "Carregando…" guard comes after it, not before.
+  const salesData = sales ?? [];
+  const collaboratorsData = collaborators ?? [];
+  const ranking = useMemo(
+    () => computeSummary(salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists),
+    [salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists],
+  );
+
   if (!collaborators || !sales || !goals || !specialLists) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
   const info = RANKING_COLS.find((c) => c.key === catKey)!;
   const isUnit = catKey === 'LEVMEL' || catKey === 'CHIP';
-  const ranking = computeSummary(sales, collaborators, dashFrom, dashTo, catKey, specialLists);
   const rankingList = ranking.filter((r) => (isUnit ? r.itens > 0 : r.valor > 0));
   const totalValor = ranking.reduce((a, r) => a + r.valor, 0);
   const totalItens = ranking.reduce((a, r) => a + r.itens, 0);

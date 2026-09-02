@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
 import { diasRestantesNoMes, effectiveMetaGeral, getSuperMeta } from '../../lib/business/goals';
@@ -39,18 +40,35 @@ export function MetasVendasPage() {
 
   const me = collaborators?.find((c) => c.id === profile?.collaborator_id);
 
-  if (!collaborators || !sales || !goals || !storeSettings || !dermGoals || !genGoals || !mpGoals || !merGoals) {
-    return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
-  }
+  // Safe stand-ins so the useMemo calls below always run in the same order
+  // (Rules of Hooks) whether or not every query has resolved yet — the
+  // "Carregando…" guard comes after them, not before. This is the
+  // collaborator's own landing screen, almost always opened on a phone, so
+  // the cost of a full `sales` scan on every unrelated render (a tab
+  // switch, a toast) is exactly the kind of thing that reads as "freezing"
+  // on weaker mobile CPUs.
+  const salesData = sales ?? [];
+  const collaboratorsData = collaborators ?? [];
 
   const modoDia = dashFrom === dashTo;
   const mode = modoDia ? 'dia' : 'mes';
   const dias = diasRestantesNoMes();
 
   // ---- Store-wide metrics ----
-  const storeRanking = computeSummary(sales, collaborators, dashFrom, dashTo);
+  const storeRanking = useMemo(
+    () => computeSummary(salesData, collaboratorsData, dashFrom, dashTo),
+    [salesData, collaboratorsData, dashFrom, dashTo],
+  );
   const storeValor = storeRanking.reduce((a, r) => a + r.valor, 0);
   const storeItens = storeRanking.reduce((a, r) => a + r.itens, 0);
+
+  const meMatricula = me?.matricula;
+  const mySales = useMemo(() => salesData.filter((s) => !meMatricula || s.matricula === meMatricula), [salesData, meMatricula]);
+
+  if (!collaborators || !sales || !goals || !storeSettings || !dermGoals || !genGoals || !mpGoals || !merGoals) {
+    return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
+  }
+
   const storeMeta = effectiveMetaGeral(goals, mode, sales, collaborators, storeSettings.meta_geral_fallback);
   const storeSuper = getSuperMeta(goals.MER, mode, sales, collaborators);
   const storeSaldo = storeValor - storeMeta;
@@ -59,7 +77,6 @@ export function MetasVendasPage() {
 
   // ---- Individual metrics: aggregate across categories where I participate ----
   const goalsByCategoria: Record<CategoryKey, typeof dermGoals> = { DERM: dermGoals, GEN: genGoals, MP: mpGoals, MER: merGoals };
-  const mySales = sales.filter((s) => !me || s.matricula === me.matricula);
   let myValor = 0;
   let myItens = 0;
   let myMeta = 0;

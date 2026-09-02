@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { MobileRankingBoard } from '../../components/collaborator/MobileRankingBoard';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
 import { getGoal, getSuperMeta } from '../../lib/business/goals';
@@ -28,15 +28,24 @@ export function CollaboratorRankingPage() {
   const { dashFrom, dashTo } = useDateRange();
   const [catKey, setCatKey] = useState<CategoryKey | 'ALL'>('ALL');
 
+  // Safe stand-ins so the useMemo below always runs in the same order
+  // (Rules of Hooks) whether or not every query has resolved yet — the
+  // "Carregando…" guard comes after it, not before.
+  const salesData = sales ?? [];
+  const collaboratorsData = collaborators ?? [];
+  // Mercadoria Geral is the store's grand total, not its own exclusive
+  // bucket — filtering by it shows the same ranking as "Todas".
+  const ranking = useMemo(
+    () => computeSummary(salesData, collaboratorsData, dashFrom, dashTo, catKey === 'MER' ? 'ALL' : catKey),
+    [salesData, collaboratorsData, dashFrom, dashTo, catKey],
+  );
+
   if (!collaborators || !sales || !goals) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
   const modoDia = dashFrom === dashTo;
   const mode = modoDia ? 'dia' : 'mes';
-  // Mercadoria Geral is the store's grand total, not its own exclusive
-  // bucket — filtering by it shows the same ranking as "Todas".
-  const ranking = computeSummary(sales, collaborators, dashFrom, dashTo, catKey === 'MER' ? 'ALL' : catKey);
   const rankingList = ranking.filter((r) => r.valor > 0);
   const totalValor = ranking.reduce((a, r) => a + r.valor, 0);
   const totalItens = ranking.reduce((a, r) => a + r.itens, 0);
