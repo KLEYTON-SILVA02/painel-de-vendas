@@ -56,6 +56,26 @@ function tierForMetric(tiers: readonly number[], metric: number): number {
   return tier;
 }
 
+/** Buckets `sales` by `dataISO` in a single O(sales) pass, restricted to
+ * [fromDate, toDate] — shared by every per-day loop below so a whole month
+ * range costs one array scan total instead of one full re-scan of `sales`
+ * per day in range (the previous implementation called computeSummary,
+ * itself an O(sales) pass, once per day — O(days × sales) for a "Modo
+ * Geral" range, which is what made the champion-star computation on the
+ * Dashboard, the achievement-celebration check that runs on every page
+ * load, and the Conquistas day gallery all noticeably slower in whole-month
+ * view than in single-day view). */
+function bucketSalesByDay(sales: Sale[], fromDate: string, toDate: string): Map<string, Sale[]> {
+  const byDay = new Map<string, Sale[]>();
+  sales.forEach((s) => {
+    if (!s.dataISO || s.dataISO < fromDate || s.dataISO > toDate) return;
+    const bucket = byDay.get(s.dataISO);
+    if (bucket) bucket.push(s);
+    else byDay.set(s.dataISO, [s]);
+  });
+  return byDay;
+}
+
 /**
  * Top 10 achievers for a category/period: anyone who reached one of that
  * category's fixed tiers **within a single day** — a tier is never reached
@@ -96,10 +116,13 @@ export function computeConquistas(
       .slice(0, 10);
   }
 
+  const salesByDay = bucketSalesByDay(sales, fromDate, toDate);
   const bestByMatricula = new Map<string, ConquistaRow>();
   for (let d = new Date(`${fromDate}T00:00:00`); d.toISOString().slice(0, 10) <= toDate; d.setDate(d.getDate() + 1)) {
     const day = d.toISOString().slice(0, 10);
-    computeSummary(sales, collaborators, day, day, catKey, specialLists).forEach((r) => {
+    const daySales = salesByDay.get(day);
+    if (!daySales) continue;
+    computeSummary(daySales, collaborators, day, day, catKey, specialLists).forEach((r) => {
       const metric = conquistaMetric(catKey, r);
       const tier = tierForMetric(tiers, metric);
       if (tier === 0) return;
@@ -122,7 +145,10 @@ export function computeConquistas(
 }
 
 /** One entry per day in [fromDate, toDate], newest first, with how many
- * achievers that single day had — powers the sidebar "Galeria de dias". */
+ * achievers that single day had — powers the sidebar "Galeria de dias".
+ * Buckets `sales` by day once up front instead of calling computeConquistas
+ * (itself an O(sales) scan) once per day in range, which made this
+ * O(days²)-ish over the full dataset for a whole-month range. */
 export function computeConquistasDayGallery(
   sales: Sale[],
   collaborators: Collaborator[],
@@ -131,11 +157,19 @@ export function computeConquistasDayGallery(
   catKey: ConquistaCategoria,
   specialLists?: { levmel: SpecialListItem[]; chip: SpecialListItem[] },
 ): { dia: string; count: number }[] {
+  const tiers = CONQUISTA_TIERS_BY_CAT[catKey];
+  const salesByDay = bucketSalesByDay(sales, fromDate, toDate);
+
   const days: string[] = [];
   for (let d = new Date(`${fromDate}T00:00:00`); d.toISOString().slice(0, 10) <= toDate; d.setDate(d.getDate() + 1)) {
     days.push(d.toISOString().slice(0, 10));
   }
-  return days
-    .reverse()
-    .map((dia) => ({ dia, count: computeConquistas(sales, collaborators, dia, dia, catKey, specialLists).length }));
+  return days.reverse().map((dia) => {
+    const daySales = salesByDay.get(dia);
+    if (!daySales) return { dia, count: 0 };
+    const count = computeSummary(daySales, collaborators, dia, dia, catKey, specialLists).filter(
+      (r) => tierForMetric(tiers, conquistaMetric(catKey, r)) > 0,
+    ).length;
+    return { dia, count };
+  });
 }

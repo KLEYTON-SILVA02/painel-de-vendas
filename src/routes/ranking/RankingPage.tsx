@@ -1,10 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
 import { MultiRankingImageModal } from '../../components/ranking/MultiRankingImageModal';
 import { RankingColumnCard } from '../../components/ranking/RankingColumnCard';
 import { diasRestantesNoMes, effectiveMetaGeral, getGoal, getSuperMeta } from '../../lib/business/goals';
 import { computeColumnRanking } from '../../lib/business/ranking';
-import { computeSummary } from '../../lib/business/summary';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { generateAllCategoryImages, type MultiImageResult } from '../../lib/rankingImage';
 import { useCollaborators, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
@@ -31,31 +30,58 @@ export function RankingPage() {
   const [generatingAll, setGeneratingAll] = useState(false);
   const [multiImages, setMultiImages] = useState<MultiImageResult[] | null>(null);
 
+  const modoDia = dashFrom === dashTo;
+  const mode = modoDia ? 'dia' : 'mes';
+
+  // Safe stand-ins so the useMemo below runs unconditionally on every
+  // render (same hook order regardless of loading state) — the
+  // "Carregando…" guard comes after it, per the Rules of Hooks.
+  const salesData = sales ?? [];
+  const collaboratorsData = collaborators ?? [];
+
+  // 6 columns × one computeColumnRanking pass each over the full `sales`
+  // array — in "Modo Geral" (whole month) that's real work, and it used to
+  // run again from scratch (via a duplicate computeSummary call per column,
+  // see statCards below) on every render, including ones triggered by
+  // unrelated state like the "Gerando imagens…" toggle. Memoizing keeps it
+  // tied to the data/date-range actually changing.
+  const columnData = useMemo(() => {
+    if (!goals) return [];
+    return RANKING_COLS.map((c) => {
+      const isUnit = c.key === 'LEVMEL' || c.key === 'CHIP';
+      // Mercadoria Geral is the store's grand total, not its own exclusive
+      // bucket — its column/stat card reflect every sale regardless of
+      // category, same as the Meta Geral it's already compared against
+      // (effectiveMetaGeral always pulls from goals.MER).
+      const columnFilter = c.key === 'MER' ? 'ALL' : c.key;
+      const ranking = computeColumnRanking(
+        salesData,
+        collaboratorsData,
+        dashFrom,
+        dashTo,
+        columnFilter,
+        isUnit,
+        mode,
+        refYear,
+        refMonth,
+        specialLists,
+      );
+      // Always the registered daily goal, regardless of the page's own
+      // dia/mês date-range mode — the generated image's "Atingimento" box is
+      // fixed to "Meta Diária" per column (MER's own goal already represents
+      // the whole store, matching its now-total column above).
+      const metaDiaria = getGoal(goals[c.key], 'dia', salesData, collaboratorsData);
+      return { ...c, ranking, isUnit, metaDiaria };
+    });
+  }, [salesData, collaboratorsData, goals, dashFrom, dashTo, mode, refYear, refMonth, specialLists]);
+
   if (!collaborators || !sales || !goals || !storeSettings || !specialLists) {
     return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
   }
 
-  const modoDia = dashFrom === dashTo;
-  const mode = modoDia ? 'dia' : 'mes';
   const metaGeral = effectiveMetaGeral(goals, mode, sales, collaborators, storeSettings.meta_geral_fallback);
   const metaSuper = getSuperMeta(goals.MER, mode, sales, collaborators);
   const dias = diasRestantesNoMes();
-
-  const columnData = RANKING_COLS.map((c) => {
-    const isUnit = c.key === 'LEVMEL' || c.key === 'CHIP';
-    // Mercadoria Geral is the store's grand total, not its own exclusive
-    // bucket — its column/stat card reflect every sale regardless of
-    // category, same as the Meta Geral it's already compared against
-    // (effectiveMetaGeral always pulls from goals.MER).
-    const columnFilter = c.key === 'MER' ? 'ALL' : c.key;
-    const ranking = computeColumnRanking(sales, collaborators, dashFrom, dashTo, columnFilter, isUnit, mode, refYear, refMonth, specialLists);
-    // Always the registered daily goal, regardless of the page's own
-    // dia/mês date-range mode — the generated image's "Atingimento" box is
-    // fixed to "Meta Diária" per column (MER's own goal already represents
-    // the whole store, matching its now-total column above).
-    const metaDiaria = getGoal(goals[c.key], 'dia', sales, collaborators);
-    return { ...c, ranking, isUnit, metaDiaria };
-  });
 
   async function handleGenerateAllImages() {
     setGeneratingAll(true);
@@ -75,11 +101,12 @@ export function RankingPage() {
   }
 
   const statCards: MfbStatCard[] = [
-    ...RANKING_COLS.map((c) => {
-      const isUnit = c.key === 'LEVMEL' || c.key === 'CHIP';
-      const rows = computeSummary(sales, collaborators, dashFrom, dashTo, c.key === 'MER' ? 'ALL' : c.key, specialLists);
-      const total = isUnit ? rows.reduce((a, r) => a + r.itens, 0) : rows.reduce((a, r) => a + r.valor, 0);
-      return { label: `Total ${c.titulo}`, value: isUnit ? `${total} un.` : fmtMoney(total), color: c.cor };
+    // Reuses columnData's already-computed ranking instead of a second
+    // computeSummary pass per category — computeColumnRanking's `list`
+    // only drops zero rows, so the sum is identical either way.
+    ...columnData.map((c) => {
+      const total = c.isUnit ? c.ranking.reduce((a, r) => a + r.itens, 0) : c.ranking.reduce((a, r) => a + r.valor, 0);
+      return { label: `Total ${c.titulo}`, value: c.isUnit ? `${total} un.` : fmtMoney(total), color: c.cor };
     }),
     {
       stack: [

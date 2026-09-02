@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { SidebarCalendarCard } from '../../components/SidebarCalendarCard';
 import { GenerateImageScopeModal } from '../../components/ranking/GenerateImageScopeModal';
 import { MultiRankingImageModal } from '../../components/ranking/MultiRankingImageModal';
@@ -203,16 +203,89 @@ export function DashboardPage() {
   const { data: dynamics } = useDynamics();
   const { dashFrom, dashTo, refYear, refMonth, rankFilter } = useDateRange();
 
-  if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !dynamics) {
-    return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
-  }
+  // Safe stand-ins for the useMemo calls below, so their hook call order
+  // never depends on whether every query has resolved yet — the
+  // "Carregando…" guard has to come after them, not before: the Rules of
+  // Hooks require the same hooks run in the same order on every render,
+  // and a hook that only runs once data has loaded breaks that the moment
+  // this component re-renders after the guard stops firing.
+  const salesData = sales ?? [];
+  const collaboratorsData = collaborators ?? [];
 
   const modoDia = dashFrom === dashTo;
   const mode = modoDia ? 'dia' : 'mes';
+  const monthFirst = monthFirstISO(refYear, refMonth);
+  const monthLast = monthLastISO(refYear, refMonth);
+  const rankFilterParams = resolveRankFilterParams(rankFilter, dashFrom, dashTo, dynamics ?? []);
 
-  const ranking = computeSummary(sales, collaborators, dashFrom, dashTo);
+  const campeaoFrom = modoDia ? dashFrom : monthFirst;
+  const campeaoTo = modoDia ? dashTo : monthLast;
+  // The champion follows the same category filter as the "Ranking Geral"
+  // podium right above it (RankFilterBar) — 'ALL' and dynamics (no
+  // per-category "melhor vendedor" concept) fall back to the overall
+  // best seller, same as before this filter was wired in.
+  const isUnitChampionCat = rankFilter === 'LEVMEL' || rankFilter === 'CHIP';
+  const championCatFilter = rankFilter === 'ALL' || rankFilter.startsWith('DIN:') ? undefined : (rankFilter as CategoryKey | 'LEVMEL' | 'CHIP');
+
+  // Each of these walks the full `sales` array (up to 3 months of history
+  // per REGRA 2's retention window) — in "Modo Geral" (whole month) that's
+  // real work, and this component re-renders on unrelated state changes
+  // (opening a modal, the "copiado" toast, image generation). Memoizing
+  // keeps that work tied to the data/date-range actually changing instead
+  // of redone on every render.
+  const ranking = useMemo(
+    () => computeSummary(salesData, collaboratorsData, dashFrom, dashTo),
+    [salesData, collaboratorsData, dashFrom, dashTo],
+  );
   const totalValor = ranking.reduce((a, r) => a + r.valor, 0);
   const totalItens = ranking.reduce((a, r) => a + r.itens, 0);
+
+  // "Vendas por Categoria" gauges — 3 catTotals() full-array passes (MER
+  // reuses totalValor/totalItens above instead of a 4th) plus a getGoal()
+  // per category.
+  const gaugeData = useMemo(() => {
+    if (!goals) return [];
+    return CAT_KEYS.map((k) => {
+      const t = k === 'MER' ? { valor: totalValor, qtd: totalItens } : catTotals(salesData, dashFrom, dashTo, k);
+      const goal = getGoal(goals[k], mode, salesData, collaboratorsData);
+      return { key: k, valor: t.valor, goal };
+    });
+  }, [salesData, collaboratorsData, goals, dashFrom, dashTo, mode, totalValor, totalItens]);
+
+  const campeaoSource = useMemo(
+    () => computeSummary(salesData, collaboratorsData, campeaoFrom, campeaoTo, championCatFilter, specialLists),
+    [salesData, collaboratorsData, campeaoFrom, campeaoTo, championCatFilter, specialLists],
+  );
+  const campeao =
+    campeaoSource.length && (isUnitChampionCat ? campeaoSource[0].itens > 0 : campeaoSource[0].valor > 0) ? campeaoSource[0] : null;
+  // computeChampionStars scores 5 categories, each scanning `sales` day by
+  // day across the whole campeaoFrom..campeaoTo range — the most expensive
+  // single call on this page in "Modo Geral", so it's the most important
+  // one to keep out of every unrelated render.
+  const campeaoMatricula = campeao?.matricula;
+  const campeaoStars = useMemo(
+    () =>
+      campeaoMatricula
+        ? computeChampionStars(campeaoMatricula, salesData, collaboratorsData, specialLists, campeaoFrom, campeaoTo)
+        : null,
+    [campeaoMatricula, salesData, collaboratorsData, specialLists, campeaoFrom, campeaoTo],
+  );
+
+  const rankingFiltered = useMemo(
+    () =>
+      rankFilterParams.dinamica
+        ? computeDinamicaRanking(
+            { ...rankFilterParams.dinamica, dataInicio: rankFilterParams.from, dataFim: rankFilterParams.to },
+            salesData,
+            collaboratorsData,
+          )
+        : computeSummary(salesData, collaboratorsData, rankFilterParams.from, rankFilterParams.to, rankFilterParams.catFilter, specialLists),
+    [rankFilterParams.dinamica, rankFilterParams.from, rankFilterParams.to, rankFilterParams.catFilter, salesData, collaboratorsData, specialLists],
+  );
+
+  if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !dynamics) {
+    return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+  }
 
   const metaGeral = effectiveMetaGeral(goals, mode, sales, collaborators, storeSettings.meta_geral_fallback);
   const metaSuper = getSuperMeta(goals.MER, mode, sales, collaborators);
@@ -243,32 +316,9 @@ export function DashboardPage() {
   const hora = new Date().getHours();
   const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
 
-  const monthFirst = monthFirstISO(refYear, refMonth);
-  const monthLast = monthLastISO(refYear, refMonth);
-  const rankFilterParams = resolveRankFilterParams(rankFilter, dashFrom, dashTo, dynamics);
-
-  const campeaoFrom = modoDia ? dashFrom : monthFirst;
-  const campeaoTo = modoDia ? dashTo : monthLast;
-  // The champion follows the same category filter as the "Ranking Geral"
-  // podium right above it (RankFilterBar) — 'ALL' and dynamics (no
-  // per-category "melhor vendedor" concept) fall back to the overall
-  // best seller, same as before this filter was wired in.
-  const isUnitChampionCat = rankFilter === 'LEVMEL' || rankFilter === 'CHIP';
-  const championCatFilter = rankFilter === 'ALL' || rankFilter.startsWith('DIN:') ? undefined : (rankFilter as CategoryKey | 'LEVMEL' | 'CHIP');
-  const campeaoSource = computeSummary(sales, collaborators, campeaoFrom, campeaoTo, championCatFilter, specialLists);
-  const campeao =
-    campeaoSource.length && (isUnitChampionCat ? campeaoSource[0].itens > 0 : campeaoSource[0].valor > 0) ? campeaoSource[0] : null;
   const campeaoBase = modoDia ? `Campeão do dia — ${dashFrom.split('-').reverse().join('/')}` : `Campeão — ${monthName(refMonth)}/${refYear}`;
   const campeaoLabel = championCatFilter ? `${campeaoBase} · ${rankFilterParams.label}` : campeaoBase;
-  const campeaoStars = campeao ? computeChampionStars(campeao.matricula, sales, collaborators, specialLists, campeaoFrom, campeaoTo) : null;
 
-  const rankingFiltered = rankFilterParams.dinamica
-    ? computeDinamicaRanking(
-        { ...rankFilterParams.dinamica, dataInicio: rankFilterParams.from, dataFim: rankFilterParams.to },
-        sales,
-        collaborators,
-      )
-    : computeSummary(sales, collaborators, rankFilterParams.from, rankFilterParams.to, rankFilterParams.catFilter, specialLists);
   const isUnitRanking =
     rankFilterParams.catFilter === 'LEVMEL' || rankFilterParams.catFilter === 'CHIP' || rankFilterParams.dinamica?.metrica === 'unidade';
   const rankingFilteredList = rankingFiltered.filter((r) => r.valor > 0 || r.itens > 0);
@@ -312,8 +362,6 @@ export function DashboardPage() {
   async function handleGenerateAllImages() {
     setGeneratingImage(true);
     try {
-      const salesData = sales!;
-      const collaboratorsData = collaborators!;
       const specs = RANKING_CATEGORIES.map((c) => {
         const isUnit = c.key === 'LEVMEL' || c.key === 'CHIP';
         const rowsRaw = computeSummary(salesData, collaboratorsData, dashFrom, dashTo, c.key, specialLists);
@@ -427,14 +475,9 @@ export function DashboardPage() {
         <div className="lg:col-start-1 lg:row-start-3 min-w-0 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <h3 className="text-cyan-400 font-semibold text-sm mb-3">Vendas por Categoria</h3>
           <div className="grid grid-cols-2 min-[1051px]:grid-cols-4 gap-1.5">
-            {CAT_KEYS.map((k) => {
-              // Mercadoria Geral is the store's grand total, not its own
-              // exclusive bucket — reuse the already-computed all-categories
-              // totalValor/totalItens instead of catTotals' MER-only sum.
-              const t = k === 'MER' ? { valor: totalValor, qtd: totalItens } : catTotals(sales, dashFrom, dashTo, k);
-              const goal = getGoal(goals[k], mode, sales, collaborators);
-              return <CategoryGauge key={k} label={CAT_LABEL[k]} valor={t.valor} goal={goal} color={CAT_COLOR[k]} />;
-            })}
+            {gaugeData.map((g) => (
+              <CategoryGauge key={g.key} label={CAT_LABEL[g.key]} valor={g.valor} goal={g.goal} color={CAT_COLOR[g.key]} />
+            ))}
           </div>
         </div>
 
