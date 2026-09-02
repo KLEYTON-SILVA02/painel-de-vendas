@@ -91,7 +91,7 @@ export function RankingPage() {
   ];
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <h3 className="text-cyan-400 font-semibold text-sm mb-3">🏆 Ranking Geral</h3>
         <MetricsFilterBar statCards={statCards} />

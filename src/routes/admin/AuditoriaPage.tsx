@@ -69,7 +69,7 @@ export function AuditoriaPage() {
   const unmatchedList = Array.from(unmatched.values()).slice(0, 25);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <div className="flex flex-wrap gap-3 mb-4 max-w-2xl">
           <div>

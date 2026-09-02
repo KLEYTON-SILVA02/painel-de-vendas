@@ -35,7 +35,7 @@ export function IconesPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <h3 className="font-semibold mb-1">Gerenciamento de Ícones</h3>
         <p className="text-xs text-slate-500">

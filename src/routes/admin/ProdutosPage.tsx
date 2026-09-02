@@ -28,7 +28,7 @@ export function ProdutosPage() {
   const [group, setGroup] = useState<CategoryKey>('DERM');
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <div className="flex flex-wrap gap-1">
           {TABS.map((t) => (
