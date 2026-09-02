@@ -60,6 +60,7 @@ export function mapBioGroupGoal(row: Tables<'bio_group_goals'>): BioGroupGoal {
     meta1: Number(row.meta1) || 0,
     meta2: Number(row.meta2) || 0,
     meta3: Number(row.meta3) || 0,
+    peso: Number(row.peso) || 0,
   };
 }
 

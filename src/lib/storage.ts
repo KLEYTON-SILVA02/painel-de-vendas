@@ -38,6 +38,19 @@ export async function uploadConquistaCardBackground(storeId: string, templateId:
   return `${data.publicUrl}?t=${Date.now()}`;
 }
 
+/** Uploads a partnership category's own icon (Gerenciar Categorias, ADM),
+ * under {storeId}/category-icons/{categoryTypeId}.{ext} — any image type,
+ * unlike uploadIcon's SVG-only function icons, since this one is meant to
+ * be a quick upload of whatever icon the ADM already has on hand. */
+export async function uploadCategoryIcon(storeId: string, categoryTypeId: string, file: File): Promise<string> {
+  const ext = file.name.split('.').pop() || 'png';
+  const fullPath = `${storeId}/category-icons/${categoryTypeId}.${ext}`;
+  const { error } = await supabase.storage.from('photos').upload(fullPath, file, { upsert: true });
+  if (error) throw error;
+  const { data } = supabase.storage.from('photos').getPublicUrl(fullPath);
+  return `${data.publicUrl}?t=${Date.now()}`;
+}
+
 /** Uploads a per-template logo override for a card template, under
  * {storeId}/card-templates/{templateId}-logo.{ext} — when set, this
  * replaces the store's default logo (Minha Loja) for that specific card. */

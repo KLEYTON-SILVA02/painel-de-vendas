@@ -24,6 +24,7 @@ export type Database = {
           meta1: number
           meta2: number
           meta3: number
+          peso: number
           store_id: string
         }
         Insert: {
@@ -33,6 +34,7 @@ export type Database = {
           meta1?: number
           meta2?: number
           meta3?: number
+          peso?: number
           store_id: string
         }
         Update: {
@@ -42,6 +44,7 @@ export type Database = {
           meta1?: number
           meta2?: number
           meta3?: number
+          peso?: number
           store_id?: string
         }
         Relationships: [

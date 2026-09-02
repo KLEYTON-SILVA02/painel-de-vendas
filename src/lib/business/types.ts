@@ -75,6 +75,10 @@ export interface BioGroupGoal {
   meta1: number;
   meta2: number;
   meta3: number;
+  /** Per-group weight for categories that store it here instead of
+   * store_settings.bio_weights (see bio_group_goals.peso) — 0 for
+   * BIOSINTÉTICA's own rows, which keep using bio_weights. */
+  peso: number;
 }
 
 /** Commission % config — Dermocosméticos/Genéricos/Marcas Exclusivas only.
