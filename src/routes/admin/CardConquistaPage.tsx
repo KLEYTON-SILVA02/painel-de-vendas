@@ -3,10 +3,14 @@ import { useAuth } from '../../auth/AuthContext';
 import {
   BUILT_IN_TEMPLATE,
   renderConquistaCard,
+  type CardTextKind,
+  type CardTextLayer,
   type CardZone,
   type CardZoneShapeKind,
   type ConquistaCardTemplate,
 } from '../../lib/conquistaCardRender';
+import { magicWandSelect } from '../../lib/magicWand';
+import { loadImg } from '../../lib/rankingImage';
 import {
   useDeleteConquistaCardTemplate,
   useSaveConquistaCardTemplate,
@@ -17,15 +21,18 @@ import { uploadConquistaCardBackground, uploadConquistaCardLogo } from '../../li
 import type { Json } from '../../types/database';
 
 // Manual configuration tool for Galeria de Conquistas card templates. Each
-// template's photo/logo/tier-banner zones are built from shape primitives
-// (not raster masks) so the admin can manipulate them with shape/scale/
-// position controls, matching the request in full: mask-building tools,
-// scale, position, an optional reference image used only for on-screen
-// alignment (never persisted — it's a local object URL, discarded on save
-// or when the editor closes), a font-family and shape-optional (text-only)
-// control for the tier banner, an optional per-template logo upload, a
-// freehand "pen" tool for tracing the exact photo cutout, and a gallery to
-// create/edit/delete templates and mark one as the default.
+// template's photo/logo zones and up to 3 independent text layers are built
+// from shape primitives (not raster masks, except when the magic wand
+// generates one — see below) so the admin can manipulate them with shape/
+// scale/position controls, matching the request in full: mask-building
+// tools, scale, position, an optional reference image used only for
+// on-screen alignment (never persisted — it's a local object URL, discarded
+// on save or when the editor closes), a magic-wand tool that flood-fills an
+// area from a click to detect it automatically, an independent logo scale
+// control, up to 3 text layers (1º = nível/tier, 2º = categoria, 3º = texto
+// livre) each with its own font, solid-or-gradient color, and optional
+// background plate, a freehand "pen" tool for tracing an exact cutout by
+// hand, and a gallery to create/edit/delete templates and mark one default.
 
 const SHAPE_OPTIONS: { value: CardZoneShapeKind; label: string }[] = [
   { value: 'circle', label: 'Círculo' },
@@ -36,10 +43,43 @@ const SHAPE_OPTIONS: { value: CardZoneShapeKind; label: string }[] = [
   { value: 'none', label: 'Sem forma (só o conteúdo)' },
 ];
 
-const FONT_OPTIONS = ['Arial', 'Georgia', 'Verdana', 'Trebuchet MS', 'Courier New', 'Impact', 'Comic Sans MS'];
+const FONT_OPTIONS = [
+  'Arial',
+  'Georgia',
+  'Verdana',
+  'Trebuchet MS',
+  'Courier New',
+  'Impact',
+  'Comic Sans MS',
+  'Poppins',
+  'Montserrat',
+  'Oswald',
+  'Bebas Neue',
+  'Anton',
+  'Russo One',
+  'Playfair Display',
+  'Pacifico',
+  'Bangers',
+];
 
-const ZONE_COLORS = { foto: '#00f0ff', logo: '#ffb700', texto: '#ff3df0' } as const;
-const ZONE_LABELS = { foto: 'Foto do colaborador', logo: 'Logo da loja', texto: 'Faixa de texto (nível)' } as const;
+const ZONE_COLORS = { foto: '#00f0ff', logo: '#ffb700' } as const;
+const ZONE_LABELS = { foto: 'Foto do colaborador', logo: 'Logo da loja' } as const;
+
+const TEXT_KIND_LABEL: Record<CardTextKind, string> = {
+  tier: '1º texto — Nível (1K, 2K, 3K, 5K, 10K...)',
+  categoria: '2º texto — Nome da categoria',
+  custom: '3º texto — Texto livre',
+};
+const TEXT_KIND_COLOR: Record<CardTextKind, string> = {
+  tier: '#ff3df0',
+  categoria: '#a82bff',
+  custom: '#00c2ff',
+};
+// The order new text layers get added in — always fills the 1º/2º slots
+// (tier/categoria) before offering the free 3º slot, matching how the ADM
+// asked for them ("o primeiro texto será... o segundo texto será...").
+const TEXT_KIND_ORDER: CardTextKind[] = ['tier', 'categoria', 'custom'];
+const MAX_TEXT_LAYERS = 3;
 
 interface EditorState {
   id: string;
@@ -49,18 +89,58 @@ interface EditorState {
   uploadingBackground: boolean;
   logoUrl: string | null;
   uploadingLogo: boolean;
-  textFontFamily: string;
+  /** Contain-fit scale for the logo within its zone — independent of the
+   * zone's own w/h, which just define the placement area. */
+  logoScale: number;
   referenceObjectUrl: string | null;
   foto: CardZone;
   logo: CardZone;
-  texto: CardZone;
+  textLayers: CardTextLayer[];
 }
 
 function newZone(shape: CardZoneShapeKind, x: number, y: number, w: number, h: number): CardZone {
   return { shape: { kind: shape }, x, y, w, h };
 }
 
+function newTextLayer(kind: CardTextKind, zone: CardZone): CardTextLayer {
+  return {
+    id: crypto.randomUUID(),
+    kind,
+    text: kind === 'custom' ? 'Texto livre' : '',
+    zone,
+    fontFamily: 'Arial',
+    color: '#0b0e1d',
+    useGradient: false,
+    gradientFrom: '#ffb700',
+    gradientTo: '#ff3df0',
+  };
+}
+
 const DEFAULT_FOTO_ZONE = () => newZone('notched', 0.0742, 0.0334, 0.8509, 0.7963);
+
+function defaultTextLayers(): CardTextLayer[] {
+  return [
+    newTextLayer('tier', newZone('trapezoid', 0.1531, 0.8362, 0.6939, 0.0459)),
+    newTextLayer('categoria', newZone('none', 0.1531, 0.8821, 0.6939, 0.0459)),
+  ];
+}
+
+/** Upgrades a template saved before this multi-text-layer editor existed
+ * (only the legacy single `texto` zone + `textFontFamily`) into a starting
+ * 1º/2º-text pair, so opening it here doesn't start from a blank slate —
+ * it keeps roughly the same on-screen footprint, split in two. */
+function synthesizeTextLayersFromLegacy(texto: CardZone | undefined, fontFamily: string | undefined): CardTextLayer[] {
+  if (!texto) return defaultTextLayers();
+  const color = texto.shape.kind === 'none' ? '#ffb700' : '#0b0e1d';
+  const half = { ...texto, h: texto.h * 0.48 };
+  const tier = { ...newTextLayer('tier', half), fontFamily: fontFamily ?? 'Arial', color };
+  const categoria = {
+    ...newTextLayer('categoria', { ...half, y: texto.y + texto.h * 0.52, shape: { kind: 'none' as const } }),
+    fontFamily: fontFamily ?? 'Arial',
+    color,
+  };
+  return [tier, categoria];
+}
 
 function blankEditor(): EditorState {
   return {
@@ -71,11 +151,11 @@ function blankEditor(): EditorState {
     uploadingBackground: false,
     logoUrl: null,
     uploadingLogo: false,
-    textFontFamily: 'Arial',
+    logoScale: 0.85,
     referenceObjectUrl: null,
     foto: DEFAULT_FOTO_ZONE(),
     logo: newZone('pill', 0.3168, 0.0274, 0.3663, 0.0321),
-    texto: newZone('trapezoid', 0.1531, 0.8362, 0.6939, 0.0917),
+    textLayers: defaultTextLayers(),
   };
 }
 
@@ -105,6 +185,7 @@ export function CardConquistaPage() {
 
   function startEdit(t: ConquistaCardTemplateRow) {
     setError(null);
+    const textLayers = t.textLayers && t.textLayers.length > 0 ? t.textLayers : synthesizeTextLayersFromLegacy(t.texto, t.textFontFamily);
     setEditing({
       id: t.id,
       isNew: false,
@@ -113,11 +194,11 @@ export function CardConquistaPage() {
       uploadingBackground: false,
       logoUrl: t.logoUrl ?? null,
       uploadingLogo: false,
-      textFontFamily: t.textFontFamily ?? 'Arial',
+      logoScale: t.logoScale ?? 0.85,
       referenceObjectUrl: null,
       foto: t.foto,
       logo: t.logo,
-      texto: t.texto,
+      textLayers,
     });
   }
 
@@ -177,10 +258,10 @@ export function CardConquistaPage() {
         name: editing.name.trim() || 'Modelo sem nome',
         backgroundUrl: editing.backgroundUrl,
         logoUrl: editing.logoUrl,
-        textFontFamily: editing.textFontFamily,
+        logoScale: editing.logoScale,
         foto: editing.foto as unknown as Json,
         logo: editing.logo as unknown as Json,
-        texto: editing.texto as unknown as Json,
+        textLayers: editing.textLayers as unknown as Json,
       });
       closeEditor();
     } catch (e) {
@@ -202,9 +283,10 @@ export function CardConquistaPage() {
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <h3 className="font-semibold mb-1">Modelos de Card — Galeria de Conquistas</h3>
         <p className="text-xs text-slate-500">
-          Crie modelos visuais para o card de conquista: monte as máscaras da foto, da logo e da faixa de nível escolhendo uma forma e
-          ajustando escala e posição — ou desenhe o recorte da foto à mão com a caneta de forma. A imagem de referência é usada apenas
-          para alinhar na tela e nunca é salva — só o plano de fundo final enviado é gravado.
+          Crie modelos visuais para o card de conquista: monte as máscaras da foto e da logo escolhendo uma forma e ajustando escala e
+          posição (ou use a varinha mágica pra detectar a área automaticamente, ou desenhe à mão com a caneta), adicione até 3 textos
+          (nível, categoria e um texto livre) com fonte, cor ou degradê próprios, e ajuste a escala da logo. A imagem de referência é
+          usada apenas para alinhar na tela e nunca é salva — só o plano de fundo final enviado é gravado.
         </p>
         {error && <p className="text-xs text-rose-400 mt-2">{error}</p>}
       </div>
@@ -287,14 +369,16 @@ function TemplateThumb({ template, logoUrl }: { template: ConquistaCardTemplate;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     let active = true;
-    renderConquistaCard(template, { photoUrl: null, logoUrl: logoUrl ?? null, tierText: 'EXEMPLO 3K', color: '#ffb700' }).then((rendered) => {
-      if (!active) return;
-      const target = canvasRef.current;
-      if (!target) return;
-      target.width = rendered.width;
-      target.height = rendered.height;
-      target.getContext('2d')?.drawImage(rendered, 0, 0);
-    });
+    renderConquistaCard(template, { photoUrl: null, logoUrl: logoUrl ?? null, tierText: 'EXEMPLO 3K', valorText: '3K', categoriaText: 'EXEMPLO', color: '#ffb700' }).then(
+      (rendered) => {
+        if (!active) return;
+        const target = canvasRef.current;
+        if (!target) return;
+        target.width = rendered.width;
+        target.height = rendered.height;
+        target.getContext('2d')?.drawImage(rendered, 0, 0);
+      },
+    );
     return () => {
       active = false;
     };
@@ -331,41 +415,41 @@ function TemplateEditor({
   // Freehand "pen" tool for the photo cutout: null = not drawing; an array
   // (possibly empty) = actively tracing, one point per click on the preview.
   const [penPoints, setPenPoints] = useState<{ x: number; y: number }[] | null>(null);
+  // Magic-wand tool: which zone a click on the preview should feed a
+  // flood-fill selection into. Mutually exclusive with the pen tool.
+  const [wandTarget, setWandTarget] = useState<'foto' | 'logo' | null>(null);
+  const [wandTolerance, setWandTolerance] = useState(32);
+  const [wandBusy, setWandBusy] = useState(false);
+  const [wandError, setWandError] = useState<string | null>(null);
 
   const previewTemplate: ConquistaCardTemplate = {
     id: editing.id,
     name: editing.name,
     backgroundUrl: editing.backgroundUrl ?? BUILT_IN_TEMPLATE.backgroundUrl,
     logoUrl: editing.logoUrl,
-    textFontFamily: editing.textFontFamily,
+    logoScale: editing.logoScale,
     foto: editing.foto,
     logo: editing.logo,
-    texto: editing.texto,
+    textLayers: editing.textLayers,
   };
 
   useEffect(() => {
     let active = true;
-    renderConquistaCard(previewTemplate, { photoUrl: null, logoUrl: logoUrl ?? null, tierText: 'EXEMPLO 3K', color: '#ffb700' }).then((rendered) => {
-      if (!active) return;
-      const target = canvasRef.current;
-      if (!target) return;
-      target.width = rendered.width;
-      target.height = rendered.height;
-      target.getContext('2d')?.drawImage(rendered, 0, 0);
-    });
+    renderConquistaCard(previewTemplate, { photoUrl: null, logoUrl: logoUrl ?? null, tierText: 'EXEMPLO 3K', valorText: '3K', categoriaText: 'EXEMPLO', color: '#ffb700' }).then(
+      (rendered) => {
+        if (!active) return;
+        const target = canvasRef.current;
+        if (!target) return;
+        target.width = rendered.width;
+        target.height = rendered.height;
+        target.getContext('2d')?.drawImage(rendered, 0, 0);
+      },
+    );
     return () => {
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing.backgroundUrl, editing.logoUrl, editing.textFontFamily, editing.foto, editing.logo, editing.texto, logoUrl]);
-
-  function handlePreviewClick(e: ReactMouseEvent<HTMLDivElement>) {
-    if (penPoints === null) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    const y = (e.clientY - rect.top) / rect.height;
-    setPenPoints([...penPoints, { x, y }]);
-  }
+  }, [editing.backgroundUrl, editing.logoUrl, editing.logoScale, editing.foto, editing.logo, editing.textLayers, logoUrl]);
 
   function finishPen() {
     if (!penPoints || penPoints.length < 3) return;
@@ -382,9 +466,69 @@ function TemplateEditor({
     setPenPoints(null);
   }
 
+  async function handlePreviewClick(e: ReactMouseEvent<HTMLDivElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+
+    if (penPoints !== null) {
+      setPenPoints([...penPoints, { x, y }]);
+      return;
+    }
+
+    if (wandTarget) {
+      setWandBusy(true);
+      setWandError(null);
+      try {
+        const sourceUrl = editing.referenceObjectUrl ?? editing.backgroundUrl;
+        const img = sourceUrl ? await loadImg(sourceUrl) : null;
+        if (!img) {
+          setWandError('Carregue um plano de fundo (ou uma referência) antes de usar a varinha.');
+          return;
+        }
+        const result = magicWandSelect(img, x, y, wandTolerance);
+        if (!result) {
+          setWandError('Não detectei uma área ali — tente clicar em outro ponto, ou aumente a tolerância.');
+          return;
+        }
+        const newZoneValue: CardZone = {
+          shape: { kind: 'image', imageUrl: result.maskDataUrl },
+          x: result.x,
+          y: result.y,
+          w: result.w,
+          h: result.h,
+        };
+        setEditing({ ...editing, [wandTarget]: newZoneValue });
+      } finally {
+        setWandBusy(false);
+      }
+    }
+  }
+
+  function addNextTextLayer() {
+    if (editing.textLayers.length >= MAX_TEXT_LAYERS) return;
+    const used = new Set(editing.textLayers.map((l) => l.kind));
+    const nextKind = TEXT_KIND_ORDER.find((k) => !used.has(k)) ?? 'custom';
+    // Starts near the top rather than stacked on the 1º/2º texto default
+    // position (usually near the bottom, like the legacy tier banner) —
+    // just a starting point, freely draggable via the sliders below either way.
+    const layer = newTextLayer(nextKind, newZone('none', 0.15, 0.05, 0.7, 0.06));
+    setEditing({ ...editing, textLayers: [...editing.textLayers, layer] });
+  }
+
+  function updateTextLayer(id: string, patch: Partial<CardTextLayer>) {
+    setEditing({ ...editing, textLayers: editing.textLayers.map((l) => (l.id === id ? { ...l, ...patch } : l)) });
+  }
+
+  function removeTextLayer(id: string) {
+    setEditing({ ...editing, textLayers: editing.textLayers.filter((l) => l.id !== id) });
+  }
+
+  const previewCursor = penPoints !== null || wandTarget ? 'crosshair' : undefined;
+
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 flex flex-col lg:flex-row gap-5">
-      <div className="flex flex-col gap-3 lg:w-[340px] shrink-0">
+      <div className="flex flex-col gap-3 lg:w-[360px] shrink-0">
         <label className="text-xs text-slate-400">
           Nome do modelo
           <input
@@ -437,13 +581,24 @@ function TemplateEditor({
               Usar a logo da loja
             </button>
           )}
+          <label className="text-[11px] text-slate-400">
+            Escala da logo dentro da área ({Math.round(editing.logoScale * 100)}%)
+            <input
+              type="range"
+              min={30}
+              max={150}
+              value={Math.round(editing.logoScale * 100)}
+              onChange={(e) => setEditing({ ...editing, logoScale: Number(e.target.value) / 100 })}
+              className="w-full"
+            />
+          </label>
         </div>
 
         <div className="rounded-lg border border-slate-800 p-2.5 flex flex-col gap-2">
           <div className="text-xs font-semibold text-slate-300">Imagem de referência (só nesta tela)</div>
           <p className="text-[11px] text-slate-500">
-            Carregue um print/rascunho para servir de guia enquanto você posiciona as formas abaixo. Ela nunca é salva — some ao trocar
-            ou ao sair da edição.
+            Carregue um print/rascunho para servir de guia enquanto você posiciona as formas abaixo (a varinha mágica e a caneta também
+            traçam sobre ela quando presente). Ela nunca é salva — some ao trocar ou ao sair da edição.
           </p>
           <label className="w-full">
             <input
@@ -475,29 +630,71 @@ function TemplateEditor({
           pen={{
             active: penPoints !== null,
             pointCount: penPoints?.length ?? 0,
-            onStart: () => setPenPoints([]),
+            onStart: () => {
+              setWandTarget(null);
+              setPenPoints([]);
+            },
             onFinish: finishPen,
             onCancel: () => setPenPoints(null),
             onClearCustom: () => setEditing({ ...editing, foto: DEFAULT_FOTO_ZONE() }),
           }}
+          wand={{
+            active: wandTarget === 'foto',
+            busy: wandBusy && wandTarget === 'foto',
+            tolerance: wandTolerance,
+            error: wandTarget === 'foto' ? wandError : null,
+            onToleranceChange: setWandTolerance,
+            onStart: () => {
+              setPenPoints(null);
+              setWandError(null);
+              setWandTarget('foto');
+            },
+            onCancel: () => {
+              setWandTarget(null);
+              setWandError(null);
+            },
+          }}
         />
-        <ZoneControls label={ZONE_LABELS.logo} color={ZONE_COLORS.logo} zone={editing.logo} onChange={(z) => setEditing({ ...editing, logo: z })} />
-        <ZoneControls label={ZONE_LABELS.texto} color={ZONE_COLORS.texto} zone={editing.texto} onChange={(z) => setEditing({ ...editing, texto: z })} />
+        <ZoneControls
+          label={ZONE_LABELS.logo}
+          color={ZONE_COLORS.logo}
+          zone={editing.logo}
+          onChange={(z) => setEditing({ ...editing, logo: z })}
+          wand={{
+            active: wandTarget === 'logo',
+            busy: wandBusy && wandTarget === 'logo',
+            tolerance: wandTolerance,
+            error: wandTarget === 'logo' ? wandError : null,
+            onToleranceChange: setWandTolerance,
+            onStart: () => {
+              setPenPoints(null);
+              setWandError(null);
+              setWandTarget('logo');
+            },
+            onCancel: () => {
+              setWandTarget(null);
+              setWandError(null);
+            },
+          }}
+        />
 
-        <div className="rounded-lg border border-slate-800 p-2.5 flex flex-col gap-2">
-          <div className="text-xs font-semibold text-slate-300">Fonte do texto (faixa de nível)</div>
-          <select
-            value={editing.textFontFamily}
-            onChange={(e) => setEditing({ ...editing, textFontFamily: e.target.value })}
-            className="w-full rounded-lg bg-slate-950 border border-slate-700 px-2 py-1.5 text-xs text-slate-100"
-            style={{ fontFamily: editing.textFontFamily }}
-          >
-            {FONT_OPTIONS.map((f) => (
-              <option key={f} value={f} style={{ fontFamily: f }}>
-                {f}
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-col gap-2">
+          <div className="text-xs font-semibold text-slate-300">Textos do card ({editing.textLayers.length}/{MAX_TEXT_LAYERS})</div>
+          {editing.textLayers.map((layer) => (
+            <TextLayerEditor
+              key={layer.id}
+              layer={layer}
+              label={TEXT_KIND_LABEL[layer.kind]}
+              color={TEXT_KIND_COLOR[layer.kind]}
+              onChange={(patch) => updateTextLayer(layer.id, patch)}
+              onRemove={() => removeTextLayer(layer.id)}
+            />
+          ))}
+          {editing.textLayers.length < MAX_TEXT_LAYERS && (
+            <button onClick={addNextTextLayer} className="rounded-lg border border-slate-700 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800">
+              + Adicionar texto
+            </button>
+          )}
         </div>
 
         <div className="flex gap-2 mt-1">
@@ -517,11 +714,7 @@ function TemplateEditor({
 
       <div className="flex-1 flex items-start justify-center">
         <div className="relative w-full max-w-[420px]">
-          <div
-            className="relative"
-            onClick={handlePreviewClick}
-            style={{ cursor: penPoints !== null ? 'crosshair' : undefined }}
-          >
+          <div className="relative" onClick={handlePreviewClick} style={{ cursor: previewCursor }}>
             <canvas ref={canvasRef} className="w-full h-auto block rounded-xl" />
             {editing.referenceObjectUrl && (
               <img
@@ -533,7 +726,9 @@ function TemplateEditor({
             )}
             {editing.foto.shape.kind !== 'polygon' && <ZoneOutline zone={editing.foto} color={ZONE_COLORS.foto} />}
             <ZoneOutline zone={editing.logo} color={ZONE_COLORS.logo} />
-            <ZoneOutline zone={editing.texto} color={ZONE_COLORS.texto} />
+            {editing.textLayers.map((l) => (
+              <ZoneOutline key={l.id} zone={l.zone} color={TEXT_KIND_COLOR[l.kind]} />
+            ))}
             {editing.foto.shape.kind === 'polygon' && penPoints === null && (
               <PolygonOutline points={editing.foto.shape.points ?? []} color={ZONE_COLORS.foto} />
             )}
@@ -543,6 +738,11 @@ function TemplateEditor({
             <p className="text-[11px] text-amber-400 mt-2">
               Clique na imagem para marcar os pontos do recorte da foto ({penPoints.length} até agora — mínimo 3, depois clique em
               "Concluir forma" na coluna ao lado).
+            </p>
+          )}
+          {wandTarget && (
+            <p className="text-[11px] text-amber-400 mt-2">
+              {wandBusy ? 'Detectando…' : `Clique na imagem sobre a área da ${wandTarget === 'foto' ? 'foto' : 'logo'} para detectá-la automaticamente.`}
             </p>
           )}
         </div>
@@ -589,12 +789,103 @@ function extraParamFor(kind: CardZoneShapeKind): 'radius' | 'topInset' | 'notch'
   return null;
 }
 
+function TextLayerEditor({
+  layer,
+  label,
+  color,
+  onChange,
+  onRemove,
+}: {
+  layer: CardTextLayer;
+  label: string;
+  color: string;
+  onChange: (patch: Partial<CardTextLayer>) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-800 p-2.5 flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
+          <span className="text-[11px] font-semibold text-slate-300 truncate">{label}</span>
+        </div>
+        <button onClick={onRemove} className="text-[10px] text-slate-500 hover:text-rose-400 shrink-0">
+          Remover
+        </button>
+      </div>
+
+      {layer.kind === 'custom' && (
+        <label className="text-[11px] text-slate-400">
+          Texto
+          <input
+            value={layer.text}
+            onChange={(e) => onChange({ text: e.target.value })}
+            className="mt-1 w-full rounded-lg bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm text-slate-100"
+          />
+        </label>
+      )}
+
+      <ZoneControls label="Posição e forma (plano de fundo do texto)" color={color} zone={layer.zone} onChange={(z) => onChange({ zone: z })} />
+
+      <label className="text-[11px] text-slate-400">
+        Fonte
+        <select
+          value={layer.fontFamily}
+          onChange={(e) => onChange({ fontFamily: e.target.value })}
+          className="mt-1 w-full rounded-lg bg-slate-950 border border-slate-700 px-2 py-1.5 text-xs text-slate-100"
+          style={{ fontFamily: layer.fontFamily }}
+        >
+          {FONT_OPTIONS.map((f) => (
+            <option key={f} value={f} style={{ fontFamily: f }}>
+              {f}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="flex items-center gap-1.5 text-[11px] text-slate-400">
+        <input type="checkbox" checked={layer.useGradient} onChange={(e) => onChange({ useGradient: e.target.checked })} />
+        Degradê entre duas cores
+      </label>
+
+      {!layer.useGradient ? (
+        <label className="text-[11px] text-slate-400 flex items-center gap-2">
+          Cor do texto
+          <input type="color" value={layer.color} onChange={(e) => onChange({ color: e.target.value })} className="w-8 h-6 rounded border border-slate-700 bg-transparent" />
+        </label>
+      ) : (
+        <div className="flex gap-4">
+          <label className="text-[11px] text-slate-400 flex items-center gap-2">
+            De
+            <input
+              type="color"
+              value={layer.gradientFrom}
+              onChange={(e) => onChange({ gradientFrom: e.target.value })}
+              className="w-8 h-6 rounded border border-slate-700 bg-transparent"
+            />
+          </label>
+          <label className="text-[11px] text-slate-400 flex items-center gap-2">
+            Para
+            <input
+              type="color"
+              value={layer.gradientTo}
+              onChange={(e) => onChange({ gradientTo: e.target.value })}
+              className="w-8 h-6 rounded border border-slate-700 bg-transparent"
+            />
+          </label>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ZoneControls({
   label,
   color,
   zone,
   onChange,
   pen,
+  wand,
 }: {
   label: string;
   color: string;
@@ -608,8 +899,18 @@ function ZoneControls({
     onCancel: () => void;
     onClearCustom: () => void;
   };
+  wand?: {
+    active: boolean;
+    busy: boolean;
+    tolerance: number;
+    error: string | null;
+    onToleranceChange: (t: number) => void;
+    onStart: () => void;
+    onCancel: () => void;
+  };
 }) {
   const isCustom = zone.shape.kind === 'polygon';
+  const isWandMask = zone.shape.kind === 'image';
   const extraParam = extraParamFor(zone.shape.kind);
   const extraValue = extraParam ? (zone.shape[extraParam] ?? (extraParam === 'radius' ? 0.15 : extraParam === 'topInset' ? 0.15 : 0.12)) : 0;
 
@@ -623,6 +924,32 @@ function ZoneControls({
         <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
         <span className="text-xs font-semibold text-slate-300">{label}</span>
       </div>
+
+      {wand && !wand.active && (
+        <button onClick={wand.onStart} className="rounded-lg border border-amber-700 px-2 py-1 text-[11px] text-amber-300 hover:bg-amber-950">
+          🪄 Varinha mágica (detectar área)
+        </button>
+      )}
+      {wand?.active && (
+        <div className="flex flex-col gap-1.5 border-b border-slate-800 pb-2">
+          <div className="text-[10px] text-amber-400">{wand.busy ? 'Detectando…' : 'Clique na pré-visualização sobre a área desejada'}</div>
+          <label className="text-[10px] text-slate-500">
+            Tolerância ({wand.tolerance})
+            <input
+              type="range"
+              min={4}
+              max={100}
+              value={wand.tolerance}
+              onChange={(e) => wand.onToleranceChange(Number(e.target.value))}
+              className="w-full"
+            />
+          </label>
+          {wand.error && <p className="text-[10px] text-rose-400">{wand.error}</p>}
+          <button onClick={wand.onCancel} className="rounded-lg border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-800">
+            ✕ Concluir / Cancelar
+          </button>
+        </div>
+      )}
 
       {pen && !pen.active && (
         <div className="flex flex-col gap-1.5 border-b border-slate-800 pb-2">
@@ -663,15 +990,20 @@ function ZoneControls({
         </div>
       )}
 
+      {isWandMask ? (
+        <p className="text-[10px] text-slate-500">Área detectada pela varinha mágica — use a varinha de novo pra refazer, ou escolha uma forma pronta abaixo.</p>
+      ) : null}
+
       {!isCustom ? (
         <>
           <label className="text-[11px] text-slate-400">
             Forma
             <select
-              value={zone.shape.kind}
+              value={zone.shape.kind === 'image' ? 'none' : zone.shape.kind}
               onChange={(e) => onChange({ ...zone, shape: { kind: e.target.value as CardZoneShapeKind } })}
               className="mt-1 w-full rounded-lg bg-slate-950 border border-slate-700 px-2 py-1 text-xs text-slate-100"
             >
+              {isWandMask && <option value="none">Máscara detectada (varinha)</option>}
               {SHAPE_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}

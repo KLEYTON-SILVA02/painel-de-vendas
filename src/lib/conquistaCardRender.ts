@@ -44,6 +44,29 @@ export interface CardZone {
   h: number;
 }
 
+export type CardTextKind = 'tier' | 'categoria' | 'custom';
+
+export interface CardTextLayer {
+  id: string;
+  /** 'tier' and 'categoria' are data-driven per achiever at render time
+   * (ConquistaCardContent.valorText / .categoriaText — e.g. "3K" and
+   * "DERMOCOSMÉTICOS"); 'custom' uses this layer's own literal `text`,
+   * fixed for every card rendered from the template. */
+  kind: CardTextKind;
+  /** Literal text — only meaningful (and editable) for kind 'custom'. */
+  text: string;
+  /** Position/scale, same as foto/logo — and, via `zone.shape`, whether a
+   * background plate is drawn behind the text at all ('none' = no plate,
+   * just the text on the raw background art). */
+  zone: CardZone;
+  fontFamily: string;
+  /** Used when `useGradient` is false. */
+  color: string;
+  useGradient: boolean;
+  gradientFrom: string;
+  gradientTo: string;
+}
+
 export interface ConquistaCardTemplate {
   id: string;
   name: string;
@@ -51,17 +74,34 @@ export interface ConquistaCardTemplate {
   /** Per-template logo override — falls back to the store's own logo
    * (ConquistaCardContent.logoUrl) when unset. */
   logoUrl?: string | null;
-  /** Font family for the tier-text banner; defaults to Arial. */
+  /** Contain-fit scale multiplier for the logo within its zone (defaults to
+   * 0.85 — the previous hardcoded value — when unset). */
+  logoScale?: number;
+  /** Up to 3 independent text layers — the multi-text-layer editor's data
+   * model. Takes over text rendering entirely when set (even to an empty
+   * array); `texto`/`textFontFamily` below are read only when it's unset,
+   * for templates saved before this editor existed. */
+  textLayers?: CardTextLayer[];
+  /** @deprecated legacy single text zone, superseded by `textLayers`. */
+  texto?: CardZone;
+  /** @deprecated legacy tier-banner font, superseded by each layer's own
+   * `fontFamily` in `textLayers`. */
   textFontFamily?: string;
   foto: CardZone;
   logo: CardZone;
-  texto: CardZone;
 }
 
 export interface ConquistaCardContent {
   photoUrl: string | null;
   logoUrl: string | null;
+  /** Legacy combined tier+category text (e.g. "3K DERMOCOSMÉTICOS") — read
+   * only by templates without `textLayers` (see above). */
   tierText: string;
+  /** Just the value part (e.g. "3K", "5un") — feeds a `kind: 'tier'` layer. */
+  valorText: string;
+  /** Just the category-name part (e.g. "DERMOCOSMÉTICOS") — feeds a
+   * `kind: 'categoria'` layer. */
+  categoriaText: string;
   color: string;
 }
 
@@ -76,8 +116,14 @@ export const BUILT_IN_TEMPLATE: ConquistaCardTemplate = {
   texto: { shape: { kind: 'image', imageUrl: maskTextoUrl }, x: 0.1531, y: 0.8362, w: 0.6939, h: 0.0917 },
 };
 
-const CANVAS_W = 750;
-const CANVAS_H = Math.round((CANVAS_W * 2302) / 1496);
+export const CANVAS_W = 750;
+export const CANVAS_H = Math.round((CANVAS_W * 2302) / 1496);
+
+/** Quotes a (possibly multi-word) family name and appends a generic
+ * fallback, for use directly in a canvas `ctx.font` string. */
+function fontStack(family: string): string {
+  return `"${family}", Arial, sans-serif`;
+}
 
 type Rect = { x: number; y: number; w: number; h: number };
 
@@ -199,13 +245,13 @@ function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement | null, 
   ctx.drawImage(img, rect.x + (rect.w - dw) / 2, rect.y + (rect.h - dh) / 2, dw, dh);
 }
 
-function drawContain(ctx: CanvasRenderingContext2D, img: HTMLImageElement | null, rect: Rect, bgColor: string) {
+function drawContain(ctx: CanvasRenderingContext2D, img: HTMLImageElement | null, rect: Rect, bgColor: string, fitScale = 0.85) {
   ctx.fillStyle = bgColor;
   ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
   if (!img) return;
   const iw = img.naturalWidth || img.width;
   const ih = img.naturalHeight || img.height;
-  const scale = Math.min(rect.w / iw, rect.h / ih) * 0.85;
+  const scale = Math.min(rect.w / iw, rect.h / ih) * fitScale;
   const dw = iw * scale;
   const dh = ih * scale;
   ctx.drawImage(img, rect.x + (rect.w - dw) / 2, rect.y + (rect.h - dh) / 2, dw, dh);
@@ -241,10 +287,46 @@ async function drawZone(
   ctx.drawImage(off, 0, 0);
 }
 
-/** Renders a full card (background + photo + logo + tier banner, all
+/** Draws one text layer: an optional background plate (the zone's shape,
+ * filled with `plateColor` — skipped entirely when `zone.shape.kind` is
+ * 'none', same "shape-optional" convention every other zone already uses)
+ * followed by the layer's own text, filled with either a solid color or a
+ * left-to-right 2-color gradient across the zone's own rect. */
+async function drawTextLayer(ctx: CanvasRenderingContext2D, layer: CardTextLayer, w: number, h: number, text: string, plateColor: string) {
+  if (layer.zone.shape.kind !== 'none') {
+    await drawZone(ctx, layer.zone, w, h, (octx, rect) => {
+      octx.fillStyle = plateColor;
+      octx.fillRect(rect.x, rect.y, rect.w, rect.h);
+    });
+  }
+  if (!text) return;
+  const rect = zoneRect(layer.zone, w, h);
+  ctx.font = `800 ${Math.round(h * 0.024)}px ${fontStack(layer.fontFamily || 'Arial')}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  if (layer.useGradient) {
+    const grad = ctx.createLinearGradient(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h);
+    grad.addColorStop(0, layer.gradientFrom);
+    grad.addColorStop(1, layer.gradientTo);
+    ctx.fillStyle = grad;
+  } else {
+    ctx.fillStyle = layer.color;
+  }
+  ctx.fillText(text.toUpperCase(), rect.x + rect.w / 2, rect.y + rect.h / 2);
+}
+
+/** Renders a full card (background + photo + logo + text layers, all
  * exactly clipped to the template's mask geometry) onto a freshly created
  * canvas at a fixed resolution matching the reference art's aspect ratio. */
 export async function renderConquistaCard(template: ConquistaCardTemplate, content: ConquistaCardContent): Promise<HTMLCanvasElement> {
+  // Google-Fonts families (see index.html) load asynchronously — without
+  // this, a card rendered right after page load could draw its text in the
+  // browser's fallback font for one frame (or, for a static PNG export like
+  // "Baixar imagem", permanently) before the real font finished loading.
+  // Resolves immediately once every requested webfont is already loaded, so
+  // this is a no-op wait on every render after the first.
+  if (typeof document !== 'undefined' && document.fonts) await document.fonts.ready;
+
   const effectiveLogoUrl = template.logoUrl ?? content.logoUrl;
   const [bg, photo, logo] = await Promise.all([loadImg(template.backgroundUrl), loadImg(content.photoUrl), loadImg(effectiveLogoUrl)]);
 
@@ -257,25 +339,30 @@ export async function renderConquistaCard(template: ConquistaCardTemplate, conte
   if (bg) ctx.drawImage(bg, 0, 0, CANVAS_W, CANVAS_H);
 
   await drawZone(ctx, template.foto, CANVAS_W, CANVAS_H, (octx, rect) => drawCover(octx, photo, rect, '#334155'));
-  await drawZone(ctx, template.logo, CANVAS_W, CANVAS_H, (octx, rect) => drawContain(octx, logo, rect, '#ffffff'));
-  // 'none' on the text zone means "just the text" — no banner box at all,
-  // not even an unclipped rectangle, so this zone isn't drawn as content.
-  if (template.texto.shape.kind !== 'none') {
-    await drawZone(ctx, template.texto, CANVAS_W, CANVAS_H, (octx, rect) => {
-      octx.fillStyle = content.color;
-      octx.fillRect(rect.x, rect.y, rect.w, rect.h);
-    });
-  }
+  await drawZone(ctx, template.logo, CANVAS_W, CANVAS_H, (octx, rect) => drawContain(octx, logo, rect, '#ffffff', template.logoScale ?? 0.85));
 
-  const tRect = zoneRect(template.texto, CANVAS_W, CANVAS_H);
-  // With a filled banner the text needs to contrast against it (dark on the
-  // category color); with no banner ('none') the text sits directly on the
-  // background art, so it uses the category color itself to stay visible.
-  ctx.fillStyle = template.texto.shape.kind === 'none' ? content.color : '#0b0e1d';
-  ctx.font = `800 ${Math.round(CANVAS_H * 0.024)}px ${template.textFontFamily ?? 'Arial'}`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(content.tierText.toUpperCase(), tRect.x + tRect.w / 2, tRect.y + tRect.h / 2);
+  if (template.textLayers) {
+    for (const layer of template.textLayers) {
+      const text = layer.kind === 'tier' ? content.valorText : layer.kind === 'categoria' ? content.categoriaText : layer.text;
+      // eslint-disable-next-line no-await-in-loop
+      await drawTextLayer(ctx, layer, CANVAS_W, CANVAS_H, text, content.color);
+    }
+  } else if (template.texto) {
+    // Legacy single hardcoded tier banner, for templates saved before the
+    // multi-text-layer editor existed (and BUILT_IN_TEMPLATE).
+    if (template.texto.shape.kind !== 'none') {
+      await drawZone(ctx, template.texto, CANVAS_W, CANVAS_H, (octx, rect) => {
+        octx.fillStyle = content.color;
+        octx.fillRect(rect.x, rect.y, rect.w, rect.h);
+      });
+    }
+    const tRect = zoneRect(template.texto, CANVAS_W, CANVAS_H);
+    ctx.fillStyle = template.texto.shape.kind === 'none' ? content.color : '#0b0e1d';
+    ctx.font = `800 ${Math.round(CANVAS_H * 0.024)}px ${fontStack(template.textFontFamily ?? 'Arial')}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(content.tierText.toUpperCase(), tRect.x + tRect.w / 2, tRect.y + tRect.h / 2);
+  }
 
   return canvas;
 }

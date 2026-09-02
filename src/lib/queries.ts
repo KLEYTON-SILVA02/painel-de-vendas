@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { BioGroupKey, GoalCategoryKey } from './business/classification';
 import type { BioGroupGoal, CommissionRate, Goal } from './business/types';
 import type { SpecialListItem } from './business/summary';
-import type { CardZone, ConquistaCardTemplate } from './conquistaCardRender';
+import type { CardTextLayer, CardZone, ConquistaCardTemplate } from './conquistaCardRender';
 import { monthFirstISO, monthLastISO } from './dateRange';
 import { mapBioGroupGoal, mapCollaborator, mapCommissionRate, mapDynamic, mapGoal, mapSale, mapSpecialListItem } from './mappers';
 import type { BulkDeletableTable } from './mutations';
@@ -206,10 +206,12 @@ export function useConquistaCardTemplates() {
         name: row.name,
         backgroundUrl: row.background_url,
         logoUrl: row.logo_url,
+        logoScale: row.logo_scale ?? undefined,
         textFontFamily: row.text_font_family ?? undefined,
         foto: row.foto as unknown as CardZone,
         logo: row.logo as unknown as CardZone,
-        texto: row.texto as unknown as CardZone,
+        texto: row.texto ? (row.texto as unknown as CardZone) : undefined,
+        textLayers: row.text_layers ? (row.text_layers as unknown as CardTextLayer[]) : undefined,
         isDefault: row.is_default,
       }));
     },
