@@ -135,14 +135,14 @@ export function useSaveConquistaCardTemplate(storeId: string | undefined) {
       name: string;
       backgroundUrl: string;
       logoUrl: string | null;
-      textFontFamily: string | null;
+      logoScale: number | null;
       foto: TablesInsert<'conquista_card_templates'>['foto'];
       logo: TablesInsert<'conquista_card_templates'>['logo'];
-      texto: TablesInsert<'conquista_card_templates'>['texto'];
+      textLayers: TablesInsert<'conquista_card_templates'>['text_layers'];
     }) => {
       if (!storeId) throw new Error('store not loaded');
-      const { id, backgroundUrl, logoUrl, textFontFamily, ...rest } = input;
-      const patch = { ...rest, background_url: backgroundUrl, logo_url: logoUrl, text_font_family: textFontFamily };
+      const { id, backgroundUrl, logoUrl, logoScale, textLayers, ...rest } = input;
+      const patch = { ...rest, background_url: backgroundUrl, logo_url: logoUrl, logo_scale: logoScale, text_layers: textLayers };
       if (id) {
         const { error } = await supabase.from('conquista_card_templates').update(patch).eq('id', id);
         if (error) throw error;

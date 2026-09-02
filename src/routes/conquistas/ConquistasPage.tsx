@@ -7,6 +7,7 @@ import {
   computeConquistas,
   computeConquistasDayGallery,
   conquistaTierLabel,
+  conquistaTierParts,
   isUnitConquista,
   type ConquistaCategoria,
   type ConquistaRow,
@@ -256,10 +257,11 @@ function ConquistaCard({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const tierText = conquistaTierLabel(categoria, row.tier);
+  const { valor: valorText, categoria: categoriaText } = conquistaTierParts(categoria, row.tier);
 
   useEffect(() => {
     let active = true;
-    renderConquistaCard(template, { photoUrl: row.foto, logoUrl: logoUrl ?? null, tierText, color }).then((rendered) => {
+    renderConquistaCard(template, { photoUrl: row.foto, logoUrl: logoUrl ?? null, tierText, valorText, categoriaText, color }).then((rendered) => {
       if (!active) return;
       const target = canvasRef.current;
       if (!target) return;
@@ -270,7 +272,7 @@ function ConquistaCard({
     return () => {
       active = false;
     };
-  }, [template, row.foto, logoUrl, tierText, color]);
+  }, [template, row.foto, logoUrl, tierText, valorText, categoriaText, color]);
 
   return (
     <div className="rounded-2xl overflow-hidden flex flex-col items-center text-center" style={{ boxShadow: `0 0 24px -6px ${color}80` }}>

@@ -313,11 +313,13 @@ export type Database = {
           id: string
           is_default: boolean
           logo: Json
+          logo_scale: number | null
           logo_url: string | null
           name: string
           store_id: string
           text_font_family: string | null
-          texto: Json
+          text_layers: Json | null
+          texto: Json | null
         }
         Insert: {
           background_url: string
@@ -326,11 +328,13 @@ export type Database = {
           id?: string
           is_default?: boolean
           logo: Json
+          logo_scale?: number | null
           logo_url?: string | null
           name: string
           store_id: string
           text_font_family?: string | null
-          texto: Json
+          text_layers?: Json | null
+          texto?: Json | null
         }
         Update: {
           background_url?: string
@@ -339,11 +343,13 @@ export type Database = {
           id?: string
           is_default?: boolean
           logo?: Json
+          logo_scale?: number | null
           logo_url?: string | null
           name?: string
           store_id?: string
           text_font_family?: string | null
-          texto?: Json
+          text_layers?: Json | null
+          texto?: Json | null
         }
         Relationships: [
           {

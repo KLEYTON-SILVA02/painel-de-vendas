@@ -32,9 +32,18 @@ const CONQUISTA_TIER_SUFFIX: Record<ConquistaCategoria, string> = {
   CHIP: 'CHIP',
 };
 
+/** Splits the tier label into its two halves — the value ("3K"/"5un") and
+ * the category name ("DERMOCOSMÉTICOS") — for the card editor's separate
+ * "1º texto" (tier) / "2º texto" (categoria) layers, which each need just
+ * one half rather than the combined string. */
+export function conquistaTierParts(categoria: ConquistaCategoria, tier: number): { valor: string; categoria: string } {
+  return { valor: isUnitConquista(categoria) ? `${tier}un` : `${tier / 1000}K`, categoria: CONQUISTA_TIER_SUFFIX[categoria] };
+}
+
 /** "3K DERMOCOSMÉTICOS" / "1K MARCA PRÓPRIA" / "5un LEVMEL" / "10un CHIP" */
 export function conquistaTierLabel(categoria: ConquistaCategoria, tier: number): string {
-  return isUnitConquista(categoria) ? `${tier}un ${CONQUISTA_TIER_SUFFIX[categoria]}` : `${tier / 1000}K ${CONQUISTA_TIER_SUFFIX[categoria]}`;
+  const { valor, categoria: cat } = conquistaTierParts(categoria, tier);
+  return `${valor} ${cat}`;
 }
 
 export interface ConquistaRow extends SummaryRow {
