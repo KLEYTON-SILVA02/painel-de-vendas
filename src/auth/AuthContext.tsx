@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
 import type { Tables } from '../types/database';
 
@@ -19,8 +19,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  // supabase-js fires onAuthStateChange with an immediate INITIAL_SESSION
+  // event right after subscribing, carrying the same session getSession()
+  // below already resolves with — without this guard both fired loadProfile
+  // for the same user id back to back, doubling (observed: sometimes
+  // tripling, a token refresh firing its own identical event soon after)
+  // the `profiles` fetch on every page load for no behavioral difference.
+  const loadedForUserId = useRef<string | null>(null);
 
-  async function loadProfile(userId: string) {
+  async function loadProfile(userId: string, { force = false } = {}) {
+    if (!force && loadedForUserId.current === userId) return;
+    loadedForUserId.current = userId;
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
     setProfile(data ?? null);
   }
@@ -40,6 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (newSession) {
         await loadProfile(newSession.user.id);
       } else {
+        loadedForUserId.current = null;
         setProfile(null);
       }
       setLoading(false);
@@ -57,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       loading,
       refreshProfile: async () => {
-        if (session) await loadProfile(session.user.id);
+        if (session) await loadProfile(session.user.id, { force: true });
       },
       signOut: async () => {
         await supabase.auth.signOut();

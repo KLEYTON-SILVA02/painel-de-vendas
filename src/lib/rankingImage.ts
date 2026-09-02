@@ -233,27 +233,42 @@ export interface MultiImageResult {
   filename: string;
 }
 
-/** Generates one ranking-image PNG per category in sequence (a canvas op
- * per category, so sequential rather than parallel keeps memory bounded)
- * for the "todas as categorias" choice on the ranking image-share flow —
- * used by both the Início and Ranking screens. Categories with no sales
+/** Generates one ranking-image PNG per category — for the "todas as
+ * categorias" choice on the ranking image-share flow, used by both the
+ * Início and Ranking screens. Categories with no sales
  * (generateRankingImageBlob's own `ranking.length === 0` case still draws
  * an empty-state image, so every spec produces a result) are included; a
- * spec is only dropped if canvas.toBlob itself fails. */
+ * spec is only dropped if canvas.toBlob itself fails.
+ *
+ * Runs every category in parallel (`Promise.all`) instead of one at a time.
+ * Each category's dominant cost is awaiting up to 10 collaborator-avatar
+ * image loads over the network (canvas drawing + PNG encoding themselves
+ * are cheap) — doing that sequentially for 6 categories meant paying that
+ * network latency 6 times over, with nothing on screen changing in between,
+ * which is what read as the UI having frozen on the "Gerar imagem → Todas
+ * as categorias" click. `onProgress` (optional) is called after every
+ * category finishes so a caller can show real "3/6" progress instead of a
+ * single static "gerando…" label for however long the whole batch takes. */
 export async function generateAllCategoryImages(
   specs: CategoryImageSpec[],
   fromDate: string,
   toDate: string,
   storeName?: string,
+  onProgress?: (done: number, total: number) => void,
 ): Promise<MultiImageResult[]> {
-  const results: MultiImageResult[] = [];
-  for (const spec of specs) {
-    const blob = await generateRankingImageBlob(spec.rows, spec.titulo, fromDate, toDate, storeName, spec.isUnit, spec.metaDiaria);
-    if (blob) {
-      results.push({ key: spec.key, title: spec.titulo, url: URL.createObjectURL(blob), filename: `ranking-${spec.key.toLowerCase()}.png` });
-    }
-  }
-  return results;
+  let done = 0;
+  const settled = await Promise.all(
+    specs.map(async (spec) => {
+      const blob = await generateRankingImageBlob(spec.rows, spec.titulo, fromDate, toDate, storeName, spec.isUnit, spec.metaDiaria);
+      onProgress?.(++done, specs.length);
+      if (!blob) return null;
+      return { key: spec.key, title: spec.titulo, url: URL.createObjectURL(blob), filename: `ranking-${spec.key.toLowerCase()}.png` };
+    }),
+  );
+  // Preserves the specs' original order — Promise.all resolves in call
+  // order regardless of which finished first, unlike the completion order
+  // `onProgress` above fires in.
+  return settled.filter((r): r is MultiImageResult => r !== null);
 }
 
 /** Tries the modern async-clipboard image write; returns whether it succeeded
