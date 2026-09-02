@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import {
   BUILT_IN_TEMPLATE,
@@ -202,6 +202,33 @@ export function CardConquistaPage() {
     });
   }
 
+  /** The built-in Hiteck template is bundled code, not a DB row — there's
+   * nothing to "Editar" on it directly. When it's the one actually in use
+   * (no saved template marked default), the admin still needs a way to
+   * adjust the card currently live — so this starts a new template
+   * pre-filled with its geometry/masks/texts as a starting point instead of
+   * from scratch. The background art can't be carried over as-is (it's a
+   * bundled asset whose build-time URL isn't stable across deploys), so it
+   * starts unset here — same as a brand-new template — and the admin
+   * uploads their own before saving. */
+  function startEditBuiltIn() {
+    setError(null);
+    setEditing({
+      id: crypto.randomUUID(),
+      isNew: true,
+      name: `${BUILT_IN_TEMPLATE.name} (cópia)`,
+      backgroundUrl: null,
+      uploadingBackground: false,
+      logoUrl: BUILT_IN_TEMPLATE.logoUrl ?? null,
+      uploadingLogo: false,
+      logoScale: BUILT_IN_TEMPLATE.logoScale ?? 0.85,
+      referenceObjectUrl: null,
+      foto: BUILT_IN_TEMPLATE.foto,
+      logo: BUILT_IN_TEMPLATE.logo,
+      textLayers: synthesizeTextLayersFromLegacy(BUILT_IN_TEMPLATE.texto, BUILT_IN_TEMPLATE.textFontFamily),
+    });
+  }
+
   function closeEditor() {
     if (editing?.referenceObjectUrl) URL.revokeObjectURL(editing.referenceObjectUrl);
     setEditing(null);
@@ -315,6 +342,9 @@ export function CardConquistaPage() {
               >
                 {hasDefaultTemplate ? 'Inativo' : '★ Em uso agora'}
               </div>
+              <button onClick={startEditBuiltIn} className="rounded-lg border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-800">
+                Duplicar e editar
+              </button>
             </div>
 
             {templates?.map((t) => (
@@ -676,7 +706,19 @@ function TemplateEditor({
               setWandError(null);
             },
           }}
-        />
+        >
+          <label className="text-[11px] text-slate-400">
+            Escala da logo dentro da área ({Math.round(editing.logoScale * 100)}%)
+            <input
+              type="range"
+              min={30}
+              max={150}
+              value={Math.round(editing.logoScale * 100)}
+              onChange={(e) => setEditing({ ...editing, logoScale: Number(e.target.value) / 100 })}
+              className="w-full"
+            />
+          </label>
+        </ZoneControls>
 
         <div className="flex flex-col gap-2">
           <div className="text-xs font-semibold text-slate-300">Textos do card ({editing.textLayers.length}/{MAX_TEXT_LAYERS})</div>
@@ -886,6 +928,7 @@ function ZoneControls({
   onChange,
   pen,
   wand,
+  children,
 }: {
   label: string;
   color: string;
@@ -908,6 +951,12 @@ function ZoneControls({
     onStart: () => void;
     onCancel: () => void;
   };
+  /** Extra controls rendered inside this same bordered box, after the
+   * position/shape ones — e.g. the logo's own contain-fit scale — so
+   * everything about one zone lives in one visible group instead of being
+   * split across the sidebar where the scale-only control (right next to
+   * the logo upload) reads as the only logo adjustment available. */
+  children?: ReactNode;
 }) {
   const isCustom = zone.shape.kind === 'polygon';
   const isWandMask = zone.shape.kind === 'image';
@@ -1045,6 +1094,7 @@ function ZoneControls({
       ) : (
         <p className="text-[10px] text-slate-500">Posição e tamanho seguem os pontos desenhados — use "Redesenhar" pra ajustar.</p>
       )}
+      {children}
     </div>
   );
 }
