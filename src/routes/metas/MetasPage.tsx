@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { MoneyInput } from '../../components/MoneyInput';
 import { CAT_KEYS, GOAL_UNIT_KEYS, type CategoryKey, type GoalCategoryKey } from '../../lib/business/classification';
@@ -94,7 +95,7 @@ function MetasPorCategoria() {
   const [edits, setEdits] = useState<Partial<Record<CategoryKey, GoalEdit>>>({});
   const [saving, setSaving] = useState(false);
 
-  if (!goals || !sales || !collaborators) return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+  if (!goals || !sales || !collaborators) return <PageLoading />;
   const goalsSafe = withGoalDefaults(goals);
 
   function fieldValue<K extends keyof GoalEdit>(k: CategoryKey, field: K): Goal[K] {
@@ -263,7 +264,7 @@ function MetasUnidade() {
   const [edits, setEdits] = useState<Partial<Record<(typeof GOAL_UNIT_KEYS)[number], { mensal: number; diaria: number }>>>({});
   const [saving, setSaving] = useState(false);
 
-  if (!goals) return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+  if (!goals) return <PageLoading />;
 
   function fieldValue(k: (typeof GOAL_UNIT_KEYS)[number], field: 'mensal' | 'diaria'): number {
     const edit = edits[k]?.[field];
@@ -341,7 +342,7 @@ function MetasIndividuais() {
   const [distributing, setDistributing] = useState(false);
 
   if (!goals || !sales || !collaborators || !individualGoals) {
-    return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+    return <PageLoading />;
   }
 
   const goal = goals[catKey] ?? defaultGoal(catKey);
@@ -482,7 +483,7 @@ function MetasComissoes() {
   const [edits, setEdits] = useState<Record<string, { percentual: number; ativo: boolean }>>({});
   const [saving, setSaving] = useState(false);
 
-  if (!rates) return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+  if (!rates) return <PageLoading />;
 
   function slotKey(categoria: 'DERM' | 'GEN' | 'MP', slot: number) {
     return `${categoria}-${slot}`;

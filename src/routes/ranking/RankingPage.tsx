@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { PageLoading } from '../../components/PageLoading';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
 import { MultiRankingImageModal } from '../../components/ranking/MultiRankingImageModal';
 import { RankingColumnCard } from '../../components/ranking/RankingColumnCard';
@@ -77,7 +78,7 @@ export function RankingPage() {
   }, [salesData, collaboratorsData, goals, dashFrom, dashTo, mode, refYear, refMonth, specialLists]);
 
   if (!collaborators || !sales || !goals || !storeSettings || !specialLists) {
-    return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+    return <PageLoading />;
   }
 
   const metaGeral = effectiveMetaGeral(goals, mode, sales, collaborators, storeSettings.meta_geral_fallback);

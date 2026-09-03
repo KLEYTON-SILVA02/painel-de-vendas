@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import type { BioWeights } from '../../lib/business/types';
 import { monthName } from '../../lib/format';
@@ -25,7 +26,7 @@ export function ConfiguracoesPage() {
   const [weights, setWeights] = useState<BioWeights | null>(null);
   const [saving, setSaving] = useState(false);
 
-  if (!rows || !storeSettings) return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+  if (!rows || !storeSettings) return <PageLoading />;
   const currentWeights = weights ?? (storeSettings.bio_weights as unknown as BioWeights);
   const levmel = rows.filter((r) => r.tipo === 'levmel');
   const chip = rows.filter((r) => r.tipo === 'chip');

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { PageLoading } from '../../components/PageLoading';
 import { Link } from 'react-router-dom';
 import { SidebarCalendarCard } from '../../components/SidebarCalendarCard';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
@@ -68,7 +69,7 @@ export function ConquistasPage() {
   );
 
   if (!collaborators || !sales || !specialLists) {
-    return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+    return <PageLoading />;
   }
 
   const info = CONQUISTA_CATS.find((c) => c.key === catKey)!;

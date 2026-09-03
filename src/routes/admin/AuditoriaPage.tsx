@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { CAT_KEYS, classifyProductTier, type CategoryKey } from '../../lib/business/classification';
 import { buildClassificationInputs } from '../../lib/mappers';
@@ -35,7 +36,7 @@ export function AuditoriaPage() {
   const [bulkCat, setBulkCat] = useState<CategoryKey>('DERM');
 
   if (!sales || !collaborators || !catalog || !products || !brandKeywords || !exclusiveBrands) {
-    return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+    return <PageLoading />;
   }
 
   const inPeriodo = (s: { dataISO: string | null; matricula: string }) => {

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PageLoading } from '../../components/PageLoading';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
@@ -54,7 +55,7 @@ export function CategoryTypePage() {
   }
 
   if (!collaborators || !sales || !categoryType || !bioGroupRows || !groupGoals || !storeSettings) {
-    return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+    return <PageLoading />;
   }
 
   const bioGroups = groupBioRows(bioGroupRows);

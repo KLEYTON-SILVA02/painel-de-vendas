@@ -1,4 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
+import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
 import {
@@ -25,7 +26,7 @@ export function DinamicasPage() {
   const deleteDynamic = useDeleteDynamic();
 
   if (!dynamics || !sales || !collaborators || !storeSettings) {
-    return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+    return <PageLoading />;
   }
 
   const today = todayISO();

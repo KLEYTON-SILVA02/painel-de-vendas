@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthContext';
 import { ClosingClock } from '../components/ClosingClock';
 import { ConquistaCelebrationHost } from '../components/ConquistaCelebration';
 import { HamburgerIcon, MedalIcon, RefreshIcon } from '../components/icons/NavIcons';
+import { PageLoading } from '../components/PageLoading';
 import { Sidebar } from '../components/Sidebar';
 import type { Horario } from '../lib/business/horario';
 import { supabase } from '../lib/supabase';
@@ -96,7 +97,7 @@ export function AppShell() {
   if (profile.role !== 'admin') {
     return (
       <DateRangeProvider>
-        <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-400 text-sm">Carregando…</div>}>
+        <Suspense fallback={<PageLoading fullScreen />}>
           <CollaboratorShell />
         </Suspense>
       </DateRangeProvider>
@@ -108,7 +109,7 @@ export function AppShell() {
   if (isMobileV2) {
     return (
       <DateRangeProvider>
-        <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-400 text-sm">Carregando…</div>}>
+        <Suspense fallback={<PageLoading fullScreen />}>
           <MobileAdminShell />
         </Suspense>
       </DateRangeProvider>
@@ -199,7 +200,7 @@ export function AppShell() {
             <Route
               path="/categoria-parceria/:chave"
               element={
-                <Suspense fallback={<div className="text-sm text-slate-500 p-6">Carregando…</div>}>
+                <Suspense fallback={<PageLoading />}>
                   <CategoryTypePage />
                 </Suspense>
               }
@@ -208,7 +209,7 @@ export function AppShell() {
             <Route
               path="/admin/*"
               element={
-                <Suspense fallback={<div className="text-sm text-slate-500 p-6">Carregando…</div>}>
+                <Suspense fallback={<PageLoading />}>
                   <Routes>
                     <Route path="colaboradores" element={<ColaboradoresPage />} />
                     <Route path="produtos" element={<ProdutosPage />} />

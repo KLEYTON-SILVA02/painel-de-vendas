@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { ReclassifyBar } from '../../components/admin/ReclassifyBar';
 import type { CategoryKey } from '../../lib/business/classification';
@@ -97,7 +98,7 @@ export function ListaVendasPage() {
   const months = useMemo(() => groupByMonthAndDay(salesForTab), [salesForTab]);
 
   if (!sales || !collaborators || !catalog) {
-    return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+    return <PageLoading />;
   }
 
   function toggleMonth(key: string) {

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { FUNCTION_ICON_SLOTS } from '../../lib/functionIconSlots';
 import { useSetFunctionIcon } from '../../lib/mutations';
@@ -14,7 +15,7 @@ export function IconesPage() {
   const [uploadingKey, setUploadingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  if (!icons) return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+  if (!icons) return <PageLoading />;
 
   async function handleUpload(functionKey: string, file: File) {
     if (!profile?.store_id) return;

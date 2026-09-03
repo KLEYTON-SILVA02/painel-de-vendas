@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
@@ -43,7 +44,7 @@ export function BioPage() {
   useEffect(() => setModoGeral(), []);
 
   if (!collaborators || !sales || !storeSettings || !bioCategoryType || !bioGroupRows || !groupGoals) {
-    return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+    return <PageLoading />;
   }
 
   const bioGroups = groupBioRows(bioGroupRows);

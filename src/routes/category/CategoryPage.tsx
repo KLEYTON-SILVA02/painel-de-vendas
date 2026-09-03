@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
 import { ReclassifyBar } from '../../components/admin/ReclassifyBar';
@@ -68,7 +69,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   const updateStoreSettings = useUpdateStoreSettings(profile?.store_id);
 
   if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !commissionRates || !catalog) {
-    return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+    return <PageLoading />;
   }
 
   const info = CATEGORY_META[catKey];

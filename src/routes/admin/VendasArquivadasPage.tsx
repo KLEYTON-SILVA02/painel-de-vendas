@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { PageLoading } from '../../components/PageLoading';
 import { fmtMoney } from '../../lib/format';
 import { useSalesArchiveCategories, useSalesArchiveCollaborators } from '../../lib/queries';
 
@@ -35,7 +36,7 @@ export function VendasArquivadasPage() {
   const month = selectedMonth && months.includes(selectedMonth) ? selectedMonth : months[0] ?? null;
 
   if (!categorias || !colaboradores) {
-    return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+    return <PageLoading />;
   }
 
   if (!months.length) {
