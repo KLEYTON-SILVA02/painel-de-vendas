@@ -1,4 +1,5 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { SidebarCalendarCard } from '../../components/SidebarCalendarCard';
 import { GenerateImageScopeModal } from '../../components/ranking/GenerateImageScopeModal';
@@ -313,7 +314,7 @@ export function DashboardPage() {
   }, [salesData, collaboratorsData, goals, dashFrom, dashTo, specialLists]);
 
   if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !dynamics) {
-    return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+    return <PageLoading />;
   }
 
   const metaGeral = effectiveMetaGeral(goals, mode, sales, collaborators, storeSettings.meta_geral_fallback);

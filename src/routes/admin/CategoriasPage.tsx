@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { useCreateCategoryType } from '../../lib/mutations';
 import { useCategoryTypes, useCollaborators } from '../../lib/queries';
@@ -56,7 +57,7 @@ export function CategoriasPage() {
   }
 
   if (!categoryTypes || !collaborators) {
-    return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+    return <PageLoading />;
   }
 
   return (

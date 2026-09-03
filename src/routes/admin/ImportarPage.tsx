@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { PageLoading } from '../../components/PageLoading';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../auth/AuthContext';
 import { Spinner } from '../../components/Spinner';
@@ -57,7 +58,7 @@ export function ImportarPage() {
   const [summary, setSummary] = useState<SheetSummary | null>(null);
 
   if (!catalog || !products || !brandKeywords || !exclusiveBrands) {
-    return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+    return <PageLoading />;
   }
   const inputs = buildClassificationInputs(catalog, products, brandKeywords, exclusiveBrands);
 

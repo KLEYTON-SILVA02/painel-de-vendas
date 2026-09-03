@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
 import { PhotoCropModal } from '../../components/PhotoCropModal';
@@ -31,7 +32,7 @@ export function ColaboradoresPage() {
   const [editing, setEditing] = useState<Collaborator | null>(null);
   const [grantingFor, setGrantingFor] = useState<Collaborator | null>(null);
 
-  if (!collaborators || !sales || !withLogin) return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+  if (!collaborators || !sales || !withLogin) return <PageLoading />;
 
   function handleAdd(e: FormEvent) {
     e.preventDefault();

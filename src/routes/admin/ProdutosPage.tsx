@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
 import { CAT_KEYS, classifyProductTier, normalizeCategoriaImport, type CategoryKey } from '../../lib/business/classification';
@@ -90,7 +91,7 @@ function ProdutosTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
   const [padrao, setPadrao] = useState('');
   const [kwDrafts, setKwDrafts] = useState<Record<string, string>>({});
 
-  if (!products) return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+  if (!products) return <PageLoading />;
   const groupProducts = products.filter((p) => p.categoria === group);
 
   function handleAdd() {
@@ -222,7 +223,7 @@ function CatalogoTab() {
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  if (!catalog) return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+  if (!catalog) return <PageLoading />;
 
   function handleAdd() {
     if (!nome.trim()) return;
@@ -359,7 +360,7 @@ function ClassificadosTab() {
   const PAGE_SIZE = 500;
 
   if (!sales || !catalog || !products || !brandKeywords || !exclusiveBrands) {
-    return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+    return <PageLoading />;
   }
 
   const inputs = buildClassificationInputs(catalog, products, brandKeywords, exclusiveBrands);
@@ -563,7 +564,7 @@ function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
   const deleteKw = useDeleteRow('brand_keywords', 'brand_keywords');
   const [kw, setKw] = useState('');
 
-  if (!brandKeywords) return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+  if (!brandKeywords) return <PageLoading />;
   const groupKeywords = brandKeywords.filter((b) => b.categoria === group);
 
   function handleAdd() {
@@ -616,7 +617,7 @@ function ExclusivasTab() {
   const deleteBrand = useDeleteRow('exclusive_brands', 'exclusive_brands');
   const [palavra, setPalavra] = useState('');
 
-  if (!exclusiveBrands) return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+  if (!exclusiveBrands) return <PageLoading />;
 
   function handleAdd() {
     if (!palavra.trim()) return;

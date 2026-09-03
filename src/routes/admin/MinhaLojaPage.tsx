@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { MoneyInput } from '../../components/MoneyInput';
 import { DIA_KEYS, DIA_LABELS, type DiaKey, type Horario } from '../../lib/business/horario';
@@ -38,7 +39,7 @@ export function MinhaLojaPage() {
   const [initialized, setInitialized] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  if (!store || !storeSettings) return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+  if (!store || !storeSettings) return <PageLoading />;
   const settings = storeSettings;
 
   if (!initialized) {
@@ -53,7 +54,7 @@ export function MinhaLojaPage() {
     setModeloRanking(storeSettings.modelo_ranking as 'escadinha' | 'lista');
     setHorario(storeSettings.horario as unknown as Horario);
     setInitialized(true);
-    return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
+    return <PageLoading />;
   }
   if (!horario) return null;
 

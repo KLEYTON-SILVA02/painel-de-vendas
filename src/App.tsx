@@ -3,6 +3,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { LoginPage } from './auth/LoginPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { PageLoading } from './components/PageLoading';
 import { AppShell } from './routes/AppShell';
 
 // Defaults (staleTime 0, refetchOnWindowFocus true) meant every navigation
@@ -24,11 +25,7 @@ function Root() {
   const { session, loading } = useAuth();
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-400 text-sm">
-        Carregando…
-      </div>
-    );
+    return <PageLoading fullScreen />;
   }
 
   return session ? <AppShell /> : <LoginPage />;
