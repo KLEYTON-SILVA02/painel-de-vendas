@@ -13,27 +13,72 @@ import type { StaircaseRow } from './PodiumStaircase';
 // image's own width/height, so they stay correct at any render size as
 // long as the container keeps the image's aspect ratio — see
 // `aspectRatio` below).
-const PODIUM_BG_RATIO = 2000 / 1669;
-const CIRCLE_SPOTS: Record<number, { left: number; top: number; diameter: number }> = {
-  0: { left: 49.98, top: 45.39, diameter: 16.95 }, // 1º — centro
-  1: { left: 18.9, top: 48.29, diameter: 18.4 }, // 2º — esquerda
-  2: { left: 86.12, top: 47.66, diameter: 17.75 }, // 3º — direita
+//
+// Both the background and every position below are overridable per store
+// (Configurações → Aparência do Ranking → "varinha mágica") — see
+// `PodiumRankSpot`/`DEFAULT_PODIUM_SPOTS`. `bgUrl`/`spots` are what an ADM
+// calibrated for their own custom artwork; omitted/null falls back to the
+// stock artwork and its measured defaults, so stores that never open the
+// calibration tool are unaffected.
+export const PODIUM_BG_RATIO = 2000 / 1669;
+
+export interface PodiumRankSpot {
+  left: number;
+  top: number;
+  diameter: number;
+  valueLeft: number;
+  valueTop: number;
+  valueSize: number;
+  valueMaxWidth: number;
+  nomeLeft: number;
+  nomeTop: number;
+  nomeSize: number;
+  nomeMaxWidth: number;
+}
+export type PodiumSpots = Record<0 | 1 | 2, PodiumRankSpot>;
+
+export const DEFAULT_PODIUM_SPOTS: PodiumSpots = {
+  0: {
+    left: 49.98,
+    top: 45.39,
+    diameter: 16.95, // 1º — centro
+    valueLeft: 49.98,
+    valueTop: 77.95,
+    valueSize: 4.2,
+    valueMaxWidth: 32,
+    nomeLeft: 49.98,
+    nomeTop: 87.4,
+    nomeSize: 2.7,
+    nomeMaxWidth: 20,
+  },
+  1: {
+    left: 18.9,
+    top: 48.29,
+    diameter: 18.4, // 2º — esquerda
+    valueLeft: 16.53,
+    valueTop: 73.4,
+    valueSize: 3.6,
+    valueMaxWidth: 25,
+    nomeLeft: 16.53,
+    nomeTop: 81.13,
+    nomeSize: 2.3,
+    nomeMaxWidth: 17,
+  },
+  2: {
+    left: 86.12,
+    top: 47.66,
+    diameter: 17.75, // 3º — direita
+    valueLeft: 83.43,
+    valueTop: 73.37,
+    valueSize: 3.6,
+    valueMaxWidth: 25,
+    nomeLeft: 83.43,
+    nomeTop: 81.13,
+    nomeSize: 2.3,
+    nomeMaxWidth: 17,
+  },
 };
-// Value/name text positioned in the blank pedestal area below the ribbon
-// — measured the same way as CIRCLE_SPOTS. Rendered in white with a drop
-// shadow (no capsule backdrop in this artwork) so it reads against any of
-// the three pedestal colors. Font sizes are in cqw so they scale with the
-// podium container's rendered width via CSS container queries; value
-// width/size are generous enough that a full "R$ 1.234,56" never
-// truncates.
-const TEXT_SPOTS: Record<
-  number,
-  { centerLeft: number; valueTop: number; nomeTop: number; valueSize: number; nomeSize: number; valueMaxWidth: number; nomeMaxWidth: number }
-> = {
-  0: { centerLeft: 49.98, valueTop: 77.95, nomeTop: 87.4, valueSize: 4.2, nomeSize: 2.7, valueMaxWidth: 32, nomeMaxWidth: 20 }, // 1º — centro
-  1: { centerLeft: 16.53, valueTop: 73.4, nomeTop: 81.13, valueSize: 3.6, nomeSize: 2.3, valueMaxWidth: 25, nomeMaxWidth: 17 }, // 2º — esquerda
-  2: { centerLeft: 83.43, valueTop: 73.37, nomeTop: 81.13, valueSize: 3.6, nomeSize: 2.3, valueMaxWidth: 25, nomeMaxWidth: 17 }, // 3º — direita
-};
+
 const MAX_LISTED = 15;
 const COL_SIZE = 6;
 
@@ -41,15 +86,23 @@ export function PodiumSplit<T extends StaircaseRow>({
   ranking,
   getValue,
   formatValue,
+  bgUrl,
+  spots,
 }: {
   ranking: T[];
   getValue: (r: T) => number;
   formatValue: (v: number) => string;
+  /** Custom podium background URL calibrated in Configurações; falls back to the stock artwork when absent. */
+  bgUrl?: string | null;
+  /** Custom circle/text positions calibrated for `bgUrl`; falls back to the measured defaults when absent. */
+  spots?: PodiumSpots | null;
 }) {
   if (!ranking.length) {
     return <div className="text-sm text-slate-500 py-6 text-center">Sem vendas para este período.</div>;
   }
 
+  const effectiveBg = bgUrl || podiumPremiumBg;
+  const effectiveSpots = spots || DEFAULT_PODIUM_SPOTS;
   const top3 = ranking.slice(0, 3);
   const rest = ranking.slice(3, MAX_LISTED);
   const col1 = rest.slice(0, COL_SIZE);
@@ -63,7 +116,7 @@ export function PodiumSplit<T extends StaircaseRow>({
           flex: '1 1 320px',
           maxWidth: 460,
           aspectRatio: PODIUM_BG_RATIO,
-          backgroundImage: `url(${podiumPremiumBg})`,
+          backgroundImage: `url(${effectiveBg})`,
           backgroundSize: '100% 100%',
           backgroundRepeat: 'no-repeat',
           borderRadius: 16,
@@ -71,10 +124,10 @@ export function PodiumSplit<T extends StaircaseRow>({
         }}
       >
         {top3.map((row, rank) => (
-          <PodiumPhoto key={row.matricula} rank={rank} row={row} />
+          <PodiumPhoto key={row.matricula} rank={rank as 0 | 1 | 2} row={row} spots={effectiveSpots} />
         ))}
         {top3.map((row, rank) => (
-          <PodiumText key={row.matricula} rank={rank} row={row} getValue={getValue} formatValue={formatValue} />
+          <PodiumText key={row.matricula} rank={rank as 0 | 1 | 2} row={row} getValue={getValue} formatValue={formatValue} spots={effectiveSpots} />
         ))}
       </div>
 
@@ -88,8 +141,8 @@ export function PodiumSplit<T extends StaircaseRow>({
   );
 }
 
-function PodiumPhoto<T extends StaircaseRow>({ rank, row }: { rank: number; row: T }) {
-  const spot = CIRCLE_SPOTS[rank];
+function PodiumPhoto<T extends StaircaseRow>({ rank, row, spots }: { rank: 0 | 1 | 2; row: T; spots: PodiumSpots }) {
+  const spot = spots[rank];
   if (!spot) return null;
   return (
     <div
@@ -115,13 +168,15 @@ function PodiumText<T extends StaircaseRow>({
   row,
   getValue,
   formatValue,
+  spots,
 }: {
-  rank: number;
+  rank: 0 | 1 | 2;
   row: T;
   getValue: (r: T) => number;
   formatValue: (v: number) => string;
+  spots: PodiumSpots;
 }) {
-  const spot = TEXT_SPOTS[rank];
+  const spot = spots[rank];
   if (!spot) return null;
   const textShadow = '0 1px 4px rgba(0,0,0,.75), 0 0 2px rgba(0,0,0,.6)';
   return (
@@ -129,7 +184,7 @@ function PodiumText<T extends StaircaseRow>({
       <div
         style={{
           position: 'absolute',
-          left: `${spot.centerLeft}%`,
+          left: `${spot.valueLeft}%`,
           top: `${spot.valueTop}%`,
           width: `${spot.valueMaxWidth}%`,
           transform: 'translate(-50%,-50%)',
@@ -149,7 +204,7 @@ function PodiumText<T extends StaircaseRow>({
       <div
         style={{
           position: 'absolute',
-          left: `${spot.centerLeft}%`,
+          left: `${spot.nomeLeft}%`,
           top: `${spot.nomeTop}%`,
           width: `${spot.nomeMaxWidth}%`,
           transform: 'translate(-50%,-50%)',

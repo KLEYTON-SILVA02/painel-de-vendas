@@ -5,7 +5,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
 import { TagIcon } from '../../components/icons/NavIcons';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
-import { PodiumSplit } from '../../components/ranking/PodiumSplit';
+import { PodiumSplit, type PodiumSpots } from '../../components/ranking/PodiumSplit';
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
 import { RankingModeToggle } from '../../components/ranking/RankingModeToggle';
 import { auditBioOutsideBalcao, computeBioSummary, groupBioRows, type BioSummaryRow } from '../../lib/business/bio';
@@ -201,7 +201,13 @@ export function CategoryTypePage() {
             Nenhum colaborador cadastrado no(s) setor(es) elegível(is) desta categoria.
           </div>
         ) : storeSettings.ranking_moderno ? (
-          <PodiumSplit ranking={ranking.filter((r) => r.itens > 0)} getValue={(r) => r.pontos} formatValue={(v) => `${v.toFixed(1)} pts`} />
+          <PodiumSplit
+            ranking={ranking.filter((r) => r.itens > 0)}
+            getValue={(r) => r.pontos}
+            formatValue={(v) => `${v.toFixed(1)} pts`}
+            bgUrl={storeSettings.ranking_podium_bg_url}
+            spots={storeSettings.ranking_podium_spots as unknown as PodiumSpots | null}
+          />
         ) : (
           <PodiumStaircase
             ranking={ranking.filter((r) => r.itens > 0)}
