@@ -44,6 +44,22 @@ const CardConquistaPage = lazy(() => import('./admin/CardConquistaPage').then((m
 const CategoriasPage = lazy(() => import('./admin/CategoriasPage').then((m) => ({ default: m.CategoriasPage })));
 const CategoryTypePage = lazy(() => import('./category-type/CategoryTypePage').then((m) => ({ default: m.CategoryTypePage })));
 
+// Screen titles that used to open each screen's own filter-bar cell now live
+// here instead, centered in the top bar next to the store name — freeing up
+// the vertical space they took inside that cell for the ranking/content
+// below. Keyed by exact pathname (desktop admin routes only; mobile-v2 and
+// collaborator shells never reach this header at all).
+const PAGE_TITLES: Record<string, { label: string; color: string }> = {
+  '/': { label: '🏆 Ranking Geral', color: '#00f0ff' },
+  '/categoria/DERM': { label: '🩹 Dermocosméticos', color: '#ff3df0' },
+  '/categoria/GEN': { label: '💊 Genérico', color: '#14ff00' },
+  '/categoria/MP': { label: '🏷️ Marcas Exclusivas', color: '#a82bff' },
+  '/categoria/MER': { label: '📦 Mercadoria Geral', color: '#ff6a00' },
+  '/categoria/LEVMEL': { label: '🍯 Levmel', color: '#ffb700' },
+  '/categoria/CHIP': { label: '🔴 Chip', color: '#00e5ff' },
+  '/bio': { label: '🧪 BIOSINTÉTICA — Ranking Balcão', color: '#14ff00' },
+};
+
 export function AppShell() {
   const { profile, signOut } = useAuth();
   useAutoArchiveOldSales();
@@ -112,17 +128,24 @@ export function AppShell() {
         <div className="sb-backdrop" onClick={() => setMobileOpen(false)} />
         <div className="app-content">
           <header className="border-b border-slate-800 px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+              <div className="flex items-center gap-3 min-w-0">
                 <button className="sb-hamburger" onClick={() => setMobileOpen(true)} aria-label="Abrir menu">
                   <HamburgerIcon />
                 </button>
-                <div>
-                  <h1 className="text-lg font-semibold">{storeQuery.data?.nome_loja || 'Painel de Gestão de Vendas'}</h1>
+                <div className="min-w-0">
+                  <h1 className="text-lg font-semibold truncate">{storeQuery.data?.nome_loja || 'Painel de Gestão de Vendas'}</h1>
                   <p className="text-xs text-slate-400">Administrador</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="text-center min-w-0 px-2">
+                {PAGE_TITLES[location.pathname] && (
+                  <h2 className="text-sm font-semibold truncate" style={{ color: PAGE_TITLES[location.pathname].color }}>
+                    {PAGE_TITLES[location.pathname].label}
+                  </h2>
+                )}
+              </div>
+              <div className="flex items-center gap-2 justify-self-end">
                 <button
                   onClick={async () => {
                     await queryClient.invalidateQueries();
@@ -159,7 +182,7 @@ export function AppShell() {
               </div>
             </div>
           </header>
-          <main className="p-6">
+          <main className="p-3">
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/ranking" element={<RankingPage />} />

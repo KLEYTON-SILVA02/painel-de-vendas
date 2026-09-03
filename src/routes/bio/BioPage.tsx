@@ -115,9 +115,8 @@ export function BioPage() {
   ];
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-1.5">
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <h3 className="text-green-400 font-semibold mb-3">🧪 BIOSINTÉTICA — Ranking Balcão</h3>
         <MetricsFilterBar statCards={statCards} />
       </div>
 
