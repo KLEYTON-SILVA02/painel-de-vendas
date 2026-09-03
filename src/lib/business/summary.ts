@@ -43,6 +43,7 @@ export function computeSummary(
   specialLists?: { levmel: SpecialListItem[]; chip: SpecialListItem[] },
 ): SummaryRow[] {
   const map: Record<string, SummaryRow> = {};
+  const registeredMatriculas = new Set(collaborators.map((c) => c.matricula));
   collaborators.forEach((c) => {
     map[c.matricula] = {
       matricula: c.matricula,
@@ -67,10 +68,14 @@ export function computeSummary(
     }
 
     if (!map[s.matricula]) {
+      // Placeholder — the sale's own vendedor text is often just an import
+      // artifact ("VENDEDOR", blank, a store-code stand-in), not someone's
+      // real name, so it's replaced with a stable "Vend. N" label below
+      // rather than shown as-is.
       map[s.matricula] = {
         matricula: s.matricula,
-        nome: s.vendedor || s.matricula,
-        apelido: s.vendedor ? firstName(s.vendedor) : s.matricula,
+        nome: s.matricula,
+        apelido: s.matricula,
         foto: null,
         metaIndividual: 0,
         qtd: emptyQtd(),
@@ -87,6 +92,19 @@ export function computeSummary(
     row.valor += valor;
     row.itens += qtdv;
   });
+
+  // Sellers with sales but no matching collaborator record show as "Vend.
+  // N" (numbered by matricula, so the same unregistered seller always gets
+  // the same label within one result set) instead of whatever free-text
+  // name came through the sales import.
+  Object.keys(map)
+    .filter((matricula) => !registeredMatriculas.has(matricula))
+    .sort()
+    .forEach((matricula, i) => {
+      const label = `Vend. ${i + 1}`;
+      map[matricula].nome = label;
+      map[matricula].apelido = label;
+    });
 
   return Object.values(map).sort((a, b) => b.valor - a.valor);
 }
