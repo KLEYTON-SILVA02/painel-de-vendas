@@ -72,14 +72,14 @@ function resolveRankFilterParams(rankFilter: RankFilter, dashFrom: string, dashT
   return { from: dashFrom, to: dashTo, catFilter: rankFilter as CategoryKey | 'ALL', label: found?.l || 'Todas', dinamica: null };
 }
 
-function RankFilterBar({ dynamics }: { dynamics: Dynamic[] }) {
+function RankFilterBar({ dynamics, singleLine }: { dynamics: Dynamic[]; singleLine?: boolean }) {
   const { rankFilter, setRankFilter } = useDateRange();
   const today = todayISO();
   const activeDynamics = dynamics.filter((d) => d.dataFim >= today);
 
   return (
     <>
-      <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: singleLine ? 'nowrap' : 'wrap' }}>
         {[...RANK_FILTERS, { k: 'LEVMEL' as RankFilter, l: 'Levmel' }, { k: 'CHIP' as RankFilter, l: 'Chip' }].map((x) => (
           <SubtabButton key={x.k} active={rankFilter === x.k} onClick={() => setRankFilter(x.k)}>
             {x.l}
@@ -441,11 +441,12 @@ export function DashboardPage() {
         </div>
 
         <div className="lg:col-start-1 lg:row-start-2 min-w-0 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
-            <div style={{ flex: '1 1 auto', minWidth: 200 }}>
-              <RankFilterBar dynamics={dynamics} />
+          <h3 className="text-cyan-400 font-semibold text-sm mb-2">🏆 Ranking Geral de Vendas — {rankFilterParams.label}</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ flex: '1 1 auto', minWidth: 0, overflowX: 'auto', paddingBottom: 2 }}>
+              <RankFilterBar dynamics={dynamics} singleLine />
             </div>
-            <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
               <button
                 onClick={handleCopyRanking}
                 title="Copiar ranking de vendas p/ WhatsApp"
