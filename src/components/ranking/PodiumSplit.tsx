@@ -17,6 +17,18 @@ const CIRCLE_SPOTS: Record<number, { left: number; top: number; diameter: number
   1: { left: 16.72, top: 48.28, diameter: 16.78 }, // 2º — esquerda
   2: { left: 83.83, top: 47.95, diameter: 16.4 }, // 3º — direita
 };
+// Value/name text baked into the base of each pedestal in the reference
+// mockup — same measurement approach as CIRCLE_SPOTS (percentages of the
+// artwork's own width/height/width, font sizes in cqw so they scale with
+// the podium container's rendered width via CSS container queries).
+const TEXT_SPOTS: Record<
+  number,
+  { centerLeft: number; valueTop: number; nomeTop: number; valueSize: number; nomeSize: number; maxWidth: number }
+> = {
+  0: { centerLeft: 49.75, valueTop: 78.8, nomeTop: 86.4, valueSize: 4.4, nomeSize: 2.7, maxWidth: 34 }, // 1º — centro
+  1: { centerLeft: 16.5, valueTop: 74.5, nomeTop: 80.8, valueSize: 3.8, nomeSize: 2.3, maxWidth: 27 }, // 2º — esquerda
+  2: { centerLeft: 83.7, valueTop: 74.5, nomeTop: 80.8, valueSize: 3.8, nomeSize: 2.3, maxWidth: 27 }, // 3º — direita
+};
 const MAX_LISTED = 15;
 const COL_SIZE = 6;
 
@@ -50,10 +62,14 @@ export function PodiumSplit<T extends StaircaseRow>({
           backgroundSize: '100% 100%',
           backgroundRepeat: 'no-repeat',
           borderRadius: 16,
+          containerType: 'inline-size',
         }}
       >
         {top3.map((row, rank) => (
           <PodiumPhoto key={row.matricula} rank={rank} row={row} />
+        ))}
+        {top3.map((row, rank) => (
+          <PodiumText key={row.matricula} rank={rank} row={row} getValue={getValue} formatValue={formatValue} />
         ))}
       </div>
 
@@ -86,6 +102,66 @@ function PodiumPhoto<T extends StaircaseRow>({ rank, row }: { rank: number; row:
     >
       {row.foto && <img src={row.foto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
     </div>
+  );
+}
+
+function PodiumText<T extends StaircaseRow>({
+  rank,
+  row,
+  getValue,
+  formatValue,
+}: {
+  rank: number;
+  row: T;
+  getValue: (r: T) => number;
+  formatValue: (v: number) => string;
+}) {
+  const spot = TEXT_SPOTS[rank];
+  if (!spot) return null;
+  const textShadow = '0 1px 4px rgba(0,0,0,.65)';
+  return (
+    <>
+      <div
+        style={{
+          position: 'absolute',
+          left: `${spot.centerLeft}%`,
+          top: `${spot.valueTop}%`,
+          width: `${spot.maxWidth}%`,
+          transform: 'translate(-50%,-50%)',
+          textAlign: 'center',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          fontFamily: "'Orbitron', sans-serif",
+          fontWeight: 800,
+          fontSize: `${spot.valueSize}cqw`,
+          color: '#fff',
+          textShadow,
+        }}
+      >
+        {formatValue(getValue(row))}
+      </div>
+      <div
+        style={{
+          position: 'absolute',
+          left: `${spot.centerLeft}%`,
+          top: `${spot.nomeTop}%`,
+          width: `${spot.maxWidth}%`,
+          transform: 'translate(-50%,-50%)',
+          textAlign: 'center',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          textTransform: 'uppercase',
+          fontWeight: 700,
+          fontSize: `${spot.nomeSize}cqw`,
+          color: '#fff',
+          textShadow,
+        }}
+      >
+        {row.apelido || row.nome}
+      </div>
+    </>
   );
 }
 
