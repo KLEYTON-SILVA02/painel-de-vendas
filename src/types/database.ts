@@ -907,6 +907,7 @@ export type Database = {
           horario: Json
           meta_geral_fallback: number
           modelo_ranking: string
+          ranking_moderno: boolean
           store_id: string
           tema: string
         }
@@ -918,6 +919,7 @@ export type Database = {
           horario?: Json
           meta_geral_fallback?: number
           modelo_ranking?: string
+          ranking_moderno?: boolean
           store_id: string
           tema?: string
         }
@@ -929,6 +931,7 @@ export type Database = {
           horario?: Json
           meta_geral_fallback?: number
           modelo_ranking?: string
+          ranking_moderno?: boolean
           store_id?: string
           tema?: string
         }

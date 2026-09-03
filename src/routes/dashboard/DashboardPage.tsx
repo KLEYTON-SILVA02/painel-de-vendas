@@ -1,9 +1,12 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useAuth } from '../../auth/AuthContext';
 import { SidebarCalendarCard } from '../../components/SidebarCalendarCard';
 import { GenerateImageScopeModal } from '../../components/ranking/GenerateImageScopeModal';
 import { MultiRankingImageModal } from '../../components/ranking/MultiRankingImageModal';
+import { PodiumSplit } from '../../components/ranking/PodiumSplit';
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
+import { RankingModeToggle } from '../../components/ranking/RankingModeToggle';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
 import { computeChampionStars, type ChampionStar } from '../../lib/business/champion';
 import { computeDinamicaRanking, intersectDynamicPeriod } from '../../lib/business/dynamics';
@@ -14,6 +17,7 @@ import { generateChampionCardBlob } from '../../lib/championImage';
 import { monthFirstISO, monthLastISO, todayISO } from '../../lib/dateRange';
 import { fmtDateBR, fmtMoney, monthName } from '../../lib/format';
 import { copyText, formatRankingText } from '../../lib/clipboard';
+import { useUpdateStoreSettings } from '../../lib/mutations';
 import { generateAllCategoryImages, generateRankingImageBlob, tryCopyImage, type MultiImageResult } from '../../lib/rankingImage';
 import { useCollaborators, useDynamics, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
 import { useDateRange, type RankFilter } from '../DateRangeContext';
@@ -189,6 +193,7 @@ function StatCard({ label, value, color, badge }: { label: string; value: string
 }
 
 export function DashboardPage() {
+  const { profile } = useAuth();
   const [rankingCopied, setRankingCopied] = useState(false);
   const [imageScopeOpen, setImageScopeOpen] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
@@ -203,6 +208,7 @@ export function DashboardPage() {
   const { data: specialLists } = useSpecialLists();
   const { data: dynamics } = useDynamics();
   const { dashFrom, dashTo, refYear, refMonth, rankFilter } = useDateRange();
+  const updateStoreSettings = useUpdateStoreSettings(profile?.store_id);
 
   // Safe stand-ins for the useMemo calls below, so their hook call order
   // never depends on whether every query has resolved yet — the
@@ -397,7 +403,7 @@ export function DashboardPage() {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-4">
+    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-2">
       {/* Each left/right pair below shares an explicit lg:row-start, so the
           grid's default align-items:stretch makes both cells in a row match
           height — their top and bottom edges line up, instead of two
@@ -435,12 +441,11 @@ export function DashboardPage() {
         </div>
 
         <div className="lg:col-start-1 lg:row-start-2 min-w-0 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-          <h3 className="text-cyan-400 font-semibold text-sm mb-2">🏆 Ranking Geral de Vendas — {rankFilterParams.label}</h3>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
             <div style={{ flex: '1 1 auto', minWidth: 200 }}>
               <RankFilterBar dynamics={dynamics} />
             </div>
-            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               <button
                 onClick={handleCopyRanking}
                 title="Copiar ranking de vendas p/ WhatsApp"
@@ -479,15 +484,27 @@ export function DashboardPage() {
                     : 'Gerando…'
                   : '🖼️ Gerar imagem'}
               </button>
+              <RankingModeToggle
+                on={storeSettings.ranking_moderno}
+                onToggle={() => updateStoreSettings.mutate({ ranking_moderno: !storeSettings.ranking_moderno })}
+              />
             </div>
           </div>
           <div className="mt-3">
-            <PodiumStaircase
-              ranking={rankingFilteredList}
-              getValue={(r) => (isUnitRanking ? r.itens : r.valor)}
-              formatValue={(v) => (isUnitRanking ? `${v} un.` : fmtMoney(v))}
-              variant={modeloRanking}
-            />
+            {storeSettings.ranking_moderno ? (
+              <PodiumSplit
+                ranking={rankingFilteredList}
+                getValue={(r) => (isUnitRanking ? r.itens : r.valor)}
+                formatValue={(v) => (isUnitRanking ? `${v} un.` : fmtMoney(v))}
+              />
+            ) : (
+              <PodiumStaircase
+                ranking={rankingFilteredList}
+                getValue={(r) => (isUnitRanking ? r.itens : r.valor)}
+                formatValue={(v) => (isUnitRanking ? `${v} un.` : fmtMoney(v))}
+                variant={modeloRanking}
+              />
+            )}
           </div>
         </div>
 

@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
 import { ReclassifyBar } from '../../components/admin/ReclassifyBar';
+import { PodiumSplit } from '../../components/ranking/PodiumSplit';
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
+import { RankingModeToggle } from '../../components/ranking/RankingModeToggle';
 import type { CategoryKey } from '../../lib/business/classification';
 import { copyText, formatRankingText } from '../../lib/clipboard';
 import { diasRestantesNoMes, getGoal, getSuperMeta } from '../../lib/business/goals';
@@ -12,7 +14,7 @@ import { computeSummary, computeVendorExtract } from '../../lib/business/summary
 import type { CommissionRate, SummaryRow } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
-import { useReclassifyProdutos } from '../../lib/mutations';
+import { useReclassifyProdutos, useUpdateStoreSettings } from '../../lib/mutations';
 import { useCatalog, useCollaborators, useCommissionRates, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 
@@ -63,6 +65,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   const [vendasPage, setVendasPage] = useState(0);
   const [vendasCommissionSlot, setVendasCommissionSlot] = useState<number | null>(null);
   const reclassify = useReclassifyProdutos(profile?.store_id);
+  const updateStoreSettings = useUpdateStoreSettings(profile?.store_id);
 
   if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !commissionRates || !catalog) {
     return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
@@ -238,21 +241,26 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-1.5">
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <h3 className="text-lg font-semibold mb-3" style={{ color: info.cor }}>
-          {info.titulo}
-        </h3>
         <MetricsFilterBar statCards={statCards} />
       </div>
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <PodiumStaircase
-          ranking={rankingList}
-          getValue={(r: SummaryRow) => (isUnit ? r.itens : r.valor)}
-          formatValue={(v) => (isUnit ? `${v} un.` : fmtMoney(v))}
-          variant={modeloRanking}
-        />
+        {storeSettings.ranking_moderno ? (
+          <PodiumSplit
+            ranking={rankingList}
+            getValue={(r: SummaryRow) => (isUnit ? r.itens : r.valor)}
+            formatValue={(v) => (isUnit ? `${v} un.` : fmtMoney(v))}
+          />
+        ) : (
+          <PodiumStaircase
+            ranking={rankingList}
+            getValue={(r: SummaryRow) => (isUnit ? r.itens : r.valor)}
+            formatValue={(v) => (isUnit ? `${v} un.` : fmtMoney(v))}
+            variant={modeloRanking}
+          />
+        )}
         <div className="flex flex-wrap gap-2 mt-4">
           <button onClick={handleCopy} className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800">
             {copied ? '✓ Copiado!' : '📋 Copiar ranking p/ WhatsApp'}
@@ -271,6 +279,10 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
           >
             👥 Detalhamento por vendedor
           </button>
+          <RankingModeToggle
+            on={storeSettings.ranking_moderno}
+            onToggle={() => updateStoreSettings.mutate({ ranking_moderno: !storeSettings.ranking_moderno })}
+          />
         </div>
       </div>
 
