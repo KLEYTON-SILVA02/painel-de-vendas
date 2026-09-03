@@ -4,14 +4,16 @@ import { useAuth } from '../../auth/AuthContext';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
 import { TagIcon } from '../../components/icons/NavIcons';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
+import { PodiumSplit } from '../../components/ranking/PodiumSplit';
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
+import { RankingModeToggle } from '../../components/ranking/RankingModeToggle';
 import { auditBioOutsideBalcao, computeBioSummary, groupBioRows, type BioSummaryRow } from '../../lib/business/bio';
 import { classifyBio } from '../../lib/business/classification';
 import { diasRestantesNoMes } from '../../lib/business/goals';
 import type { BioGroupGoal, BioWeights } from '../../lib/business/types';
 import { fmtDateBR } from '../../lib/format';
-import { useAddBioProduct, useBulkInsertBioProducts, useDeleteBioProduct, useUpdateBioGroupGoal } from '../../lib/mutations';
-import { useBioGroupGoals, useBioGroups, useCategoryTypes, useCollaborators, useSales } from '../../lib/queries';
+import { useAddBioProduct, useBulkInsertBioProducts, useDeleteBioProduct, useUpdateBioGroupGoal, useUpdateStoreSettings } from '../../lib/mutations';
+import { useBioGroupGoals, useBioGroups, useCategoryTypes, useCollaborators, useSales, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 
 /** Generic screen for any ADM-created partnership category (Gerenciar
@@ -30,6 +32,8 @@ export function CategoryTypePage() {
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
   const { data: categoryTypes } = useCategoryTypes();
+  const { data: storeSettings } = useStoreSettings();
+  const updateStoreSettings = useUpdateStoreSettings(profile?.store_id);
   const categoryType = categoryTypes?.find((c) => c.chave === chave);
   const { data: bioGroupRows } = useBioGroups(categoryType?.id);
   const { data: groupGoals } = useBioGroupGoals(categoryType?.id);
@@ -49,7 +53,7 @@ export function CategoryTypePage() {
     );
   }
 
-  if (!collaborators || !sales || !categoryType || !bioGroupRows || !groupGoals) {
+  if (!collaborators || !sales || !categoryType || !bioGroupRows || !groupGoals || !storeSettings) {
     return <div className="text-sm text-slate-500 p-6">Carregando…</div>;
   }
 
@@ -195,6 +199,8 @@ export function CategoryTypePage() {
           <div className="text-sm text-slate-500 py-4 text-center">
             Nenhum colaborador cadastrado no(s) setor(es) elegível(is) desta categoria.
           </div>
+        ) : storeSettings.ranking_moderno ? (
+          <PodiumSplit ranking={ranking.filter((r) => r.itens > 0)} getValue={(r) => r.pontos} formatValue={(v) => `${v.toFixed(1)} pts`} />
         ) : (
           <PodiumStaircase
             ranking={ranking.filter((r) => r.itens > 0)}
@@ -203,6 +209,14 @@ export function CategoryTypePage() {
             getSub={(r) => `${r.itens} un.`}
             variant="escadinha"
           />
+        )}
+        {elegiveisMatriculas.size > 0 && (
+          <div className="flex justify-end mt-3">
+            <RankingModeToggle
+              on={storeSettings.ranking_moderno}
+              onToggle={() => updateStoreSettings.mutate({ ranking_moderno: !storeSettings.ranking_moderno })}
+            />
+          </div>
         )}
       </div>
 

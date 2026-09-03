@@ -5,30 +5,34 @@ import type { StaircaseRow } from './PodiumStaircase';
 // podium artwork on the left, positions 4-15 as a two-column pill grid on
 // the right), toggled on via store_settings.ranking_moderno alongside the
 // older PodiumStaircase design it doesn't replace. The podium image is a
-// fixed background (silver/gold/bronze pedestals, crown baked in) — the
-// system only overlays each collaborator's photo into that image's own
-// blank white circle, at the exact position/size measured on the source
-// artwork (percentages of the image's own width/height, so they stay
-// correct at any render size as long as the container keeps the image's
-// aspect ratio — see `aspectRatio` below).
+// fixed background (silver/gold/bronze pedestals, crown baked in, no
+// baked-in text placeholders) — the system overlays each collaborator's
+// photo into the image's own blank white circle, plus the value/name as
+// white text in the blank area below the ribbon, all at the exact
+// position/size measured on the source artwork (percentages of the
+// image's own width/height, so they stay correct at any render size as
+// long as the container keeps the image's aspect ratio — see
+// `aspectRatio` below).
 const PODIUM_BG_RATIO = 2000 / 1669;
 const CIRCLE_SPOTS: Record<number, { left: number; top: number; diameter: number }> = {
-  0: { left: 52.48, top: 45.84, diameter: 21.1 }, // 1º — centro
-  1: { left: 18.9, top: 48.29, diameter: 18.3 }, // 2º — esquerda
-  2: { left: 86.28, top: 48.17, diameter: 17.5 }, // 3º — direita
+  0: { left: 49.98, top: 45.39, diameter: 16.95 }, // 1º — centro
+  1: { left: 18.9, top: 48.29, diameter: 18.4 }, // 2º — esquerda
+  2: { left: 86.12, top: 47.66, diameter: 17.75 }, // 3º — direita
 };
-// Value/name text fitted inside the two capsule cutouts baked into each
-// pedestal of the reference artwork (wide capsule above for the value,
-// smaller capsule below for the name) — measured the same way as
-// CIRCLE_SPOTS. Font sizes are in cqw so they scale with the podium
-// container's rendered width via CSS container queries.
+// Value/name text positioned in the blank pedestal area below the ribbon
+// — measured the same way as CIRCLE_SPOTS. Rendered in white with a drop
+// shadow (no capsule backdrop in this artwork) so it reads against any of
+// the three pedestal colors. Font sizes are in cqw so they scale with the
+// podium container's rendered width via CSS container queries; value
+// width/size are generous enough that a full "R$ 1.234,56" never
+// truncates.
 const TEXT_SPOTS: Record<
   number,
   { centerLeft: number; valueTop: number; nomeTop: number; valueSize: number; nomeSize: number; valueMaxWidth: number; nomeMaxWidth: number }
 > = {
-  0: { centerLeft: 49.98, valueTop: 77.95, nomeTop: 87.4, valueSize: 4.4, nomeSize: 2.7, valueMaxWidth: 29, nomeMaxWidth: 18 }, // 1º — centro
-  1: { centerLeft: 16.53, valueTop: 73.4, nomeTop: 81.13, valueSize: 3.8, nomeSize: 2.3, valueMaxWidth: 22, nomeMaxWidth: 15 }, // 2º — esquerda
-  2: { centerLeft: 83.43, valueTop: 73.37, nomeTop: 81.13, valueSize: 3.8, nomeSize: 2.3, valueMaxWidth: 23, nomeMaxWidth: 15 }, // 3º — direita
+  0: { centerLeft: 49.98, valueTop: 77.95, nomeTop: 87.4, valueSize: 4.2, nomeSize: 2.7, valueMaxWidth: 32, nomeMaxWidth: 20 }, // 1º — centro
+  1: { centerLeft: 16.53, valueTop: 73.4, nomeTop: 81.13, valueSize: 3.6, nomeSize: 2.3, valueMaxWidth: 25, nomeMaxWidth: 17 }, // 2º — esquerda
+  2: { centerLeft: 83.43, valueTop: 73.37, nomeTop: 81.13, valueSize: 3.6, nomeSize: 2.3, valueMaxWidth: 25, nomeMaxWidth: 17 }, // 3º — direita
 };
 const MAX_LISTED = 15;
 const COL_SIZE = 6;
@@ -119,6 +123,7 @@ function PodiumText<T extends StaircaseRow>({
 }) {
   const spot = TEXT_SPOTS[rank];
   if (!spot) return null;
+  const textShadow = '0 1px 4px rgba(0,0,0,.75), 0 0 2px rgba(0,0,0,.6)';
   return (
     <>
       <div
@@ -135,7 +140,8 @@ function PodiumText<T extends StaircaseRow>({
           fontFamily: "'Orbitron', sans-serif",
           fontWeight: 800,
           fontSize: `${spot.valueSize}cqw`,
-          color: '#1a1400',
+          color: '#fff',
+          textShadow,
         }}
       >
         {formatValue(getValue(row))}
@@ -154,7 +160,8 @@ function PodiumText<T extends StaircaseRow>({
           textTransform: 'uppercase',
           fontWeight: 700,
           fontSize: `${spot.nomeSize}cqw`,
-          color: '#1a1400',
+          color: '#fff',
+          textShadow,
         }}
       >
         {row.apelido || row.nome}
