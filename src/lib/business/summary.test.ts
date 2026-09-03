@@ -33,11 +33,12 @@ describe('computeSummary', () => {
     expect(carla.apelido).toBe('Carla');
   });
 
-  it('synthesizes a row for an unregistered matricula found in sales', () => {
+  it('synthesizes a numbered "Vend. N" row for an unregistered matricula found in sales', () => {
     const rows = computeSummary(sales, collaborators, '2026-08-01', '2026-08-31');
     const unknown = rows.find((r) => r.matricula === 'M9');
     expect(unknown).toBeDefined();
-    expect(unknown!.nome).toBe('Desconhecido');
+    expect(unknown!.nome).toBe('Vend. 1');
+    expect(unknown!.apelido).toBe('Vend. 1');
   });
 
   it('filters by category', () => {

@@ -441,7 +441,6 @@ export function DashboardPage() {
         </div>
 
         <div className="lg:col-start-1 lg:row-start-2 min-w-0 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-          <h3 className="text-cyan-400 font-semibold text-sm mb-2">🏆 Ranking Geral de Vendas — {rankFilterParams.label}</h3>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ flex: '1 1 auto', minWidth: 0, overflowX: 'auto', paddingBottom: 2 }}>
               <RankFilterBar dynamics={dynamics} singleLine />
