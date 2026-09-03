@@ -13,21 +13,22 @@ import type { StaircaseRow } from './PodiumStaircase';
 // aspect ratio — see `aspectRatio` below).
 const PODIUM_BG_RATIO = 2000 / 1669;
 const CIRCLE_SPOTS: Record<number, { left: number; top: number; diameter: number }> = {
-  0: { left: 49.98, top: 45.88, diameter: 16.86 }, // 1º — centro
-  1: { left: 16.72, top: 48.28, diameter: 16.78 }, // 2º — esquerda
-  2: { left: 83.83, top: 47.95, diameter: 16.4 }, // 3º — direita
+  0: { left: 52.48, top: 45.84, diameter: 21.1 }, // 1º — centro
+  1: { left: 18.9, top: 48.29, diameter: 18.3 }, // 2º — esquerda
+  2: { left: 86.28, top: 48.17, diameter: 17.5 }, // 3º — direita
 };
-// Value/name text baked into the base of each pedestal in the reference
-// mockup — same measurement approach as CIRCLE_SPOTS (percentages of the
-// artwork's own width/height/width, font sizes in cqw so they scale with
-// the podium container's rendered width via CSS container queries).
+// Value/name text fitted inside the two capsule cutouts baked into each
+// pedestal of the reference artwork (wide capsule above for the value,
+// smaller capsule below for the name) — measured the same way as
+// CIRCLE_SPOTS. Font sizes are in cqw so they scale with the podium
+// container's rendered width via CSS container queries.
 const TEXT_SPOTS: Record<
   number,
-  { centerLeft: number; valueTop: number; nomeTop: number; valueSize: number; nomeSize: number; maxWidth: number }
+  { centerLeft: number; valueTop: number; nomeTop: number; valueSize: number; nomeSize: number; valueMaxWidth: number; nomeMaxWidth: number }
 > = {
-  0: { centerLeft: 49.75, valueTop: 78.8, nomeTop: 86.4, valueSize: 4.4, nomeSize: 2.7, maxWidth: 34 }, // 1º — centro
-  1: { centerLeft: 16.5, valueTop: 74.5, nomeTop: 80.8, valueSize: 3.8, nomeSize: 2.3, maxWidth: 27 }, // 2º — esquerda
-  2: { centerLeft: 83.7, valueTop: 74.5, nomeTop: 80.8, valueSize: 3.8, nomeSize: 2.3, maxWidth: 27 }, // 3º — direita
+  0: { centerLeft: 49.98, valueTop: 77.95, nomeTop: 87.4, valueSize: 4.4, nomeSize: 2.7, valueMaxWidth: 29, nomeMaxWidth: 18 }, // 1º — centro
+  1: { centerLeft: 16.53, valueTop: 73.4, nomeTop: 81.13, valueSize: 3.8, nomeSize: 2.3, valueMaxWidth: 22, nomeMaxWidth: 15 }, // 2º — esquerda
+  2: { centerLeft: 83.43, valueTop: 73.37, nomeTop: 81.13, valueSize: 3.8, nomeSize: 2.3, valueMaxWidth: 23, nomeMaxWidth: 15 }, // 3º — direita
 };
 const MAX_LISTED = 15;
 const COL_SIZE = 6;
@@ -118,7 +119,6 @@ function PodiumText<T extends StaircaseRow>({
 }) {
   const spot = TEXT_SPOTS[rank];
   if (!spot) return null;
-  const textShadow = '0 1px 4px rgba(0,0,0,.65)';
   return (
     <>
       <div
@@ -126,7 +126,7 @@ function PodiumText<T extends StaircaseRow>({
           position: 'absolute',
           left: `${spot.centerLeft}%`,
           top: `${spot.valueTop}%`,
-          width: `${spot.maxWidth}%`,
+          width: `${spot.valueMaxWidth}%`,
           transform: 'translate(-50%,-50%)',
           textAlign: 'center',
           whiteSpace: 'nowrap',
@@ -135,8 +135,7 @@ function PodiumText<T extends StaircaseRow>({
           fontFamily: "'Orbitron', sans-serif",
           fontWeight: 800,
           fontSize: `${spot.valueSize}cqw`,
-          color: '#fff',
-          textShadow,
+          color: '#1a1400',
         }}
       >
         {formatValue(getValue(row))}
@@ -146,7 +145,7 @@ function PodiumText<T extends StaircaseRow>({
           position: 'absolute',
           left: `${spot.centerLeft}%`,
           top: `${spot.nomeTop}%`,
-          width: `${spot.maxWidth}%`,
+          width: `${spot.nomeMaxWidth}%`,
           transform: 'translate(-50%,-50%)',
           textAlign: 'center',
           whiteSpace: 'nowrap',
@@ -155,8 +154,7 @@ function PodiumText<T extends StaircaseRow>({
           textTransform: 'uppercase',
           fontWeight: 700,
           fontSize: `${spot.nomeSize}cqw`,
-          color: '#fff',
-          textShadow,
+          color: '#1a1400',
         }}
       >
         {row.apelido || row.nome}
@@ -165,6 +163,13 @@ function PodiumText<T extends StaircaseRow>({
   );
 }
 
+// Pills stretch to fill whatever vertical space the column has (matching the
+// podium's height) instead of stacking at a fixed size and leaving blank
+// space below when few collaborators are listed: each row is `flex:1` with a
+// generous max-height, and its own internal sizes scale with its rendered
+// height (`containerType:'size'` + `cqh` units, clamped so a very short list
+// doesn't blow up into oversized pills) — a short list gets fewer, taller
+// pills; a full list looks the same as before.
 function PillColumn<T extends StaircaseRow>({
   rows,
   startPos,
@@ -184,18 +189,41 @@ function PillColumn<T extends StaircaseRow>({
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 8,
-            height: 38,
+            gap: 'clamp(6px, 14cqh, 12px)',
+            flex: '1 1 0',
+            minHeight: 38,
+            maxHeight: 96,
             boxSizing: 'border-box',
-            padding: '0 12px',
+            padding: '0 clamp(10px, 18cqh, 16px)',
             borderRadius: 9999,
             background: 'linear-gradient(90deg,#1D3557 0%,#2A4D80 100%)',
+            containerType: 'size',
           }}
         >
-          <span style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: 13, color: '#fff', width: 20, textAlign: 'center', flexShrink: 0 }}>
+          <span
+            style={{
+              fontFamily: "'Orbitron', sans-serif",
+              fontWeight: 800,
+              fontSize: 'clamp(12px, 34cqh, 20px)',
+              color: '#fff',
+              width: 'clamp(18px, 40cqh, 26px)',
+              textAlign: 'center',
+              flexShrink: 0,
+            }}
+          >
             {startPos + i}
           </span>
-          <span style={{ width: 26, height: 26, borderRadius: '50%', border: '2px solid #8A2BE2', background: '#0b0e1d', overflow: 'hidden', flexShrink: 0 }}>
+          <span
+            style={{
+              width: 'clamp(22px, 60cqh, 36px)',
+              aspectRatio: '1/1',
+              borderRadius: '50%',
+              border: '2px solid #8A2BE2',
+              background: '#0b0e1d',
+              overflow: 'hidden',
+              flexShrink: 0,
+            }}
+          >
             {r.foto && <img src={r.foto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
           </span>
           <span
@@ -207,13 +235,22 @@ function PillColumn<T extends StaircaseRow>({
               whiteSpace: 'nowrap',
               textTransform: 'uppercase',
               fontWeight: 700,
-              fontSize: 12,
+              fontSize: 'clamp(11px, 28cqh, 15px)',
               color: '#fff',
             }}
           >
             {r.apelido || r.nome}
           </span>
-          <span style={{ marginLeft: 'auto', flexShrink: 0, fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, fontSize: 12, color: '#64B5F6' }}>
+          <span
+            style={{
+              marginLeft: 'auto',
+              flexShrink: 0,
+              fontFamily: "'JetBrains Mono', monospace",
+              fontWeight: 800,
+              fontSize: 'clamp(11px, 28cqh, 15px)',
+              color: '#64B5F6',
+            }}
+          >
             {formatValue(getValue(r))}
           </span>
         </div>

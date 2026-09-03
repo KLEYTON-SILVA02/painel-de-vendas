@@ -50,7 +50,7 @@ const CategoryTypePage = lazy(() => import('./category-type/CategoryTypePage').t
 // below. Keyed by exact pathname (desktop admin routes only; mobile-v2 and
 // collaborator shells never reach this header at all).
 const PAGE_TITLES: Record<string, { label: string; color: string }> = {
-  '/': { label: '🏆 Ranking Geral', color: '#00f0ff' },
+  '/ranking': { label: '🏆 Ranking Geral', color: '#00f0ff' },
   '/categoria/DERM': { label: '🩹 Dermocosméticos', color: '#ff3df0' },
   '/categoria/GEN': { label: '💊 Genérico', color: '#14ff00' },
   '/categoria/MP': { label: '🏷️ Marcas Exclusivas', color: '#a82bff' },
