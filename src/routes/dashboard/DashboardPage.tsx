@@ -4,7 +4,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { SidebarCalendarCard } from '../../components/SidebarCalendarCard';
 import { GenerateImageScopeModal } from '../../components/ranking/GenerateImageScopeModal';
 import { MultiRankingImageModal } from '../../components/ranking/MultiRankingImageModal';
-import { PodiumSplit } from '../../components/ranking/PodiumSplit';
+import { PodiumSplit, type PodiumSpots } from '../../components/ranking/PodiumSplit';
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { RankingModeToggle } from '../../components/ranking/RankingModeToggle';
@@ -497,6 +497,8 @@ export function DashboardPage() {
                 ranking={rankingFilteredList}
                 getValue={(r) => (isUnitRanking ? r.itens : r.valor)}
                 formatValue={(v) => (isUnitRanking ? `${v} un.` : fmtMoney(v))}
+                bgUrl={storeSettings.ranking_podium_bg_url}
+                spots={storeSettings.ranking_podium_spots as unknown as PodiumSpots | null}
               />
             ) : (
               <PodiumStaircase

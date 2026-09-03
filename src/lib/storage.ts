@@ -62,3 +62,17 @@ export async function uploadConquistaCardLogo(storeId: string, templateId: strin
   const { data } = supabase.storage.from('photos').getPublicUrl(fullPath);
   return `${data.publicUrl}?t=${Date.now()}`;
 }
+
+/** Uploads a store's own custom Ranking Geral podium background (replacing
+ * the ADM-supplied stock artwork), under {storeId}/ranking-podium/bg.{ext}
+ * — calibrated in Configurações via the "varinha mágica" tool, which marks
+ * where the photo circles and value/name text land on it (see
+ * ranking_podium_spots on store_settings). */
+export async function uploadRankingPodiumBackground(storeId: string, file: File): Promise<string> {
+  const ext = file.name.split('.').pop() || 'jpg';
+  const fullPath = `${storeId}/ranking-podium/bg.${ext}`;
+  const { error } = await supabase.storage.from('photos').upload(fullPath, file, { upsert: true });
+  if (error) throw error;
+  const { data } = supabase.storage.from('photos').getPublicUrl(fullPath);
+  return `${data.publicUrl}?t=${Date.now()}`;
+}

@@ -908,6 +908,8 @@ export type Database = {
           meta_geral_fallback: number
           modelo_ranking: string
           ranking_moderno: boolean
+          ranking_podium_bg_url: string | null
+          ranking_podium_spots: Json | null
           store_id: string
           tema: string
         }
@@ -920,6 +922,8 @@ export type Database = {
           meta_geral_fallback?: number
           modelo_ranking?: string
           ranking_moderno?: boolean
+          ranking_podium_bg_url?: string | null
+          ranking_podium_spots?: Json | null
           store_id: string
           tema?: string
         }
@@ -932,6 +936,8 @@ export type Database = {
           meta_geral_fallback?: number
           modelo_ranking?: string
           ranking_moderno?: boolean
+          ranking_podium_bg_url?: string | null
+          ranking_podium_spots?: Json | null
           store_id?: string
           tema?: string
         }

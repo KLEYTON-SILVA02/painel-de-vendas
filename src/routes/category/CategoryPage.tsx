@@ -3,7 +3,7 @@ import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
 import { ReclassifyBar } from '../../components/admin/ReclassifyBar';
-import { PodiumSplit } from '../../components/ranking/PodiumSplit';
+import { PodiumSplit, type PodiumSpots } from '../../components/ranking/PodiumSplit';
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { RankingModeToggle } from '../../components/ranking/RankingModeToggle';
@@ -253,6 +253,8 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
             ranking={rankingList}
             getValue={(r: SummaryRow) => (isUnit ? r.itens : r.valor)}
             formatValue={(v) => (isUnit ? `${v} un.` : fmtMoney(v))}
+            bgUrl={storeSettings.ranking_podium_bg_url}
+            spots={storeSettings.ranking_podium_spots as unknown as PodiumSpots | null}
           />
         ) : (
           <PodiumStaircase
