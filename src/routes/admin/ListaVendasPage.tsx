@@ -80,6 +80,8 @@ export function ListaVendasPage() {
   const [reclassifyMode, setReclassifyMode] = useState(false);
   const [selectedProdutos, setSelectedProdutos] = useState<Set<string>>(new Set());
   const [bulkCat, setBulkCat] = useState<CategoryKey>('DERM');
+  const [reclassifyFrom, setReclassifyFrom] = useState('');
+  const [reclassifyTo, setReclassifyTo] = useState('');
   const reclassify = useReclassifyProdutos(profile?.store_id);
 
   const byMatricula = useMemo(() => {
@@ -126,7 +128,13 @@ export function ListaVendasPage() {
     });
   }
   async function applyReclassify() {
-    await reclassify.mutateAsync({ produtos: Array.from(selectedProdutos), categoria: bulkCat, catalog: catalog!, sales: sales! });
+    await reclassify.mutateAsync({
+      produtos: Array.from(selectedProdutos),
+      categoria: bulkCat,
+      catalog: catalog!,
+      sales: sales!,
+      dateRange: { from: reclassifyFrom || undefined, to: reclassifyTo || undefined },
+    });
     setSelectedProdutos(new Set());
     setReclassifyMode(false);
   }
@@ -147,6 +155,10 @@ export function ListaVendasPage() {
             onCategoriaChange={setBulkCat}
             onApply={applyReclassify}
             applying={reclassify.isPending}
+            dateFrom={reclassifyFrom}
+            dateTo={reclassifyTo}
+            onDateFromChange={setReclassifyFrom}
+            onDateToChange={setReclassifyTo}
           />
         </div>
         <div className="flex gap-1 mb-2">

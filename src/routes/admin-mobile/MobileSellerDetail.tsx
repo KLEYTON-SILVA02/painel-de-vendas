@@ -114,6 +114,8 @@ export function MobileSalesTable({
   const [reclassifyMode, setReclassifyMode] = useState(false);
   const [selectedProdutos, setSelectedProdutos] = useState<Set<string>>(new Set());
   const [bulkCat, setBulkCat] = useState<CategoryKey>('DERM');
+  const [reclassifyFrom, setReclassifyFrom] = useState('');
+  const [reclassifyTo, setReclassifyTo] = useState('');
 
   const totalValor = sales.reduce((a, s) => a + s.valor, 0);
   const totalQtd = sales.reduce((a, s) => a + s.qtd, 0);
@@ -130,7 +132,13 @@ export function MobileSalesTable({
   }
   async function applyReclassify() {
     if (!catalog || !allSales) return;
-    await reclassify.mutateAsync({ produtos: Array.from(selectedProdutos), categoria: bulkCat, catalog, sales: allSales });
+    await reclassify.mutateAsync({
+      produtos: Array.from(selectedProdutos),
+      categoria: bulkCat,
+      catalog,
+      sales: allSales,
+      dateRange: { from: reclassifyFrom || undefined, to: reclassifyTo || undefined },
+    });
     setSelectedProdutos(new Set());
     setReclassifyMode(false);
   }
@@ -150,6 +158,10 @@ export function MobileSalesTable({
           onCategoriaChange={setBulkCat}
           onApply={applyReclassify}
           applying={reclassify.isPending}
+          dateFrom={reclassifyFrom}
+          dateTo={reclassifyTo}
+          onDateFromChange={setReclassifyFrom}
+          onDateToChange={setReclassifyTo}
         />
       </div>
       <div style={{ overflowX: 'auto' }}>

@@ -3,7 +3,7 @@ import { PageLoading } from '../../components/PageLoading';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
 import { MultiRankingImageModal } from '../../components/ranking/MultiRankingImageModal';
 import { RankingColumnCard } from '../../components/ranking/RankingColumnCard';
-import { diasRestantesNoMes, effectiveMetaGeral, getGoal, getSuperMeta } from '../../lib/business/goals';
+import { diasRestantesNoMes, effectiveMetaGeral, getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
 import { computeColumnRanking } from '../../lib/business/ranking';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { generateAllCategoryImages, type MultiImageResult } from '../../lib/rankingImage';
@@ -27,13 +27,14 @@ export function RankingPage() {
   const { data: storeSettings } = useStoreSettings();
   const { data: specialLists } = useSpecialLists();
   const { data: store } = useStore();
-  const { dashFrom, dashTo, refYear, refMonth } = useDateRange();
+  const { dashFrom, dashTo, refYear, refMonth, modoGeral } = useDateRange();
   const [generatingAll, setGeneratingAll] = useState(false);
   const [generatingProgress, setGeneratingProgress] = useState({ done: 0, total: 0 });
   const [multiImages, setMultiImages] = useState<MultiImageResult[] | null>(null);
 
   const modoDia = dashFrom === dashTo;
   const mode = modoDia ? 'dia' : 'mes';
+  const proration = goalProration(dashFrom, dashTo, modoGeral);
 
   // Safe stand-ins so the useMemo below runs unconditionally on every
   // render (same hook order regardless of loading state) — the
@@ -81,8 +82,8 @@ export function RankingPage() {
     return <PageLoading />;
   }
 
-  const metaGeral = effectiveMetaGeral(goals, mode, sales, collaborators, storeSettings.meta_geral_fallback);
-  const metaSuper = getSuperMeta(goals.MER, mode, sales, collaborators);
+  const metaGeral = effectiveMetaGeral(goals, mode, sales, collaborators, storeSettings.meta_geral_fallback, proration);
+  const metaSuper = getSuperMeta(goals.MER, mode, sales, collaborators, proration);
   const dias = diasRestantesNoMes();
 
   async function handleGenerateAllImages() {

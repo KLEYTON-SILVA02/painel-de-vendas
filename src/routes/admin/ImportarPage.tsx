@@ -7,10 +7,21 @@ import { classifyProductTier } from '../../lib/business/classification';
 import { autoMapColumns, detectHeaderRow, type ColumnMap, type ImportField } from '../../lib/business/importMapping';
 import { dateFromCell, idFromCell, normalizeMatricula, parseNumeroBR } from '../../lib/business/parsing';
 import { buildClassificationInputs } from '../../lib/mappers';
-import { fmtMoney } from '../../lib/format';
-import { useBrandKeywords, useCatalog, useExclusiveBrands, useProducts, useSales, useSalesImports } from '../../lib/queries';
-import { findExistingImport, hashBytes, recordSalesImport, saleImportKey } from '../../lib/salesImport';
-import { supabase } from '../../lib/supabase';
+import { fmtDateBR, fmtMoney } from '../../lib/format';
+import { useBrandKeywords, useCatalog, useCollaborators, useExclusiveBrands, useProducts, useSales, useSalesImports } from '../../lib/queries';
+import {
+  aggregateByDate,
+  compareDateAggregate,
+  deleteSalesForDates,
+  findExistingImport,
+  hashBytes,
+  insertSalesInBatches,
+  recordSalesImport,
+  saleImportKey,
+  translateDbError,
+  updateSalesImportProgress,
+  type RejectedRow,
+} from '../../lib/salesImport';
 
 const MAX_SIZE = 50 * 1024 * 1024;
 const FIELDS: ImportField[] = ['data', 'matricula', 'vendedor', 'codigo', 'produto', 'qtd', 'valor'];
@@ -52,6 +63,7 @@ export function ImportarPage() {
   const { data: exclusiveBrands } = useExclusiveBrands();
   const { data: existingSales, refetch: refetchSales } = useSales();
   const { data: pastImports } = useSalesImports();
+  const { data: collaborators } = useCollaborators();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>('pick');
@@ -62,7 +74,18 @@ export function ImportarPage() {
   const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmResult, setConfirmResult] = useState<
-    { count: number; invalidDate: number; noProduto: number; duplicateCount: number; footerRowSkipped: number } | null
+    | {
+        count: number;
+        invalidDate: number;
+        noProduto: number;
+        duplicateCount: number;
+        footerRowSkipped: number;
+        unmatchedSeller: number;
+        unclassified: number;
+        replacedDates: string[];
+        rejected: RejectedRow[];
+      }
+    | null
   >(null);
   const [analysisOptions, setAnalysisOptions] = useState<AnalysisOptions>({ produtos: true, vendedores: true, listaVendas: true });
   const [summary, setSummary] = useState<SheetSummary | null>(null);
@@ -169,20 +192,36 @@ export function ImportarPage() {
 
   async function handleConfirm() {
     if (!profile?.store_id) return;
+    setError(null);
     setStep('done');
-    setProgress('Verificando duplicidade…');
+    setProgress('Verificando planilha…');
+    const startedAt = performance.now();
 
-    // Every sale already in the store, keyed the same way as the rows about
-    // to be inserted — a new row matching one of these is a duplicate
-    // (already imported before, from this file or another one) and gets
-    // skipped rather than inserted again.
-    const existingKeys = new Set((existingSales ?? []).map((s) => saleImportKey({ ...s, codigo: s.codigo ?? null })));
-    const seenInBatch = new Set<string>();
-    const rows: Record<string, unknown>[] = [];
+    const knownMatriculas = new Set((collaborators ?? []).map((c) => c.matricula));
+
+    // First pass: parse every row (same field extraction as before) into a
+    // flat candidate list, without yet deciding what to insert — the
+    // per-date safety check right below needs the *whole* file's contents
+    // per date, not the post-dedup subset.
+    type Candidate = {
+      store_id: string;
+      data_raw: string;
+      data_iso: string | null;
+      matricula: string;
+      vendedor: string;
+      produto: string;
+      codigo: string | null;
+      qtd: number;
+      valor: number;
+      grupo: string | null;
+      classification_tier: number;
+    };
+    const candidates: Candidate[] = [];
     let invalidDate = 0;
     let noProduto = 0;
-    let duplicateCount = 0;
     let footerRowSkipped = 0;
+    let unmatchedSeller = 0;
+    let unclassified = 0;
 
     for (const sheet of sheets) {
       for (const [ri, r] of sheet.rows.entries()) {
@@ -201,18 +240,14 @@ export function ImportarPage() {
         if (!dataISO) invalidDate++;
         const codigo = sheet.map.codigo >= 0 ? idFromCell(rr[sheet.map.codigo], r[sheet.map.codigo]) : '';
         const matricula = sheet.map.matricula >= 0 ? normalizeMatricula(idFromCell(rr[sheet.map.matricula], r[sheet.map.matricula])) : '';
+        if (matricula && knownMatriculas.size > 0 && !knownMatriculas.has(matricula)) unmatchedSeller++;
         const qtd = sheet.map.qtd >= 0 ? parseNumeroBR(r[sheet.map.qtd]) : 0;
         const valor = sheet.map.valor >= 0 ? parseNumeroBR(r[sheet.map.valor]) : 0;
 
-        const key = saleImportKey({ dataISO, matricula, produto, codigo: codigo || null, qtd, valor });
-        if (existingKeys.has(key) || seenInBatch.has(key)) {
-          duplicateCount++;
-          continue;
-        }
-        seenInBatch.add(key);
-
         const { categoria, tier } = classifyProductTier(produto, codigo, inputs);
-        rows.push({
+        if (classifyProductTier(produto, codigo, inputs, false).categoria === null) unclassified++;
+
+        candidates.push({
           store_id: profile.store_id,
           data_raw: dataStr,
           data_iso: dataISO,
@@ -228,23 +263,106 @@ export function ImportarPage() {
       }
     }
 
+    // Per-date safety net (complements the row-level dedup below): compare
+    // what this file has for each date against what's already recorded for
+    // that date in this store. A date with strictly less data than what's
+    // already there is a partial resend — blocking the whole import rather
+    // than silently under-writing it. A date with at least as much data is
+    // a full resend — offered as a delete-and-rewrite of just that date so
+    // re-uploading the same (or a corrected) file never creates duplicates.
+    const incomingByDate = aggregateByDate(candidates.map((c) => ({ dataISO: c.data_iso, valor: c.valor })));
+    const existingByDate = aggregateByDate((existingSales ?? []).map((s) => ({ dataISO: s.dataISO, valor: s.valor })));
+    const blockedDates: string[] = [];
+    const replaceDates: string[] = [];
+    incomingByDate.forEach((incoming, date) => {
+      const cmp = compareDateAggregate(incoming, existingByDate.get(date));
+      if (cmp === 'blocked') blockedDates.push(date);
+      else if (cmp === 'replace') replaceDates.push(date);
+    });
+
+    if (blockedDates.length > 0) {
+      const list = blockedDates.sort().map(fmtDateBR).join(', ');
+      setError(
+        `Importação bloqueada: a planilha tem menos vendas ou valor total menor do que o já registrado para ${blockedDates.length === 1 ? 'a data' : 'as datas'} ${list}. Nada foi gravado. Confira se a planilha está completa antes de tentar novamente.`,
+      );
+      setStep('verify');
+      setProgress(null);
+      return;
+    }
+
+    if (replaceDates.length > 0) {
+      const list = replaceDates.sort().map(fmtDateBR).join(', ');
+      const proceed = window.confirm(
+        `Esta planilha cobre ${replaceDates.length === 1 ? 'a data' : 'as datas'} ${list}, que já ${replaceDates.length === 1 ? 'tem vendas registradas' : 'têm vendas registradas'} com quantidade/valor igual ou menor ao da planilha. Isso parece uma reimportação — o sistema vai apagar as vendas já registradas ${replaceDates.length === 1 ? 'nessa data' : 'nessas datas'} e regravar a partir da planilha, pra não duplicar nada. Deseja continuar?`,
+      );
+      if (!proceed) {
+        setStep('verify');
+        setProgress(null);
+        return;
+      }
+    }
+
     try {
+      if (replaceDates.length > 0) {
+        setProgress('Substituindo vendas das datas reenviadas…');
+        await deleteSalesForDates(profile.store_id, replaceDates);
+      }
+
+      // Every sale still in the store after the replace-dates deletion
+      // above, keyed the same way as the candidates — a new row matching
+      // one of these is a duplicate (already imported, unrelated to the
+      // per-date replace) and gets skipped rather than inserted again.
+      const replaceDatesSet = new Set(replaceDates);
+      const existingKeys = new Set(
+        (existingSales ?? [])
+          .filter((s) => !s.dataISO || !replaceDatesSet.has(s.dataISO))
+          .map((s) => saleImportKey({ ...s, codigo: s.codigo ?? null })),
+      );
+      const seenInBatch = new Set<string>();
+      const rows: Record<string, unknown>[] = [];
+      let duplicateCount = 0;
+      candidates.forEach((c) => {
+        const key = saleImportKey({ dataISO: c.data_iso, matricula: c.matricula, produto: c.produto, codigo: c.codigo, qtd: c.qtd, valor: c.valor });
+        if (existingKeys.has(key) || seenInBatch.has(key)) {
+          duplicateCount++;
+          return;
+        }
+        seenInBatch.add(key);
+        rows.push(c);
+      });
+
       const importRow = await recordSalesImport(profile.store_id, fileName, fileHash, rows.length, duplicateCount);
       rows.forEach((row) => {
         row.import_id = importRow.id;
       });
 
       setProgress(`Gravando vendas… 0/${rows.length}`);
-      for (let i = 0; i < rows.length; i += 500) {
-        const chunk = rows.slice(i, i + 500);
-        const { error: insertErr } = await supabase.from('sales').insert(chunk as never);
-        if (insertErr) throw insertErr;
-        setProgress(`Gravando vendas… ${Math.min(i + 500, rows.length)}/${rows.length}`);
-      }
-      setConfirmResult({ count: rows.length, invalidDate, noProduto, duplicateCount, footerRowSkipped });
+      const { insertedCount, rejected } = await insertSalesInBatches(rows, (inserted, total) => {
+        setProgress(`Gravando vendas… ${inserted}/${total}`);
+        updateSalesImportProgress(importRow.id, { insertedRows: inserted });
+      });
+      const processingMs = Math.round(performance.now() - startedAt);
+      updateSalesImportProgress(importRow.id, {
+        insertedRows: insertedCount,
+        invalidDateCount: invalidDate,
+        unmatchedSellerCount: unmatchedSeller,
+        unclassifiedCount: unclassified,
+        processingMs,
+      });
+      setConfirmResult({
+        count: insertedCount,
+        invalidDate,
+        noProduto,
+        duplicateCount,
+        footerRowSkipped,
+        unmatchedSeller,
+        unclassified,
+        replacedDates: replaceDates,
+        rejected,
+      });
       refetchSales();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao gravar vendas.');
+      setError(translateDbError(err));
       setStep('verify');
     } finally {
       setProgress(null);
@@ -468,12 +586,42 @@ export function ImportarPage() {
                 {confirmResult.invalidDate ? ` · ${confirmResult.invalidDate} com data inválida` : ''}
                 {confirmResult.noProduto ? ` · ${confirmResult.noProduto} sem produto` : ''}
                 {confirmResult.footerRowSkipped ? ` · ${confirmResult.footerRowSkipped} linha(s) de total ignorada(s)` : ''}
+                {confirmResult.unmatchedSeller ? ` · ${confirmResult.unmatchedSeller} de vendedor não cadastrado` : ''}
+                {confirmResult.unclassified ? ` · ${confirmResult.unclassified} de produto não classificado` : ''}
               </p>
+              {confirmResult.replacedDates.length > 0 && (
+                <p className="text-xs text-amber-400 mb-3">
+                  {confirmResult.replacedDates.length === 1 ? 'A data' : 'As datas'}{' '}
+                  {confirmResult.replacedDates.map((d) => fmtDateBR(d)).join(', ')} {confirmResult.replacedDates.length === 1 ? 'foi' : 'foram'} substituída(s):
+                  as vendas antigas dessa(s) data(s) foram apagadas e regravadas a partir desta planilha.
+                </p>
+              )}
               {confirmResult.duplicateCount > 0 && (
                 <p className="text-xs text-slate-500 mb-3">
                   {confirmResult.duplicateCount} venda(s) da planilha já existiam no sistema (mesma data, matrícula, produto,
                   quantidade e valor) e não foram gravadas de novo.
                 </p>
+              )}
+              {confirmResult.unmatchedSeller > 0 && (
+                <p className="text-xs text-slate-500 mb-3">
+                  {confirmResult.unmatchedSeller} venda(s) têm matrícula que não corresponde a nenhum colaborador cadastrado —
+                  foram importadas normalmente, mas vale cadastrar esses vendedores em <b>ADM → Colaboradores</b>.
+                </p>
+              )}
+              {confirmResult.rejected.length > 0 && (
+                <div className="rounded-xl border border-rose-700/50 bg-rose-950/30 p-3 mb-3">
+                  <p className="text-xs text-rose-300 mb-1">
+                    {confirmResult.rejected.length} linha(s) não puderam ser gravadas mesmo após tentar de novo — o restante da
+                    planilha foi importado normalmente. Corrija e reenvie só essas vendas:
+                  </p>
+                  <ul className="text-[11px] text-rose-400 list-disc pl-4 max-h-32 overflow-y-auto">
+                    {confirmResult.rejected.slice(0, 20).map((r, i) => (
+                      <li key={i}>
+                        {String(r.row.data_raw ?? '—')} · {String(r.row.produto ?? '—')} — {r.error}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
               <button onClick={reset} className="rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm">
                 Importar outra planilha

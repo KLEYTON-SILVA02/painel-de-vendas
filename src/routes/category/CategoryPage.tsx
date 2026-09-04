@@ -9,7 +9,7 @@ import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { RankingModeToggle } from '../../components/ranking/RankingModeToggle';
 import type { CategoryKey } from '../../lib/business/classification';
 import { copyText, formatRankingText } from '../../lib/clipboard';
-import { diasRestantesNoMes, getGoal, getSuperMeta } from '../../lib/business/goals';
+import { diasRestantesNoMes, getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
 import { todayISO } from '../../lib/dateRange';
 import { computeSummary, computeVendorExtract } from '../../lib/business/summary';
 import type { CommissionRate, SummaryRow } from '../../lib/business/types';
@@ -53,7 +53,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   const { data: store } = useStore();
   const { data: commissionRates } = useCommissionRates();
   const { data: catalog } = useCatalog();
-  const { dashFrom, dashTo } = useDateRange();
+  const { dashFrom, dashTo, modoGeral } = useDateRange();
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [extractMatricula, setExtractMatricula] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -62,6 +62,8 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   const [reclassifyMode, setReclassifyMode] = useState(false);
   const [selectedProdutos, setSelectedProdutos] = useState<Set<string>>(new Set());
   const [bulkCat, setBulkCat] = useState<CategoryKey>('DERM');
+  const [reclassifyFrom, setReclassifyFrom] = useState('');
+  const [reclassifyTo, setReclassifyTo] = useState('');
   const [vendasSeller, setVendasSeller] = useState('');
   const [vendasPage, setVendasPage] = useState(0);
   const [vendasCommissionSlot, setVendasCommissionSlot] = useState<number | null>(null);
@@ -76,6 +78,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   const isUnit = catKey === 'LEVMEL' || catKey === 'CHIP';
   const modoDia = dashFrom === dashTo;
   const mode = modoDia ? 'dia' : 'mes';
+  const proration = goalProration(dashFrom, dashTo, modoGeral);
   // Mercadoria Geral is the store's grand total, not its own exclusive
   // bucket — its screen (ranking, stat cards, Lista de vendas, extrato)
   // reflects every sale regardless of category, same as "Meta Geral"
@@ -96,8 +99,8 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
     const isUnidadeMetric = goal?.metrica === 'unidade';
     const valorRef = isUnidadeMetric ? totalItens : totalValor;
     const fmtMetrica = (v: number) => (isUnidadeMetric ? `${Math.round(v)} un.` : fmtMoney(v));
-    const metaGeral = getGoal(goal, mode, sales, collaborators);
-    const metaSuper = getSuperMeta(goal, mode, sales, collaborators);
+    const metaGeral = getGoal(goal, mode, sales, collaborators, proration);
+    const metaSuper = getSuperMeta(goal, mode, sales, collaborators, proration);
     const atingiuMeta = metaGeral > 0 && valorRef >= metaGeral;
     const pctMeta = metaGeral > 0 ? Math.min(999, (valorRef / metaGeral) * 100) : 0;
     const pctSuper = metaSuper > 0 ? Math.min(999, (valorRef / metaSuper) * 100) : null;
@@ -236,7 +239,13 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
     });
   }
   async function applyReclassify() {
-    await reclassify.mutateAsync({ produtos: Array.from(selectedProdutos), categoria: bulkCat, catalog: catalog!, sales: sales! });
+    await reclassify.mutateAsync({
+      produtos: Array.from(selectedProdutos),
+      categoria: bulkCat,
+      catalog: catalog!,
+      sales: sales!,
+      dateRange: { from: reclassifyFrom || undefined, to: reclassifyTo || undefined },
+    });
     setSelectedProdutos(new Set());
     setReclassifyMode(false);
   }
@@ -320,6 +329,10 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
                 onCategoriaChange={setBulkCat}
                 onApply={applyReclassify}
                 applying={reclassify.isPending}
+                dateFrom={reclassifyFrom}
+                dateTo={reclassifyTo}
+                onDateFromChange={setReclassifyFrom}
+                onDateToChange={setReclassifyTo}
               />
             </div>
           </div>

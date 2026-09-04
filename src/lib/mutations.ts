@@ -541,11 +541,17 @@ export function useReclassifyProdutos(storeId: string | undefined) {
       categoria,
       catalog,
       sales,
+      dateRange,
     }: {
       produtos: string[];
       categoria: CategoryKey;
       catalog: { id: string; nome: string }[];
-      sales: { id: string; produto: string }[];
+      sales: { id: string; produto: string; dataISO?: string | null }[];
+      /** Optional — when set, the retroactive `sales.grupo` update only
+       * touches sales within this window instead of the product's entire
+       * history (the `catalog` upsert above still always applies store-
+       * wide, so future imports keep classifying correctly regardless). */
+      dateRange?: { from?: string; to?: string };
     }) => {
       if (!storeId) throw new Error('store not loaded');
       for (const nome of produtos) {
@@ -559,7 +565,15 @@ export function useReclassifyProdutos(storeId: string | undefined) {
         }
       }
       const targets = new Set(produtos.map((p) => normalize(p)));
-      const ids = sales.filter((s) => targets.has(normalize(s.produto))).map((s) => s.id);
+      const ids = sales
+        .filter((s) => targets.has(normalize(s.produto)))
+        .filter((s) => {
+          if (!dateRange) return true;
+          if (dateRange.from && (!s.dataISO || s.dataISO < dateRange.from)) return false;
+          if (dateRange.to && (!s.dataISO || s.dataISO > dateRange.to)) return false;
+          return true;
+        })
+        .map((s) => s.id);
       for (let i = 0; i < ids.length; i += 500) {
         const chunk = ids.slice(i, i + 500);
         const { error } = await supabase.from('sales').update({ grupo: categoria }).in('id', chunk);

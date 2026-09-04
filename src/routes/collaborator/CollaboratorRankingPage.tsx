@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { MobileRankingBoard } from '../../components/collaborator/MobileRankingBoard';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
-import { getGoal, getSuperMeta } from '../../lib/business/goals';
+import { getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
 import { computeSummary } from '../../lib/business/summary';
 import { fmtMoney } from '../../lib/format';
 import { useCollaborators, useGoals, useSales } from '../../lib/queries';
@@ -25,7 +25,7 @@ export function CollaboratorRankingPage() {
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
   const { data: goals } = useGoals();
-  const { dashFrom, dashTo } = useDateRange();
+  const { dashFrom, dashTo, modoGeral } = useDateRange();
   const [catKey, setCatKey] = useState<CategoryKey | 'ALL'>('ALL');
 
   // Safe stand-ins so the useMemo below always runs in the same order
@@ -46,13 +46,14 @@ export function CollaboratorRankingPage() {
 
   const modoDia = dashFrom === dashTo;
   const mode = modoDia ? 'dia' : 'mes';
+  const proration = goalProration(dashFrom, dashTo, modoGeral);
   const rankingList = ranking.filter((r) => r.valor > 0);
   const totalValor = ranking.reduce((a, r) => a + r.valor, 0);
   const totalItens = ranking.reduce((a, r) => a + r.itens, 0);
 
   const goal = catKey === 'ALL' ? undefined : goals[catKey];
-  const metaGeral = catKey === 'ALL' ? 0 : getGoal(goal, mode, sales, collaborators);
-  const metaSuper = catKey === 'ALL' ? 0 : getSuperMeta(goal, mode, sales, collaborators);
+  const metaGeral = catKey === 'ALL' ? 0 : getGoal(goal, mode, sales, collaborators, proration);
+  const metaSuper = catKey === 'ALL' ? 0 : getSuperMeta(goal, mode, sales, collaborators, proration);
   const metaAlvo = metaSuper > metaGeral && totalValor >= metaGeral && metaGeral > 0 ? metaSuper : metaGeral;
   const pct = metaAlvo > 0 ? Math.min(999, (totalValor / metaAlvo) * 100) : null;
 
