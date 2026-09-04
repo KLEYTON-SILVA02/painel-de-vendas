@@ -499,7 +499,7 @@ export function useBulkDeleteTable(table: BulkDeletableTable, invalidateKey: str
       let from = 0;
       for (;;) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let query = (supabase.from(table) as any).select('id').range(from, from + DELETE_FETCH_PAGE_SIZE - 1);
+        let query = (supabase.from(table) as any).select('id').order('id', { ascending: true }).range(from, from + DELETE_FETCH_PAGE_SIZE - 1);
         if (range.dateColumn && range.from) query = query.gte(range.dateColumn, range.from);
         if (range.dateColumn && range.to) query = query.lte(range.dateColumn, range.to);
         const { data, error } = await query;

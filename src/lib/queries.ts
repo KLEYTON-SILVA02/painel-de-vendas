@@ -32,7 +32,12 @@ const SALES_PAGE_SIZE = 1000;
  * time out (PostgREST returning a 503 instead of the count). Capped at 12
  * batches (well past a million rows at this doubling rate) purely as a
  * safety net against an unexpected always-full-page response looping
- * forever. */
+ * forever. The `.order('id', ...)` tiebreaker after `data_iso` (a plain
+ * date, so many rows share the same value) is required for `.range()` to
+ * paginate deterministically — without it, ties can sort differently
+ * between two of these parallel requests (or shift under a concurrent
+ * write, e.g. the auto-archive delete), letting the same row land in two
+ * adjacent pages and get double-counted downstream. */
 async function fetchSalesPages(range?: { fromISO: string; toISO: string }) {
   const pages: Tables<'sales'>[][] = [];
   let nextStart = 0;
@@ -42,7 +47,11 @@ async function fetchSalesPages(range?: { fromISO: string; toISO: string }) {
     // eslint-disable-next-line no-await-in-loop
     const batch = await Promise.all(
       starts.map(async (from) => {
-        let query = supabase.from('sales').select('*').order('data_iso', { ascending: false });
+        let query = supabase
+          .from('sales')
+          .select('*')
+          .order('data_iso', { ascending: false })
+          .order('id', { ascending: true });
         if (range) query = query.gte('data_iso', range.fromISO).lte('data_iso', range.toISO);
         const { data, error } = await query.range(from, from + SALES_PAGE_SIZE - 1);
         if (error) throw error;
@@ -297,7 +306,12 @@ export function useProducts() {
       if (pageStarts.length === 0) return [];
       const pages = await Promise.all(
         pageStarts.map(async (from) => {
-          const { data, error } = await supabase.from('products').select('*').order('nome').range(from, from + PRODUCTS_PAGE_SIZE - 1);
+          const { data, error } = await supabase
+            .from('products')
+            .select('*')
+            .order('nome')
+            .order('id', { ascending: true })
+            .range(from, from + PRODUCTS_PAGE_SIZE - 1);
           if (error) throw error;
           return data;
         }),
