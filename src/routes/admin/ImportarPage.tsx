@@ -14,6 +14,16 @@ import { supabase } from '../../lib/supabase';
 
 const MAX_SIZE = 50 * 1024 * 1024;
 const FIELDS: ImportField[] = ['data', 'matricula', 'vendedor', 'codigo', 'produto', 'qtd', 'valor'];
+// A spreadsheet's own footer/summary line (e.g. "TOTAL", "TOTAIS", "TOTAL
+// GERAL" in the date column) isn't a real sale — its "produto"/"valor"
+// cells hold the sheet's own sums, not a line item — but it does pass the
+// only other row filter here (a non-empty "produto" cell), so it was
+// getting inserted as a phantom sale whose valor is roughly the true sum
+// of the real rows above it, silently inflating every total. Matched on
+// the date cell specifically since that's the one column a totals row
+// reliably repurposes for its label, regardless of which other columns a
+// given store's spreadsheet happens to shift its sums into.
+const FOOTER_ROW_PATTERN = /^(sub)?tota(l|is)\b/i;
 const NEON_CYAN = '#00f0ff';
 const NEON_PURPLE = '#a82bff';
 
@@ -51,9 +61,9 @@ export function ImportarPage() {
   const [readPct, setReadPct] = useState<number | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [confirmResult, setConfirmResult] = useState<{ count: number; invalidDate: number; noProduto: number; duplicateCount: number } | null>(
-    null,
-  );
+  const [confirmResult, setConfirmResult] = useState<
+    { count: number; invalidDate: number; noProduto: number; duplicateCount: number; footerRowSkipped: number } | null
+  >(null);
   const [analysisOptions, setAnalysisOptions] = useState<AnalysisOptions>({ produtos: true, vendedores: true, listaVendas: true });
   const [summary, setSummary] = useState<SheetSummary | null>(null);
 
@@ -172,16 +182,21 @@ export function ImportarPage() {
     let invalidDate = 0;
     let noProduto = 0;
     let duplicateCount = 0;
+    let footerRowSkipped = 0;
 
     for (const sheet of sheets) {
       for (const [ri, r] of sheet.rows.entries()) {
         const rr = sheet.rawRows[ri] ?? [];
+        const dataStr = sheet.map.data >= 0 ? String(r[sheet.map.data] ?? '').trim() : '';
+        if (FOOTER_ROW_PATTERN.test(dataStr)) {
+          footerRowSkipped++;
+          continue;
+        }
         const produto = sheet.map.produto >= 0 ? String(r[sheet.map.produto] ?? '').trim() : '';
         if (!produto) {
           noProduto++;
           continue;
         }
-        const dataStr = sheet.map.data >= 0 ? String(r[sheet.map.data] ?? '').trim() : '';
         const dataISO = sheet.map.data >= 0 ? dateFromCell(rr[sheet.map.data], dataStr) : null;
         if (!dataISO) invalidDate++;
         const codigo = sheet.map.codigo >= 0 ? idFromCell(rr[sheet.map.codigo], r[sheet.map.codigo]) : '';
@@ -226,7 +241,7 @@ export function ImportarPage() {
         if (insertErr) throw insertErr;
         setProgress(`Gravando vendas… ${Math.min(i + 500, rows.length)}/${rows.length}`);
       }
-      setConfirmResult({ count: rows.length, invalidDate, noProduto, duplicateCount });
+      setConfirmResult({ count: rows.length, invalidDate, noProduto, duplicateCount, footerRowSkipped });
       refetchSales();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao gravar vendas.');
@@ -452,6 +467,7 @@ export function ImportarPage() {
                 {confirmResult.duplicateCount ? ` · ${confirmResult.duplicateCount} duplicada(s) ignorada(s)` : ''}
                 {confirmResult.invalidDate ? ` · ${confirmResult.invalidDate} com data inválida` : ''}
                 {confirmResult.noProduto ? ` · ${confirmResult.noProduto} sem produto` : ''}
+                {confirmResult.footerRowSkipped ? ` · ${confirmResult.footerRowSkipped} linha(s) de total ignorada(s)` : ''}
               </p>
               {confirmResult.duplicateCount > 0 && (
                 <p className="text-xs text-slate-500 mb-3">
@@ -578,6 +594,8 @@ function summarize(sheets: ParsedSheet[], inputs: ReturnType<typeof buildClassif
     const map = sheet.map;
     sheet.rows.forEach((r, ri) => {
       const rr = sheet.rawRows[ri] ?? [];
+      const dataStr = map.data >= 0 ? String(r[map.data] ?? '').trim() : '';
+      if (FOOTER_ROW_PATTERN.test(dataStr)) return;
       const produto = map.produto >= 0 ? String(r[map.produto] ?? '').trim() : '';
       if (!produto) return;
       total++;
@@ -599,7 +617,6 @@ function summarize(sheets: ParsedSheet[], inputs: ReturnType<typeof buildClassif
       itensTotais += qtd;
       valorTotal += valor;
 
-      const dataStr = map.data >= 0 ? String(r[map.data] ?? '').trim() : '';
       const dataISO = map.data >= 0 ? dateFromCell(rr[map.data], dataStr) : null;
       if (dataISO) diasSet.add(dataISO);
 
