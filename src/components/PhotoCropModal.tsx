@@ -88,7 +88,7 @@ export function PhotoCropModal({
     ctx.drawImage(imgRef.current, dx, dy, drawW * factor, drawH * factor);
     canvas.toBlob((blob) => {
       if (blob) onCropped(blob);
-    }, 'image/jpeg', 0.92);
+    }, 'image/webp', 0.9);
   }
 
   const s = baseScale() * scale;
