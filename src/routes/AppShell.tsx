@@ -11,15 +11,7 @@ import type { Horario } from '../lib/business/horario';
 import { supabase } from '../lib/supabase';
 import { useIsMobileV2 } from '../lib/useIsMobileV2';
 import { useStoreSettings } from '../lib/queries';
-import { AdminLandingPage } from './admin/AdminLandingPage';
-import { BioPage } from './bio/BioPage';
-import { CategoryPage } from './category/CategoryPage';
-import { ConquistasPage } from './conquistas/ConquistasPage';
-import { DashboardPage } from './dashboard/DashboardPage';
 import { DateRangeProvider } from './DateRangeContext';
-import { DinamicasPage } from './dinamicas/DinamicasPage';
-import { MetasPage } from './metas/MetasPage';
-import { RankingPage } from './ranking/RankingPage';
 
 // Any one session only ever renders exactly one of these three trees
 // (desktop admin routes below, or one of the shells here) — splitting them
@@ -30,6 +22,20 @@ import { RankingPage } from './ranking/RankingPage';
 // every user's initial load.
 const CollaboratorShell = lazy(() => import('./collaborator/CollaboratorShell').then((m) => ({ default: m.CollaboratorShell })));
 const MobileAdminShell = lazy(() => import('./admin-mobile/MobileAdminShell').then((m) => ({ default: m.MobileAdminShell })));
+// Desktop admin's own top-level routes (Início/Ranking/Categoria/Metas/
+// Dinâmicas/Bio/Conquistas + the /admin landing grid) used to be regular
+// static imports — every one of them, and everything they in turn import,
+// landed in the same initial chunk a desktop admin downloads just to see
+// the Dashboard. Lazy like the /admin/* maintenance screens below: each
+// becomes its own chunk, fetched only when that route is actually visited.
+const AdminLandingPage = lazy(() => import('./admin/AdminLandingPage').then((m) => ({ default: m.AdminLandingPage })));
+const BioPage = lazy(() => import('./bio/BioPage').then((m) => ({ default: m.BioPage })));
+const CategoryPage = lazy(() => import('./category/CategoryPage').then((m) => ({ default: m.CategoryPage })));
+const ConquistasPage = lazy(() => import('./conquistas/ConquistasPage').then((m) => ({ default: m.ConquistasPage })));
+const DashboardPage = lazy(() => import('./dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })));
+const DinamicasPage = lazy(() => import('./dinamicas/DinamicasPage').then((m) => ({ default: m.DinamicasPage })));
+const MetasPage = lazy(() => import('./metas/MetasPage').then((m) => ({ default: m.MetasPage })));
+const RankingPage = lazy(() => import('./ranking/RankingPage').then((m) => ({ default: m.RankingPage })));
 const ColaboradoresPage = lazy(() => import('./admin/ColaboradoresPage').then((m) => ({ default: m.ColaboradoresPage })));
 const ProdutosPage = lazy(() => import('./admin/ProdutosPage').then((m) => ({ default: m.ProdutosPage })));
 const ImportarPage = lazy(() => import('./admin/ImportarPage').then((m) => ({ default: m.ImportarPage })));
@@ -182,6 +188,7 @@ export function AppShell() {
             </div>
           </header>
           <main className="p-3">
+          <Suspense fallback={<PageLoading />}>
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/ranking" element={<RankingPage />} />
@@ -226,6 +233,7 @@ export function AppShell() {
               }
             />
           </Routes>
+          </Suspense>
           </main>
         </div>
       </div>
