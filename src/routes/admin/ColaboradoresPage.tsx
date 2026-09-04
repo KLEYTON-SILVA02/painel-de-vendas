@@ -250,7 +250,7 @@ function EditCollaboratorModal({
     if (!storeId || !cropTarget) return;
     setUploading(true);
     try {
-      const file = new File([blob], 'foto.jpg', { type: 'image/jpeg' });
+      const file = new File([blob], 'foto.webp', { type: 'image/webp' });
       const path = cropTarget === 'avatar' ? `collaborators/${collaborator.id}` : `collaborators/${collaborator.id}-conquista`;
       const url = await uploadPhoto(storeId, path, file);
       if (cropTarget === 'avatar') setFoto(url);
