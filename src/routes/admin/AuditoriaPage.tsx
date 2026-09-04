@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { CAT_KEYS, classifyProductTier, type CategoryKey } from '../../lib/business/classification';
@@ -35,18 +35,32 @@ export function AuditoriaPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkCat, setBulkCat] = useState<CategoryKey>('DERM');
 
-  if (!sales || !collaborators || !catalog || !products || !brandKeywords || !exclusiveBrands) {
+  // `inputs` feeds classifyProductTier() calls over the *entire* sales
+  // history further down (PendentesTab) — rebuilding it, and re-running
+  // that classification pass, on every render (typing a date, ticking a
+  // checkbox) was real, avoidable cost once this store's sales history grew
+  // into the tens of thousands.
+  const inputs = useMemo(
+    () => (catalog && products && brandKeywords && exclusiveBrands ? buildClassificationInputs(catalog, products, brandKeywords, exclusiveBrands) : null),
+    [catalog, products, brandKeywords, exclusiveBrands],
+  );
+  const unmatchedList = useMemo(() => {
+    if (!sales || !collaborators) return [];
+    const knownMatriculas = new Set(collaborators.map((c) => c.matricula));
+    const unmatched = new Map<string, { matricula: string; vendedor: string; vendas: number }>();
+    sales.forEach((s) => {
+      if (knownMatriculas.has(s.matricula)) return;
+      const key = `${s.matricula}|${s.vendedor}`;
+      const existing = unmatched.get(key);
+      if (existing) existing.vendas += 1;
+      else unmatched.set(key, { matricula: s.matricula, vendedor: s.vendedor, vendas: 1 });
+    });
+    return Array.from(unmatched.values()).slice(0, 25);
+  }, [sales, collaborators]);
+
+  if (!sales || !collaborators || !catalog || !products || !brandKeywords || !exclusiveBrands || !inputs) {
     return <PageLoading />;
   }
-
-  const inPeriodo = (s: { dataISO: string | null; matricula: string }) => {
-    if (from && s.dataISO && s.dataISO < from) return false;
-    if (to && s.dataISO && s.dataISO > to) return false;
-    if (colab && s.matricula !== colab) return false;
-    return true;
-  };
-
-  const inputs = buildClassificationInputs(catalog, products, brandKeywords, exclusiveBrands);
 
   async function reclassify(produtoNomes: string[], categoria: CategoryKey) {
     // Also retroactively updates every already-imported sale for these
@@ -63,17 +77,6 @@ export function AuditoriaPage() {
     });
     setSelected(new Set());
   }
-
-  const knownMatriculas = new Set(collaborators.map((c) => c.matricula));
-  const unmatched = new Map<string, { matricula: string; vendedor: string; vendas: number }>();
-  sales.forEach((s) => {
-    if (knownMatriculas.has(s.matricula)) return;
-    const key = `${s.matricula}|${s.vendedor}`;
-    const existing = unmatched.get(key);
-    if (existing) existing.vendas += 1;
-    else unmatched.set(key, { matricula: s.matricula, vendedor: s.vendedor, vendas: 1 });
-  });
-  const unmatchedList = Array.from(unmatched.values()).slice(0, 25);
 
   return (
     <div className="flex flex-col gap-3">
@@ -125,7 +128,7 @@ export function AuditoriaPage() {
       </div>
 
       {tab === 'pendentes' && (
-        <PendentesTab sales={sales} inPeriodo={inPeriodo} inputs={inputs} selected={selected} setSelected={setSelected} bulkCat={bulkCat} setBulkCat={setBulkCat} reclassify={reclassify} />
+        <PendentesTab sales={sales} from={from} to={to} colab={colab} inputs={inputs} selected={selected} setSelected={setSelected} bulkCat={bulkCat} setBulkCat={setBulkCat} reclassify={reclassify} />
       )}
       {tab === 'recentes' && <RecentesTab catalog={catalog} />}
       {CAT_KEYS.includes(tab as CategoryKey) && (
@@ -167,7 +170,9 @@ export function AuditoriaPage() {
 
 function PendentesTab({
   sales,
-  inPeriodo,
+  from,
+  to,
+  colab,
   inputs,
   selected,
   setSelected,
@@ -176,7 +181,9 @@ function PendentesTab({
   reclassify,
 }: {
   sales: { produto: string; codigo?: string | null; qtd: number; valor: number; dataISO: string | null; matricula: string }[];
-  inPeriodo: (s: { dataISO: string | null; matricula: string }) => boolean;
+  from: string;
+  to: string;
+  colab: string;
   inputs: ReturnType<typeof buildClassificationInputs>;
   selected: Set<string>;
   setSelected: (s: Set<string>) => void;
@@ -184,23 +191,31 @@ function PendentesTab({
   setBulkCat: (k: CategoryKey) => void;
   reclassify: (produtos: string[], categoria: CategoryKey) => void;
 }) {
-  const unclassified = new Map<string, { produto: string; qtd: number; valor: number; ocorrencias: number }>();
-  sales.forEach((s) => {
-    if (!inPeriodo(s)) return;
-    const especifico = classifyProductTier(s.produto, s.codigo, inputs, false).categoria;
-    if (especifico) return;
-    const existing = unclassified.get(s.produto);
-    if (existing) {
-      existing.qtd += s.qtd;
-      existing.valor += s.valor;
-      existing.ocorrencias += 1;
-    } else {
-      unclassified.set(s.produto, { produto: s.produto, qtd: s.qtd, valor: s.valor, ocorrencias: 1 });
-    }
-  });
-  const list = Array.from(unclassified.values())
-    .sort((a, b) => b.ocorrencias - a.ocorrencias)
-    .slice(0, 80);
+  // classifyProductTier() runs once per sale here — a full re-classification
+  // pass over the store's entire history. Memoized so it only reruns when
+  // the underlying data or the De/Até/Colaborador filters actually change,
+  // not on every keystroke or checkbox click elsewhere on the page.
+  const list = useMemo(() => {
+    const unclassified = new Map<string, { produto: string; qtd: number; valor: number; ocorrencias: number }>();
+    sales.forEach((s) => {
+      if (from && s.dataISO && s.dataISO < from) return;
+      if (to && s.dataISO && s.dataISO > to) return;
+      if (colab && s.matricula !== colab) return;
+      const especifico = classifyProductTier(s.produto, s.codigo, inputs, false).categoria;
+      if (especifico) return;
+      const existing = unclassified.get(s.produto);
+      if (existing) {
+        existing.qtd += s.qtd;
+        existing.valor += s.valor;
+        existing.ocorrencias += 1;
+      } else {
+        unclassified.set(s.produto, { produto: s.produto, qtd: s.qtd, valor: s.valor, ocorrencias: 1 });
+      }
+    });
+    return Array.from(unclassified.values())
+      .sort((a, b) => b.ocorrencias - a.ocorrencias)
+      .slice(0, 80);
+  }, [sales, from, to, colab, inputs]);
 
   function toggle(produto: string) {
     const next = new Set(selected);

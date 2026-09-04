@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
@@ -70,15 +70,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   const reclassify = useReclassifyProdutos(profile?.store_id);
   const updateStoreSettings = useUpdateStoreSettings(profile?.store_id);
 
-  if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !commissionRates || !catalog) {
-    return <PageLoading />;
-  }
-
-  const info = CATEGORY_META[catKey];
   const isUnit = catKey === 'LEVMEL' || catKey === 'CHIP';
-  const modoDia = dashFrom === dashTo;
-  const mode = modoDia ? 'dia' : 'mes';
-  const proration = goalProration(dashFrom, dashTo, modoGeral);
   // Mercadoria Geral is the store's grand total, not its own exclusive
   // bucket — its screen (ranking, stat cards, Lista de vendas, extrato)
   // reflects every sale regardless of category, same as "Meta Geral"
@@ -86,8 +78,53 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   // the goal registered for MER (effectiveMetaGeral). Every other category
   // keeps its normal exclusive filter.
   const summaryFilter = catKey === 'MER' ? 'ALL' : catKey;
+  const today = todayISO();
 
-  const ranking = computeSummary(sales, collaborators, dashFrom, dashTo, summaryFilter, specialLists);
+  // computeSummary/computeVendorExtract re-scan and re-classify the store's
+  // entire sales history — cheap for a handful of rows, but this store now
+  // has tens of thousands, and without memoization it reran on every
+  // render: typing into the seller filter, opening a modal, toggling a
+  // commission button all triggered a full re-classification pass none of
+  // those interactions actually needed.
+  const ranking = useMemo(
+    () => (sales && collaborators ? computeSummary(sales, collaborators, dashFrom, dashTo, summaryFilter, specialLists) : []),
+    [sales, collaborators, dashFrom, dashTo, summaryFilter, specialLists],
+  );
+  // Levmel/Chip's "Meta Diária (hoje)" stat needs a second same-shaped
+  // ranking scoped to just today — only worth computing for those two
+  // screens.
+  const todayRanking = useMemo(
+    () => (isUnit && sales && collaborators ? computeSummary(sales, collaborators, today, today, catKey, specialLists) : []),
+    [isUnit, sales, collaborators, today, catKey, specialLists],
+  );
+  const categorySalesAll = useMemo(
+    () =>
+      !isUnit && sales
+        ? sales
+            .filter(
+              (s) =>
+                (catKey === 'MER' ? true : s.grupo === catKey) &&
+                (!s.dataISO || (s.dataISO >= dashFrom && s.dataISO <= dashTo)) &&
+                (!vendasSeller || s.matricula === vendasSeller),
+            )
+            .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
+        : [],
+    [isUnit, sales, catKey, dashFrom, dashTo, vendasSeller],
+  );
+  const extract = useMemo(
+    () => (extractMatricula && sales ? computeVendorExtract(sales, extractMatricula, summaryFilter, dashFrom, dashTo, specialLists) : []),
+    [extractMatricula, sales, summaryFilter, dashFrom, dashTo, specialLists],
+  );
+
+  if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !commissionRates || !catalog) {
+    return <PageLoading />;
+  }
+
+  const info = CATEGORY_META[catKey];
+  const modoDia = dashFrom === dashTo;
+  const mode = modoDia ? 'dia' : 'mes';
+  const proration = goalProration(dashFrom, dashTo, modoGeral);
+
   const totalValor = ranking.reduce((a, r) => a + r.valor, 0);
   const totalItens = ranking.reduce((a, r) => a + r.itens, 0);
   const dias = diasRestantesNoMes();
@@ -133,8 +170,6 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
     const goal = goals[catKey];
     const metaMensal = goal?.mensal ?? 0;
     const metaDiaria = goal?.diaria ?? 0;
-    const today = todayISO();
-    const todayRanking = computeSummary(sales, collaborators, today, today, catKey, specialLists);
     const itensHoje = todayRanking.reduce((a, r) => a + r.itens, 0);
     const pctMensal = metaMensal > 0 ? Math.min(999, (totalItens / metaMensal) * 100) : 0;
     const pctDiaria = metaDiaria > 0 ? Math.min(999, (itensHoje / metaDiaria) * 100) : 0;
@@ -192,16 +227,6 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   // flat slice(0, 150) used to silently drop everything past the 150th row
   // instead of paginating through the rest.
   const VENDAS_PAGE_SIZE = 150;
-  const categorySalesAll = !isUnit
-    ? sales
-        .filter(
-          (s) =>
-            (catKey === 'MER' ? true : s.grupo === catKey) &&
-            (!s.dataISO || (s.dataISO >= dashFrom && s.dataISO <= dashTo)) &&
-            (!vendasSeller || s.matricula === vendasSeller),
-        )
-        .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
-    : [];
   const vendasTotalPages = Math.max(1, Math.ceil(categorySalesAll.length / VENDAS_PAGE_SIZE));
   const vendasPageClamped = Math.min(vendasPage, vendasTotalPages - 1);
   const categorySales = vendasSeller
@@ -209,9 +234,6 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
     : categorySalesAll.slice(vendasPageClamped * VENDAS_PAGE_SIZE, (vendasPageClamped + 1) * VENDAS_PAGE_SIZE);
 
   const extractVendor = extractMatricula ? collaborators.find((c) => c.matricula === extractMatricula) : null;
-  const extract = extractMatricula
-    ? computeVendorExtract(sales, extractMatricula, summaryFilter, dashFrom, dashTo, specialLists)
-    : [];
 
   // Same liga/desliga commission toggle as the "Detalhamento por vendedor"
   // extrato (and mobile's MobileCategoryScreen) — but wired to the "Lista de

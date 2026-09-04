@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { FunctionIcon } from '../../components/icons/FunctionIcon';
 import {
@@ -52,15 +53,21 @@ function usePendingClassificationCount(): number | undefined {
   const { data: products } = useProducts();
   const { data: brandKeywords } = useBrandKeywords();
   const { data: exclusiveBrands } = useExclusiveBrands();
-  if (!sales || !catalog || !products || !brandKeywords || !exclusiveBrands) return undefined;
-  const inputs = buildClassificationInputs(catalog, products, brandKeywords, exclusiveBrands);
-  const pending = new Set<string>();
-  sales.forEach((s) => {
-    if (!s.produto) return;
-    const especifico = classifyProductTier(s.produto, s.codigo, inputs, false).categoria;
-    if (!especifico) pending.add(s.produto.toLowerCase());
-  });
-  return pending.size;
+  // classifyProductTier() over the whole sales history, just to badge one
+  // icon — memoized so landing on this screen doesn't redo that full pass
+  // every time (e.g. the header's "Atualizar" button re-renders everything
+  // that reads any query, this card grid included).
+  return useMemo(() => {
+    if (!sales || !catalog || !products || !brandKeywords || !exclusiveBrands) return undefined;
+    const inputs = buildClassificationInputs(catalog, products, brandKeywords, exclusiveBrands);
+    const pending = new Set<string>();
+    sales.forEach((s) => {
+      if (!s.produto) return;
+      const especifico = classifyProductTier(s.produto, s.codigo, inputs, false).categoria;
+      if (!especifico) pending.add(s.produto.toLowerCase());
+    });
+    return pending.size;
+  }, [sales, catalog, products, brandKeywords, exclusiveBrands]);
 }
 
 export function AdminLandingPage() {
