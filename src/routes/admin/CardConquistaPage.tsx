@@ -75,12 +75,6 @@ const TEXT_KIND_COLOR: Record<CardTextKind, string> = {
   categoria: '#a82bff',
   custom: '#00c2ff',
 };
-// The order new text layers get added in — always fills the 1º/2º slots
-// (tier/categoria) before offering the free 3º slot, matching how the ADM
-// asked for them ("o primeiro texto será... o segundo texto será...").
-const TEXT_KIND_ORDER: CardTextKind[] = ['tier', 'categoria', 'custom'];
-const MAX_TEXT_LAYERS = 3;
-
 /** Collapsible/expandable bar used as the outer shell for every function
  * group in the editor (name, uploads, zones, text layers) — click the
  * header to toggle. `headerRight` renders extra controls (e.g. a "Remover"
@@ -153,12 +147,47 @@ function newTextLayer(kind: CardTextKind, zone: CardZone): CardTextLayer {
 }
 
 const DEFAULT_FOTO_ZONE = () => newZone('notched', 0.0742, 0.0334, 0.8509, 0.7963);
+const DEFAULT_LOGO_ZONE = () => newZone('pill', 0.3168, 0.0274, 0.3663, 0.0321);
 
 function defaultTextLayers(): CardTextLayer[] {
   return [
     newTextLayer('tier', newZone('trapezoid', 0.1531, 0.8362, 0.6939, 0.0459)),
     newTextLayer('categoria', newZone('none', 0.1531, 0.8821, 0.6939, 0.0459)),
   ];
+}
+
+/** The 1º/2º textos (tier/categoria) are permanent columns in the editor —
+ * not part of a removable list — so "Restaurar" on either needs a single
+ * default to fall back to, and the 3º (custom) needs one too for its own
+ * restore/re-add. */
+function defaultTextLayer(kind: CardTextKind): CardTextLayer {
+  if (kind === 'custom') return newTextLayer('custom', newZone('none', 0.15, 0.05, 0.7, 0.06));
+  const [tier, categoria] = defaultTextLayers();
+  return kind === 'tier' ? tier : categoria;
+}
+
+/** Guarantees the 1º/2º textos are present (synthesizing whichever is
+ * missing from its default) while preserving an existing 3º texto —
+ * template rows saved before tier/categoria became permanent could in
+ * theory be missing one. */
+function ensureCoreTextLayers(layers: CardTextLayer[]): CardTextLayer[] {
+  const tier = layers.find((l) => l.kind === 'tier') ?? defaultTextLayer('tier');
+  const categoria = layers.find((l) => l.kind === 'categoria') ?? defaultTextLayer('categoria');
+  const custom = layers.find((l) => l.kind === 'custom');
+  return custom ? [tier, categoria, custom] : [tier, categoria];
+}
+
+function typographyPatch(l: CardTextLayer): Partial<CardTextLayer> {
+  return {
+    text: l.text,
+    fontFamily: l.fontFamily,
+    fontSize: l.fontSize,
+    color: l.color,
+    useGradient: l.useGradient,
+    gradientFrom: l.gradientFrom,
+    gradientTo: l.gradientTo,
+    gradientAngle: l.gradientAngle,
+  };
 }
 
 /** Upgrades a template saved before this multi-text-layer editor existed
@@ -190,8 +219,8 @@ function blankEditor(): EditorState {
     logoScale: 0.85,
     referenceObjectUrl: null,
     foto: DEFAULT_FOTO_ZONE(),
-    logo: newZone('pill', 0.3168, 0.0274, 0.3663, 0.0321),
-    textLayers: defaultTextLayers(),
+    logo: DEFAULT_LOGO_ZONE(),
+    textLayers: ensureCoreTextLayers(defaultTextLayers()),
   };
 }
 
@@ -270,7 +299,9 @@ export function CardConquistaPage() {
 
   function startEdit(t: ConquistaCardTemplateRow) {
     setError(null);
-    const textLayers = t.textLayers && t.textLayers.length > 0 ? t.textLayers : synthesizeTextLayersFromLegacy(t.texto, t.textFontFamily);
+    const textLayers = ensureCoreTextLayers(
+      t.textLayers && t.textLayers.length > 0 ? t.textLayers : synthesizeTextLayersFromLegacy(t.texto, t.textFontFamily),
+    );
     setEditingRaw({
       id: t.id,
       isNew: false,
@@ -311,7 +342,7 @@ export function CardConquistaPage() {
       referenceObjectUrl: null,
       foto: BUILT_IN_TEMPLATE.foto,
       logo: BUILT_IN_TEMPLATE.logo,
-      textLayers: synthesizeTextLayersFromLegacy(BUILT_IN_TEMPLATE.texto, BUILT_IN_TEMPLATE.textFontFamily),
+      textLayers: ensureCoreTextLayers(synthesizeTextLayersFromLegacy(BUILT_IN_TEMPLATE.texto, BUILT_IN_TEMPLATE.textFontFamily)),
     });
     resetHistory();
   }
@@ -508,6 +539,196 @@ function TemplateThumb({ template, logoUrl }: { template: ConquistaCardTemplate;
   return <canvas ref={canvasRef} className="w-full h-auto block rounded-lg" />;
 }
 
+/** Small solid-button pair every staged adjustment module ends with —
+ * "Restaurar" resets that one module straight to its default (an
+ * immediate commit, its own undo step), "Aplicar ajuste" commits whatever
+ * is currently in that module's local slider draft. Disabling "Aplicar"
+ * when the draft already matches what's committed avoids a no-op undo
+ * step and signals nothing's pending. */
+function ActionBar({ onRestore, onApply, applyDisabled }: { onRestore: () => void; onApply: () => void; applyDisabled?: boolean }) {
+  return (
+    <div className="flex gap-2 pt-1">
+      <button
+        onClick={onRestore}
+        className="flex-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold"
+        style={{ background: '#c2410c33', color: '#fdba74', border: '1px solid #c2410c' }}
+      >
+        Restaurar
+      </button>
+      <button
+        onClick={onApply}
+        disabled={applyDisabled}
+        className="flex-1 rounded-lg px-2 py-1.5 text-[11px] font-bold disabled:opacity-40"
+        style={{ background: '#f5a623', color: '#231a02' }}
+      >
+        Aplicar ajuste
+      </button>
+    </div>
+  );
+}
+
+/** Outer shell for a "Configurações de texto N" column — a centered title
+ * plus the property header (colored bullet + which text this is) above
+ * whatever position/typography modules are passed as children. */
+function TextColumn({ title, propertyLabel, color, children }: { title: string; propertyLabel: string; color: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-3 min-w-0">
+      <h4 className="text-center text-xs font-bold uppercase tracking-wide text-slate-300">{title}</h4>
+      <div className="flex items-center gap-2 px-1">
+        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
+        <span className="text-[11px] text-slate-400">{propertyLabel}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** The two staged boxes every text layer (1º/2º/3º texto) gets: position
+ * & shape (reuses ZoneControls, staged via zoneDraft) and typography &
+ * style (font/size/color/gradient, staged via typeDraft) — each with its
+ * own independent Restaurar/Aplicar ajuste pair, matching the spec's
+ * "Seção 1" / "Seção 2" split. `onRemove` only passed for the optional 3º
+ * texto — the 1º/2º (tier/categoria) columns are permanent. */
+function TextLayerBoxes({
+  committed,
+  color,
+  zoneDraft,
+  onZoneDraftChange,
+  onApplyZone,
+  onRestoreZone,
+  typeDraft,
+  onTypeDraftChange,
+  onApplyType,
+  onRestoreType,
+  onRemove,
+}: {
+  committed: CardTextLayer;
+  color: string;
+  zoneDraft: CardZone;
+  onZoneDraftChange: (z: CardZone) => void;
+  onApplyZone: () => void;
+  onRestoreZone: () => void;
+  typeDraft: CardTextLayer;
+  onTypeDraftChange: (l: CardTextLayer) => void;
+  onApplyType: () => void;
+  onRestoreType: () => void;
+  onRemove?: () => void;
+}) {
+  const zoneChanged = JSON.stringify(zoneDraft) !== JSON.stringify(committed.zone);
+  const typeChanged = JSON.stringify(typographyPatch(typeDraft)) !== JSON.stringify(typographyPatch(committed));
+  return (
+    <>
+      <ZoneControls label="Posição e forma (plano de fundo do texto)" color={color} zone={zoneDraft} onChange={onZoneDraftChange}>
+        <ActionBar onRestore={onRestoreZone} onApply={onApplyZone} applyDisabled={!zoneChanged} />
+      </ZoneControls>
+
+      <CollapsibleBox
+        title="Tipografia e estilo"
+        colorDot={color}
+        headerRight={
+          onRemove ? (
+            <button onClick={onRemove} className="text-[10px] text-slate-500 hover:text-rose-400 shrink-0">
+              Remover
+            </button>
+          ) : undefined
+        }
+      >
+        {typeDraft.kind === 'custom' && (
+          <label className="text-[11px] text-slate-400">
+            Texto
+            <input
+              value={typeDraft.text}
+              onChange={(e) => onTypeDraftChange({ ...typeDraft, text: e.target.value })}
+              className="mt-1 w-full rounded-lg bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm text-slate-100"
+            />
+          </label>
+        )}
+
+        <label className="text-[11px] text-slate-400">
+          Fonte
+          <select
+            value={typeDraft.fontFamily}
+            onChange={(e) => onTypeDraftChange({ ...typeDraft, fontFamily: e.target.value })}
+            className="mt-1 w-full rounded-lg bg-slate-950 border border-slate-700 px-2 py-1.5 text-xs text-slate-100"
+            style={{ fontFamily: typeDraft.fontFamily }}
+          >
+            {FONT_OPTIONS.map((f) => (
+              <option key={f} value={f} style={{ fontFamily: f }}>
+                {f}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="text-[11px] text-slate-400">
+          Tamanho do texto ({(Math.round((typeDraft.fontSize ?? 0.024) * 1000) / 10).toFixed(1)}%)
+          <input
+            type="range"
+            min={10}
+            max={60}
+            value={Math.round((typeDraft.fontSize ?? 0.024) * 1000)}
+            onChange={(e) => onTypeDraftChange({ ...typeDraft, fontSize: Number(e.target.value) / 1000 })}
+            className="w-full"
+          />
+        </label>
+
+        <label className="flex items-center gap-1.5 text-[11px] text-slate-400">
+          <input type="checkbox" checked={typeDraft.useGradient} onChange={(e) => onTypeDraftChange({ ...typeDraft, useGradient: e.target.checked })} />
+          Degradê cores do texto
+        </label>
+
+        {!typeDraft.useGradient ? (
+          <label className="text-[11px] text-slate-400 flex items-center gap-2">
+            Cor do texto
+            <input
+              type="color"
+              value={typeDraft.color}
+              onChange={(e) => onTypeDraftChange({ ...typeDraft, color: e.target.value })}
+              className="w-8 h-6 rounded border border-slate-700 bg-transparent"
+            />
+          </label>
+        ) : (
+          <>
+            <div className="flex gap-4">
+              <label className="text-[11px] text-slate-400 flex items-center gap-2">
+                De
+                <input
+                  type="color"
+                  value={typeDraft.gradientFrom}
+                  onChange={(e) => onTypeDraftChange({ ...typeDraft, gradientFrom: e.target.value })}
+                  className="w-8 h-6 rounded border border-slate-700 bg-transparent"
+                />
+              </label>
+              <label className="text-[11px] text-slate-400 flex items-center gap-2">
+                Para
+                <input
+                  type="color"
+                  value={typeDraft.gradientTo}
+                  onChange={(e) => onTypeDraftChange({ ...typeDraft, gradientTo: e.target.value })}
+                  className="w-8 h-6 rounded border border-slate-700 bg-transparent"
+                />
+              </label>
+            </div>
+            <label className="text-[11px] text-slate-400">
+              Orientação do degradê ({typeDraft.gradientAngle ?? 45}°)
+              <input
+                type="range"
+                min={0}
+                max={359}
+                value={typeDraft.gradientAngle ?? 45}
+                onChange={(e) => onTypeDraftChange({ ...typeDraft, gradientAngle: Number(e.target.value) })}
+                className="w-full"
+              />
+            </label>
+          </>
+        )}
+
+        <ActionBar onRestore={onRestoreType} onApply={onApplyType} applyDisabled={!typeChanged} />
+      </CollapsibleBox>
+    </>
+  );
+}
+
 function TemplateEditor({
   editing,
   setEditing,
@@ -551,6 +772,58 @@ function TemplateEditor({
   const [wandTolerance, setWandTolerance] = useState(32);
   const [wandBusy, setWandBusy] = useState(false);
   const [wandError, setWandError] = useState<string | null>(null);
+  // Preview zoom is a single-step toggle (100% <-> 150%), not continuous —
+  // matches the footer's "Aumentar/Diminuir zoom" being one-shot buttons.
+  const [zoomed, setZoomed] = useState(false);
+
+  // Every adjustment module (foto/logo masks, 1º/2º/3º texto) edits a local
+  // draft here first — sliders write into the draft, which drives the
+  // dashed outline overlays on the preview for live feedback, while the
+  // actual rendered card (the canvas effect below) only reflects what's
+  // been committed to `editing` via that module's own "Aplicar ajuste".
+  // Each draft re-syncs from its committed source whenever that source
+  // changes for any other reason (Aplicar/Restaurar itself, undo/redo, the
+  // magic wand, the pen tool, "Restaurar tudo", or switching templates).
+  const text1 = editing.textLayers.find((l) => l.kind === 'tier')!;
+  const text2 = editing.textLayers.find((l) => l.kind === 'categoria')!;
+  const text3 = editing.textLayers.find((l) => l.kind === 'custom') ?? null;
+
+  const [fotoDraft, setFotoDraft] = useState<CardZone>(editing.foto);
+  useEffect(() => setFotoDraft(editing.foto), [editing.foto]);
+  const [logoDraft, setLogoDraft] = useState<CardZone>(editing.logo);
+  useEffect(() => setLogoDraft(editing.logo), [editing.logo]);
+
+  const [t1ZoneDraft, setT1ZoneDraft] = useState<CardZone>(text1.zone);
+  useEffect(() => setT1ZoneDraft(text1.zone), [text1]);
+  const [t1TypeDraft, setT1TypeDraft] = useState<CardTextLayer>(text1);
+  useEffect(() => setT1TypeDraft(text1), [text1]);
+
+  const [t2ZoneDraft, setT2ZoneDraft] = useState<CardZone>(text2.zone);
+  useEffect(() => setT2ZoneDraft(text2.zone), [text2]);
+  const [t2TypeDraft, setT2TypeDraft] = useState<CardTextLayer>(text2);
+  useEffect(() => setT2TypeDraft(text2), [text2]);
+
+  const [t3ZoneDraft, setT3ZoneDraft] = useState<CardZone | null>(text3?.zone ?? null);
+  useEffect(() => setT3ZoneDraft(text3?.zone ?? null), [text3]);
+  const [t3TypeDraft, setT3TypeDraft] = useState<CardTextLayer | null>(text3);
+  useEffect(() => setT3TypeDraft(text3), [text3]);
+
+  function updateTextLayer(id: string, patch: Partial<CardTextLayer>) {
+    setEditing({ ...editing, textLayers: editing.textLayers.map((l) => (l.id === id ? { ...l, ...patch } : l)) });
+  }
+
+  function restoreAllTools() {
+    setEditing({ ...editing, foto: DEFAULT_FOTO_ZONE(), logo: DEFAULT_LOGO_ZONE(), textLayers: defaultTextLayers() });
+  }
+
+  function addCustomText() {
+    if (text3) return;
+    setEditing({ ...editing, textLayers: [...editing.textLayers, defaultTextLayer('custom')] });
+  }
+
+  function removeCustomText() {
+    setEditing({ ...editing, textLayers: editing.textLayers.filter((l) => l.kind !== 'custom') });
+  }
 
   const previewTemplate: ConquistaCardTemplate = {
     id: editing.id,
@@ -635,277 +908,336 @@ function TemplateEditor({
     }
   }
 
-  function addNextTextLayer() {
-    if (editing.textLayers.length >= MAX_TEXT_LAYERS) return;
-    const used = new Set(editing.textLayers.map((l) => l.kind));
-    const nextKind = TEXT_KIND_ORDER.find((k) => !used.has(k)) ?? 'custom';
-    // Starts near the top rather than stacked on the 1º/2º texto default
-    // position (usually near the bottom, like the legacy tier banner) —
-    // just a starting point, freely draggable via the sliders below either way.
-    const layer = newTextLayer(nextKind, newZone('none', 0.15, 0.05, 0.7, 0.06));
-    setEditing({ ...editing, textLayers: [...editing.textLayers, layer] });
-  }
-
-  function updateTextLayer(id: string, patch: Partial<CardTextLayer>) {
-    setEditing({ ...editing, textLayers: editing.textLayers.map((l) => (l.id === id ? { ...l, ...patch } : l)) });
-  }
-
-  function removeTextLayer(id: string) {
-    setEditing({ ...editing, textLayers: editing.textLayers.filter((l) => l.id !== id) });
-  }
-
   const previewCursor = penPoints !== null || wandTarget ? 'crosshair' : undefined;
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex gap-2">
+      {/* Faixa superior — identificação do modelo e uploads */}
+      <div className="flex flex-col sm:flex-row gap-3 items-stretch">
+        <div className="flex-1 min-w-0 rounded-lg border border-slate-800 px-3 py-2 flex items-center gap-2">
+          <span className="text-[11px] text-slate-500 shrink-0">Nome do modelo</span>
+          <input
+            value={editing.name}
+            onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+            placeholder="Modelo sem nome"
+            className="flex-1 min-w-0 bg-transparent text-sm text-slate-100 outline-none"
+          />
+        </div>
+
+        <div className="flex-1 min-w-0 rounded-lg border border-slate-800 px-3 py-2 flex items-center justify-between gap-2">
+          <span className="text-[11px] text-slate-500 truncate">Plano de fundo final (card)</span>
+          <label className="shrink-0 cursor-pointer text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-700 text-slate-300 hover:bg-slate-800">
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) onUploadBackground(f);
+                e.target.value = '';
+              }}
+            />
+            {editing.uploadingBackground ? 'Enviando…' : editing.backgroundUrl ? 'Substituir plano de fundo' : 'Carregar plano de fundo'}
+          </label>
+        </div>
+
+        <div className="flex-1 min-w-0 rounded-lg border border-slate-800 px-3 py-2 flex flex-col gap-1">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] text-slate-500 truncate">Logo deste card (opcional)</span>
+            <label className="shrink-0 cursor-pointer text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-700 text-slate-300 hover:bg-slate-800">
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) onUploadLogo(f);
+                  e.target.value = '';
+                }}
+              />
+              {editing.uploadingLogo ? 'Enviando…' : editing.logoUrl ? 'Substituir logo' : 'Carregar logo'}
+            </label>
+          </div>
+          {editing.logoUrl && (
+            <button onClick={onRemoveLogo} className="self-start text-[10px] text-slate-500 hover:text-rose-400">
+              Usar a logo da loja
+            </button>
+          )}
+        </div>
+
+        <div className="sm:w-[190px] shrink-0 rounded-lg border border-slate-800 px-3 py-2">
+          <label className="text-[10px] uppercase tracking-wide text-slate-500">Escala da logo ({Math.round(editing.logoScale * 100)}%)</label>
+          <input
+            type="range"
+            min={30}
+            max={150}
+            value={Math.round(editing.logoScale * 100)}
+            onChange={(e) => setEditing({ ...editing, logoScale: Number(e.target.value) / 100 })}
+            className="w-full"
+            style={{ accentColor: '#a855f7' }}
+          />
+        </div>
+      </div>
+
+      <CollapsibleBox title="Imagem de referência (só nesta tela, opcional)" defaultOpen={false}>
+        <p className="text-[11px] text-slate-500">
+          Carregue um print/rascunho para servir de guia enquanto você posiciona as formas abaixo (a varinha mágica e a caneta também
+          traçam sobre ela quando presente). Ela nunca é salva — só o plano de fundo final acima é gravado.
+        </p>
+        <label className="w-full">
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) onUploadReference(f);
+              e.target.value = '';
+            }}
+          />
+          <span className="block text-center rounded-lg border border-slate-700 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800 cursor-pointer">
+            {editing.referenceObjectUrl ? 'Substituir referência' : 'Carregar referência'}
+          </span>
+        </label>
+        {editing.referenceObjectUrl && (
+          <button onClick={onRemoveReference} className="text-[11px] text-slate-500 hover:text-rose-400">
+            Remover referência
+          </button>
+        )}
+      </CollapsibleBox>
+
+      {/* Área central — 3 colunas de controles + preview */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_380px] gap-4 items-start">
+        <div className="flex flex-col gap-3 min-w-0">
+          <h4 className="text-center text-xs font-bold uppercase tracking-wide text-slate-300">Máscaras de imagens</h4>
+
+          <ZoneControls
+            label={ZONE_LABELS.foto}
+            color={ZONE_COLORS.foto}
+            zone={fotoDraft}
+            onChange={setFotoDraft}
+            pen={{
+              active: penPoints !== null,
+              pointCount: penPoints?.length ?? 0,
+              onStart: () => {
+                setWandTarget(null);
+                setPenPoints([]);
+              },
+              onFinish: finishPen,
+              onCancel: () => setPenPoints(null),
+              onClearCustom: () => setEditing({ ...editing, foto: DEFAULT_FOTO_ZONE() }),
+            }}
+            wand={{
+              active: wandTarget === 'foto',
+              busy: wandBusy && wandTarget === 'foto',
+              tolerance: wandTolerance,
+              error: wandTarget === 'foto' ? wandError : null,
+              onToleranceChange: setWandTolerance,
+              onStart: () => {
+                setPenPoints(null);
+                setWandError(null);
+                setWandTarget('foto');
+              },
+              onCancel: () => {
+                setWandTarget(null);
+                setWandError(null);
+              },
+            }}
+          >
+            <ActionBar
+              onRestore={() => setEditing({ ...editing, foto: DEFAULT_FOTO_ZONE() })}
+              onApply={() => setEditing({ ...editing, foto: fotoDraft })}
+              applyDisabled={JSON.stringify(fotoDraft) === JSON.stringify(editing.foto)}
+            />
+          </ZoneControls>
+
+          <ZoneControls
+            label={ZONE_LABELS.logo}
+            color={ZONE_COLORS.logo}
+            zone={logoDraft}
+            onChange={setLogoDraft}
+            wand={{
+              active: wandTarget === 'logo',
+              busy: wandBusy && wandTarget === 'logo',
+              tolerance: wandTolerance,
+              error: wandTarget === 'logo' ? wandError : null,
+              onToleranceChange: setWandTolerance,
+              onStart: () => {
+                setPenPoints(null);
+                setWandError(null);
+                setWandTarget('logo');
+              },
+              onCancel: () => {
+                setWandTarget(null);
+                setWandError(null);
+              },
+            }}
+          >
+            <label className="text-[11px] text-slate-400">
+              Redimensionamento proporcional geral ({Math.round(editing.logoScale * 100)}%)
+              <input
+                type="range"
+                min={30}
+                max={150}
+                value={Math.round(editing.logoScale * 100)}
+                onChange={(e) => setEditing({ ...editing, logoScale: Number(e.target.value) / 100 })}
+                className="w-full"
+                style={{ accentColor: '#a855f7' }}
+              />
+            </label>
+            <ActionBar
+              onRestore={() => setEditing({ ...editing, logo: DEFAULT_LOGO_ZONE() })}
+              onApply={() => setEditing({ ...editing, logo: logoDraft })}
+              applyDisabled={JSON.stringify(logoDraft) === JSON.stringify(editing.logo)}
+            />
+          </ZoneControls>
+
+          {text3 && t3ZoneDraft && t3TypeDraft ? (
+            <TextLayerBoxes
+              committed={text3}
+              color={TEXT_KIND_COLOR.custom}
+              zoneDraft={t3ZoneDraft}
+              onZoneDraftChange={setT3ZoneDraft}
+              onApplyZone={() => updateTextLayer(text3.id, { zone: t3ZoneDraft })}
+              onRestoreZone={() => updateTextLayer(text3.id, { zone: defaultTextLayer('custom').zone })}
+              typeDraft={t3TypeDraft}
+              onTypeDraftChange={setT3TypeDraft}
+              onApplyType={() => updateTextLayer(text3.id, typographyPatch(t3TypeDraft))}
+              onRestoreType={() => updateTextLayer(text3.id, typographyPatch(defaultTextLayer('custom')))}
+              onRemove={removeCustomText}
+            />
+          ) : (
+            <button onClick={addCustomText} className="rounded-lg border border-slate-700 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800">
+              + Adicionar 3º texto (opcional, texto livre)
+            </button>
+          )}
+        </div>
+
+        <TextColumn title="Configurações de texto 1" propertyLabel={TEXT_KIND_LABEL.tier} color={TEXT_KIND_COLOR.tier}>
+          <TextLayerBoxes
+            committed={text1}
+            color={TEXT_KIND_COLOR.tier}
+            zoneDraft={t1ZoneDraft}
+            onZoneDraftChange={setT1ZoneDraft}
+            onApplyZone={() => updateTextLayer(text1.id, { zone: t1ZoneDraft })}
+            onRestoreZone={() => updateTextLayer(text1.id, { zone: defaultTextLayer('tier').zone })}
+            typeDraft={t1TypeDraft}
+            onTypeDraftChange={setT1TypeDraft}
+            onApplyType={() => updateTextLayer(text1.id, typographyPatch(t1TypeDraft))}
+            onRestoreType={() => updateTextLayer(text1.id, typographyPatch(defaultTextLayer('tier')))}
+          />
+        </TextColumn>
+
+        <TextColumn title="Configurações de texto 2" propertyLabel={TEXT_KIND_LABEL.categoria} color={TEXT_KIND_COLOR.categoria}>
+          <TextLayerBoxes
+            committed={text2}
+            color={TEXT_KIND_COLOR.categoria}
+            zoneDraft={t2ZoneDraft}
+            onZoneDraftChange={setT2ZoneDraft}
+            onApplyZone={() => updateTextLayer(text2.id, { zone: t2ZoneDraft })}
+            onRestoreZone={() => updateTextLayer(text2.id, { zone: defaultTextLayer('categoria').zone })}
+            typeDraft={t2TypeDraft}
+            onTypeDraftChange={setT2TypeDraft}
+            onApplyType={() => updateTextLayer(text2.id, typographyPatch(t2TypeDraft))}
+            onRestoreType={() => updateTextLayer(text2.id, typographyPatch(defaultTextLayer('categoria')))}
+          />
+        </TextColumn>
+
+        <div className="flex flex-col items-center gap-2">
+          <div
+            className="relative w-full max-w-[420px]"
+            style={{ overflow: zoomed ? 'auto' : 'visible', maxHeight: zoomed ? 620 : undefined, borderRadius: 12 }}
+          >
+            <div style={{ transform: zoomed ? 'scale(1.5)' : 'scale(1)', transformOrigin: 'top center', transition: 'transform .15s ease' }}>
+              <div className="relative" onClick={handlePreviewClick} style={{ cursor: previewCursor }}>
+                <canvas ref={canvasRef} className="w-full h-auto block rounded-xl" />
+                {editing.referenceObjectUrl && (
+                  <img
+                    src={editing.referenceObjectUrl}
+                    alt=""
+                    className="absolute inset-0 w-full h-full object-fill rounded-xl pointer-events-none"
+                    style={{ opacity: 0.45 }}
+                  />
+                )}
+                {fotoDraft.shape.kind !== 'polygon' && <ZoneOutline zone={fotoDraft} color={ZONE_COLORS.foto} />}
+                <ZoneOutline zone={logoDraft} color={ZONE_COLORS.logo} />
+                <ZoneOutline zone={t1ZoneDraft} color={TEXT_KIND_COLOR.tier} />
+                <ZoneOutline zone={t2ZoneDraft} color={TEXT_KIND_COLOR.categoria} />
+                {t3ZoneDraft && <ZoneOutline zone={t3ZoneDraft} color={TEXT_KIND_COLOR.custom} />}
+                {editing.foto.shape.kind === 'polygon' && penPoints === null && (
+                  <PolygonOutline points={editing.foto.shape.points ?? []} color={ZONE_COLORS.foto} />
+                )}
+                {penPoints !== null && <PolygonOutline points={penPoints} color={ZONE_COLORS.foto} inProgress />}
+              </div>
+            </div>
+          </div>
+          {penPoints !== null && (
+            <p className="text-[11px] text-amber-400">
+              Clique na imagem para marcar os pontos do recorte da foto ({penPoints.length} até agora — mínimo 3, depois clique em
+              "Concluir forma" na coluna ao lado).
+            </p>
+          )}
+          {wandTarget && (
+            <p className="text-[11px] text-amber-400">
+              {wandBusy ? 'Detectando…' : `Clique na imagem sobre a área da ${wandTarget === 'foto' ? 'foto' : 'logo'} para detectá-la automaticamente.`}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Rodapé — utilitários globais, histórico e finalização */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800">
+        <button
+          onClick={restoreAllTools}
+          className="rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wide"
+          style={{ background: '#f5a623', color: '#231a02' }}
+        >
+          Restaurar tudo
+        </button>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setZoomed(true)}
+            disabled={zoomed}
+            className="rounded-full border border-slate-700 px-3 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800 disabled:opacity-40"
+          >
+            🔍+ Aumentar zoom
+          </button>
+          <button
+            onClick={() => setZoomed(false)}
+            disabled={!zoomed}
+            className="rounded-full border border-slate-700 px-3 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800 disabled:opacity-40"
+          >
+            🔍− Diminuir zoom
+          </button>
           <button
             onClick={onUndo}
             disabled={!canUndo}
-            className="rounded-lg border border-slate-700 px-3 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:hover:bg-transparent"
+            className="rounded-full border border-slate-700 px-3 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800 disabled:opacity-40"
           >
             ↶ Voltar uma etapa
           </button>
           <button
             onClick={onRedo}
             disabled={!canRedo}
-            className="rounded-lg border border-slate-700 px-3 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:hover:bg-transparent"
+            className="rounded-full border border-slate-700 px-3 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800 disabled:opacity-40"
           >
             Avançar uma etapa ↷
           </button>
         </div>
-        <div className="flex gap-2 ml-auto">
+
+        <div className="flex gap-2">
           <button
             onClick={onSave}
             disabled={saving}
-            className="rounded-lg px-4 py-1.5 text-xs font-bold uppercase tracking-wide disabled:opacity-50"
+            className="rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wide disabled:opacity-50"
             style={{ background: '#14ff00', color: '#04210a' }}
           >
             {saving ? 'Salvando…' : 'Salvar modelo'}
           </button>
-          <button onClick={onCancel} className="rounded-lg border border-slate-700 px-4 py-1.5 text-xs text-slate-300 hover:bg-slate-800">
+          <button onClick={onCancel} className="rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-300 hover:bg-slate-800">
             Cancelar
           </button>
-        </div>
-      </div>
-
-      <div className="flex flex-col lg:flex-row gap-5">
-        <div className="flex flex-col sm:flex-row gap-3 flex-1 min-w-0">
-          <div className="flex flex-col gap-3 flex-1 min-w-0">
-            <CollapsibleBox title="Nome do modelo">
-              <input
-                value={editing.name}
-                onChange={(e) => setEditing({ ...editing, name: e.target.value })}
-                placeholder="Ex.: Card Hiteck roxo"
-                className="w-full rounded-lg bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm text-slate-100"
-              />
-            </CollapsibleBox>
-
-            <CollapsibleBox title="Plano de fundo final (salvo)">
-              <label className="w-full">
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) onUploadBackground(f);
-                    e.target.value = '';
-                  }}
-                />
-                <span className="block text-center rounded-lg border border-slate-700 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800 cursor-pointer">
-                  {editing.uploadingBackground ? 'Enviando…' : editing.backgroundUrl ? 'Substituir plano de fundo' : 'Carregar plano de fundo'}
-                </span>
-              </label>
-            </CollapsibleBox>
-
-            <CollapsibleBox title="Logo deste card (opcional)">
-              <p className="text-[11px] text-slate-500">Substitui a logo da loja só neste modelo. Sem upload, usa a logo cadastrada em Minha Loja.</p>
-              <label className="w-full">
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) onUploadLogo(f);
-                    e.target.value = '';
-                  }}
-                />
-                <span className="block text-center rounded-lg border border-slate-700 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800 cursor-pointer">
-                  {editing.uploadingLogo ? 'Enviando…' : editing.logoUrl ? 'Substituir logo' : 'Carregar logo própria'}
-                </span>
-              </label>
-              {editing.logoUrl && (
-                <button onClick={onRemoveLogo} className="text-[11px] text-slate-500 hover:text-rose-400">
-                  Usar a logo da loja
-                </button>
-              )}
-              <label className="text-[11px] text-slate-400">
-                Escala da logo dentro da área ({Math.round(editing.logoScale * 100)}%)
-                <input
-                  type="range"
-                  min={30}
-                  max={150}
-                  value={Math.round(editing.logoScale * 100)}
-                  onChange={(e) => setEditing({ ...editing, logoScale: Number(e.target.value) / 100 })}
-                  className="w-full"
-                />
-              </label>
-            </CollapsibleBox>
-
-            <CollapsibleBox title="Imagem de referência (só nesta tela)" defaultOpen={false}>
-              <p className="text-[11px] text-slate-500">
-                Carregue um print/rascunho para servir de guia enquanto você posiciona as formas abaixo (a varinha mágica e a caneta
-                também traçam sobre ela quando presente). Ela nunca é salva — some ao trocar ou ao sair da edição.
-              </p>
-              <label className="w-full">
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) onUploadReference(f);
-                    e.target.value = '';
-                  }}
-                />
-                <span className="block text-center rounded-lg border border-slate-700 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800 cursor-pointer">
-                  {editing.referenceObjectUrl ? 'Substituir referência' : 'Carregar referência'}
-                </span>
-              </label>
-              {editing.referenceObjectUrl && (
-                <button onClick={onRemoveReference} className="text-[11px] text-slate-500 hover:text-rose-400">
-                  Remover referência
-                </button>
-              )}
-            </CollapsibleBox>
-          </div>
-
-          <div className="flex flex-col gap-3 flex-1 min-w-0">
-            <ZoneControls
-              label={ZONE_LABELS.foto}
-              color={ZONE_COLORS.foto}
-              zone={editing.foto}
-              onChange={(z) => setEditing({ ...editing, foto: z })}
-              pen={{
-                active: penPoints !== null,
-                pointCount: penPoints?.length ?? 0,
-                onStart: () => {
-                  setWandTarget(null);
-                  setPenPoints([]);
-                },
-                onFinish: finishPen,
-                onCancel: () => setPenPoints(null),
-                onClearCustom: () => setEditing({ ...editing, foto: DEFAULT_FOTO_ZONE() }),
-              }}
-              wand={{
-                active: wandTarget === 'foto',
-                busy: wandBusy && wandTarget === 'foto',
-                tolerance: wandTolerance,
-                error: wandTarget === 'foto' ? wandError : null,
-                onToleranceChange: setWandTolerance,
-                onStart: () => {
-                  setPenPoints(null);
-                  setWandError(null);
-                  setWandTarget('foto');
-                },
-                onCancel: () => {
-                  setWandTarget(null);
-                  setWandError(null);
-                },
-              }}
-            />
-            <ZoneControls
-              label={ZONE_LABELS.logo}
-              color={ZONE_COLORS.logo}
-              zone={editing.logo}
-              onChange={(z) => setEditing({ ...editing, logo: z })}
-              wand={{
-                active: wandTarget === 'logo',
-                busy: wandBusy && wandTarget === 'logo',
-                tolerance: wandTolerance,
-                error: wandTarget === 'logo' ? wandError : null,
-                onToleranceChange: setWandTolerance,
-                onStart: () => {
-                  setPenPoints(null);
-                  setWandError(null);
-                  setWandTarget('logo');
-                },
-                onCancel: () => {
-                  setWandTarget(null);
-                  setWandError(null);
-                },
-              }}
-            >
-              <label className="text-[11px] text-slate-400">
-                Escala da logo dentro da área ({Math.round(editing.logoScale * 100)}%)
-                <input
-                  type="range"
-                  min={30}
-                  max={150}
-                  value={Math.round(editing.logoScale * 100)}
-                  onChange={(e) => setEditing({ ...editing, logoScale: Number(e.target.value) / 100 })}
-                  className="w-full"
-                />
-              </label>
-            </ZoneControls>
-
-            <CollapsibleBox title={`Textos do card (${editing.textLayers.length}/${MAX_TEXT_LAYERS})`}>
-              {editing.textLayers.map((layer) => (
-                <TextLayerEditor
-                  key={layer.id}
-                  layer={layer}
-                  label={TEXT_KIND_LABEL[layer.kind]}
-                  color={TEXT_KIND_COLOR[layer.kind]}
-                  onChange={(patch) => updateTextLayer(layer.id, patch)}
-                  onRemove={() => removeTextLayer(layer.id)}
-                />
-              ))}
-              {editing.textLayers.length < MAX_TEXT_LAYERS && (
-                <button onClick={addNextTextLayer} className="rounded-lg border border-slate-700 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800">
-                  + Adicionar texto
-                </button>
-              )}
-            </CollapsibleBox>
-          </div>
-        </div>
-
-        <div className="lg:w-[380px] shrink-0 flex items-start justify-center">
-          <div className="relative w-full max-w-[420px]">
-            <div className="relative" onClick={handlePreviewClick} style={{ cursor: previewCursor }}>
-              <canvas ref={canvasRef} className="w-full h-auto block rounded-xl" />
-              {editing.referenceObjectUrl && (
-                <img
-                  src={editing.referenceObjectUrl}
-                  alt=""
-                  className="absolute inset-0 w-full h-full object-fill rounded-xl pointer-events-none"
-                  style={{ opacity: 0.45 }}
-                />
-              )}
-              {editing.foto.shape.kind !== 'polygon' && <ZoneOutline zone={editing.foto} color={ZONE_COLORS.foto} />}
-              <ZoneOutline zone={editing.logo} color={ZONE_COLORS.logo} />
-              {editing.textLayers.map((l) => (
-                <ZoneOutline key={l.id} zone={l.zone} color={TEXT_KIND_COLOR[l.kind]} />
-              ))}
-              {editing.foto.shape.kind === 'polygon' && penPoints === null && (
-                <PolygonOutline points={editing.foto.shape.points ?? []} color={ZONE_COLORS.foto} />
-              )}
-              {penPoints !== null && <PolygonOutline points={penPoints} color={ZONE_COLORS.foto} inProgress />}
-            </div>
-            {penPoints !== null && (
-              <p className="text-[11px] text-amber-400 mt-2">
-                Clique na imagem para marcar os pontos do recorte da foto ({penPoints.length} até agora — mínimo 3, depois clique em
-                "Concluir forma" na coluna ao lado).
-              </p>
-            )}
-            {wandTarget && (
-              <p className="text-[11px] text-amber-400 mt-2">
-                {wandBusy ? 'Detectando…' : `Clique na imagem sobre a área da ${wandTarget === 'foto' ? 'foto' : 'logo'} para detectá-la automaticamente.`}
-              </p>
-            )}
-          </div>
         </div>
       </div>
     </div>
@@ -948,119 +1280,6 @@ function extraParamFor(kind: CardZoneShapeKind): 'radius' | 'topInset' | 'notch'
   if (kind === 'trapezoid') return 'topInset';
   if (kind === 'notched') return 'notch';
   return null;
-}
-
-function TextLayerEditor({
-  layer,
-  label,
-  color,
-  onChange,
-  onRemove,
-}: {
-  layer: CardTextLayer;
-  label: string;
-  color: string;
-  onChange: (patch: Partial<CardTextLayer>) => void;
-  onRemove: () => void;
-}) {
-  return (
-    <CollapsibleBox
-      title={label}
-      colorDot={color}
-      headerRight={
-        <button onClick={onRemove} className="text-[10px] text-slate-500 hover:text-rose-400 shrink-0">
-          Remover
-        </button>
-      }
-    >
-      {layer.kind === 'custom' && (
-        <label className="text-[11px] text-slate-400">
-          Texto
-          <input
-            value={layer.text}
-            onChange={(e) => onChange({ text: e.target.value })}
-            className="mt-1 w-full rounded-lg bg-slate-950 border border-slate-700 px-2 py-1.5 text-sm text-slate-100"
-          />
-        </label>
-      )}
-
-      <ZoneControls label="Posição e forma (plano de fundo do texto)" color={color} zone={layer.zone} onChange={(z) => onChange({ zone: z })} />
-
-      <label className="text-[11px] text-slate-400">
-        Fonte
-        <select
-          value={layer.fontFamily}
-          onChange={(e) => onChange({ fontFamily: e.target.value })}
-          className="mt-1 w-full rounded-lg bg-slate-950 border border-slate-700 px-2 py-1.5 text-xs text-slate-100"
-          style={{ fontFamily: layer.fontFamily }}
-        >
-          {FONT_OPTIONS.map((f) => (
-            <option key={f} value={f} style={{ fontFamily: f }}>
-              {f}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="text-[11px] text-slate-400">
-        Tamanho do texto ({(Math.round((layer.fontSize ?? 0.024) * 1000) / 10).toFixed(1)}%)
-        <input
-          type="range"
-          min={10}
-          max={60}
-          value={Math.round((layer.fontSize ?? 0.024) * 1000)}
-          onChange={(e) => onChange({ fontSize: Number(e.target.value) / 1000 })}
-          className="w-full"
-        />
-      </label>
-
-      <label className="flex items-center gap-1.5 text-[11px] text-slate-400">
-        <input type="checkbox" checked={layer.useGradient} onChange={(e) => onChange({ useGradient: e.target.checked })} />
-        Degradê entre duas cores
-      </label>
-
-      {!layer.useGradient ? (
-        <label className="text-[11px] text-slate-400 flex items-center gap-2">
-          Cor do texto
-          <input type="color" value={layer.color} onChange={(e) => onChange({ color: e.target.value })} className="w-8 h-6 rounded border border-slate-700 bg-transparent" />
-        </label>
-      ) : (
-        <>
-          <div className="flex gap-4">
-            <label className="text-[11px] text-slate-400 flex items-center gap-2">
-              De
-              <input
-                type="color"
-                value={layer.gradientFrom}
-                onChange={(e) => onChange({ gradientFrom: e.target.value })}
-                className="w-8 h-6 rounded border border-slate-700 bg-transparent"
-              />
-            </label>
-            <label className="text-[11px] text-slate-400 flex items-center gap-2">
-              Para
-              <input
-                type="color"
-                value={layer.gradientTo}
-                onChange={(e) => onChange({ gradientTo: e.target.value })}
-                className="w-8 h-6 rounded border border-slate-700 bg-transparent"
-              />
-            </label>
-          </div>
-          <label className="text-[11px] text-slate-400">
-            Orientação do degradê ({layer.gradientAngle ?? 45}°)
-            <input
-              type="range"
-              min={0}
-              max={359}
-              value={layer.gradientAngle ?? 45}
-              onChange={(e) => onChange({ gradientAngle: Number(e.target.value) })}
-              className="w-full"
-            />
-          </label>
-        </>
-      )}
-    </CollapsibleBox>
-  );
 }
 
 function ZoneControls({
