@@ -106,7 +106,10 @@ function RankFilterBar({ dynamics, singleLine }: { dynamics: Dynamic[]; singleLi
 // filters share one non-wrapping row with the Copiar/Gerar imagem/toggle
 // buttons (ACTION_BUTTON_STYLE below matches the same clamp() curve) and a
 // narrower desktop window otherwise cut the row off instead of everything
-// shrinking to fit.
+// shrinking to fit. Deliberately no flex-shrink here: shrinking a flex item
+// narrower than its own (nowrap) text just makes the text spill out over
+// whatever sits next to it — the RankFilterBar wrapper's own overflow-x is
+// what catches whatever this clamp() floor still doesn't fit.
 function SubtabButton({ active, onClick, children, shrink }: { active: boolean; onClick: () => void; children: ReactNode; shrink?: boolean }) {
   return (
     <button
@@ -115,15 +118,15 @@ function SubtabButton({ active, onClick, children, shrink }: { active: boolean; 
         background: active ? '#ffb700' : 'transparent',
         border: `1px solid ${active ? '#ffb700' : '#212948'}`,
         color: active ? '#231a02' : '#8b90bf',
-        padding: shrink ? 'clamp(4px, 0.7vw, 7px) clamp(6px, 1.3vw, 13px)' : '7px 13px',
+        padding: shrink ? 'clamp(3px, 0.5vw, 7px) clamp(4px, 0.9vw, 13px)' : '7px 13px',
         borderRadius: 10,
         cursor: 'pointer',
-        fontSize: shrink ? 'clamp(9px, 1.05vw, 12px)' : 12,
+        fontSize: shrink ? 'clamp(8px, 0.85vw, 12px)' : 12,
         fontWeight: 700,
         textTransform: 'uppercase',
         letterSpacing: '.04em',
         whiteSpace: 'nowrap',
-        flexShrink: shrink ? 1 : undefined,
+        flexShrink: 0,
       }}
     >
       {children}
@@ -136,10 +139,10 @@ function SubtabButton({ active, onClick, children, shrink }: { active: boolean; 
 // "Ranking Geral" header row keeps everything visible on one line instead
 // of any of them getting clipped or forced into a scrollbar.
 const ACTION_BUTTON_STYLE: CSSProperties = {
-  padding: 'clamp(4px, 0.7vw, 7px) clamp(6px, 1.3vw, 13px)',
+  padding: 'clamp(3px, 0.5vw, 7px) clamp(4px, 0.9vw, 13px)',
   borderRadius: 10,
   cursor: 'pointer',
-  fontSize: 'clamp(9px, 1.05vw, 12px)',
+  fontSize: 'clamp(8px, 0.85vw, 12px)',
   fontWeight: 700,
   whiteSpace: 'nowrap',
 };
@@ -470,10 +473,16 @@ export function DashboardPage() {
               via the same clamp() curve (SubtabButton's `shrink` prop,
               ACTION_BUTTON_STYLE, RankingModeToggle's `shrink` prop) so a
               narrower desktop window shrinks everything down together
-              instead of clipping the tail end of the row. overflow-x stays
-              as a last-resort fallback below the clamp()s' floor. */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(4px, 1vw, 12px)', overflowX: 'auto', paddingBottom: 2 }}>
-            <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+              instead of clipping the tail end of the row. overflow-x lives
+              on the filter-bar's own wrapper (not this outer row) so if the
+              filters still don't fit at the clamp()s' floor, THEY scroll
+              inside their own box — the flex:1 1 auto wrapper is otherwise
+              allowed to shrink narrower than its content (min-width:0),
+              which without a matching overflow here let that content spill
+              out over the action buttons sitting right next to it instead
+              of clipping/scrolling. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(4px, 1vw, 12px)', paddingBottom: 2 }}>
+            <div style={{ flex: '1 1 auto', minWidth: 0, overflowX: 'auto' }}>
               <RankFilterBar dynamics={dynamics} singleLine />
             </div>
             <div style={{ display: 'flex', gap: 'clamp(3px, 0.5vw, 6px)', flexShrink: 0 }}>
