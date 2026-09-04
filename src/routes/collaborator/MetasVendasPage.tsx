@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
-import { diasRestantesNoMes, effectiveMetaGeral, getSuperMeta } from '../../lib/business/goals';
+import { diasRestantesNoMes, effectiveMetaGeral, getSuperMeta, goalProration } from '../../lib/business/goals';
 import { catTotals, computeSummary } from '../../lib/business/summary';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { useIndividualGoals } from '../../lib/mutations';
@@ -32,7 +32,7 @@ export function MetasVendasPage() {
   const { data: sales } = useSales();
   const { data: goals } = useGoals();
   const { data: storeSettings } = useStoreSettings();
-  const { dashFrom, dashTo } = useDateRange();
+  const { dashFrom, dashTo, modoGeral } = useDateRange();
   const { data: dermGoals } = useIndividualGoals('DERM');
   const { data: genGoals } = useIndividualGoals('GEN');
   const { data: mpGoals } = useIndividualGoals('MP');
@@ -52,6 +52,7 @@ export function MetasVendasPage() {
 
   const modoDia = dashFrom === dashTo;
   const mode = modoDia ? 'dia' : 'mes';
+  const proration = goalProration(dashFrom, dashTo, modoGeral);
   const dias = diasRestantesNoMes();
 
   // ---- Store-wide metrics ----
@@ -69,8 +70,8 @@ export function MetasVendasPage() {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
-  const storeMeta = effectiveMetaGeral(goals, mode, sales, collaborators, storeSettings.meta_geral_fallback);
-  const storeSuper = getSuperMeta(goals.MER, mode, sales, collaborators);
+  const storeMeta = effectiveMetaGeral(goals, mode, sales, collaborators, storeSettings.meta_geral_fallback, proration);
+  const storeSuper = getSuperMeta(goals.MER, mode, sales, collaborators, proration);
   const storeSaldo = storeValor - storeMeta;
   const storeAtingimento = storeMeta > 0 ? Math.min(999, (storeValor / storeMeta) * 100) : null;
   const storeFalta = Math.max(0, (storeSuper > storeMeta ? storeSuper : storeMeta) - storeValor);

@@ -11,7 +11,7 @@ import { RankingModeToggle } from '../../components/ranking/RankingModeToggle';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
 import { computeChampionStars, type ChampionStar } from '../../lib/business/champion';
 import { computeDinamicaRanking, intersectDynamicPeriod } from '../../lib/business/dynamics';
-import { effectiveMetaGeral, getGoal, getSuperMeta } from '../../lib/business/goals';
+import { effectiveMetaGeral, getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
 import type { Dynamic, SummaryRow } from '../../lib/business/types';
 import { catTotals, computeSummary } from '../../lib/business/summary';
 import { generateChampionCardBlob } from '../../lib/championImage';
@@ -208,7 +208,7 @@ export function DashboardPage() {
   const { data: store } = useStore();
   const { data: specialLists } = useSpecialLists();
   const { data: dynamics } = useDynamics();
-  const { dashFrom, dashTo, refYear, refMonth, rankFilter } = useDateRange();
+  const { dashFrom, dashTo, refYear, refMonth, rankFilter, modoGeral } = useDateRange();
   const updateStoreSettings = useUpdateStoreSettings(profile?.store_id);
 
   // Safe stand-ins for the useMemo calls below, so their hook call order
@@ -222,6 +222,7 @@ export function DashboardPage() {
 
   const modoDia = dashFrom === dashTo;
   const mode = modoDia ? 'dia' : 'mes';
+  const proration = useMemo(() => goalProration(dashFrom, dashTo, modoGeral), [dashFrom, dashTo, modoGeral]);
   const monthFirst = monthFirstISO(refYear, refMonth);
   const monthLast = monthLastISO(refYear, refMonth);
   const rankFilterParams = resolveRankFilterParams(rankFilter, dashFrom, dashTo, dynamics ?? []);
@@ -255,10 +256,10 @@ export function DashboardPage() {
     if (!goals) return [];
     return CAT_KEYS.map((k) => {
       const t = k === 'MER' ? { valor: totalValor, qtd: totalItens } : catTotals(salesData, dashFrom, dashTo, k);
-      const goal = getGoal(goals[k], mode, salesData, collaboratorsData);
+      const goal = getGoal(goals[k], mode, salesData, collaboratorsData, proration);
       return { key: k, valor: t.valor, goal };
     });
-  }, [salesData, collaboratorsData, goals, dashFrom, dashTo, mode, totalValor, totalItens]);
+  }, [salesData, collaboratorsData, goals, dashFrom, dashTo, mode, proration, totalValor, totalItens]);
 
   const campeaoSource = useMemo(
     () => computeSummary(salesData, collaboratorsData, campeaoFrom, campeaoTo, championCatFilter, specialLists),
@@ -317,8 +318,8 @@ export function DashboardPage() {
     return <PageLoading />;
   }
 
-  const metaGeral = effectiveMetaGeral(goals, mode, sales, collaborators, storeSettings.meta_geral_fallback);
-  const metaSuper = getSuperMeta(goals.MER, mode, sales, collaborators);
+  const metaGeral = effectiveMetaGeral(goals, mode, sales, collaborators, storeSettings.meta_geral_fallback, proration);
+  const metaSuper = getSuperMeta(goals.MER, mode, sales, collaborators, proration);
   const atingiuMeta = metaGeral > 0 && totalValor >= metaGeral;
   const saldo = totalValor - metaGeral;
 

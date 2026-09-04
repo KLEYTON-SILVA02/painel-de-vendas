@@ -3,7 +3,7 @@ import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
 import { computeChampionStars, type ChampionStar } from '../../lib/business/champion';
-import { effectiveMetaGeral, getGoal, getSuperMeta } from '../../lib/business/goals';
+import { effectiveMetaGeral, getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
 import { catTotals, computeSummary } from '../../lib/business/summary';
 import type { SummaryRow } from '../../lib/business/types';
 import { generateChampionCardBlob } from '../../lib/championImage';
@@ -26,7 +26,7 @@ export function MobileInicioPage() {
   const { data: specialLists } = useSpecialLists();
   const { data: dynamics } = useDynamics();
   const { data: store } = useStore();
-  const { dashFrom, dashTo, refYear, refMonth, rankFilter } = useDateRange();
+  const { dashFrom, dashTo, refYear, refMonth, rankFilter, modoGeral } = useDateRange();
 
   // Safe stand-ins so the useMemo calls below always run in the same order
   // (Rules of Hooks) whether or not every query has resolved yet — the
@@ -39,6 +39,7 @@ export function MobileInicioPage() {
 
   const modoDia = dashFrom === dashTo;
   const mode = modoDia ? 'dia' : 'mes';
+  const proration = useMemo(() => goalProration(dashFrom, dashTo, modoGeral), [dashFrom, dashTo, modoGeral]);
   const monthFirst = monthFirstISO(refYear, refMonth);
   const monthLast = monthLastISO(refYear, refMonth);
   const campeaoFrom = modoDia ? dashFrom : monthFirst;
@@ -60,10 +61,10 @@ export function MobileInicioPage() {
     if (!goals) return [];
     return CAT_KEYS.map((k) => {
       const t = k === 'MER' ? { valor: totalValor, qtd: totalItens } : catTotals(salesData, dashFrom, dashTo, k);
-      const goal = getGoal(goals[k], mode, salesData, collaboratorsData);
+      const goal = getGoal(goals[k], mode, salesData, collaboratorsData, proration);
       return { key: k, valor: t.valor, goal };
     });
-  }, [salesData, collaboratorsData, goals, dashFrom, dashTo, mode, totalValor, totalItens]);
+  }, [salesData, collaboratorsData, goals, dashFrom, dashTo, mode, proration, totalValor, totalItens]);
 
   const campeaoSource = useMemo(
     () => computeSummary(salesData, collaboratorsData, campeaoFrom, campeaoTo, championCatFilter, specialLists),
@@ -84,8 +85,8 @@ export function MobileInicioPage() {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
-  const metaGeral = effectiveMetaGeral(goals, mode, sales, collaborators, storeSettings.meta_geral_fallback);
-  const metaSuper = getSuperMeta(goals.MER, mode, sales, collaborators);
+  const metaGeral = effectiveMetaGeral(goals, mode, sales, collaborators, storeSettings.meta_geral_fallback, proration);
+  const metaSuper = getSuperMeta(goals.MER, mode, sales, collaborators, proration);
   const atingiuMeta = metaGeral > 0 && totalValor >= metaGeral;
   const saldo = totalValor - metaGeral;
   const pct = metaGeral > 0 ? Math.min(999, (totalValor / metaGeral) * 100) : 0;

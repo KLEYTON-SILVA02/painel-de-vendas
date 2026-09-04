@@ -832,8 +832,13 @@ export type Database = {
           file_hash: string
           file_name: string
           id: string
+          inserted_rows: number
+          invalid_date_count: number
+          processing_ms: number | null
           row_count: number
           store_id: string
+          unclassified_count: number
+          unmatched_seller_count: number
         }
         Insert: {
           created_at?: string
@@ -841,8 +846,13 @@ export type Database = {
           file_hash: string
           file_name: string
           id?: string
+          inserted_rows?: number
+          invalid_date_count?: number
+          processing_ms?: number | null
           row_count?: number
           store_id: string
+          unclassified_count?: number
+          unmatched_seller_count?: number
         }
         Update: {
           created_at?: string
@@ -850,8 +860,13 @@ export type Database = {
           file_hash?: string
           file_name?: string
           id?: string
+          inserted_rows?: number
+          invalid_date_count?: number
+          processing_ms?: number | null
           row_count?: number
           store_id?: string
+          unclassified_count?: number
+          unmatched_seller_count?: number
         }
         Relationships: [
           {

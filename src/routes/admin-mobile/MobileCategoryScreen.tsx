@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { CategoryKey } from '../../lib/business/classification';
-import { getGoal, getSuperMeta } from '../../lib/business/goals';
+import { getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
 import { computeSummary } from '../../lib/business/summary';
 import type { Collaborator } from '../../lib/business/types';
 import { fmtMoney } from '../../lib/format';
@@ -28,7 +28,7 @@ export function MobileCategoryScreen({
   const { data: sales } = useSales();
   const { data: goals } = useGoals();
   const { data: commissionRates } = useCommissionRates();
-  const { dashFrom, dashTo } = useDateRange();
+  const { dashFrom, dashTo, modoGeral } = useDateRange();
   const [selectedSeller, setSelectedSeller] = useState<string | null>(null);
   const [activeCommissionSlot, setActiveCommissionSlot] = useState<number | null>(null);
   const [vendasPage, setVendasPage] = useState(0);
@@ -73,12 +73,13 @@ export function MobileCategoryScreen({
   }
 
   const mode = dashFrom === dashTo ? 'dia' : 'mes';
+  const proration = goalProration(dashFrom, dashTo, modoGeral);
   const rankingList = ranking.filter((r) => r.valor > 0).sort((a, b) => b.valor - a.valor);
   const totalValor = ranking.reduce((a, r) => a + r.valor, 0);
   const totalItens = ranking.reduce((a, r) => a + r.itens, 0);
 
-  const metaGeral = getGoal(goals[catKey], mode, sales, collaborators);
-  const metaSuper = getSuperMeta(goals[catKey], mode, sales, collaborators);
+  const metaGeral = getGoal(goals[catKey], mode, sales, collaborators, proration);
+  const metaSuper = getSuperMeta(goals[catKey], mode, sales, collaborators, proration);
   const faltaMeta = Math.max(0, metaGeral - totalValor);
   const faltaSuper = Math.max(0, metaSuper - totalValor);
   const pctMeta = metaGeral > 0 ? Math.min(999, (totalValor / metaGeral) * 100) : 0;

@@ -6,6 +6,7 @@ import {
   effectiveMetaGeral,
   getGoal,
   getSuperMeta,
+  goalProration,
 } from './goals';
 import type { Collaborator, Goal, Sale } from './types';
 
@@ -65,13 +66,46 @@ describe('getGoal / getSuperMeta', () => {
   };
 
   it('uses the redistributed value for "dia" mode when autoRedistribuir is on', () => {
-    expect(getGoal(goal, 'dia', salesAugust, collaborators, now)).toBeCloseTo(100);
+    expect(getGoal(goal, 'dia', salesAugust, collaborators, undefined, now)).toBeCloseTo(100);
   });
   it('uses the stored monthly value for "mes" mode regardless of autoRedistribuir', () => {
-    expect(getGoal(goal, 'mes', salesAugust, collaborators, now)).toBe(3100);
+    expect(getGoal(goal, 'mes', salesAugust, collaborators, undefined, now)).toBe(3100);
   });
   it('super meta uses the stored value when superMetaAuto is off', () => {
-    expect(getSuperMeta(goal, 'dia', salesAugust, collaborators, now)).toBe(4000);
+    expect(getSuperMeta(goal, 'dia', salesAugust, collaborators, undefined, now)).toBe(4000);
+  });
+});
+
+describe('goalProration', () => {
+  it('returns undefined for a single day', () => {
+    expect(goalProration('2026-08-10', '2026-08-10', false)).toBeUndefined();
+  });
+  it('returns undefined for modoGeral (the whole calendar month)', () => {
+    expect(goalProration('2026-08-01', '2026-08-31', true)).toBeUndefined();
+  });
+  it('returns undefined when the selected range already spans the whole month', () => {
+    expect(goalProration('2026-08-01', '2026-08-31', false)).toBeUndefined();
+  });
+  it('computes {periodDays, monthDays} for a custom multi-day range', () => {
+    expect(goalProration('2026-08-01', '2026-08-05', false)).toEqual({ periodDays: 5, monthDays: 31 });
+  });
+});
+
+describe('getGoal / getSuperMeta with proration', () => {
+  const goal: Goal = {
+    categoria: 'MER', mensal: 3100, diaria: 150, metrica: 'valor',
+    autoRedistribuir: false, superMeta: 4000, superMetaAuto: false,
+  };
+  const proration = { periodDays: 5, monthDays: 31 };
+
+  it('prorates the monthly goal by periodDays/monthDays in "mes" mode', () => {
+    expect(getGoal(goal, 'mes', salesAugust, collaborators, proration, now)).toBeCloseTo((3100 * 5) / 31);
+  });
+  it('prorates the super meta the same way', () => {
+    expect(getSuperMeta(goal, 'mes', salesAugust, collaborators, proration, now)).toBeCloseTo((4000 * 5) / 31);
+  });
+  it('does not prorate in "dia" mode', () => {
+    expect(getGoal(goal, 'dia', salesAugust, collaborators, proration, now)).toBe(150);
   });
 });
 
@@ -80,16 +114,22 @@ describe('effectiveMetaGeral', () => {
     const goals = {
       MER: { categoria: 'MER', mensal: 3100, diaria: 0, metrica: 'valor', autoRedistribuir: false, superMeta: 0, superMetaAuto: false } as Goal,
     } as Record<'DERM' | 'GEN' | 'MP' | 'MER', Goal | undefined>;
-    expect(effectiveMetaGeral(goals, 'mes', salesAugust, collaborators, 43000, now)).toBe(3100);
+    expect(effectiveMetaGeral(goals, 'mes', salesAugust, collaborators, 43000, undefined, now)).toBe(3100);
   });
 
   it('falls back to metaGeralFallback in month mode when MER goal is unset', () => {
     const goals = {} as Record<'DERM' | 'GEN' | 'MP' | 'MER', Goal | undefined>;
-    expect(effectiveMetaGeral(goals, 'mes', salesAugust, collaborators, 43000, now)).toBe(43000);
+    expect(effectiveMetaGeral(goals, 'mes', salesAugust, collaborators, 43000, undefined, now)).toBe(43000);
   });
 
   it('falls back to 0 (not the fallback) in day mode when MER goal is unset', () => {
     const goals = {} as Record<'DERM' | 'GEN' | 'MP' | 'MER', Goal | undefined>;
-    expect(effectiveMetaGeral(goals, 'dia', salesAugust, collaborators, 43000, now)).toBe(0);
+    expect(effectiveMetaGeral(goals, 'dia', salesAugust, collaborators, 43000, undefined, now)).toBe(0);
+  });
+
+  it('prorates the fallback too when in a custom period', () => {
+    const goals = {} as Record<'DERM' | 'GEN' | 'MP' | 'MER', Goal | undefined>;
+    const proration = { periodDays: 5, monthDays: 31 };
+    expect(effectiveMetaGeral(goals, 'mes', salesAugust, collaborators, 43000, proration, now)).toBeCloseTo((43000 * 5) / 31);
   });
 });

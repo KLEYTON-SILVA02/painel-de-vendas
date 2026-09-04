@@ -54,7 +54,13 @@ export function AuditoriaPage() {
     // fixed future imports but left sales already in the system stuck with
     // their old category forever (sales.grupo is written once at import
     // time and never recomputed).
-    await reclassifyMutation.mutateAsync({ produtos: produtoNomes, categoria, catalog: catalog!, sales: sales! });
+    await reclassifyMutation.mutateAsync({
+      produtos: produtoNomes,
+      categoria,
+      catalog: catalog!,
+      sales: sales!,
+      dateRange: { from: from || undefined, to: to || undefined },
+    });
     setSelected(new Set());
   }
 
@@ -232,7 +238,8 @@ function PendentesTab({
       </div>
       <p className="text-xs text-slate-500 mb-3">
         Mercadoria Geral é a categoria padrão: tudo que não bate com Dermo, Gen/Sim ou Marcas Excl. cai aqui. Marque
-        um ou vários produtos e reclassifique-os — ou use o seletor rápido em cada linha.
+        um ou vários produtos e reclassifique-os — ou use o seletor rápido em cada linha. A reclassificação retroativa
+        das vendas já gravadas segue o filtro De/Até acima (em branco = todo o histórico do produto).
       </p>
       {list.length === 0 ? (
         <div className="text-sm text-slate-500 py-4 text-center">Nenhum produto pendente de revisão neste período/filtro.</div>
