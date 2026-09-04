@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
+import { SalesListLockedNotice } from '../../components/SalesListLockedNotice';
 import { ReclassifyBar } from '../../components/admin/ReclassifyBar';
 import { PodiumSplit, type PodiumSpots } from '../../components/ranking/PodiumSplit';
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
@@ -53,7 +54,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   const { data: store } = useStore();
   const { data: commissionRates } = useCommissionRates();
   const { data: catalog } = useCatalog();
-  const { dashFrom, dashTo, modoGeral } = useDateRange();
+  const { dashFrom, dashTo, modoGeral, salesListEnabled, toggleSalesListEnabled } = useDateRange();
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [extractMatricula, setExtractMatricula] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -99,7 +100,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   );
   const categorySalesAll = useMemo(
     () =>
-      !isUnit && sales
+      !isUnit && salesListEnabled && sales
         ? sales
             .filter(
               (s) =>
@@ -109,7 +110,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
             )
             .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
         : [],
-    [isUnit, sales, catKey, dashFrom, dashTo, vendasSeller],
+    [isUnit, salesListEnabled, sales, catKey, dashFrom, dashTo, vendasSeller],
   );
   const extract = useMemo(
     () => (extractMatricula && sales ? computeVendorExtract(sales, extractMatricula, summaryFilter, dashFrom, dashTo, specialLists) : []),
@@ -324,40 +325,46 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
             <h3 className="text-sm font-semibold text-slate-300">Lista de vendas — {info.titulo}</h3>
-            <div className="flex items-center gap-2 flex-wrap">
-              <select
-                value={vendasSeller}
-                onChange={(e) => {
-                  setVendasSeller(e.target.value);
-                  setVendasPage(0);
-                }}
-                className="input !w-auto"
-              >
-                <option value="">Todos os colaboradores</option>
-                {collaborators.map((c) => (
-                  <option key={c.id} value={c.matricula}>
-                    {c.apelido || c.nome}
-                  </option>
-                ))}
-              </select>
-              <ReclassifyBar
-                active={reclassifyMode}
-                onToggle={() => {
-                  setReclassifyMode((v) => !v);
-                  setSelectedProdutos(new Set());
-                }}
-                selectedCount={selectedProdutos.size}
-                categoria={bulkCat}
-                onCategoriaChange={setBulkCat}
-                onApply={applyReclassify}
-                applying={reclassify.isPending}
-                dateFrom={reclassifyFrom}
-                dateTo={reclassifyTo}
-                onDateFromChange={setReclassifyFrom}
-                onDateToChange={setReclassifyTo}
-              />
-            </div>
+            {salesListEnabled && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <select
+                  value={vendasSeller}
+                  onChange={(e) => {
+                    setVendasSeller(e.target.value);
+                    setVendasPage(0);
+                  }}
+                  className="input !w-auto"
+                >
+                  <option value="">Todos os colaboradores</option>
+                  {collaborators.map((c) => (
+                    <option key={c.id} value={c.matricula}>
+                      {c.apelido || c.nome}
+                    </option>
+                  ))}
+                </select>
+                <ReclassifyBar
+                  active={reclassifyMode}
+                  onToggle={() => {
+                    setReclassifyMode((v) => !v);
+                    setSelectedProdutos(new Set());
+                  }}
+                  selectedCount={selectedProdutos.size}
+                  categoria={bulkCat}
+                  onCategoriaChange={setBulkCat}
+                  onApply={applyReclassify}
+                  applying={reclassify.isPending}
+                  dateFrom={reclassifyFrom}
+                  dateTo={reclassifyTo}
+                  onDateFromChange={setReclassifyFrom}
+                  onDateToChange={setReclassifyTo}
+                />
+              </div>
+            )}
           </div>
+          {!salesListEnabled ? (
+            <SalesListLockedNotice onEnable={toggleSalesListEnabled} />
+          ) : (
+            <>
           {vendasAvailableRates.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 mb-3">
               {vendasAvailableRates.map((r) => (
@@ -466,6 +473,8 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
                 </div>
               )}
             </div>
+          )}
+            </>
           )}
         </div>
       )}

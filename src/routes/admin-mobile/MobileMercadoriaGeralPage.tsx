@@ -6,7 +6,7 @@ import { fmtMoney } from '../../lib/format';
 import { useCollaborators, useGoals, useSales } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { MobileDateFilter } from './MobileDateFilter';
-import { MobileSalesTable, MobileSellerAccordion } from './MobileSellerDetail';
+import { MobileSalesListLockedNotice, MobileSalesTable, MobileSellerAccordion } from './MobileSellerDetail';
 
 const ACCENT = '#f26122'; // laranja — mesma cor de mv2-cat-mercgeral
 
@@ -24,7 +24,7 @@ export function MobileMercadoriaGeralPage() {
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
   const { data: goals } = useGoals();
-  const { dashFrom, dashTo, modoGeral } = useDateRange();
+  const { dashFrom, dashTo, modoGeral, salesListEnabled, toggleSalesListEnabled } = useDateRange();
   const [selectedSeller, setSelectedSeller] = useState<string | null>(null);
   const [vendasPage, setVendasPage] = useState(0);
 
@@ -54,14 +54,16 @@ export function MobileMercadoriaGeralPage() {
   // drop everything past the 150th row instead of paginating.
   const categorySalesAll = useMemo(
     () =>
-      salesData
-        .filter((s) => {
-          if (s.dataISO && (s.dataISO < dashFrom || s.dataISO > dashTo)) return false;
-          if (selectedSeller && s.matricula !== selectedSeller) return false;
-          return true;
-        })
-        .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || '')),
-    [salesData, dashFrom, dashTo, selectedSeller],
+      salesListEnabled
+        ? salesData
+            .filter((s) => {
+              if (s.dataISO && (s.dataISO < dashFrom || s.dataISO > dashTo)) return false;
+              if (selectedSeller && s.matricula !== selectedSeller) return false;
+              return true;
+            })
+            .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
+        : [],
+    [salesListEnabled, salesData, dashFrom, dashTo, selectedSeller],
   );
 
   if (!collaborators || !sales || !goals) {
@@ -155,44 +157,50 @@ export function MobileMercadoriaGeralPage() {
         )}
       </div>
 
-      <MobileSellerAccordion
-        collaborators={collaborators}
-        selected={selectedSeller}
-        onSelect={(m) => {
-          setSelectedSeller(m);
-          setVendasPage(0);
-        }}
-      />
+      {!salesListEnabled ? (
+        <MobileSalesListLockedNotice onEnable={toggleSalesListEnabled} />
+      ) : (
+        <>
+          <MobileSellerAccordion
+            collaborators={collaborators}
+            selected={selectedSeller}
+            onSelect={(m) => {
+              setSelectedSeller(m);
+              setVendasPage(0);
+            }}
+          />
 
-      <MobileSalesTable
-        title="Lista de vendas — Mercadoria Geral"
-        sales={categorySales}
-        byMatricula={byMatricula}
-        showValor
-        subtotalMode={selectedSeller ? 'valor' : 'none'}
-      />
-      {!selectedSeller && vendasTotalPages > 1 && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, margin: '0 18px 16px' }}>
-          <button
-            disabled={vendasPageClamped === 0}
-            onClick={() => setVendasPage(Math.max(0, vendasPageClamped - 1))}
-            className="mv2-btn-outline"
-            style={{ opacity: vendasPageClamped === 0 ? 0.4 : 1 }}
-          >
-            ← Anterior
-          </button>
-          <span style={{ fontSize: 10, color: 'var(--mv2-texto-2)' }}>
-            Página {vendasPageClamped + 1} de {vendasTotalPages}
-          </span>
-          <button
-            disabled={vendasPageClamped >= vendasTotalPages - 1}
-            onClick={() => setVendasPage(Math.min(vendasTotalPages - 1, vendasPageClamped + 1))}
-            className="mv2-btn-outline"
-            style={{ opacity: vendasPageClamped >= vendasTotalPages - 1 ? 0.4 : 1 }}
-          >
-            Próxima →
-          </button>
-        </div>
+          <MobileSalesTable
+            title="Lista de vendas — Mercadoria Geral"
+            sales={categorySales}
+            byMatricula={byMatricula}
+            showValor
+            subtotalMode={selectedSeller ? 'valor' : 'none'}
+          />
+          {!selectedSeller && vendasTotalPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, margin: '0 18px 16px' }}>
+              <button
+                disabled={vendasPageClamped === 0}
+                onClick={() => setVendasPage(Math.max(0, vendasPageClamped - 1))}
+                className="mv2-btn-outline"
+                style={{ opacity: vendasPageClamped === 0 ? 0.4 : 1 }}
+              >
+                ← Anterior
+              </button>
+              <span style={{ fontSize: 10, color: 'var(--mv2-texto-2)' }}>
+                Página {vendasPageClamped + 1} de {vendasTotalPages}
+              </span>
+              <button
+                disabled={vendasPageClamped >= vendasTotalPages - 1}
+                onClick={() => setVendasPage(Math.min(vendasTotalPages - 1, vendasPageClamped + 1))}
+                className="mv2-btn-outline"
+                style={{ opacity: vendasPageClamped >= vendasTotalPages - 1 ? 0.4 : 1 }}
+              >
+                Próxima →
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

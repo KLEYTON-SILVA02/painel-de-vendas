@@ -13,7 +13,7 @@ import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
 import { useBioGroupGoals, useBioGroups, useCategoryTypes, useCollaborators, useSales, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { MobileDateFilter } from './MobileDateFilter';
-import { resolveVendorName } from './MobileSellerDetail';
+import { MobileSalesListLockedNotice, resolveVendorName } from './MobileSellerDetail';
 
 const BIO_GROUP_KEYS: BioGroupKey[] = ['G1', 'G2', 'G3', 'G4'];
 const GROUP_LABELS: Record<BioGroupKey, string> = { G1: 'Grupo 1', G2: 'Grupo 2', G3: 'Grupo 3', G4: 'Grupo 4' };
@@ -28,7 +28,7 @@ export function MobileBioPage() {
   const bioCategoryType = categoryTypes?.find((c) => c.chave === 'biosintetica');
   const { data: bioGroupRows } = useBioGroups(bioCategoryType?.id);
   const { data: groupGoals } = useBioGroupGoals(bioCategoryType?.id);
-  const { dashFrom, dashTo, setModoGeral } = useDateRange();
+  const { dashFrom, dashTo, setModoGeral, salesListEnabled, toggleSalesListEnabled } = useDateRange();
   const [view, setView] = useState<'ranking' | 'grupos' | 'pontos'>('ranking');
   const [groupFilter, setGroupFilter] = useState<BioGroupKey | 'ALL'>('ALL');
   const [generating, setGenerating] = useState(false);
@@ -97,15 +97,17 @@ export function MobileBioPage() {
   // the row, matching auditBioOutsideBalcao's own audit criteria.
   const salesForTable = useMemo(
     () =>
-      salesData
-        .filter((s) => {
-          if (s.dataISO && s.dataISO < dashFrom) return false;
-          if (s.dataISO && s.dataISO > dashTo) return false;
-          return !!classifyBio(s.produto, bioGroups);
-        })
-        .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
-        .slice(0, 150),
-    [salesData, bioGroups, dashFrom, dashTo],
+      salesListEnabled
+        ? salesData
+            .filter((s) => {
+              if (s.dataISO && s.dataISO < dashFrom) return false;
+              if (s.dataISO && s.dataISO > dashTo) return false;
+              return !!classifyBio(s.produto, bioGroups);
+            })
+            .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
+            .slice(0, 150)
+        : [],
+    [salesListEnabled, salesData, bioGroups, dashFrom, dashTo],
   );
 
   if (!collaborators || !sales || !storeSettings || !bioCategoryType || !bioGroupRows || !groupGoals) {
@@ -287,6 +289,9 @@ export function MobileBioPage() {
 
       <div style={{ margin: '18px 18px 8px' }}>
         <div style={{ fontSize: 10, fontWeight: 700, marginBottom: 6 }}>Lista de vendas — Biosintética</div>
+        {!salesListEnabled ? (
+          <MobileSalesListLockedNotice onEnable={toggleSalesListEnabled} />
+        ) : (
         <div style={{ overflowX: 'auto' }}>
           <table className="mv2-data-table">
             <thead>
@@ -336,6 +341,7 @@ export function MobileBioPage() {
             </tbody>
           </table>
         </div>
+        )}
       </div>
 
       {imageModal && (

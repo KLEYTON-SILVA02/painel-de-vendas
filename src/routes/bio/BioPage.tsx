@@ -3,6 +3,7 @@ import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
+import { SalesListLockedNotice } from '../../components/SalesListLockedNotice';
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
 import {
   auditBioOutsideBalcao,
@@ -31,7 +32,7 @@ export function BioPage() {
   const bioCategoryType = categoryTypes?.find((c) => c.chave === 'biosintetica');
   const { data: bioGroupRows } = useBioGroups(bioCategoryType?.id);
   const { data: groupGoals } = useBioGroupGoals(bioCategoryType?.id);
-  const { dashFrom, dashTo, setModoGeral } = useDateRange();
+  const { dashFrom, dashTo, setModoGeral, salesListEnabled, toggleSalesListEnabled } = useDateRange();
   const [view, setView] = useState<'ranking' | 'grupos' | 'pontos'>('ranking');
   const [bioFilter, setBioFilter] = useState<BioGroupKey | 'ALL'>('ALL');
   const [foraDoBalcaoOpen, setForaDoBalcaoOpen] = useState(false);
@@ -89,14 +90,16 @@ export function BioPage() {
   // shown here is G1-G4, regardless of the seller's sector. A sale by
   // someone outside Balcão isn't hidden, just flagged with "!" in the row
   // (see the pink alert bar above the table).
-  const salesForTable = sales
-    .filter((s) => {
-      if (s.dataISO && s.dataISO < dashFrom) return false;
-      if (s.dataISO && s.dataISO > dashTo) return false;
-      return !!classifyBio(s.produto, bioGroups);
-    })
-    .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
-    .slice(0, 150);
+  const salesForTable = salesListEnabled
+    ? sales
+        .filter((s) => {
+          if (s.dataISO && s.dataISO < dashFrom) return false;
+          if (s.dataISO && s.dataISO > dashTo) return false;
+          return !!classifyBio(s.produto, bioGroups);
+        })
+        .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
+        .slice(0, 150)
+    : [];
 
   const modeloRanking = storeSettings.modelo_ranking as 'escadinha' | 'lista';
   const totalItensBio = ranking.reduce((a, r) => a + r.itens, 0);
@@ -188,6 +191,10 @@ export function BioPage() {
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <h3 className="text-sm font-semibold mb-1">Lista de vendas — Biosintética</h3>
+        {!salesListEnabled ? (
+          <SalesListLockedNotice onEnable={toggleSalesListEnabled} />
+        ) : (
+          <>
         <p className="text-xs text-slate-500 mb-3">Mostra as vendas de produtos dos grupos G1-G4 no período, com a pontuação calculada.</p>
         {salesForTable.length === 0 ? (
           <div className="text-sm text-slate-500 py-4 text-center">Nenhuma venda no período.</div>
@@ -241,6 +248,8 @@ export function BioPage() {
               </tbody>
             </table>
           </div>
+        )}
+          </>
         )}
       </div>
     </div>
