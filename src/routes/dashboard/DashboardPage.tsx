@@ -80,9 +80,9 @@ function RankFilterBar({ dynamics, singleLine }: { dynamics: Dynamic[]; singleLi
 
   return (
     <>
-      <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: singleLine ? 'nowrap' : 'wrap' }}>
+      <div style={{ display: 'flex', gap: 'clamp(3px, 0.5vw, 6px)', marginBottom: 6, flexWrap: singleLine ? 'nowrap' : 'wrap' }}>
         {[...RANK_FILTERS, { k: 'LEVMEL' as RankFilter, l: 'Levmel' }, { k: 'CHIP' as RankFilter, l: 'Chip' }].map((x) => (
-          <SubtabButton key={x.k} active={rankFilter === x.k} onClick={() => setRankFilter(x.k)}>
+          <SubtabButton key={x.k} active={rankFilter === x.k} onClick={() => setRankFilter(x.k)} shrink={singleLine}>
             {x.l}
           </SubtabButton>
         ))}
@@ -100,7 +100,14 @@ function RankFilterBar({ dynamics, singleLine }: { dynamics: Dynamic[]; singleLi
   );
 }
 
-function SubtabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+// `shrink` scales padding/font-size down with the viewport (via clamp())
+// instead of the fixed sizing every other use of this button keeps — only
+// the Dashboard's "Ranking Geral" header needs it, where the category
+// filters share one non-wrapping row with the Copiar/Gerar imagem/toggle
+// buttons (ACTION_BUTTON_STYLE below matches the same clamp() curve) and a
+// narrower desktop window otherwise cut the row off instead of everything
+// shrinking to fit.
+function SubtabButton({ active, onClick, children, shrink }: { active: boolean; onClick: () => void; children: ReactNode; shrink?: boolean }) {
   return (
     <button
       onClick={onClick}
@@ -108,19 +115,34 @@ function SubtabButton({ active, onClick, children }: { active: boolean; onClick:
         background: active ? '#ffb700' : 'transparent',
         border: `1px solid ${active ? '#ffb700' : '#212948'}`,
         color: active ? '#231a02' : '#8b90bf',
-        padding: '7px 13px',
+        padding: shrink ? 'clamp(4px, 0.7vw, 7px) clamp(6px, 1.3vw, 13px)' : '7px 13px',
         borderRadius: 10,
         cursor: 'pointer',
-        fontSize: 12,
+        fontSize: shrink ? 'clamp(9px, 1.05vw, 12px)' : 12,
         fontWeight: 700,
         textTransform: 'uppercase',
         letterSpacing: '.04em',
+        whiteSpace: 'nowrap',
+        flexShrink: shrink ? 1 : undefined,
       }}
     >
       {children}
     </button>
   );
 }
+
+// Shared with SubtabButton's `shrink` curve above so the category filters
+// and these action buttons shrink together, at the same rate, and the whole
+// "Ranking Geral" header row keeps everything visible on one line instead
+// of any of them getting clipped or forced into a scrollbar.
+const ACTION_BUTTON_STYLE: CSSProperties = {
+  padding: 'clamp(4px, 0.7vw, 7px) clamp(6px, 1.3vw, 13px)',
+  borderRadius: 10,
+  cursor: 'pointer',
+  fontSize: 'clamp(9px, 1.05vw, 12px)',
+  fontWeight: 700,
+  whiteSpace: 'nowrap',
+};
 
 function CategoryGauge({ label, valor, goal, color }: { label: string; valor: number; goal: number; color: string }) {
   const pct = goal > 0 ? Math.min(100, (valor / goal) * 100) : 0;
@@ -443,23 +465,26 @@ export function DashboardPage() {
         </div>
 
         <div className="lg:col-start-1 lg:row-start-2 min-w-0 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ flex: '1 1 auto', minWidth: 0, overflowX: 'auto', paddingBottom: 2 }}>
+          {/* Category filters + Copiar/Gerar imagem/toggle all share this one
+              non-wrapping row — every button here scales its padding/font
+              via the same clamp() curve (SubtabButton's `shrink` prop,
+              ACTION_BUTTON_STYLE, RankingModeToggle's `shrink` prop) so a
+              narrower desktop window shrinks everything down together
+              instead of clipping the tail end of the row. overflow-x stays
+              as a last-resort fallback below the clamp()s' floor. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(4px, 1vw, 12px)', overflowX: 'auto', paddingBottom: 2 }}>
+            <div style={{ flex: '1 1 auto', minWidth: 0 }}>
               <RankFilterBar dynamics={dynamics} singleLine />
             </div>
-            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: 'clamp(3px, 0.5vw, 6px)', flexShrink: 0 }}>
               <button
                 onClick={handleCopyRanking}
                 title="Copiar ranking de vendas p/ WhatsApp"
                 style={{
+                  ...ACTION_BUTTON_STYLE,
                   background: 'transparent',
                   border: '1px solid #212948',
                   color: '#8b90bf',
-                  padding: '7px 13px',
-                  borderRadius: 10,
-                  cursor: 'pointer',
-                  fontSize: 12,
-                  fontWeight: 700,
                 }}
               >
                 {rankingCopied ? '✓ Copiado!' : '📋 Copiar ranking'}
@@ -469,14 +494,10 @@ export function DashboardPage() {
                 disabled={generatingImage}
                 title="Gerar imagem do ranking"
                 style={{
+                  ...ACTION_BUTTON_STYLE,
                   background: 'transparent',
                   border: '1px solid #ffb700',
                   color: '#ffb700',
-                  padding: '7px 13px',
-                  borderRadius: 10,
-                  cursor: 'pointer',
-                  fontSize: 12,
-                  fontWeight: 700,
                   opacity: generatingImage ? 0.5 : 1,
                 }}
               >
@@ -489,6 +510,7 @@ export function DashboardPage() {
               <RankingModeToggle
                 on={storeSettings.ranking_moderno}
                 onToggle={() => updateStoreSettings.mutate({ ranking_moderno: !storeSettings.ranking_moderno })}
+                shrink
               />
             </div>
           </div>

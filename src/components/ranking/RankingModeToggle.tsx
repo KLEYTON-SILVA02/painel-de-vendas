@@ -5,7 +5,11 @@
 // such screen stays in sync. Shows the name of whichever model is currently
 // on screen (not a generic ON/OFF) — clicking it swaps to the other one.
 
-export function RankingModeToggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
+// `shrink` scales padding/font-size down with the viewport instead of the
+// default fixed sizing — used where this button shares a non-wrapping row
+// with other buttons that need to shrink together to avoid the row getting
+// clipped (see DashboardPage's "Ranking Geral" header).
+export function RankingModeToggle({ on, onToggle, shrink }: { on: boolean; onToggle: () => void; shrink?: boolean }) {
   return (
     <button
       onClick={onToggle}
@@ -14,11 +18,12 @@ export function RankingModeToggle({ on, onToggle }: { on: boolean; onToggle: () 
         background: 'transparent',
         border: `1px solid ${on ? '#00e676' : '#212948'}`,
         color: on ? '#00e676' : '#8b90bf',
-        padding: '7px 13px',
+        padding: shrink ? 'clamp(4px, 0.7vw, 7px) clamp(6px, 1.3vw, 13px)' : '7px 13px',
         borderRadius: 10,
         cursor: 'pointer',
-        fontSize: 12,
+        fontSize: shrink ? 'clamp(9px, 1.05vw, 12px)' : 12,
         fontWeight: 700,
+        whiteSpace: 'nowrap',
       }}
     >
       {on ? '🏆 Premium' : '🪜 Escadinha'}
