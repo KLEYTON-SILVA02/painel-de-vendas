@@ -10,7 +10,6 @@ import { Sidebar } from '../components/Sidebar';
 import type { Horario } from '../lib/business/horario';
 import { supabase } from '../lib/supabase';
 import { useIsMobileV2 } from '../lib/useIsMobileV2';
-import { useAutoArchiveOldSales } from '../lib/archival';
 import { useStoreSettings } from '../lib/queries';
 import { AdminLandingPage } from './admin/AdminLandingPage';
 import { BioPage } from './bio/BioPage';
@@ -63,7 +62,6 @@ const PAGE_TITLES: Record<string, { label: string; color: string }> = {
 
 export function AppShell() {
   const { profile, signOut } = useAuth();
-  useAutoArchiveOldSales();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [refreshed, setRefreshed] = useState(false);
