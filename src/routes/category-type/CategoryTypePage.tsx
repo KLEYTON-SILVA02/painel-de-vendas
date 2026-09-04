@@ -5,6 +5,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
 import { TagIcon } from '../../components/icons/NavIcons';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
+import { SalesListLockedNotice } from '../../components/SalesListLockedNotice';
 import { PodiumSplit, type PodiumSpots } from '../../components/ranking/PodiumSplit';
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
 import { RankingModeToggle } from '../../components/ranking/RankingModeToggle';
@@ -38,7 +39,7 @@ export function CategoryTypePage() {
   const categoryType = categoryTypes?.find((c) => c.chave === chave);
   const { data: bioGroupRows } = useBioGroups(categoryType?.id);
   const { data: groupGoals } = useBioGroupGoals(categoryType?.id);
-  const { dashFrom, dashTo } = useDateRange();
+  const { dashFrom, dashTo, salesListEnabled, toggleSalesListEnabled } = useDateRange();
   const [view, setView] = useState<'ranking' | 'grupos' | 'pontos'>('ranking');
   const [groupFilter, setGroupFilter] = useState<string>('ALL');
   const [foraOpen, setForaOpen] = useState(false);
@@ -104,14 +105,16 @@ export function CategoryTypePage() {
   const elegiveisMatriculas = new Set(
     collaborators.filter((c) => c.setor !== null && setoresElegiveis.includes(c.setor)).map((c) => c.matricula),
   );
-  const salesForTable = sales
-    .filter((s) => {
-      if (s.dataISO && s.dataISO < dashFrom) return false;
-      if (s.dataISO && s.dataISO > dashTo) return false;
-      return !!classifyBio(s.produto, bioGroups);
-    })
-    .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
-    .slice(0, 150);
+  const salesForTable = salesListEnabled
+    ? sales
+        .filter((s) => {
+          if (s.dataISO && s.dataISO < dashFrom) return false;
+          if (s.dataISO && s.dataISO > dashTo) return false;
+          return !!classifyBio(s.produto, bioGroups);
+        })
+        .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
+        .slice(0, 150)
+    : [];
 
   const totalItens = ranking.reduce((a, r) => a + r.itens, 0);
   const vendedoresAtivos = ranking.filter((r) => r.itens > 0).length;
@@ -229,6 +232,10 @@ export function CategoryTypePage() {
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <h3 className="text-sm font-semibold mb-1">Lista de vendas — {categoryType.nome}</h3>
+        {!salesListEnabled ? (
+          <SalesListLockedNotice onEnable={toggleSalesListEnabled} />
+        ) : (
+          <>
         <p className="text-xs text-slate-500 mb-3">Mostra as vendas de produtos desta categoria no período, com a pontuação calculada.</p>
         {salesForTable.length === 0 ? (
           <div className="text-sm text-slate-500 py-4 text-center">Nenhuma venda no período.</div>
@@ -282,6 +289,8 @@ export function CategoryTypePage() {
               </tbody>
             </table>
           </div>
+        )}
+          </>
         )}
       </div>
     </div>

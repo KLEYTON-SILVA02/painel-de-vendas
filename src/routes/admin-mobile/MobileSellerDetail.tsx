@@ -84,6 +84,23 @@ export function MobileSellerAccordion({
   );
 }
 
+/** Mobile counterpart to SalesListLockedNotice (src/components) — shown by
+ * each category screen instead of <MobileSalesTable> + seller
+ * accordion/pagination when the global "Lista de vendas detalhada" toggle is
+ * off, so tab switches on mobile (where DOM cost is felt hardest) skip
+ * mounting every individual sale row by default. */
+export function MobileSalesListLockedNotice({ onEnable }: { onEnable: () => void }) {
+  return (
+    <p style={{ margin: '0 18px 16px', fontSize: 10, color: 'var(--mv2-texto-2)' }}>
+      Mostrando só o ranking e os totais — mais rápido para abrir e trocar de aba. Ligue{' '}
+      <button onClick={onEnable} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--mv2-ciano-claro)', textDecoration: 'underline', fontSize: 10 }}>
+        "Lista de vendas detalhada"
+      </button>{' '}
+      no calendário da tela Início pra ver os itens vendidos.
+    </p>
+  );
+}
+
 /** Sales detail table shared by Dermo/Genéricos/Marcas Exclusivas/Mercadoria
  * Geral/Levmel/Chip — resolved vendor name (never a matrícula), no matrícula
  * column, and a subtotal row once a specific seller narrows the list. */

@@ -7,7 +7,7 @@ import { fmtMoney } from '../../lib/format';
 import { useCollaborators, useCommissionRates, useGoals, useSales } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { MobileDateFilter } from './MobileDateFilter';
-import { MobileSalesTable, MobileSellerAccordion } from './MobileSellerDetail';
+import { MobileSalesListLockedNotice, MobileSalesTable, MobileSellerAccordion } from './MobileSellerDetail';
 
 // Shared mobile v2 screen for Dermo / Marcas Exclusivas / Genéricos — the
 // spec says all three reuse this exact structure, only the accent color
@@ -28,7 +28,7 @@ export function MobileCategoryScreen({
   const { data: sales } = useSales();
   const { data: goals } = useGoals();
   const { data: commissionRates } = useCommissionRates();
-  const { dashFrom, dashTo, modoGeral } = useDateRange();
+  const { dashFrom, dashTo, modoGeral, salesListEnabled, toggleSalesListEnabled } = useDateRange();
   const [selectedSeller, setSelectedSeller] = useState<string | null>(null);
   const [activeCommissionSlot, setActiveCommissionSlot] = useState<number | null>(null);
   const [vendasPage, setVendasPage] = useState(0);
@@ -57,15 +57,17 @@ export function MobileCategoryScreen({
   // instead of paginating — this now pages through the full set instead.
   const categorySalesAll = useMemo(
     () =>
-      salesData
-        .filter((s) => {
-          if (s.grupo !== catKey) return false;
-          if (s.dataISO && (s.dataISO < dashFrom || s.dataISO > dashTo)) return false;
-          if (selectedSeller && s.matricula !== selectedSeller) return false;
-          return true;
-        })
-        .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || '')),
-    [salesData, catKey, dashFrom, dashTo, selectedSeller],
+      salesListEnabled
+        ? salesData
+            .filter((s) => {
+              if (s.grupo !== catKey) return false;
+              if (s.dataISO && (s.dataISO < dashFrom || s.dataISO > dashTo)) return false;
+              if (selectedSeller && s.matricula !== selectedSeller) return false;
+              return true;
+            })
+            .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
+        : [],
+    [salesListEnabled, salesData, catKey, dashFrom, dashTo, selectedSeller],
   );
 
   if (!collaborators || !sales || !goals || !commissionRates) {
@@ -165,76 +167,82 @@ export function MobileCategoryScreen({
         )}
       </div>
 
-      <MobileSellerAccordion
-        collaborators={collaborators}
-        selected={selectedSeller}
-        onSelect={(m) => {
-          setSelectedSeller(m);
-          setVendasPage(0);
-        }}
-      />
+      {!salesListEnabled ? (
+        <MobileSalesListLockedNotice onEnable={toggleSalesListEnabled} />
+      ) : (
+        <>
+          <MobileSellerAccordion
+            collaborators={collaborators}
+            selected={selectedSeller}
+            onSelect={(m) => {
+              setSelectedSeller(m);
+              setVendasPage(0);
+            }}
+          />
 
-      {availableRates.length > 0 && (
-        <div className="mv2-commission-toggle" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {availableRates.map((r) => (
-              <button
-                key={r.slot}
-                onClick={() => setActiveCommissionSlot((cur) => (cur === r.slot ? null : r.slot))}
-                style={{
-                  border: `1px solid ${accent}`,
-                  background: activeCommissionSlot === r.slot ? accent : 'transparent',
-                  color: activeCommissionSlot === r.slot ? '#080a08' : accent,
-                  borderRadius: 999,
-                  padding: '4px 10px',
-                  fontSize: 10,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
-              >
-                {availableRates.length > 1 ? `Comissão ${r.slot} (${r.percentual}%)` : `Comissão (${r.percentual}%)`}
-              </button>
-            ))}
-          </div>
-          {activeRate && (
-            <span style={{ fontSize: 8, color: 'var(--mv2-texto-2)' }}>
-              {selectedSeller ? 'Exibindo comissão do vendedor selecionado' : 'Selecione um vendedor pra ver a comissão'}
-            </span>
+          {availableRates.length > 0 && (
+            <div className="mv2-commission-toggle" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {availableRates.map((r) => (
+                  <button
+                    key={r.slot}
+                    onClick={() => setActiveCommissionSlot((cur) => (cur === r.slot ? null : r.slot))}
+                    style={{
+                      border: `1px solid ${accent}`,
+                      background: activeCommissionSlot === r.slot ? accent : 'transparent',
+                      color: activeCommissionSlot === r.slot ? '#080a08' : accent,
+                      borderRadius: 999,
+                      padding: '4px 10px',
+                      fontSize: 10,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {availableRates.length > 1 ? `Comissão ${r.slot} (${r.percentual}%)` : `Comissão (${r.percentual}%)`}
+                  </button>
+                ))}
+              </div>
+              {activeRate && (
+                <span style={{ fontSize: 8, color: 'var(--mv2-texto-2)' }}>
+                  {selectedSeller ? 'Exibindo comissão do vendedor selecionado' : 'Selecione um vendedor pra ver a comissão'}
+                </span>
+              )}
+            </div>
           )}
-        </div>
-      )}
 
-      <MobileSalesTable
-        title={`Lista de vendas — ${title}`}
-        sales={categorySales}
-        byMatricula={byMatricula}
-        showValor
-        showComissao={showCommission}
-        comissaoPercentual={activeRate?.percentual}
-        subtotalMode={selectedSeller ? 'valor' : 'none'}
-      />
-      {!selectedSeller && vendasTotalPages > 1 && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, margin: '0 18px 16px' }}>
-          <button
-            disabled={vendasPageClamped === 0}
-            onClick={() => setVendasPage(Math.max(0, vendasPageClamped - 1))}
-            className="mv2-btn-outline"
-            style={{ opacity: vendasPageClamped === 0 ? 0.4 : 1 }}
-          >
-            ← Anterior
-          </button>
-          <span style={{ fontSize: 10, color: 'var(--mv2-texto-2)' }}>
-            Página {vendasPageClamped + 1} de {vendasTotalPages}
-          </span>
-          <button
-            disabled={vendasPageClamped >= vendasTotalPages - 1}
-            onClick={() => setVendasPage(Math.min(vendasTotalPages - 1, vendasPageClamped + 1))}
-            className="mv2-btn-outline"
-            style={{ opacity: vendasPageClamped >= vendasTotalPages - 1 ? 0.4 : 1 }}
-          >
-            Próxima →
-          </button>
-        </div>
+          <MobileSalesTable
+            title={`Lista de vendas — ${title}`}
+            sales={categorySales}
+            byMatricula={byMatricula}
+            showValor
+            showComissao={showCommission}
+            comissaoPercentual={activeRate?.percentual}
+            subtotalMode={selectedSeller ? 'valor' : 'none'}
+          />
+          {!selectedSeller && vendasTotalPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, margin: '0 18px 16px' }}>
+              <button
+                disabled={vendasPageClamped === 0}
+                onClick={() => setVendasPage(Math.max(0, vendasPageClamped - 1))}
+                className="mv2-btn-outline"
+                style={{ opacity: vendasPageClamped === 0 ? 0.4 : 1 }}
+              >
+                ← Anterior
+              </button>
+              <span style={{ fontSize: 10, color: 'var(--mv2-texto-2)' }}>
+                Página {vendasPageClamped + 1} de {vendasTotalPages}
+              </span>
+              <button
+                disabled={vendasPageClamped >= vendasTotalPages - 1}
+                onClick={() => setVendasPage(Math.min(vendasTotalPages - 1, vendasPageClamped + 1))}
+                className="mv2-btn-outline"
+                style={{ opacity: vendasPageClamped >= vendasTotalPages - 1 ? 0.4 : 1 }}
+              >
+                Próxima →
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
