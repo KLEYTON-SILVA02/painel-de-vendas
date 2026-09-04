@@ -13,8 +13,21 @@ const DOW_ABBR = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
 const NEON_CYAN = '#00f0ff';
 
 export function SidebarCalendarCard() {
-  const { refYear, refMonth, dashFrom, dashTo, modoGeral, quickMonth, navigateMonth, pickDay, toggleBuscaPeriodo, setModoGeral, buscaPeriodoOpen } =
-    useDateRange();
+  const {
+    refYear,
+    refMonth,
+    dashFrom,
+    dashTo,
+    modoGeral,
+    quickMonth,
+    navigateMonth,
+    pickDay,
+    toggleBuscaPeriodo,
+    setModoGeral,
+    buscaPeriodoOpen,
+    salesListEnabled,
+    toggleSalesListEnabled,
+  } = useDateRange();
 
   const firstDow = new Date(refYear, refMonth, 1).getDay();
   const daysInMonth = new Date(refYear, refMonth + 1, 0).getDate();
@@ -168,6 +181,30 @@ export function SidebarCalendarCard() {
           );
         })}
       </div>
+
+      <button
+        onClick={toggleSalesListEnabled}
+        title="Quando desligado, a tela Lista de Vendas mostra só os totais por mês — ligue para carregar a lista item a item."
+        style={{
+          width: '100%',
+          marginTop: 10,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 6,
+          background: salesListEnabled ? NEON_CYAN : '#0b0e1d',
+          color: salesListEnabled ? '#02181c' : NEON_CYAN,
+          border: `1px solid ${NEON_CYAN}`,
+          borderRadius: 999,
+          padding: 6,
+          fontSize: 9.5,
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          cursor: 'pointer',
+        }}
+      >
+        {salesListEnabled ? '🔓' : '🔒'} Lista de vendas detalhada: {salesListEnabled ? 'ligada' : 'desligada'}
+      </button>
     </div>
   );
 }

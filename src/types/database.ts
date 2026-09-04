@@ -1020,6 +1020,10 @@ export type Database = {
         Args: { p_matricula: string }
         Returns: string
       }
+      sales_month_totals: {
+        Args: never
+        Returns: { year_month: string; valor_total: number; itens_total: number; vendas_total: number }[]
+      }
     }
     Enums: {
       [_ in never]: never

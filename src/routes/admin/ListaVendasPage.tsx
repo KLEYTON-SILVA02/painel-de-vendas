@@ -6,7 +6,8 @@ import type { CategoryKey } from '../../lib/business/classification';
 import type { Collaborator, Sale } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney, monthName } from '../../lib/format';
 import { useReclassifyProdutos } from '../../lib/mutations';
-import { useCatalog, useCollaborators, useSales } from '../../lib/queries';
+import { useCatalog, useCollaborators, useSales, useSalesMonthTotals } from '../../lib/queries';
+import { useDateRange } from '../DateRangeContext';
 
 const TIPO_LABEL: Record<string, string> = {
   DERM: 'Dermocosméticos',
@@ -70,7 +71,9 @@ function groupByMonthAndDay(sales: Sale[]): MonthGroup[] {
 
 export function ListaVendasPage() {
   const { profile } = useAuth();
-  const { data: sales } = useSales();
+  const { salesListEnabled, toggleSalesListEnabled } = useDateRange();
+  const { data: sales } = useSales(salesListEnabled);
+  const { data: monthTotals } = useSalesMonthTotals();
   const { data: collaborators } = useCollaborators();
   const { data: catalog } = useCatalog();
   const [tab, setTab] = useState<'todas' | 'outros'>('todas');
@@ -99,9 +102,9 @@ export function ListaVendasPage() {
   const salesForTab = tab === 'outros' ? outrosSales : sales ?? [];
   const months = useMemo(() => groupByMonthAndDay(salesForTab), [salesForTab]);
 
-  if (!sales || !collaborators || !catalog) {
-    return <PageLoading />;
-  }
+  if (!collaborators || !catalog) return <PageLoading />;
+  if (salesListEnabled && !sales) return <PageLoading />;
+  if (!salesListEnabled && !monthTotals) return <PageLoading />;
 
   function toggleMonth(key: string) {
     setOpenMonths((prev) => {
@@ -144,46 +147,83 @@ export function ListaVendasPage() {
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <div className="flex items-start justify-between gap-3 flex-wrap mb-1">
           <h3 className="text-cyan-400 font-semibold text-sm">📋 Lista de Vendas</h3>
-          <ReclassifyBar
-            active={reclassifyMode}
-            onToggle={() => {
-              setReclassifyMode((v) => !v);
-              setSelectedProdutos(new Set());
-            }}
-            selectedCount={selectedProdutos.size}
-            categoria={bulkCat}
-            onCategoriaChange={setBulkCat}
-            onApply={applyReclassify}
-            applying={reclassify.isPending}
-            dateFrom={reclassifyFrom}
-            dateTo={reclassifyTo}
-            onDateFromChange={setReclassifyFrom}
-            onDateToChange={setReclassifyTo}
-          />
+          {salesListEnabled && (
+            <ReclassifyBar
+              active={reclassifyMode}
+              onToggle={() => {
+                setReclassifyMode((v) => !v);
+                setSelectedProdutos(new Set());
+              }}
+              selectedCount={selectedProdutos.size}
+              categoria={bulkCat}
+              onCategoriaChange={setBulkCat}
+              onApply={applyReclassify}
+              applying={reclassify.isPending}
+              dateFrom={reclassifyFrom}
+              dateTo={reclassifyTo}
+              onDateFromChange={setReclassifyFrom}
+              onDateToChange={setReclassifyTo}
+            />
+          )}
         </div>
-        <div className="flex gap-1 mb-2">
-          <button
-            onClick={() => setTab('todas')}
-            className={`rounded-lg px-3 py-1.5 text-xs ${tab === 'todas' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
-          >
-            Todas
-          </button>
-          <button
-            onClick={() => setTab('outros')}
-            className={`rounded-lg px-3 py-1.5 text-xs ${tab === 'outros' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
-          >
-            OUTROS {outrosSales.length > 0 && `(${outrosSales.length.toLocaleString('pt-BR')})`}
-          </button>
-        </div>
+        {salesListEnabled && (
+          <div className="flex gap-1 mb-2">
+            <button
+              onClick={() => setTab('todas')}
+              className={`rounded-lg px-3 py-1.5 text-xs ${tab === 'todas' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+            >
+              Todas
+            </button>
+            <button
+              onClick={() => setTab('outros')}
+              className={`rounded-lg px-3 py-1.5 text-xs ${tab === 'outros' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+            >
+              OUTROS {outrosSales.length > 0 && `(${outrosSales.length.toLocaleString('pt-BR')})`}
+            </button>
+          </div>
+        )}
         <p className="text-xs text-slate-500">
-          {tab === 'outros'
-            ? 'Vendas cuja matrícula não corresponde a nenhum colaborador cadastrado no momento — inclui quem foi removido automaticamente por 60+ dias sem vender e vendedores nunca cadastrados. O nome vem direto da planilha importada.'
-            : `Todas as vendas importadas por planilha, separadas por mês e por dia. ${sales.length.toLocaleString('pt-BR')} registro(s) no total.`}
-          {reclassifyMode && ' Marque um ou mais produtos abaixo para reclassificá-los — o ajuste vale para todas as vendas já importadas desse produto, em qualquer mês.'}
+          {!salesListEnabled ? (
+            <>
+              Mostrando só os totais por mês, sem baixar cada venda — mais rápido para abrir a tela. Ligue{' '}
+              <button onClick={toggleSalesListEnabled} className="text-cyan-400 underline underline-offset-2 hover:text-cyan-300">
+                "Lista de vendas detalhada"
+              </button>{' '}
+              no calendário da tela Início para ver e reclassificar os itens vendidos.
+            </>
+          ) : tab === 'outros' ? (
+            'Vendas cuja matrícula não corresponde a nenhum colaborador cadastrado no momento — inclui quem foi removido automaticamente por 60+ dias sem vender e vendedores nunca cadastrados. O nome vem direto da planilha importada.'
+          ) : (
+            `Todas as vendas importadas por planilha, separadas por mês e por dia. ${(sales ?? []).length.toLocaleString('pt-BR')} registro(s) no total.`
+          )}
+          {salesListEnabled && reclassifyMode && ' Marque um ou mais produtos abaixo para reclassificá-los — o ajuste vale para todas as vendas já importadas desse produto, em qualquer mês.'}
         </p>
       </div>
 
-      {months.length === 0 ? (
+      {!salesListEnabled ? (
+        (monthTotals ?? []).length === 0 ? (
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 text-center text-sm text-slate-500">Nenhuma venda importada ainda.</div>
+        ) : (
+          (monthTotals ?? []).map((m) => {
+            const [y, mo] = m.yearMonth.split('-');
+            return (
+              <div key={m.yearMonth} className="rounded-2xl border border-slate-800 bg-slate-900/60 overflow-hidden">
+                <div className="w-full flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-cyan-400 font-semibold text-sm">
+                      {monthName(Number(mo) - 1)}/{y}
+                    </span>
+                    <span className="text-xs text-slate-500">{m.vendasTotal.toLocaleString('pt-BR')} registro(s)</span>
+                  </div>
+                  <span className="text-xs text-slate-400 font-mono">
+                    {m.itensTotal.toLocaleString('pt-BR')} un. · {fmtMoney(m.valorTotal)}
+                  </span>
+                </div>
+              </div>
+            );
+          })
+        )
+      ) : months.length === 0 ? (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 text-center text-sm text-slate-500">
           {tab === 'outros' ? 'Nenhuma venda de vendedor não cadastrado no momento.' : 'Nenhuma venda importada ainda.'}
         </div>
