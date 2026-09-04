@@ -82,6 +82,36 @@ export function useSales(enabled = true) {
   });
 }
 
+export interface SalesMonthTotal {
+  yearMonth: string; // "YYYY-MM"
+  valorTotal: number;
+  itensTotal: number;
+  vendasTotal: number;
+}
+
+/** Header totals for every month that has sales — one row per month, from
+ * the `sales_month_totals()` RPC (supabase/migrations/0036) instead of
+ * `useSales()`'s full item-level history. Backs Lista de Vendas' default
+ * (collapsed) view: the month/day accordion headers need "how much and how
+ * many" per month, not the underlying rows, so this is the only fetch that
+ * screen needs until an ADM explicitly turns on `salesListEnabled` to see
+ * the line items themselves. */
+export function useSalesMonthTotals() {
+  return useQuery({
+    queryKey: ['sales_month_totals'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('sales_month_totals');
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        yearMonth: row.year_month,
+        valorTotal: Number(row.valor_total),
+        itensTotal: Number(row.itens_total),
+        vendasTotal: Number(row.vendas_total),
+      })) as SalesMonthTotal[];
+    },
+  });
+}
+
 /** Only the current calendar month's sales, fetched with a `data_iso` range
  * filter instead of `useSales()`'s full multi-thousand-row history — for
  * callers (the achievement-celebration check) that only ever look at this

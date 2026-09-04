@@ -16,6 +16,14 @@ interface DateRangeState {
    * (first click = anchor, second click = range) instead of picking a single day. */
   buscaPeriodoOpen: boolean;
   rankFilter: RankFilter;
+  /** Plano de Ação Tartaruga (performance): Lista de Vendas defaults to
+   * showing only its per-month totals (from the sales_month_totals RPC)
+   * instead of fetching every sale ever imported for the store. Off by
+   * default; the ADM turns this on from the toggle below the calendar grid
+   * to load the full item-level list for whatever month/range is currently
+   * selected. */
+  salesListEnabled: boolean;
+  toggleSalesListEnabled: () => void;
   setModoGeral: () => void;
   setDay: (iso: string) => void;
   setRange: (from: string, to: string) => void;
@@ -46,6 +54,7 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
   const [buscaPeriodoOpen, setBuscaPeriodoOpen] = useState(false);
   const [rangeAnchor, setRangeAnchor] = useState<string | null>(null);
   const [rankFilter, setRankFilterState] = useState<RankFilter>('ALL');
+  const [salesListEnabled, setSalesListEnabled] = useState(false);
 
   const value = useMemo<DateRangeState>(
     () => ({
@@ -56,6 +65,8 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
       modoGeral,
       buscaPeriodoOpen,
       rankFilter,
+      salesListEnabled,
+      toggleSalesListEnabled: () => setSalesListEnabled((v) => !v),
       setModoGeral: () => {
         setDashFrom(monthFirstISO(refYear, refMonth));
         setDashTo(monthLastISO(refYear, refMonth));
@@ -125,7 +136,7 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
       },
       setRankFilter: setRankFilterState,
     }),
-    [refYear, refMonth, dashFrom, dashTo, modoGeral, buscaPeriodoOpen, rangeAnchor, rankFilter],
+    [refYear, refMonth, dashFrom, dashTo, modoGeral, buscaPeriodoOpen, rangeAnchor, rankFilter, salesListEnabled],
   );
 
   return <DateRangeContext.Provider value={value}>{children}</DateRangeContext.Provider>;
