@@ -197,6 +197,20 @@ export function ImportarPage() {
     setProgress('Verificando planilha…');
     const startedAt = performance.now();
 
+    // Both dedup layers below (per-date aggregate and per-row composite key)
+    // only protect against what THIS snapshot of `sales` already contains —
+    // and `existingSales` is whatever React Query happened to have cached
+    // from whenever the screen last fetched it, which can be stale by the
+    // time an ADM actually clicks "confirmar" (they may have reviewed the
+    // analysis screen for a while, or just finished a previous import in
+    // the same session a moment ago). A stale snapshot makes both layers
+    // blind to sales written since it was fetched, letting a second
+    // back-to-back import of overlapping data slip past as "new" instead of
+    // being caught as a duplicate or a full resend. Refetching right here,
+    // synchronously before either layer runs, closes that window.
+    const { data: freshExistingSales } = await refetchSales();
+    const existingSalesNow = freshExistingSales ?? existingSales ?? [];
+
     const knownMatriculas = new Set((collaborators ?? []).map((c) => c.matricula));
 
     // First pass: parse every row (same field extraction as before) into a
@@ -271,7 +285,7 @@ export function ImportarPage() {
     // a full resend — offered as a delete-and-rewrite of just that date so
     // re-uploading the same (or a corrected) file never creates duplicates.
     const incomingByDate = aggregateByDate(candidates.map((c) => ({ dataISO: c.data_iso, valor: c.valor })));
-    const existingByDate = aggregateByDate((existingSales ?? []).map((s) => ({ dataISO: s.dataISO, valor: s.valor })));
+    const existingByDate = aggregateByDate(existingSalesNow.map((s) => ({ dataISO: s.dataISO, valor: s.valor })));
     const blockedDates: string[] = [];
     const replaceDates: string[] = [];
     incomingByDate.forEach((incoming, date) => {
@@ -314,7 +328,7 @@ export function ImportarPage() {
       // per-date replace) and gets skipped rather than inserted again.
       const replaceDatesSet = new Set(replaceDates);
       const existingKeys = new Set(
-        (existingSales ?? [])
+        existingSalesNow
           .filter((s) => !s.dataISO || !replaceDatesSet.has(s.dataISO))
           .map((s) => saleImportKey({ ...s, codigo: s.codigo ?? null })),
       );
