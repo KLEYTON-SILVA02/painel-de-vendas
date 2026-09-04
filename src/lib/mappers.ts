@@ -19,7 +19,18 @@ export function mapCollaborator(row: Tables<'collaborators'>): Collaborator {
   };
 }
 
-export function mapSale(row: Tables<'sales'>): Sale {
+/** The only `sales` columns any reader (mapSale, and every screen that
+ * consumes its output) actually touches — `useSales()`'s fetch selects
+ * exactly this list instead of `select('*')`, so `store_id` (redundant,
+ * RLS already scopes every row to the caller's store), `data_raw` (only
+ * needed at import-review time, queried separately there),
+ * `classification_tier`, `created_at` and `import_id` never cross the
+ * network for a fetch that already returns 30k+ rows. */
+export type SaleRow = Pick<Tables<'sales'>, 'id' | 'data_iso' | 'matricula' | 'vendedor' | 'produto' | 'codigo' | 'qtd' | 'valor' | 'grupo'>;
+
+export const SALE_COLUMNS = 'id, data_iso, matricula, vendedor, produto, codigo, qtd, valor, grupo';
+
+export function mapSale(row: SaleRow): Sale {
   return {
     id: row.id,
     dataISO: row.data_iso,
