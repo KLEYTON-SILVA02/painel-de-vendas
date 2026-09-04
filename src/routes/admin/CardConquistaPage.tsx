@@ -570,32 +570,35 @@ function ActionBar({ onRestore, onApply, applyDisabled }: { onRestore: () => voi
 /** Outer shell for a "Configurações de texto N" column — a centered title
  * plus the property header (colored bullet + which text this is) above
  * whatever position/typography modules are passed as children. */
-function TextColumn({ title, propertyLabel, color, children }: { title: string; propertyLabel: string; color: string; children: ReactNode }) {
+/** Header cell shared by every column of the central tools grid — just a
+ * centered title for "Máscaras de imagens" (col 1), or a title plus the
+ * colored-bullet property line ("1º texto — Nível...") for the two text
+ * columns. Rendered as its own grid item (row 0) so all three column
+ * headers sit on the exact same row regardless of how tall each is. */
+function ColumnHeader({ title, propertyLabel, color }: { title: string; propertyLabel?: string; color?: string }) {
   return (
-    <div className="flex flex-col gap-3 min-w-0">
+    <div className="flex flex-col gap-2 min-w-0">
       <h4 className="text-center text-xs font-bold uppercase tracking-wide text-slate-300">{title}</h4>
-      <div className="flex items-center gap-2 px-1">
-        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
-        <span className="text-[11px] text-slate-400">{propertyLabel}</span>
-      </div>
-      {children}
+      {propertyLabel && color && (
+        <div className="flex items-center gap-2 px-1">
+          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
+          <span className="text-[11px] text-slate-400">{propertyLabel}</span>
+        </div>
+      )}
     </div>
   );
 }
 
-/** The two staged boxes every text layer (1º/2º/3º texto) gets: position
- * & shape (reuses ZoneControls, staged via zoneDraft) and typography &
- * style (font/size/color/gradient, staged via typeDraft) — each with its
- * own independent Restaurar/Aplicar ajuste pair, matching the spec's
- * "Seção 1" / "Seção 2" split. `onRemove` only passed for the optional 3º
- * texto — the 1º/2º (tier/categoria) columns are permanent. */
-function TextLayerBoxes({
+/** The "Tipografia e estilo" staged box every text layer (1º/2º/3º texto)
+ * gets — font/size/color/gradient, staged via typeDraft, with its own
+ * Restaurar/Aplicar ajuste pair. The "Posição e forma" box is just a
+ * plain ZoneControls call at each call site (not wrapped here) so both
+ * boxes can be placed as independent grid items — that's what lets the
+ * central grid line the Máscaras column up with the two texto columns
+ * row by row. `onRemove` only passed for the optional 3º texto. */
+function TypographyBox({
   committed,
   color,
-  zoneDraft,
-  onZoneDraftChange,
-  onApplyZone,
-  onRestoreZone,
   typeDraft,
   onTypeDraftChange,
   onApplyType,
@@ -604,24 +607,14 @@ function TextLayerBoxes({
 }: {
   committed: CardTextLayer;
   color: string;
-  zoneDraft: CardZone;
-  onZoneDraftChange: (z: CardZone) => void;
-  onApplyZone: () => void;
-  onRestoreZone: () => void;
   typeDraft: CardTextLayer;
   onTypeDraftChange: (l: CardTextLayer) => void;
   onApplyType: () => void;
   onRestoreType: () => void;
   onRemove?: () => void;
 }) {
-  const zoneChanged = JSON.stringify(zoneDraft) !== JSON.stringify(committed.zone);
   const typeChanged = JSON.stringify(typographyPatch(typeDraft)) !== JSON.stringify(typographyPatch(committed));
   return (
-    <>
-      <ZoneControls label="Posição e forma (plano de fundo do texto)" color={color} zone={zoneDraft} onChange={onZoneDraftChange}>
-        <ActionBar onRestore={onRestoreZone} onApply={onApplyZone} applyDisabled={!zoneChanged} />
-      </ZoneControls>
-
       <CollapsibleBox
         title="Tipografia e estilo"
         colorDot={color}
@@ -725,7 +718,6 @@ function TextLayerBoxes({
 
         <ActionBar onRestore={onRestoreType} onApply={onApplyType} applyDisabled={!typeChanged} />
       </CollapsibleBox>
-    </>
   );
 }
 
@@ -763,6 +755,11 @@ function TemplateEditor({
   canRedo: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Bounding box every drag/click coordinate on the preview is measured
+  // against — the same element the wand/pen click math already uses via
+  // e.currentTarget, but drag needs it independently since mousemove/mouseup
+  // are tracked on `window`, not on that element.
+  const previewBoxRef = useRef<HTMLDivElement>(null);
   // Freehand "pen" tool for the photo cutout: null = not drawing; an array
   // (possibly empty) = actively tracing, one point per click on the preview.
   const [penPoints, setPenPoints] = useState<{ x: number; y: number }[] | null>(null);
@@ -823,6 +820,71 @@ function TemplateEditor({
 
   function removeCustomText() {
     setEditing({ ...editing, textLayers: editing.textLayers.filter((l) => l.kind !== 'custom') });
+  }
+
+  // Dragging a text layer directly on the preview — the X/Y sliders still
+  // work (staged, via Aplicar ajuste), but a mouse drag is a more direct
+  // gesture: it moves the zone live (same draft the sliders write into, so
+  // the dashed outline tracks the cursor) and commits the instant the
+  // mouse is released, no separate "Aplicar ajuste" click needed. While
+  // dragging, the layer's own center is compared to the card's center —
+  // within SNAP_THRESHOLD it locks onto exact 50%, with a cyan guide line
+  // shown for whichever axis (or both) is currently snapped.
+  const SNAP_THRESHOLD = 0.02;
+  const [dragText, setDragText] = useState<{ kind: CardTextKind; startClientX: number; startClientY: number; startZone: CardZone } | null>(null);
+  const [snapGuides, setSnapGuides] = useState<{ x: boolean; y: boolean }>({ x: false, y: false });
+  const dragZoneRef = useRef<CardZone | null>(null);
+
+  useEffect(() => {
+    if (!dragText) return;
+    function zoneForEvent(e: MouseEvent): CardZone {
+      const rect = previewBoxRef.current!.getBoundingClientRect();
+      const { startClientX, startClientY, startZone } = dragText!;
+      const w = startZone.w;
+      const h = startZone.h;
+      let x = startZone.x + (e.clientX - startClientX) / rect.width;
+      let y = startZone.y + (e.clientY - startClientY) / rect.height;
+      const snapX = Math.abs(x + w / 2 - 0.5) < SNAP_THRESHOLD;
+      const snapY = Math.abs(y + h / 2 - 0.5) < SNAP_THRESHOLD;
+      if (snapX) x = 0.5 - w / 2;
+      if (snapY) y = 0.5 - h / 2;
+      x = Math.max(0, Math.min(1, x));
+      y = Math.max(0, Math.min(1, y));
+      setSnapGuides({ x: snapX, y: snapY });
+      return { ...startZone, x, y };
+    }
+    function onMove(e: MouseEvent) {
+      const zone = zoneForEvent(e);
+      dragZoneRef.current = zone;
+      if (dragText!.kind === 'tier') setT1ZoneDraft(zone);
+      else if (dragText!.kind === 'categoria') setT2ZoneDraft(zone);
+      else setT3ZoneDraft(zone);
+    }
+    function onUp() {
+      const zone = dragZoneRef.current ?? dragText!.startZone;
+      if (dragText!.kind === 'tier') updateTextLayer(text1.id, { zone });
+      else if (dragText!.kind === 'categoria') updateTextLayer(text2.id, { zone });
+      else if (text3) updateTextLayer(text3.id, { zone });
+      dragZoneRef.current = null;
+      setDragText(null);
+      setSnapGuides({ x: false, y: false });
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragText]);
+
+  function startTextDrag(kind: CardTextKind, zone: CardZone) {
+    return (e: ReactMouseEvent) => {
+      if (penPoints !== null || wandTarget) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setDragText({ kind, startClientX: e.clientX, startClientY: e.clientY, startZone: zone });
+    };
   }
 
   const previewTemplate: ConquistaCardTemplate = {
@@ -1006,10 +1068,18 @@ function TemplateEditor({
         )}
       </CollapsibleBox>
 
-      {/* Área central — 3 colunas de controles + preview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_380px] gap-4 items-start">
-        <div className="flex flex-col gap-3 min-w-0">
-          <h4 className="text-center text-xs font-bold uppercase tracking-wide text-slate-300">Máscaras de imagens</h4>
+      {/* Área central — colunas de controles alinhadas em grid + preview.
+          Um único CSS grid (não 3 colunas flex independentes) para que o
+          card de "Foto do colaborador" fique na mesma fileira que os dois
+          cards de "Posição e forma" dos textos, "Logo da loja" na mesma
+          fileira que os dois de "Tipografia", etc. — a ordem de saída dos
+          itens abaixo segue exatamente a ordem de preenchimento do grid
+          (fileira a fileira, da esquerda pra direita). */}
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-4 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+          <ColumnHeader title="Máscaras de imagens" />
+          <ColumnHeader title="Configurações de texto 1" propertyLabel={TEXT_KIND_LABEL.tier} color={TEXT_KIND_COLOR.tier} />
+          <ColumnHeader title="Configurações de texto 2" propertyLabel={TEXT_KIND_LABEL.categoria} color={TEXT_KIND_COLOR.categoria} />
 
           <ZoneControls
             label={ZONE_LABELS.foto}
@@ -1048,6 +1118,29 @@ function TemplateEditor({
               onRestore={() => setEditing({ ...editing, foto: DEFAULT_FOTO_ZONE() })}
               onApply={() => setEditing({ ...editing, foto: fotoDraft })}
               applyDisabled={JSON.stringify(fotoDraft) === JSON.stringify(editing.foto)}
+            />
+          </ZoneControls>
+
+          <ZoneControls label="Posição e forma (plano de fundo do texto)" color={TEXT_KIND_COLOR.tier} zone={t1ZoneDraft} onChange={setT1ZoneDraft}>
+            <p className="text-[10px] text-slate-500">Dica: arraste a caixa tracejada direto na prévia pra mover — encaixa sozinho no centro.</p>
+            <ActionBar
+              onRestore={() => updateTextLayer(text1.id, { zone: defaultTextLayer('tier').zone })}
+              onApply={() => updateTextLayer(text1.id, { zone: t1ZoneDraft })}
+              applyDisabled={JSON.stringify(t1ZoneDraft) === JSON.stringify(text1.zone)}
+            />
+          </ZoneControls>
+
+          <ZoneControls
+            label="Posição e forma (plano de fundo do texto)"
+            color={TEXT_KIND_COLOR.categoria}
+            zone={t2ZoneDraft}
+            onChange={setT2ZoneDraft}
+          >
+            <p className="text-[10px] text-slate-500">Dica: arraste a caixa tracejada direto na prévia pra mover — encaixa sozinho no centro.</p>
+            <ActionBar
+              onRestore={() => updateTextLayer(text2.id, { zone: defaultTextLayer('categoria').zone })}
+              onApply={() => updateTextLayer(text2.id, { zone: t2ZoneDraft })}
+              applyDisabled={JSON.stringify(t2ZoneDraft) === JSON.stringify(text2.zone)}
             />
           </ZoneControls>
 
@@ -1092,56 +1185,57 @@ function TemplateEditor({
             />
           </ZoneControls>
 
-          {text3 && t3ZoneDraft && t3TypeDraft ? (
-            <TextLayerBoxes
-              committed={text3}
-              color={TEXT_KIND_COLOR.custom}
-              zoneDraft={t3ZoneDraft}
-              onZoneDraftChange={setT3ZoneDraft}
-              onApplyZone={() => updateTextLayer(text3.id, { zone: t3ZoneDraft })}
-              onRestoreZone={() => updateTextLayer(text3.id, { zone: defaultTextLayer('custom').zone })}
-              typeDraft={t3TypeDraft}
-              onTypeDraftChange={setT3TypeDraft}
-              onApplyType={() => updateTextLayer(text3.id, typographyPatch(t3TypeDraft))}
-              onRestoreType={() => updateTextLayer(text3.id, typographyPatch(defaultTextLayer('custom')))}
-              onRemove={removeCustomText}
-            />
-          ) : (
-            <button onClick={addCustomText} className="rounded-lg border border-slate-700 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800">
-              + Adicionar 3º texto (opcional, texto livre)
-            </button>
-          )}
-        </div>
-
-        <TextColumn title="Configurações de texto 1" propertyLabel={TEXT_KIND_LABEL.tier} color={TEXT_KIND_COLOR.tier}>
-          <TextLayerBoxes
+          <TypographyBox
             committed={text1}
             color={TEXT_KIND_COLOR.tier}
-            zoneDraft={t1ZoneDraft}
-            onZoneDraftChange={setT1ZoneDraft}
-            onApplyZone={() => updateTextLayer(text1.id, { zone: t1ZoneDraft })}
-            onRestoreZone={() => updateTextLayer(text1.id, { zone: defaultTextLayer('tier').zone })}
             typeDraft={t1TypeDraft}
             onTypeDraftChange={setT1TypeDraft}
             onApplyType={() => updateTextLayer(text1.id, typographyPatch(t1TypeDraft))}
             onRestoreType={() => updateTextLayer(text1.id, typographyPatch(defaultTextLayer('tier')))}
           />
-        </TextColumn>
 
-        <TextColumn title="Configurações de texto 2" propertyLabel={TEXT_KIND_LABEL.categoria} color={TEXT_KIND_COLOR.categoria}>
-          <TextLayerBoxes
+          <TypographyBox
             committed={text2}
             color={TEXT_KIND_COLOR.categoria}
-            zoneDraft={t2ZoneDraft}
-            onZoneDraftChange={setT2ZoneDraft}
-            onApplyZone={() => updateTextLayer(text2.id, { zone: t2ZoneDraft })}
-            onRestoreZone={() => updateTextLayer(text2.id, { zone: defaultTextLayer('categoria').zone })}
             typeDraft={t2TypeDraft}
             onTypeDraftChange={setT2TypeDraft}
             onApplyType={() => updateTextLayer(text2.id, typographyPatch(t2TypeDraft))}
             onRestoreType={() => updateTextLayer(text2.id, typographyPatch(defaultTextLayer('categoria')))}
           />
-        </TextColumn>
+
+          {text3 && t3ZoneDraft ? (
+            <ZoneControls label="Posição e forma (plano de fundo do texto)" color={TEXT_KIND_COLOR.custom} zone={t3ZoneDraft} onChange={setT3ZoneDraft}>
+              <p className="text-[10px] text-slate-500">Dica: arraste a caixa tracejada direto na prévia pra mover — encaixa sozinho no centro.</p>
+              <ActionBar
+                onRestore={() => updateTextLayer(text3.id, { zone: defaultTextLayer('custom').zone })}
+                onApply={() => updateTextLayer(text3.id, { zone: t3ZoneDraft })}
+                applyDisabled={JSON.stringify(t3ZoneDraft) === JSON.stringify(text3.zone)}
+              />
+            </ZoneControls>
+          ) : (
+            <button onClick={addCustomText} className="rounded-lg border border-slate-700 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800 h-fit">
+              + Adicionar 3º texto (opcional, texto livre)
+            </button>
+          )}
+          <div />
+          <div />
+
+          {text3 && t3TypeDraft && (
+            <>
+              <TypographyBox
+                committed={text3}
+                color={TEXT_KIND_COLOR.custom}
+                typeDraft={t3TypeDraft}
+                onTypeDraftChange={setT3TypeDraft}
+                onApplyType={() => updateTextLayer(text3.id, typographyPatch(t3TypeDraft))}
+                onRestoreType={() => updateTextLayer(text3.id, typographyPatch(defaultTextLayer('custom')))}
+                onRemove={removeCustomText}
+              />
+              <div />
+              <div />
+            </>
+          )}
+        </div>
 
         <div className="flex flex-col items-center gap-2">
           <div
@@ -1149,7 +1243,7 @@ function TemplateEditor({
             style={{ overflow: zoomed ? 'auto' : 'visible', maxHeight: zoomed ? 620 : undefined, borderRadius: 12 }}
           >
             <div style={{ transform: zoomed ? 'scale(1.5)' : 'scale(1)', transformOrigin: 'top center', transition: 'transform .15s ease' }}>
-              <div className="relative" onClick={handlePreviewClick} style={{ cursor: previewCursor }}>
+              <div className="relative" ref={previewBoxRef} onClick={handlePreviewClick} style={{ cursor: previewCursor }}>
                 <canvas ref={canvasRef} className="w-full h-auto block rounded-xl" />
                 {editing.referenceObjectUrl && (
                   <img
@@ -1161,13 +1255,25 @@ function TemplateEditor({
                 )}
                 {fotoDraft.shape.kind !== 'polygon' && <ZoneOutline zone={fotoDraft} color={ZONE_COLORS.foto} />}
                 <ZoneOutline zone={logoDraft} color={ZONE_COLORS.logo} />
-                <ZoneOutline zone={t1ZoneDraft} color={TEXT_KIND_COLOR.tier} />
-                <ZoneOutline zone={t2ZoneDraft} color={TEXT_KIND_COLOR.categoria} />
-                {t3ZoneDraft && <ZoneOutline zone={t3ZoneDraft} color={TEXT_KIND_COLOR.custom} />}
+                <ZoneOutline zone={t1ZoneDraft} color={TEXT_KIND_COLOR.tier} onMouseDown={startTextDrag('tier', t1ZoneDraft)} />
+                <ZoneOutline zone={t2ZoneDraft} color={TEXT_KIND_COLOR.categoria} onMouseDown={startTextDrag('categoria', t2ZoneDraft)} />
+                {t3ZoneDraft && <ZoneOutline zone={t3ZoneDraft} color={TEXT_KIND_COLOR.custom} onMouseDown={startTextDrag('custom', t3ZoneDraft)} />}
                 {editing.foto.shape.kind === 'polygon' && penPoints === null && (
                   <PolygonOutline points={editing.foto.shape.points ?? []} color={ZONE_COLORS.foto} />
                 )}
                 {penPoints !== null && <PolygonOutline points={penPoints} color={ZONE_COLORS.foto} inProgress />}
+                {dragText && snapGuides.x && (
+                  <div
+                    className="absolute top-0 bottom-0 pointer-events-none"
+                    style={{ left: '50%', width: 1, background: '#22d3ee', boxShadow: '0 0 6px #22d3ee' }}
+                  />
+                )}
+                {dragText && snapGuides.y && (
+                  <div
+                    className="absolute left-0 right-0 pointer-events-none"
+                    style={{ top: '50%', height: 1, background: '#22d3ee', boxShadow: '0 0 6px #22d3ee' }}
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -1180,6 +1286,11 @@ function TemplateEditor({
           {wandTarget && (
             <p className="text-[11px] text-amber-400">
               {wandBusy ? 'Detectando…' : `Clique na imagem sobre a área da ${wandTarget === 'foto' ? 'foto' : 'logo'} para detectá-la automaticamente.`}
+            </p>
+          )}
+          {dragText && (
+            <p className="text-[11px] text-cyan-400">
+              Arrastando o texto — solte pra aplicar a nova posição. {(snapGuides.x || snapGuides.y) && 'Encaixado no centro.'}
             </p>
           )}
         </div>
@@ -1259,10 +1370,15 @@ function PolygonOutline({ points, color, inProgress }: { points: { x: number; y:
   );
 }
 
-function ZoneOutline({ zone, color }: { zone: CardZone; color: string }) {
+/** `onMouseDown` (only passed for the draggable text zones) turns this
+ * from a purely visual indicator into a grab handle: enables pointer
+ * events and a move cursor so the outline itself can be dragged directly
+ * on the preview, instead of only through the X/Y sliders. */
+function ZoneOutline({ zone, color, onMouseDown }: { zone: CardZone; color: string; onMouseDown?: (e: ReactMouseEvent) => void }) {
   return (
     <div
-      className="absolute pointer-events-none"
+      onMouseDown={onMouseDown}
+      className="absolute"
       style={{
         left: `${zone.x * 100}%`,
         top: `${zone.y * 100}%`,
@@ -1270,6 +1386,8 @@ function ZoneOutline({ zone, color }: { zone: CardZone; color: string }) {
         height: `${zone.h * 100}%`,
         border: `2px dashed ${color}`,
         borderRadius: zone.shape.kind === 'circle' || zone.shape.kind === 'pill' ? '999px' : 6,
+        pointerEvents: onMouseDown ? 'auto' : 'none',
+        cursor: onMouseDown ? 'move' : undefined,
       }}
     />
   );
