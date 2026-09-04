@@ -118,10 +118,10 @@ function SubtabButton({ active, onClick, children, shrink }: { active: boolean; 
         background: active ? '#ffb700' : 'transparent',
         border: `1px solid ${active ? '#ffb700' : '#212948'}`,
         color: active ? '#231a02' : '#8b90bf',
-        padding: shrink ? 'clamp(3px, 0.5vw, 7px) clamp(4px, 0.9vw, 13px)' : '7px 13px',
+        padding: shrink ? 'clamp(2px, 0.4vw, 6px) clamp(3px, 0.7vw, 10px)' : '7px 13px',
         borderRadius: 10,
         cursor: 'pointer',
-        fontSize: shrink ? 'clamp(8px, 0.85vw, 12px)' : 12,
+        fontSize: shrink ? 'clamp(6px, 0.7vw, 10px)' : 12,
         fontWeight: 700,
         textTransform: 'uppercase',
         letterSpacing: '.04em',
@@ -139,10 +139,10 @@ function SubtabButton({ active, onClick, children, shrink }: { active: boolean; 
 // "Ranking Geral" header row keeps everything visible on one line instead
 // of any of them getting clipped or forced into a scrollbar.
 const ACTION_BUTTON_STYLE: CSSProperties = {
-  padding: 'clamp(3px, 0.5vw, 7px) clamp(4px, 0.9vw, 13px)',
+  padding: 'clamp(2px, 0.4vw, 6px) clamp(3px, 0.7vw, 10px)',
   borderRadius: 10,
   cursor: 'pointer',
-  fontSize: 'clamp(8px, 0.85vw, 12px)',
+  fontSize: 'clamp(6px, 0.7vw, 10px)',
   fontWeight: 700,
   whiteSpace: 'nowrap',
 };
