@@ -163,10 +163,17 @@ export async function archiveOldSalesForStore(
  * until `profile` is an admin and every query it depends on has resolved,
  * and a `ranRef` guard means it only ever fires once per mount even though
  * its dependencies (sales, in particular) change again right after a run
- * deletes rows. */
+ * deletes rows.
+ *
+ * This hook is mounted at the top of `AppShell`, before the branch that
+ * routes a non-admin to `CollaboratorShell` — so its own `useSales()` call
+ * needs `enabled: isAdmin` (rather than relying on the effect's role check
+ * below) to avoid downloading the entire store's sales history for a
+ * collaborator session that will never use it. */
 export function useAutoArchiveOldSales(): void {
   const { profile } = useAuth();
-  const { data: sales, refetch: refetchSales } = useSales();
+  const isAdmin = !!profile && profile.role === 'admin' && !!profile.store_id;
+  const { data: sales, refetch: refetchSales } = useSales(isAdmin);
   const { data: specialLists } = useSpecialLists();
   const { data: categoryTypes } = useCategoryTypes();
   const bioCategoryType = categoryTypes?.find((c) => c.chave === 'biosintetica');

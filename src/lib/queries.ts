@@ -21,48 +21,44 @@ export function useCollaborators() {
 }
 
 const SALES_PAGE_SIZE = 1000;
+// Headroom for the keyset loop below — 500 pages of 1000 rows = 500k sales,
+// well past this store's current ~33k and years of growth at its current
+// rate. Purely a safety net against an unexpected always-full-page response
+// looping forever, same role the old doubling-batch cap played.
+const SALES_MAX_PAGES = 500;
 
-/** Pages through `sales` with `.range()`, optionally restricted to a
- * `data_iso` window, in growing parallel batches (1, then 2, then 4... pages
- * fired at once) instead of a single serial page-by-page walk. Stops the
- * moment a page comes back short of SALES_PAGE_SIZE — no upfront row count
- * needed, unlike the previous approach: a `count: 'exact'` HEAD request
- * duplicates a full COUNT(*) scan of the (RLS-filtered) table on every
- * fetch, which on a store past ~30k rows was slow enough to occasionally
- * time out (PostgREST returning a 503 instead of the count). Capped at 12
- * batches (well past a million rows at this doubling rate) purely as a
- * safety net against an unexpected always-full-page response looping
- * forever. The `.order('id', ...)` tiebreaker after `data_iso` (a plain
- * date, so many rows share the same value) is required for `.range()` to
- * paginate deterministically — without it, ties can sort differently
- * between two of these parallel requests (or shift under a concurrent
- * write, e.g. the auto-archive delete), letting the same row land in two
- * adjacent pages and get double-counted downstream. */
+/** Pages through `sales` via keyset (cursor) pagination on `id` — each page
+ * is a plain `.gt('id', cursor).limit(1000)`, not `.range()` (OFFSET/LIMIT).
+ * OFFSET's cost grows with how deep a page is: Postgres has to walk and
+ * discard every row before the requested slice, so the last pages of a
+ * ~33k-row table were measured taking 5-10s each while the first came back
+ * in under a second. A keyset page's cost is flat no matter how many pages
+ * came before it — it's an index lookup starting right after the last row
+ * already fetched, using the table's existing primary-key index with no
+ * extra sort. `id` (not `data_iso`) is the cursor column specifically
+ * because it already has a unique index (the primary key) and no caller
+ * needs the returned array pre-sorted by date — every consumer that cares
+ * about order (computeSummary, computeVendorExtract, ListaVendasPage's
+ * day/month grouping) already sorts its own output. Pages run sequentially
+ * (each needs the previous page's cursor) rather than the old growing-
+ * parallel-batches scheme — that scheme made sense to front-load cheap
+ * OFFSET pages, but firing many *expensive* deep OFFSET pages at once was
+ * exactly what made them compete for the same DB connections and blow up
+ * total load time; flat-cost keyset pages don't need that workaround. */
 async function fetchSalesPages(range?: { fromISO: string; toISO: string }) {
   const pages: Tables<'sales'>[][] = [];
-  let nextStart = 0;
-  let batchSize = 1;
-  for (let iteration = 0; iteration < 12; iteration++) {
-    const starts = Array.from({ length: batchSize }, (_, i) => nextStart + i * SALES_PAGE_SIZE);
+  let cursor: string | null = null;
+  for (let iteration = 0; iteration < SALES_MAX_PAGES; iteration++) {
+    let query = supabase.from('sales').select('*').order('id', { ascending: true }).limit(SALES_PAGE_SIZE);
+    if (range) query = query.gte('data_iso', range.fromISO).lte('data_iso', range.toISO);
+    if (cursor) query = query.gt('id', cursor);
     // eslint-disable-next-line no-await-in-loop
-    const batch = await Promise.all(
-      starts.map(async (from) => {
-        let query = supabase
-          .from('sales')
-          .select('*')
-          .order('data_iso', { ascending: false })
-          .order('id', { ascending: true });
-        if (range) query = query.gte('data_iso', range.fromISO).lte('data_iso', range.toISO);
-        const { data, error } = await query.range(from, from + SALES_PAGE_SIZE - 1);
-        if (error) throw error;
-        return data;
-      }),
-    );
-    batch.forEach((page) => pages.push(page));
-    const lastPage = batch[batch.length - 1];
-    if (!lastPage || lastPage.length < SALES_PAGE_SIZE) break;
-    nextStart += batchSize * SALES_PAGE_SIZE;
-    batchSize *= 2;
+    const { data, error } = await query;
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    pages.push(data);
+    if (data.length < SALES_PAGE_SIZE) break;
+    cursor = data[data.length - 1].id;
   }
   return pages.flat();
 }
@@ -71,11 +67,18 @@ async function fetchSalesPages(range?: { fromISO: string; toISO: string }) {
  * the business-logic layer (matches the legacy in-memory model and keeps a
  * single cached dataset reusable across every date-range view) — screens
  * that only ever need a bounded window (see `useCurrentMonthSales` below)
- * should fetch that window directly instead of pulling this full history. */
-export function useSales() {
+ * should fetch that window directly instead of pulling this full history.
+ *
+ * `enabled` (default true) lets a caller that only *might* need this data —
+ * e.g. the auto-archive check, which used to run this full fetch for every
+ * signed-in user including collaborators, before it even knew whether the
+ * session was an admin's — opt out until it actually knows it needs it,
+ * without duplicating the query key or its caching. */
+export function useSales(enabled = true) {
   return useQuery({
     queryKey: ['sales'],
     queryFn: async () => (await fetchSalesPages()).map(mapSale),
+    enabled,
   });
 }
 
