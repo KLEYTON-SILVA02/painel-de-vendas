@@ -18,12 +18,13 @@ export function RankingModeToggle({ on, onToggle, shrink }: { on: boolean; onTog
         background: 'transparent',
         border: `1px solid ${on ? '#00e676' : '#212948'}`,
         color: on ? '#00e676' : '#8b90bf',
-        padding: shrink ? 'clamp(4px, 0.7vw, 7px) clamp(6px, 1.3vw, 13px)' : '7px 13px',
+        padding: shrink ? 'clamp(3px, 0.5vw, 7px) clamp(4px, 0.9vw, 13px)' : '7px 13px',
         borderRadius: 10,
         cursor: 'pointer',
-        fontSize: shrink ? 'clamp(9px, 1.05vw, 12px)' : 12,
+        fontSize: shrink ? 'clamp(8px, 0.85vw, 12px)' : 12,
         fontWeight: 700,
         whiteSpace: 'nowrap',
+        flexShrink: 0,
       }}
     >
       {on ? '🏆 Premium' : '🪜 Escadinha'}
