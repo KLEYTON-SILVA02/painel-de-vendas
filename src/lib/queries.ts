@@ -4,10 +4,9 @@ import type { BioGroupGoal, CommissionRate, Goal } from './business/types';
 import type { SpecialListItem } from './business/summary';
 import type { CardTextLayer, CardZone, ConquistaCardTemplate } from './conquistaCardRender';
 import { monthFirstISO, monthLastISO } from './dateRange';
-import { mapBioGroupGoal, mapCollaborator, mapCommissionRate, mapDynamic, mapGoal, mapSale, mapSpecialListItem } from './mappers';
+import { mapBioGroupGoal, mapCollaborator, mapCommissionRate, mapDynamic, mapGoal, mapSale, mapSpecialListItem, SALE_COLUMNS, type SaleRow } from './mappers';
 import type { BulkDeletableTable } from './mutations';
 import { supabase } from './supabase';
-import type { Tables } from '../types/database';
 
 export function useCollaborators() {
   return useQuery({
@@ -46,10 +45,10 @@ const SALES_MAX_PAGES = 500;
  * exactly what made them compete for the same DB connections and blow up
  * total load time; flat-cost keyset pages don't need that workaround. */
 async function fetchSalesPages(range?: { fromISO: string; toISO: string }) {
-  const pages: Tables<'sales'>[][] = [];
+  const pages: SaleRow[][] = [];
   let cursor: string | null = null;
   for (let iteration = 0; iteration < SALES_MAX_PAGES; iteration++) {
-    let query = supabase.from('sales').select('*').order('id', { ascending: true }).limit(SALES_PAGE_SIZE);
+    let query = supabase.from('sales').select(SALE_COLUMNS).order('id', { ascending: true }).limit(SALES_PAGE_SIZE);
     if (range) query = query.gte('data_iso', range.fromISO).lte('data_iso', range.toISO);
     if (cursor) query = query.gt('id', cursor);
     // eslint-disable-next-line no-await-in-loop
