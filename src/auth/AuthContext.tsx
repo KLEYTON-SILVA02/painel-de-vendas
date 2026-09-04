@@ -1,5 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
+import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { queryPersister } from '../lib/queryPersister';
 import { supabase } from '../lib/supabase';
 import type { Tables } from '../types/database';
 
@@ -16,6 +18,7 @@ interface AuthState {
 const AuthContext = createContext<AuthState | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -71,9 +74,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       signOut: async () => {
         await supabase.auth.signOut();
+        // Without this, the persisted IndexedDB cache (queryPersister)
+        // survives the sign-out — on a shared device, the next person to
+        // log in (a different collaborator, or the ADM after one) would
+        // briefly see the previous session's cached data on screen before
+        // their own queries finish loading. queryClient.clear() empties
+        // the in-memory cache; removeClient() clears what's on disk too,
+        // since the persister only overwrites its stored snapshot on the
+        // next successful save, not immediately on clear().
+        queryClient.clear();
+        await queryPersister.removeClient();
       },
     }),
-    [session, profile, loading],
+    [session, profile, loading, queryClient],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
