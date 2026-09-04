@@ -116,9 +116,10 @@ export function useSalesImports() {
   });
 }
 
-/** REGRA 2 archived-months report — reads the aggregates computed by
- * useAutoArchiveOldSales() (src/lib/archival.ts) for months whose raw sales
- * rows were already deleted after passing the 3-month retention window. */
+/** REGRA 2 archived-months report — reads the aggregates written by the
+ * `archive_old_sales` Postgres function (supabase/migrations/0034_archive_old_sales_cron.sql),
+ * scheduled daily via pg_cron, for months whose raw sales rows were already
+ * deleted after passing the 3-month retention window. */
 export function useSalesArchiveCategories() {
   return useQuery({
     queryKey: ['sales_archive_categories'],
