@@ -161,8 +161,9 @@ export function computeVendorExtract(
   specialLists?: { levmel: SpecialListItem[]; chip: SpecialListItem[] },
 ): Sale[] {
   const isUnit = catKey === 'LEVMEL' || catKey === 'CHIP';
+  const target = normalizeMatricula(matricula);
   const list = sales.filter((s) => {
-    if (s.matricula !== matricula) return false;
+    if (normalizeMatricula(s.matricula) !== target) return false;
     if (fromDate && s.dataISO && s.dataISO < fromDate) return false;
     if (toDate && s.dataISO && s.dataISO > toDate) return false;
     if (isUnit) {
