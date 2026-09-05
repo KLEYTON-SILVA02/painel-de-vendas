@@ -603,6 +603,95 @@ export type Database = {
           },
         ]
       }
+      notification_schedules: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          dias: Json
+          hora: string
+          id: string
+          last_sent_date: string | null
+          store_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          dias?: Json
+          hora: string
+          id?: string
+          last_sent_date?: string | null
+          store_id: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          dias?: Json
+          hora?: string
+          id?: string
+          last_sent_date?: string | null
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_schedules_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          body: string
+          collaborator_id: string
+          created_at: string
+          data: Json
+          id: string
+          read_at: string | null
+          sent_at: string | null
+          store_id: string
+          title: string
+        }
+        Insert: {
+          body: string
+          collaborator_id: string
+          created_at?: string
+          data?: Json
+          id?: string
+          read_at?: string | null
+          sent_at?: string | null
+          store_id: string
+          title: string
+        }
+        Update: {
+          body?: string
+          collaborator_id?: string
+          created_at?: string
+          data?: Json
+          id?: string
+          read_at?: string | null
+          sent_at?: string | null
+          store_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           categoria: string
@@ -676,6 +765,41 @@ export type Database = {
             columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      push_tokens: {
+        Row: {
+          collaborator_id: string
+          created_at: string
+          id: string
+          platform: string
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          collaborator_id: string
+          created_at?: string
+          id?: string
+          platform: string
+          token: string
+          updated_at?: string
+        }
+        Update: {
+          collaborator_id?: string
+          created_at?: string
+          id?: string
+          platform?: string
+          token?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_tokens_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
             referencedColumns: ["id"]
           },
         ]

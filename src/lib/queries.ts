@@ -345,6 +345,43 @@ export function useCollaboratorsWithLogin() {
   });
 }
 
+/** The signed-in collaborator's own recent notifications — RLS already
+ * scopes `select *` to their own rows (or every row in the store for an
+ * ADM), so no explicit collaborator_id filter is needed here. A plain
+ * 30-most-recent feed is enough for a first version; this isn't a screen
+ * anyone scrolls through history on. */
+export function useNotifications() {
+  return useQuery({
+    queryKey: ['notifications'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(30);
+      if (error) throw error;
+      return data;
+    },
+    // Short polling instead of a realtime subscription: the dispatch cron
+    // only ever adds rows every few minutes at most, so a subscription
+    // would be a permanent open connection for an event this infrequent.
+    refetchInterval: 60_000,
+  });
+}
+
+/** ADM-only: every notification_schedules row for the store, used by the
+ * Configurações screen to list/create/edit the automatic dispatch times. */
+export function useNotificationSchedules() {
+  return useQuery({
+    queryKey: ['notification_schedules'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('notification_schedules').select('*').order('hora');
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
 export function useCatalog() {
   return useQuery({
     queryKey: ['catalog'],
