@@ -156,10 +156,18 @@ export function DailyEvolutionChart({
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, flex: 1, minWidth: points.length * 16 }}>
           {points.map((p) => {
             const pct = Math.min(100, (p.valor / axisMax) * 100);
+            // SM (Super Meta) and MG (Meta Geral) are mutually exclusive:
+            // Super Meta already implies Meta Geral was cleared too, so once
+            // both are hit only the higher badge (SM) shows.
+            const showSuper = p.hitSuper;
+            const showMeta = p.hitMeta && !p.hitSuper;
             return (
               <div key={p.dateISO} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, minWidth: 14 }}>
-                <div style={{ position: 'relative', width: '100%', height: CHART_H, display: 'flex', alignItems: 'flex-end' }}>
-                  {(p.hitMeta || p.hitSuper) && (
+                <div
+                  title={`Realizado no dia: ${fmtMoney(p.valor)}`}
+                  style={{ position: 'relative', width: '100%', height: CHART_H, display: 'flex', alignItems: 'flex-end', cursor: 'default' }}
+                >
+                  {(showMeta || showSuper) && (
                     <div
                       style={{
                         position: 'absolute',
@@ -170,20 +178,19 @@ export function DailyEvolutionChart({
                         flexDirection: 'column',
                         alignItems: 'center',
                         gap: 2,
+                        pointerEvents: 'none',
                       }}
                     >
-                      {p.hitSuper && (
+                      {showSuper && (
                         <span
-                          title={`Realizado no dia: ${fmtMoney(p.valor)}`}
-                          style={{ fontSize: 7, fontWeight: 800, lineHeight: 1, color: '#0b0e1d', background: '#14ff00', borderRadius: 999, padding: '2px 3px', cursor: 'default' }}
+                          style={{ fontSize: 7, fontWeight: 800, lineHeight: 1, color: '#0b0e1d', background: '#14ff00', borderRadius: 999, padding: '2px 3px' }}
                         >
                           SM
                         </span>
                       )}
-                      {p.hitMeta && (
+                      {showMeta && (
                         <span
-                          title={`Realizado no dia: ${fmtMoney(p.valor)}`}
-                          style={{ fontSize: 7, fontWeight: 800, lineHeight: 1, color: '#0b0e1d', background: '#ffb700', borderRadius: 999, padding: '2px 3px', cursor: 'default' }}
+                          style={{ fontSize: 7, fontWeight: 800, lineHeight: 1, color: '#0b0e1d', background: '#ffb700', borderRadius: 999, padding: '2px 3px' }}
                         >
                           MG
                         </span>

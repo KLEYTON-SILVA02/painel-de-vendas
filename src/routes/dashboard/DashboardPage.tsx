@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { DailyEvolutionChart } from '../../components/dashboard/DailyEvolutionChart';
-import { TrophyIcon } from '../../components/icons/NavIcons';
 import { SidebarCalendarCard } from '../../components/SidebarCalendarCard';
 import { GenerateImageScopeModal } from '../../components/ranking/GenerateImageScopeModal';
 import { MultiRankingImageModal } from '../../components/ranking/MultiRankingImageModal';
@@ -11,14 +10,12 @@ import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { RankingModeToggle } from '../../components/ranking/RankingModeToggle';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
-import { computeChampionStars, type ChampionStar } from '../../lib/business/champion';
 import { computeDinamicaRanking, intersectDynamicPeriod } from '../../lib/business/dynamics';
 import { effectiveMetaGeral, getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
-import type { Dynamic, SummaryRow } from '../../lib/business/types';
+import type { Dynamic } from '../../lib/business/types';
 import { catTotals, computeSummary } from '../../lib/business/summary';
-import { generateChampionCardBlob } from '../../lib/championImage';
 import { monthFirstISO, monthLastISO, todayISO } from '../../lib/dateRange';
-import { fmtDateBR, fmtMoney, monthName } from '../../lib/format';
+import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { copyText, formatRankingText } from '../../lib/clipboard';
 import { useUpdateStoreSettings } from '../../lib/mutations';
 import { generateAllCategoryImages, generateRankingImageBlob, tryCopyImage, type MultiImageResult } from '../../lib/rankingImage';
@@ -229,7 +226,6 @@ export function DashboardPage() {
   const [rankingImageModal, setRankingImageModal] = useState<{ url: string; copied: boolean } | null>(null);
   const [multiImages, setMultiImages] = useState<MultiImageResult[] | null>(null);
   const [bestDayExpanded, setBestDayExpanded] = useState(false);
-  const [championModalOpen, setChampionModalOpen] = useState(false);
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
   const { data: goals } = useGoals();
@@ -256,15 +252,6 @@ export function DashboardPage() {
   const monthLast = monthLastISO(refYear, refMonth);
   const rankFilterParams = resolveRankFilterParams(rankFilter, dashFrom, dashTo, dynamics ?? []);
 
-  const campeaoFrom = modoDia ? dashFrom : monthFirst;
-  const campeaoTo = modoDia ? dashTo : monthLast;
-  // The champion follows the same category filter as the "Ranking Geral"
-  // podium right above it (RankFilterBar) — 'ALL' and dynamics (no
-  // per-category "melhor vendedor" concept) fall back to the overall
-  // best seller, same as before this filter was wired in.
-  const isUnitChampionCat = rankFilter === 'LEVMEL' || rankFilter === 'CHIP';
-  const championCatFilter = rankFilter === 'ALL' || rankFilter.startsWith('DIN:') ? undefined : (rankFilter as CategoryKey | 'LEVMEL' | 'CHIP');
-
   // Each of these walks the full `sales` array (up to 3 months of history
   // per REGRA 2's retention window) — in "Modo Geral" (whole month) that's
   // real work, and this component re-renders on unrelated state changes
@@ -289,25 +276,6 @@ export function DashboardPage() {
       return { key: k, valor: t.valor, goal };
     });
   }, [salesData, collaboratorsData, goals, dashFrom, dashTo, mode, proration, totalValor, totalItens]);
-
-  const campeaoSource = useMemo(
-    () => computeSummary(salesData, collaboratorsData, campeaoFrom, campeaoTo, championCatFilter, specialLists),
-    [salesData, collaboratorsData, campeaoFrom, campeaoTo, championCatFilter, specialLists],
-  );
-  const campeao =
-    campeaoSource.length && (isUnitChampionCat ? campeaoSource[0].itens > 0 : campeaoSource[0].valor > 0) ? campeaoSource[0] : null;
-  // computeChampionStars scores 5 categories, each scanning `sales` day by
-  // day across the whole campeaoFrom..campeaoTo range — the most expensive
-  // single call on this page in "Modo Geral", so it's the most important
-  // one to keep out of every unrelated render.
-  const campeaoMatricula = campeao?.matricula;
-  const campeaoStars = useMemo(
-    () =>
-      campeaoMatricula
-        ? computeChampionStars(campeaoMatricula, salesData, collaboratorsData, specialLists, campeaoFrom, campeaoTo)
-        : null,
-    [campeaoMatricula, salesData, collaboratorsData, specialLists, campeaoFrom, campeaoTo],
-  );
 
   // "Melhor Dia de Vendas" always tracks the real current month (like the
   // achievement-celebration check), regardless of which month the date
@@ -398,9 +366,6 @@ export function DashboardPage() {
 
   const hora = new Date().getHours();
   const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
-
-  const campeaoBase = modoDia ? `Campeão do dia — ${dashFrom.split('-').reverse().join('/')}` : `Campeão — ${monthName(refMonth)}/${refYear}`;
-  const campeaoLabel = championCatFilter ? `${campeaoBase} · ${rankFilterParams.label}` : campeaoBase;
 
   const isUnitRanking =
     rankFilterParams.catFilter === 'LEVMEL' || rankFilterParams.catFilter === 'CHIP' || rankFilterParams.dinamica?.metrica === 'unidade';
@@ -588,7 +553,12 @@ export function DashboardPage() {
           </div>
         </div>
 
-        <div className="lg:col-start-1 lg:row-start-3 min-w-0">
+        {/* Evolução Diária now spans both columns — the champion cell that
+            used to sit in row 3's right column moved to a small trophy
+            button in AppShell's top header (see ChampionHeaderButton), so
+            this chart stretches into the freed width instead of being
+            capped at the left column's ~70%. */}
+        <div className="lg:col-start-1 lg:row-start-3 lg:col-span-2 min-w-0">
           <DailyEvolutionChart
             salesData={salesData}
             collaboratorsData={collaboratorsData}
@@ -599,11 +569,7 @@ export function DashboardPage() {
           />
         </div>
 
-        {/* Vendas por Categoria now spans both columns — with the champion
-            card gone from the sidebar (shrunk to the small trophy icon
-            below), row 4's right column is otherwise empty, so this card
-            stretches into that freed width instead of being capped at the
-            left column's ~70%. */}
+        {/* Vendas por Categoria also spans both columns, same reasoning. */}
         <div className="lg:col-start-1 lg:row-start-4 lg:col-span-2 min-w-0 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <h3 className="text-cyan-400 font-semibold text-sm mb-3">Vendas por Categoria</h3>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-1.5">
@@ -615,9 +581,10 @@ export function DashboardPage() {
 
         {/* Meta/Falta/Saldo/Itens sit at the top of the sidebar, level with
             the venda-total summary bar in the left column; the date filter
-            comes next, level with the "Ranking Geral" card; the champion
-            icon now sits level with Evolução Diária instead of holding its
-            own full card. */}
+            comes next, level with the "Ranking Geral" card. The champion
+            cell that used to sit here moved to a trophy button in the top
+            header (ChampionHeaderButton, in AppShell) — Evolução Diária and
+            Vendas por Categoria below now both span the freed width. */}
         <div className="lg:col-start-2 lg:row-start-1 grid grid-cols-2 gap-2">
           <StatCard label={metaLabel} value={fmtMoney(metaExibida)} color="#00f0ff" badge={atingiuMeta ? 'MG ✓' : undefined} />
           <StatCard label={faltaLabel} value={fmtMoney(faltaValor)} color="#a82bff" />
@@ -628,22 +595,6 @@ export function DashboardPage() {
         <div className="lg:col-start-2 lg:row-start-2">
           <SidebarCalendarCard />
         </div>
-
-        {campeao && (
-          <div className="lg:col-start-2 lg:row-start-3">
-            <ChampionIconCard onClick={() => setChampionModalOpen(true)} />
-          </div>
-        )}
-
-        {campeao && championModalOpen && (
-          <ChampionCelebrationModal
-            campeao={campeao}
-            campeaoLabel={campeaoLabel}
-            campeaoStars={campeaoStars}
-            storeName={store?.nome_loja}
-            onClose={() => setChampionModalOpen(false)}
-          />
-        )}
 
       {imageScopeOpen && (
         <GenerateImageScopeModal
@@ -757,194 +708,6 @@ function BestDayCard({
         )}
       </div>
       <ToggleSwitch on={expanded} onToggle={onToggle} title="Ocultar Melhor Dia de Vendas" />
-    </div>
-  );
-}
-
-// Replaces the old full-width ChampionCard: now just a small yellow-bordered
-// trophy button sitting where the champion card used to be, opening
-// ChampionCelebrationModal (below) with the full celebration + stars on click.
-function ChampionIconCard({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      title="Ver Campeão do dia"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 4,
-        width: '100%',
-        height: '100%',
-        minHeight: 64,
-        background: '#0b0e1d',
-        border: '1px solid #ffb700',
-        boxShadow: '0 0 18px rgba(255,183,0,.35)',
-        borderRadius: 18,
-        cursor: 'pointer',
-        boxSizing: 'border-box',
-      }}
-    >
-      <TrophyIcon width={26} height={26} style={{ color: '#ffb700' }} />
-      <span style={{ fontSize: 9, color: '#ffb700', textTransform: 'uppercase', letterSpacing: '.06em', fontWeight: 700 }}>Campeão</span>
-    </button>
-  );
-}
-
-// Full-screen celebration opened from ChampionIconCard — same confetti
-// particle animation as ConquistaCelebrationOverlay (components/
-// ConquistaCelebration.tsx), kept as a separate self-contained copy since
-// this one centers on the champion's stars/image-generation flow instead of
-// a single conquista tier. Stars fill left-to-right naturally: campeaoStars
-// is already ordered that way (computeChampionStars), so `.map()` renders
-// them in that order with no extra sorting needed.
-function ChampionCelebrationModal({
-  campeao,
-  campeaoLabel,
-  campeaoStars,
-  storeName,
-  onClose,
-}: {
-  campeao: SummaryRow;
-  campeaoLabel: string;
-  campeaoStars: ChampionStar[] | null;
-  storeName: string | undefined;
-  onClose: () => void;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [generating, setGenerating] = useState(false);
-  const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    let raf: number;
-    const colors = ['#00f0ff', '#a82bff', '#ffb700', '#14ff00', '#ff3df0'];
-    function resize() {
-      canvas!.width = window.innerWidth;
-      canvas!.height = window.innerHeight;
-    }
-    resize();
-    window.addEventListener('resize', resize);
-
-    const particles = Array.from({ length: 160 }, () => ({
-      x: Math.random() * canvas.width,
-      y: -20 - Math.random() * canvas.height,
-      r: 4 + Math.random() * 5,
-      vy: 2 + Math.random() * 3,
-      vx: -1.5 + Math.random() * 3,
-      rot: Math.random() * Math.PI * 2,
-      vrot: -0.15 + Math.random() * 0.3,
-      color: colors[Math.floor(Math.random() * colors.length)],
-    }));
-
-    function tick() {
-      ctx!.clearRect(0, 0, canvas!.width, canvas!.height);
-      particles.forEach((p) => {
-        p.x += p.vx;
-        p.y += p.vy;
-        p.rot += p.vrot;
-        if (p.y > canvas!.height + 20) {
-          p.y = -20;
-          p.x = Math.random() * canvas!.width;
-        }
-        ctx!.save();
-        ctx!.translate(p.x, p.y);
-        ctx!.rotate(p.rot);
-        ctx!.fillStyle = p.color;
-        ctx!.fillRect(-p.r / 2, -p.r / 2, p.r, p.r * 0.6);
-        ctx!.restore();
-      });
-      raf = requestAnimationFrame(tick);
-    }
-    tick();
-
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener('resize', resize);
-    };
-  }, []);
-
-  async function handleGenerateImage() {
-    setGenerating(true);
-    try {
-      const blob = await generateChampionCardBlob({
-        nome: campeao.apelido || campeao.nome,
-        label: campeaoLabel,
-        valorLabel: fmtMoney(campeao.valor),
-        itensLabel: `${campeao.itens} it.`,
-        foto: campeao.foto,
-        stars: campeaoStars ?? [],
-        storeName,
-      });
-      if (!blob) return;
-      const wasCopied = await tryCopyImage(blob);
-      setImageModal({ url: URL.createObjectURL(blob), copied: wasCopied });
-    } finally {
-      setGenerating(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center">
-      <canvas ref={canvasRef} className="absolute inset-0" style={{ pointerEvents: 'none' }} />
-      <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,.6)' }} onClick={onClose} />
-      <div
-        className="relative rounded-3xl p-6 flex flex-col items-center text-center gap-2 shadow-2xl"
-        style={{
-          width: 320,
-          background: 'linear-gradient(160deg, #12142b, #0b0e1d)',
-          border: '2px solid #ffb700',
-          boxShadow: '0 0 40px rgba(255,183,0,.45)',
-        }}
-      >
-        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-slate-200">
-          ✕
-        </button>
-        <div className="text-xs uppercase tracking-wide font-bold" style={{ color: '#ffb700' }}>
-          👑 {campeaoLabel}
-        </div>
-        {campeao.foto ? (
-          <img src={campeao.foto} alt="" className="w-20 h-20 rounded-full object-cover border-2" style={{ borderColor: '#ffb700' }} />
-        ) : (
-          <div className="w-20 h-20 rounded-full bg-slate-700 border-2" style={{ borderColor: '#ffb700' }} />
-        )}
-        <div className="text-lg font-bold">{campeao.apelido || campeao.nome}</div>
-        <div className="font-mono text-sm" style={{ color: '#14ff00' }}>
-          {fmtMoney(campeao.valor)} · {campeao.itens} it.
-        </div>
-        {campeaoStars && (
-          <div title={campeaoStars.map((s) => `${s.achieved ? '✓' : '✗'} ${s.label}`).join(' · ')}>
-            {campeaoStars.map((s) => (
-              <span key={s.key} style={{ fontSize: 22, color: s.achieved ? '#ffb700' : '#2b3350' }}>
-                ★
-              </span>
-            ))}
-          </div>
-        )}
-        <button
-          onClick={handleGenerateImage}
-          disabled={generating}
-          className="mt-2 rounded-lg px-4 py-1.5 text-xs font-bold uppercase tracking-wide disabled:opacity-50"
-          style={{ background: '#ffb700', color: '#231a02' }}
-        >
-          {generating ? 'Gerando…' : '🖼️ Gerar imagem do card'}
-        </button>
-      </div>
-
-      {imageModal && (
-        <RankingImageModal
-          url={imageModal.url}
-          copied={imageModal.copied}
-          onClose={() => setImageModal(null)}
-          title={`Card de Campeão — ${campeao.apelido || campeao.nome}`}
-          filename="card-campeao.png"
-          alt="Card de campeão"
-        />
-      )}
     </div>
   );
 }
