@@ -305,6 +305,21 @@ export function useMarkNotificationRead() {
   });
 }
 
+/** Upserts the native FCM token a device registered for push (see
+ * useNativePushRegistration) — `token` is unique across the whole table, so
+ * re-registering the same device (app reinstall, token rotation) just
+ * updates which collaborator it now belongs to instead of erroring. */
+export function useRegisterPushToken() {
+  return useMutation({
+    mutationFn: async ({ collaboratorId, token, platform }: { collaboratorId: string; token: string; platform: 'android' | 'ios' | 'web' }) => {
+      const { error } = await supabase
+        .from('push_tokens')
+        .upsert({ collaborator_id: collaboratorId, token, platform, updated_at: new Date().toISOString() }, { onConflict: 'token' });
+      if (error) throw error;
+    },
+  });
+}
+
 export function useCreateNotificationSchedule(storeId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({

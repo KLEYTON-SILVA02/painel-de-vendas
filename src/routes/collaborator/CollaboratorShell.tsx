@@ -3,6 +3,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { HomeIcon, LeafIcon, TargetIcon, TrophyIcon } from '../../components/icons/NavIcons';
 import { NotificationBell } from '../../components/NotificationBell';
 import { BALCAO_SETOR } from '../../lib/business/bio';
+import { useNativePushRegistration } from '../../lib/useNativePushRegistration';
 import { useCategoryTypes, useCollaborators } from '../../lib/queries';
 import '../../styles/mobile-v2.css';
 import { CollaboratorBioPage } from './CollaboratorBioPage';
@@ -24,6 +25,7 @@ export function CollaboratorShell() {
   const { profile, signOut } = useAuth();
   const { data: collaborators } = useCollaborators();
   const { data: categoryTypes } = useCategoryTypes();
+  useNativePushRegistration(profile?.collaborator_id ?? undefined);
   const me = collaborators?.find((c) => c.id === profile?.collaborator_id);
   const isBalcao = me?.setor === BALCAO_SETOR;
   // Biosintética isn't seeded for new stores (see Sidebar.tsx) — a Balcão
