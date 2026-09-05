@@ -154,7 +154,7 @@ export function Sidebar({
 
       <div className="sb-footer">
         <button type="button" className="sb-logout-btn" onClick={() => signOut()}>
-          <LogoutIcon width={18} height={18} />
+          <LogoutIcon width={13} height={13} />
           <span className="sb-label">Sair</span>
         </button>
         <NavLink to="/admin/importar" className="sb-import-btn" onClick={onNavigate}>

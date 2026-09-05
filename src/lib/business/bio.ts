@@ -7,6 +7,7 @@
 import { classifyBio } from './classification';
 import type { BioGroupKey } from './classification';
 import { firstName } from './normalize';
+import { normalizeMatricula } from './parsing';
 import type { BioGroupsProducts, BioWeights, Collaborator, Sale } from './types';
 
 export const BALCAO_SETOR = 'Balcão';
@@ -52,9 +53,11 @@ export function computeBioSummary(
   const eligible = new Set(setoresElegiveis);
   const zeroQtd = Object.fromEntries(Object.keys(bioGroups).map((g) => [g, 0]));
   const elegiveis = collaborators.filter((c) => c.setor !== null && eligible.has(c.setor));
+  // Keyed by normalized matricula — see the comment on the same pattern in
+  // summary.ts's computeSummary.
   const map: Record<string, BioSummaryRow> = {};
   elegiveis.forEach((c) => {
-    map[c.matricula] = {
+    map[normalizeMatricula(c.matricula)] = {
       matricula: c.matricula,
       nome: c.nome,
       apelido: c.apelido || firstName(c.nome),
@@ -68,14 +71,15 @@ export function computeBioSummary(
   sales.forEach((s) => {
     if (fromDate && s.dataISO && s.dataISO < fromDate) return;
     if (toDate && s.dataISO && s.dataISO > toDate) return;
-    if (!map[s.matricula]) return; // only counts collaborators in an eligible sector
+    const row = map[normalizeMatricula(s.matricula)];
+    if (!row) return; // only counts collaborators in an eligible sector
     const g = classifyBio(s.produto, bioGroups);
     if (!g) return;
     if (groupFilter && groupFilter !== 'ALL' && g !== groupFilter) return;
     const qtd = Number(s.qtd) || 0;
-    map[s.matricula].qtd[g] += qtd;
-    map[s.matricula].pontos += qtd * (Number(bioWeights[g]) || 0);
-    map[s.matricula].itens += qtd;
+    row.qtd[g] += qtd;
+    row.pontos += qtd * (Number(bioWeights[g]) || 0);
+    row.itens += qtd;
   });
 
   return Object.values(map).sort((a, b) => b.pontos - a.pontos);
@@ -99,12 +103,12 @@ export function auditBioOutsideBalcao(
   setoresElegiveis: string[] = [BALCAO_SETOR],
 ): BioOutsideAlert[] {
   const eligible = new Set(setoresElegiveis);
-  const byMatricula = new Map(collaborators.map((c) => [c.matricula, c]));
+  const byMatricula = new Map(collaborators.map((c) => [normalizeMatricula(c.matricula), c]));
   const alerts: BioOutsideAlert[] = [];
   sales.forEach((s) => {
     const g = classifyBio(s.produto, bioGroups);
     if (!g) return;
-    const collaborator = byMatricula.get(s.matricula);
+    const collaborator = byMatricula.get(normalizeMatricula(s.matricula));
     if (collaborator && collaborator.setor !== null && eligible.has(collaborator.setor)) return;
     alerts.push({
       matricula: s.matricula,

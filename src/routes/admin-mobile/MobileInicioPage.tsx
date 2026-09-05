@@ -124,10 +124,9 @@ export function MobileInicioPage() {
         </div>
         <div className="mv2-metric-card mv2-saldo">
           <div className="mv2-label">Saldo</div>
-          <div className="mv2-value">
-            {saldo >= 0 ? '' : '-'}
-            {fmtMoney(Math.abs(saldo))}
-          </div>
+          {/* Sign hidden by design (visual only) — the underlying `saldo`
+              stays negative for every calculation elsewhere. */}
+          <div className="mv2-value">{fmtMoney(Math.abs(saldo))}</div>
         </div>
         <div className="mv2-metric-card mv2-itens">
           <div className="mv2-label">Itens vendidos</div>

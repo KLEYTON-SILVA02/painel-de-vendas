@@ -1,6 +1,7 @@
 // Ported 1:1 from legacy/index-original.html (computeDinamicaProgresso /
 // computeDinamicaRanking / resolveRankFilterParams' dynamic-intersection branch).
 import { firstName, normalize } from './normalize';
+import { normalizeMatricula } from './parsing';
 import type { Collaborator, Dynamic, Sale } from './types';
 
 export interface DinamicaRankingRow {
@@ -28,15 +29,15 @@ export function dynamicAllowsCollaborator(din: Dynamic, collaborator: Pick<Colla
  * using the dynamic's own metric (R$ or units). */
 export function computeDinamicaProgresso(din: Dynamic, sales: Sale[], collaborators: Collaborator[]): number {
   const produtosSet = din.produtos.length ? new Set(din.produtos.map((p) => normalize(p))) : null;
-  const participantesSet = din.participantes.length ? new Set(din.participantes) : null;
-  const collaboratorByMatricula = new Map(collaborators.map((c) => [c.matricula, c]));
+  const participantesSet = din.participantes.length ? new Set(din.participantes.map(normalizeMatricula)) : null;
+  const collaboratorByMatricula = new Map(collaborators.map((c) => [normalizeMatricula(c.matricula), c]));
   let valor = 0;
   let itens = 0;
   sales.forEach((s) => {
     if (!s.dataISO || s.dataISO < din.dataInicio || s.dataISO > din.dataFim) return;
     if (produtosSet && !produtosSet.has(normalize(s.produto))) return;
-    if (participantesSet && !participantesSet.has(s.matricula)) return;
-    const c = collaboratorByMatricula.get(s.matricula);
+    if (participantesSet && !participantesSet.has(normalizeMatricula(s.matricula))) return;
+    const c = collaboratorByMatricula.get(normalizeMatricula(s.matricula));
     if (din.setorAlvo !== 'ambos' && (!c || !dynamicAllowsCollaborator(din, c))) return;
     valor += Number(s.valor) || 0;
     itens += Number(s.qtd) || 0;
@@ -51,13 +52,16 @@ export function computeDinamicaRanking(
   collaborators: Collaborator[],
 ): DinamicaRankingRow[] {
   const produtosSet = din.produtos.length ? new Set(din.produtos.map((p) => normalize(p))) : null;
-  const participantesSet = din.participantes.length ? new Set(din.participantes) : null;
+  const participantesSet = din.participantes.length ? new Set(din.participantes.map(normalizeMatricula)) : null;
+  // Keyed by normalized matricula — see the comment on the same pattern in
+  // summary.ts's computeSummary.
   const map: Record<string, DinamicaRankingRow> = {};
 
   collaborators.forEach((c) => {
-    if (participantesSet && !participantesSet.has(c.matricula)) return;
+    const key = normalizeMatricula(c.matricula);
+    if (participantesSet && !participantesSet.has(key)) return;
     if (!dynamicAllowsCollaborator(din, c)) return;
-    map[c.matricula] = {
+    map[key] = {
       matricula: c.matricula,
       nome: c.nome,
       apelido: c.apelido || firstName(c.nome),
@@ -70,11 +74,12 @@ export function computeDinamicaRanking(
   sales.forEach((s) => {
     if (!s.dataISO || s.dataISO < din.dataInicio || s.dataISO > din.dataFim) return;
     if (produtosSet && !produtosSet.has(normalize(s.produto))) return;
-    if (!map[s.matricula]) {
+    const key = normalizeMatricula(s.matricula);
+    if (!map[key]) {
       if (participantesSet) return;
-      const c = collaborators.find((cc) => cc.matricula === s.matricula);
+      const c = collaborators.find((cc) => normalizeMatricula(cc.matricula) === key);
       if (c && !dynamicAllowsCollaborator(din, c)) return;
-      map[s.matricula] = {
+      map[key] = {
         matricula: s.matricula,
         nome: c ? c.nome : s.vendedor,
         apelido: c ? c.apelido || firstName(c.nome) : (s.vendedor && firstName(s.vendedor)) || s.matricula,
@@ -83,8 +88,8 @@ export function computeDinamicaRanking(
         itens: 0,
       };
     }
-    map[s.matricula].valor += Number(s.valor) || 0;
-    map[s.matricula].itens += Number(s.qtd) || 0;
+    map[key].valor += Number(s.valor) || 0;
+    map[key].itens += Number(s.qtd) || 0;
   });
 
   return Object.values(map).sort((a, b) => (din.metrica === 'unidade' ? b.itens - a.itens : b.valor - a.valor));

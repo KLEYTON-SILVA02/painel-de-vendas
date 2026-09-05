@@ -23,6 +23,14 @@ import {
   type PodiumSpots,
 } from '../../components/ranking/PodiumSplit';
 
+// Keyword lists only ever render a bounded page at a time — a store that's
+// accumulated hundreds/thousands of Levmel/Chip keywords over time (bulk
+// imports, years of manual additions, never pruned) would otherwise render
+// every single one as its own DOM node + click handler on every load of
+// this screen, which is real, avoidable jank for no benefit (an ADM
+// reviewing this list isn't scanning all of them at once anyway).
+const KEYWORD_PAGE_SIZE = 100;
+
 export function ConfiguracoesPage() {
   const { profile } = useAuth();
   const { data: rows } = useSpecialListRows();
@@ -35,6 +43,8 @@ export function ConfiguracoesPage() {
   const [chipInput, setChipInput] = useState('');
   const [weights, setWeights] = useState<BioWeights | null>(null);
   const [saving, setSaving] = useState(false);
+  const [levmelShown, setLevmelShown] = useState(KEYWORD_PAGE_SIZE);
+  const [chipShown, setChipShown] = useState(KEYWORD_PAGE_SIZE);
 
   if (!rows || !storeSettings) return <PageLoading />;
   const currentWeights = weights ?? (storeSettings.bio_weights as unknown as BioWeights);
@@ -77,7 +87,7 @@ export function ConfiguracoesPage() {
               {levmel.length === 0 ? (
                 <span className="text-xs text-slate-500">Nenhum produto cadastrado.</span>
               ) : (
-                levmel.map((p) => (
+                levmel.slice(0, levmelShown).map((p) => (
                   <span key={p.id} className="text-xs bg-slate-800 rounded-full px-2 py-1 flex items-center gap-1.5">
                     {p.nome}
                     <button onClick={() => deleteProduct.mutate(p.id)} className="text-slate-500 hover:text-rose-400">
@@ -85,6 +95,14 @@ export function ConfiguracoesPage() {
                     </button>
                   </span>
                 ))
+              )}
+              {levmel.length > levmelShown && (
+                <button
+                  onClick={() => setLevmelShown((n) => n + KEYWORD_PAGE_SIZE)}
+                  className="text-xs text-cyan-400 rounded-full px-2 py-1 border border-cyan-800"
+                >
+                  Mostrar mais ({levmel.length - levmelShown})
+                </button>
               )}
             </div>
           </div>
@@ -107,7 +125,7 @@ export function ConfiguracoesPage() {
               {chip.length === 0 ? (
                 <span className="text-xs text-slate-500">Nenhum produto cadastrado.</span>
               ) : (
-                chip.map((p) => (
+                chip.slice(0, chipShown).map((p) => (
                   <span key={p.id} className="text-xs bg-slate-800 rounded-full px-2 py-1 flex items-center gap-1.5">
                     {p.nome}
                     <button onClick={() => deleteProduct.mutate(p.id)} className="text-slate-500 hover:text-rose-400">
@@ -115,6 +133,14 @@ export function ConfiguracoesPage() {
                     </button>
                   </span>
                 ))
+              )}
+              {chip.length > chipShown && (
+                <button
+                  onClick={() => setChipShown((n) => n + KEYWORD_PAGE_SIZE)}
+                  className="text-xs text-cyan-400 rounded-full px-2 py-1 border border-cyan-800"
+                >
+                  Mostrar mais ({chip.length - chipShown})
+                </button>
               )}
             </div>
           </div>

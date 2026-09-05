@@ -238,7 +238,7 @@ export function useCreateDynamic(storeId: string | undefined) {
 export function useCreateCollaborator(storeId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { matricula: string; nome: string; apelido: string; setor: string }) => {
+    mutationFn: async (input: { matricula: string; nome: string; apelido: string; setor: string; celular?: string | null }) => {
       if (!storeId) throw new Error('store not loaded');
       const { error } = await supabase
         .from('collaborators')
@@ -257,7 +257,7 @@ export function useCreateCollaborator(storeId: string | undefined) {
 export function useBulkUpsertCollaborators(storeId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (rows: { matricula: string; nome: string; apelido: string; setor: string }[]) => {
+    mutationFn: async (rows: { matricula: string; nome: string; apelido: string; setor: string; celular?: string | null }[]) => {
       if (!storeId) throw new Error('store not loaded');
       const { error } = await supabase
         .from('collaborators')

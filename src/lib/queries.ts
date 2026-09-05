@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useRef, useState } from 'react';
 import type { BioGroupKey, GoalCategoryKey } from './business/classification';
 import type { BioGroupGoal, CommissionRate, Goal } from './business/types';
 import type { SpecialListItem } from './business/summary';
@@ -44,9 +45,10 @@ const SALES_MAX_PAGES = 500;
  * OFFSET pages, but firing many *expensive* deep OFFSET pages at once was
  * exactly what made them compete for the same DB connections and blow up
  * total load time; flat-cost keyset pages don't need that workaround. */
-async function fetchSalesPages(range?: { fromISO: string; toISO: string }) {
+async function fetchSalesPages(range?: { fromISO: string; toISO: string }, onPage?: (loadedSoFar: number) => void) {
   const pages: SaleRow[][] = [];
   let cursor: string | null = null;
+  let loaded = 0;
   for (let iteration = 0; iteration < SALES_MAX_PAGES; iteration++) {
     let query = supabase.from('sales').select(SALE_COLUMNS).order('id', { ascending: true }).limit(SALES_PAGE_SIZE);
     if (range) query = query.gte('data_iso', range.fromISO).lte('data_iso', range.toISO);
@@ -56,6 +58,8 @@ async function fetchSalesPages(range?: { fromISO: string; toISO: string }) {
     if (error) throw error;
     if (!data || data.length === 0) break;
     pages.push(data);
+    loaded += data.length;
+    onPage?.(loaded);
     if (data.length < SALES_PAGE_SIZE) break;
     cursor = data[data.length - 1].id;
   }
@@ -79,6 +83,36 @@ export function useSales(enabled = true) {
     queryFn: async () => (await fetchSalesPages()).map(mapSale),
     enabled,
   });
+}
+
+/** "Lista de vendas detalhada" (ListaVendasPage) deliberately does NOT
+ * share the `['sales']` cache key above — that key is kept warm by
+ * whichever of Dashboard/Ranking/Category screens the ADM has open, so a
+ * short `gcTime` on it wouldn't actually free anything as long as one of
+ * those is still mounted. This is its own query, fetched only while the
+ * detailed list is switched on (`enabled`), and evicted from the cache 30s
+ * after the ADM leaves the list or switches it back off — so the item-level
+ * rows genuinely stop occupying memory once nothing needs them, instead of
+ * lingering for the default 5 minutes. `loadedCount` mirrors the fetch's
+ * own paging progress (SALES_PAGE_SIZE rows at a time) for a live counter
+ * in the loading state, since a full-history fetch has no single percentage
+ * to report against. */
+export function useSalesDetailList(enabled: boolean) {
+  const [loadedCount, setLoadedCount] = useState(0);
+  const onPageRef = useRef(setLoadedCount);
+  onPageRef.current = setLoadedCount;
+
+  const query = useQuery({
+    queryKey: ['sales-detail-list'],
+    queryFn: async () => {
+      setLoadedCount(0);
+      return (await fetchSalesPages(undefined, (n) => onPageRef.current(n))).map(mapSale);
+    },
+    enabled,
+    gcTime: 30_000,
+  });
+
+  return { ...query, loadedCount };
 }
 
 export interface SalesMonthTotal {

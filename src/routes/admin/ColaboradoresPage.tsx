@@ -26,6 +26,7 @@ export function ColaboradoresPage() {
   const [matricula, setMatricula] = useState('');
   const [nome, setNome] = useState('');
   const [apelido, setApelido] = useState('');
+  const [celular, setCelular] = useState('');
   const [setor, setSetor] = useState(SETORES[0]);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -37,10 +38,17 @@ export function ColaboradoresPage() {
   function handleAdd(e: FormEvent) {
     e.preventDefault();
     if (!matricula.trim() || !nome.trim()) return;
-    createCollaborator.mutate({ matricula: matricula.trim(), nome: nome.trim(), apelido: apelido.trim(), setor });
+    createCollaborator.mutate({
+      matricula: matricula.trim(),
+      nome: nome.trim(),
+      apelido: apelido.trim(),
+      setor,
+      celular: celular.trim() || null,
+    });
     setMatricula('');
     setNome('');
     setApelido('');
+    setCelular('');
   }
 
   function toggleSelected(id: string) {
@@ -63,7 +71,7 @@ export function ColaboradoresPage() {
     <div className="flex flex-col gap-3">
       <form onSubmit={handleAdd} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <h3 className="font-semibold mb-3">Novo colaborador</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 items-end">
           <div>
             <label className="block text-xs text-slate-400 mb-1">Matrícula</label>
             <input value={matricula} onChange={(e) => setMatricula(e.target.value)} className="input" />
@@ -75,6 +83,10 @@ export function ColaboradoresPage() {
           <div>
             <label className="block text-xs text-slate-400 mb-1">Apelido</label>
             <input value={apelido} onChange={(e) => setApelido(e.target.value)} className="input" />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Celular</label>
+            <input value={celular} onChange={(e) => setCelular(e.target.value)} className="input" placeholder="(opcional)" />
           </div>
           <div>
             <label className="block text-xs text-slate-400 mb-1">Setor</label>
@@ -94,13 +106,19 @@ export function ColaboradoresPage() {
 
       <SimpleSheetImportPanel
         title="Importar planilha de colaboradores"
-        columns={['Código de venda', 'Nome', 'Apelido', 'Setor']}
+        columns={['Código de venda', 'Nome', 'Apelido', 'Setor', 'Celular']}
         idColumnIndex={0}
         onConfirm={async (rows) => {
           const valid = rows.filter((r) => r[0]?.trim() && r[1]?.trim());
           if (valid.length === 0) return { count: 0, skipped: rows.length };
           await bulkUpsertCollaborators.mutateAsync(
-            valid.map((r) => ({ matricula: r[0].trim(), nome: r[1].trim(), apelido: r[2]?.trim() || '', setor: r[3]?.trim() || SETORES[0] })),
+            valid.map((r) => ({
+              matricula: r[0].trim(),
+              nome: r[1].trim(),
+              apelido: r[2]?.trim() || '',
+              setor: r[3]?.trim() || SETORES[0],
+              celular: r[4]?.trim() || null,
+            })),
           );
           return { count: valid.length, skipped: rows.length - valid.length };
         }}
@@ -228,10 +246,19 @@ function EditCollaboratorModal({
   collaborator: Collaborator;
   storeId: string | undefined;
   onClose: () => void;
-  onSave: (patch: { nome: string; apelido: string; setor: string; data_nascimento: string | null; foto_url?: string; foto_conquista_url?: string }) => void;
+  onSave: (patch: {
+    nome: string;
+    apelido: string;
+    celular: string | null;
+    setor: string;
+    data_nascimento: string | null;
+    foto_url?: string;
+    foto_conquista_url?: string;
+  }) => void;
 }) {
   const [nome, setNome] = useState(collaborator.nome);
   const [apelido, setApelido] = useState(collaborator.apelido || '');
+  const [celular, setCelular] = useState(collaborator.celular || '');
   const [setor, setSetor] = useState(collaborator.setor || SETORES[0]);
   const [dataNascimento, setDataNascimento] = useState(collaborator.dataNascimento || '');
   const [foto, setFoto] = useState(collaborator.foto);
@@ -283,6 +310,10 @@ function EditCollaboratorModal({
             <input value={apelido} onChange={(e) => setApelido(e.target.value)} className="input" />
           </div>
           <div>
+            <label className="block text-xs text-slate-400 mb-1">Celular</label>
+            <input value={celular} onChange={(e) => setCelular(e.target.value)} className="input" placeholder="(opcional)" />
+          </div>
+          <div>
             <label className="block text-xs text-slate-400 mb-1">Setor</label>
             <select value={setor} onChange={(e) => setSetor(e.target.value)} className="input">
               {SETORES.map((s) => (
@@ -306,6 +337,7 @@ function EditCollaboratorModal({
               onSave({
                 nome,
                 apelido,
+                celular: celular.trim() || null,
                 setor,
                 data_nascimento: dataNascimento || null,
                 ...(foto !== collaborator.foto && { foto_url: foto ?? undefined }),
