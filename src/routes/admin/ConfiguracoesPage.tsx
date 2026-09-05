@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
+import { DIA_KEYS, DIA_LABELS, type DiaKey } from '../../lib/business/horario';
 import type { BioWeights } from '../../lib/business/types';
 import type { Json } from '../../types/database';
 import { monthName } from '../../lib/format';
@@ -8,12 +9,15 @@ import { monthFirstISO, monthLastISO } from '../../lib/dateRange';
 import {
   useAddSpecialListProduct,
   useBulkDeleteTable,
+  useCreateNotificationSchedule,
+  useDeleteNotificationSchedule,
   useDeleteSpecialListProduct,
   useUpdateBioWeights,
+  useUpdateNotificationSchedule,
   useUpdateStoreSettings,
   type BulkDeletableTable,
 } from '../../lib/mutations';
-import { countRowsInRange, useSpecialListRows, useStoreSettings } from '../../lib/queries';
+import { countRowsInRange, useNotificationSchedules, useSpecialListRows, useStoreSettings } from '../../lib/queries';
 import { uploadRankingPodiumBackground } from '../../lib/storage';
 import podiumPremiumBg from '../../assets/ranking/podium-premium-bg.jpg';
 import {
@@ -172,7 +176,104 @@ export function ConfiguracoesPage() {
 
       <RankingAppearanceCard />
 
+      <NotificationSchedulesCard />
+
       <DangerZoneCard />
+    </div>
+  );
+}
+
+/** ADM screen for notification_schedules: when the automatic "vendas de
+ * hoje" push to every collaborator fires (see dispatch_sales_notifications
+ * in supabase/migrations/0039_notifications_dispatch.sql, which runs on
+ * pg_cron every 5 minutes and checks these rows). Purely CRUD over the
+ * schedule — the actual sales computation and delivery live server-side. */
+function NotificationSchedulesCard() {
+  const { profile } = useAuth();
+  const { data: schedules } = useNotificationSchedules();
+  const createSchedule = useCreateNotificationSchedule(profile?.store_id);
+  const updateSchedule = useUpdateNotificationSchedule();
+  const deleteSchedule = useDeleteNotificationSchedule();
+
+  const [hora, setHora] = useState('12:00');
+  const [dias, setDias] = useState<DiaKey[]>([...DIA_KEYS]);
+
+  function toggleDia(dia: DiaKey) {
+    setDias((prev) => (prev.includes(dia) ? prev.filter((d) => d !== dia) : [...prev, dia]));
+  }
+
+  function handleAdd() {
+    if (dias.length === 0) return;
+    createSchedule.mutate({ hora, dias });
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+      <h3 className="text-amber-400 font-semibold mb-1">🔔 Notificações automáticas de vendas</h3>
+      <p className="text-xs text-slate-500 mb-3">
+        Nos horários abaixo, cada colaborador recebe uma notificação no app com o total de vendas do dia em cada categoria.
+      </p>
+
+      <div className="flex flex-wrap items-end gap-3 mb-4">
+        <label className="text-xs text-slate-400">
+          Horário
+          <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} className="input mt-1" />
+        </label>
+        <div className="flex flex-wrap gap-1.5">
+          {DIA_KEYS.map((dia) => (
+            <button
+              key={dia}
+              type="button"
+              onClick={() => toggleDia(dia)}
+              className="rounded-lg border px-2.5 py-1.5 text-xs font-medium"
+              style={
+                dias.includes(dia)
+                  ? { borderColor: '#ffb700', background: '#ffb700', color: '#231a02' }
+                  : { borderColor: '#334155', color: '#94a3b8', background: 'transparent' }
+              }
+            >
+              {DIA_LABELS[dia].slice(0, 3)}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={handleAdd}
+          disabled={dias.length === 0}
+          className="rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm disabled:opacity-50"
+        >
+          + Adicionar horário
+        </button>
+      </div>
+
+      {!schedules || schedules.length === 0 ? (
+        <p className="text-sm text-slate-500 py-2 text-center">Nenhum horário configurado ainda.</p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {schedules.map((s) => {
+            const scheduleDias = (Array.isArray(s.dias) ? (s.dias as string[]) : []) as DiaKey[];
+            return (
+              <div key={s.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-950/60 border border-slate-800 px-3 py-2">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium font-mono">{s.hora.slice(0, 5)}</div>
+                  <div className="text-[11px] text-slate-500 truncate">{scheduleDias.map((d) => DIA_LABELS[d]?.slice(0, 3) ?? d).join(', ')}</div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => updateSchedule.mutate({ id: s.id, patch: { ativo: !s.ativo } })}
+                    className="text-[11px] rounded-lg border px-2 py-1"
+                    style={s.ativo ? { borderColor: '#14ff00', color: '#14ff00' } : { borderColor: '#334155', color: '#94a3b8' }}
+                  >
+                    {s.ativo ? 'Ativo' : 'Pausado'}
+                  </button>
+                  <button onClick={() => deleteSchedule.mutate(s.id)} className="text-slate-500 hover:text-rose-400 text-sm px-1">
+                    ✕
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

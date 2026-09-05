@@ -294,6 +294,51 @@ export function useDeleteCollaborators() {
   });
 }
 
+export function useMarkNotificationRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('notifications').update({ read_at: new Date().toISOString() }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+  });
+}
+
+export function useCreateNotificationSchedule(storeId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { hora: string; dias: string[] }) => {
+      if (!storeId) throw new Error('store not loaded');
+      const { error } = await supabase.from('notification_schedules').insert({ store_id: storeId, hora: input.hora, dias: input.dias });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notification_schedules'] }),
+  });
+}
+
+export function useUpdateNotificationSchedule() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, patch }: { id: string; patch: TablesUpdate<'notification_schedules'> }) => {
+      const { error } = await supabase.from('notification_schedules').update(patch).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notification_schedules'] }),
+  });
+}
+
+export function useDeleteNotificationSchedule() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('notification_schedules').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notification_schedules'] }),
+  });
+}
+
 export function useUpdateStore(storeId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({

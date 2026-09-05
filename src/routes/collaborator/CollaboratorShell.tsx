@@ -1,6 +1,7 @@
 import { NavLink, Route, Routes } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { HomeIcon, LeafIcon, TargetIcon, TrophyIcon } from '../../components/icons/NavIcons';
+import { NotificationBell } from '../../components/NotificationBell';
 import { BALCAO_SETOR } from '../../lib/business/bio';
 import { useCategoryTypes, useCollaborators } from '../../lib/queries';
 import '../../styles/mobile-v2.css';
@@ -47,9 +48,12 @@ export function CollaboratorShell() {
             <div className="mv2-collab-role">Colaborador{me?.setor ? ` · ${me.setor}` : ''}</div>
           </div>
         </div>
-        <button className="mv2-collab-signout" onClick={() => signOut()}>
-          Sair
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <NotificationBell />
+          <button className="mv2-collab-signout" onClick={() => signOut()}>
+            Sair
+          </button>
+        </div>
       </header>
 
       <div className="mv2-collab-body">
