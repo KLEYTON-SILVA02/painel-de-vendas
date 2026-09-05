@@ -198,7 +198,7 @@ export function DailyEvolutionChart(props: DailyEvolutionChartProps) {
               <div key={p.dateISO} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, minWidth: 14 }}>
                 <div
                   title={`Realizado no dia: ${formatChartValue(p.valor, isUnit)}`}
-                  style={{ position: 'relative', width: '100%', height: CHART_H, display: 'flex', alignItems: 'flex-end', cursor: 'default' }}
+                  style={{ position: 'relative', width: '100%', height: CHART_H, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', cursor: 'default' }}
                 >
                   {(showMeta || showSuper) && (
                     <div
@@ -254,7 +254,11 @@ export function DailyEvolutionChart(props: DailyEvolutionChartProps) {
                       )}
                     </div>
                   )}
-                  <div style={{ width: '100%', height: '100%', borderRadius: 999, background: '#080818', border: '1px solid #212948', overflow: 'hidden', display: 'flex', alignItems: 'flex-end' }}>
+                  {/* 80% of the day slot's width — narrowed 20% from the old
+                      full-width bar — centered via the parent's justifyContent
+                      so the badges above (positioned off the slot's own
+                      center) still line up with the bar. */}
+                  <div style={{ width: '80%', height: '100%', borderRadius: 999, background: '#080818', border: '1px solid #212948', overflow: 'hidden', display: 'flex', alignItems: 'flex-end' }}>
                     <div style={{ width: '100%', height: `${pct}%`, borderRadius: 999, background: 'linear-gradient(0deg, #ff3df0, #ff8bf5)' }} />
                   </div>
                 </div>
