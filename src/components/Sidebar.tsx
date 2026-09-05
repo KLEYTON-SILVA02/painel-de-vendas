@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { useAuth } from '../auth/AuthContext';
 import { useCategoryTypes } from '../lib/queries';
 import './Sidebar.css';
 import { FunctionIcon } from './icons/FunctionIcon';
@@ -10,6 +11,7 @@ import {
   HexagonIcon,
   HomeIcon,
   LeafIcon,
+  LogoutIcon,
   PillIcon,
   SettingsIcon,
   TagIcon,
@@ -79,6 +81,7 @@ export function Sidebar({
   // /categoria-parceria/:chave screen instead of Biosintética's dedicated
   // /bio route.
   const { data: categoryTypes } = useCategoryTypes();
+  const { signOut } = useAuth();
   const bioCategory = (categoryTypes ?? []).find((c) => c.chave === 'biosintetica');
   const extraCategories = (categoryTypes ?? []).filter((c) => c.chave !== 'biosintetica');
 
@@ -150,6 +153,10 @@ export function Sidebar({
       </nav>
 
       <div className="sb-footer">
+        <button type="button" className="sb-logout-btn" onClick={() => signOut()}>
+          <LogoutIcon width={18} height={18} />
+          <span className="sb-label">Sair</span>
+        </button>
         <NavLink to="/admin/importar" className="sb-import-btn" onClick={onNavigate}>
           <UploadIcon width={26} height={26} />
           <span className="sb-label">Importar Vendas</span>
