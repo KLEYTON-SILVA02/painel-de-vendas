@@ -5,9 +5,9 @@ import { matchesSpecialList, type SpecialListItem } from '../../lib/business/sum
 import type { Collaborator, Goal, Sale } from '../../lib/business/types';
 import { fmtMoney } from '../../lib/format';
 
-type ChartCategoryKey = CategoryKey | 'LEVMEL' | 'CHIP';
+export type ChartCategoryKey = CategoryKey | 'LEVMEL' | 'CHIP';
 
-const CHART_CATEGORIES: { key: ChartCategoryKey; titulo: string; color: string }[] = [
+export const CHART_CATEGORIES: { key: ChartCategoryKey; titulo: string; color: string }[] = [
   { key: 'MER', titulo: 'Mercadoria Geral', color: '#ff6a00' },
   { key: 'DERM', titulo: 'Dermocosméticos', color: '#ff3df0' },
   { key: 'GEN', titulo: 'Genéricos', color: '#14ff00' },
@@ -16,7 +16,7 @@ const CHART_CATEGORIES: { key: ChartCategoryKey; titulo: string; color: string }
   { key: 'CHIP', titulo: 'Chip', color: '#00e5ff' },
 ];
 
-interface DailyPoint {
+export interface DailyPoint {
   day: number;
   dateISO: string;
   valor: number;
@@ -78,21 +78,26 @@ function niceAxisMax(values: number[]): number {
   return step * magnitude;
 }
 
-export function DailyEvolutionChart({
-  salesData,
-  collaboratorsData,
-  goals,
-  specialLists,
-  monthFirst,
-  monthLast,
-}: {
+interface DailyEvolutionChartProps {
   salesData: Sale[];
   collaboratorsData: Collaborator[];
   goals: Record<GoalCategoryKey, Goal | undefined>;
   specialLists: { levmel: SpecialListItem[]; chip: SpecialListItem[] } | undefined;
   monthFirst: string;
   monthLast: string;
-}) {
+}
+
+// Shared by the desktop (vertical bars) and mobile (horizontal bars) chart
+// presentations — same category selection, same day-bucketing, same axis.
+// The axis's 3 marks are each category's own goals, not an arbitrary "nice"
+// max over the observed data: R$0,00 at the bottom, that category's daily
+// Meta Geral in the middle, its daily Super Meta at the top — so the same
+// bar height always means the same progress toward that day's targets,
+// whichever category tab is active. A category with no Super Meta
+// configured (LEVMEL/CHIP typically don't use one) falls back to 1.5× its
+// daily meta as headroom; with neither goal configured, falls back to the
+// old observed-max heuristic so the chart still reads sensibly.
+export function useDailyEvolutionChart({ salesData, collaboratorsData, goals, specialLists, monthFirst, monthLast }: DailyEvolutionChartProps) {
   const [catKey, setCatKey] = useState<ChartCategoryKey>('MER');
   const active = CHART_CATEGORIES.find((c) => c.key === catKey)!;
 
@@ -108,8 +113,22 @@ export function DailyEvolutionChart({
     () => computeDailyPoints(salesData, catKey, monthFirst, monthLast, specialLists, metaDiaria, superMetaDiaria),
     [salesData, catKey, monthFirst, monthLast, specialLists, metaDiaria, superMetaDiaria],
   );
-  const axisMax = useMemo(() => niceAxisMax(points.map((p) => p.valor)), [points]);
+  const { axisTop, axisMid } = useMemo(() => {
+    if (superMetaDiaria > 0) {
+      return { axisTop: superMetaDiaria, axisMid: metaDiaria > 0 ? metaDiaria : superMetaDiaria / 2 };
+    }
+    if (metaDiaria > 0) {
+      return { axisTop: metaDiaria * 1.5, axisMid: metaDiaria };
+    }
+    const fallback = niceAxisMax(points.map((p) => p.valor));
+    return { axisTop: fallback, axisMid: fallback / 2 };
+  }, [metaDiaria, superMetaDiaria, points]);
 
+  return { catKey, setCatKey, active, points, axisTop, axisMid };
+}
+
+export function DailyEvolutionChart(props: DailyEvolutionChartProps) {
+  const { catKey, setCatKey, active, points, axisTop, axisMid } = useDailyEvolutionChart(props);
   const CHART_H = 130;
 
   return (
@@ -144,18 +163,17 @@ export function DailyEvolutionChart({
       </div>
 
       <div style={{ display: 'flex', gap: 6, overflowX: 'auto' }}>
-        {/* Y-axis: 3 marks (0, half, full) against the bars' own scale — this
-            chart is about relative day-to-day shape, not an absolute-precision
-            readout, so 3 marks are enough to anchor the eye. */}
+        {/* Y-axis: 3 marks (0, meta diária, super meta diária) against the
+            active category's own goals — see useDailyEvolutionChart above. */}
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: CHART_H, fontSize: 9, color: '#8b90bf', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0, textAlign: 'right', paddingBottom: 18 }}>
-          <span>{fmtMoney(axisMax)}</span>
-          <span>{fmtMoney(axisMax / 2)}</span>
+          <span>{fmtMoney(axisTop)}</span>
+          <span>{fmtMoney(axisMid)}</span>
           <span>R$ 0,00</span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, flex: 1, minWidth: points.length * 16 }}>
           {points.map((p) => {
-            const pct = Math.min(100, (p.valor / axisMax) * 100);
+            const pct = Math.min(100, (p.valor / axisTop) * 100);
             // SM (Super Meta) and MG (Meta Geral) are mutually exclusive:
             // Super Meta already implies Meta Geral was cleared too, so once
             // both are hit only the higher badge (SM) shows.
@@ -183,14 +201,38 @@ export function DailyEvolutionChart({
                     >
                       {showSuper && (
                         <span
-                          style={{ fontSize: 7, fontWeight: 800, lineHeight: 1, color: '#0b0e1d', background: '#14ff00', borderRadius: 999, padding: '2px 3px' }}
+                          style={{
+                            width: 20,
+                            height: 20,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 9,
+                            fontWeight: 800,
+                            lineHeight: 1,
+                            color: '#0b0e1d',
+                            background: '#14ff00',
+                            borderRadius: '50%',
+                          }}
                         >
                           SM
                         </span>
                       )}
                       {showMeta && (
                         <span
-                          style={{ fontSize: 7, fontWeight: 800, lineHeight: 1, color: '#0b0e1d', background: '#ffb700', borderRadius: 999, padding: '2px 3px' }}
+                          style={{
+                            width: 20,
+                            height: 20,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 9,
+                            fontWeight: 800,
+                            lineHeight: 1,
+                            color: '#0b0e1d',
+                            background: '#ffb700',
+                            borderRadius: '50%',
+                          }}
                         >
                           MG
                         </span>
