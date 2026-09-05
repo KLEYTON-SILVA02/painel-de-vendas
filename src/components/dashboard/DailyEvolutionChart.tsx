@@ -24,12 +24,25 @@ export interface DailyPoint {
   hitSuper: boolean;
 }
 
+/** LEVMEL/CHIP goals and rankings are tracked in units sold, not R$ (same
+ * convention as everywhere else those two categories appear — ranking
+ * podiums, category gauges), so this chart's day totals, axis, and tooltip
+ * all switch to unit counts for them instead of currency. */
+export function isUnitChartCategory(catKey: ChartCategoryKey): boolean {
+  return catKey === 'LEVMEL' || catKey === 'CHIP';
+}
+
+export function formatChartValue(value: number, isUnit: boolean): string {
+  return isUnit ? `${value} un.` : fmtMoney(value);
+}
+
 /** Buckets `salesData` by day for the reference month (monthFirst..monthLast)
  * and one category — MER counts every sale (store total, same convention as
  * everywhere else this category is treated as "all sales"), LEVMEL/CHIP
  * match by product-name keyword (matchesSpecialList, they're not a `grupo`
- * value), the rest by `grupo`. Every calendar day gets a point even with no
- * sales (valor 0), so the x-axis never skips a day. */
+ * value) and sum quantity sold instead of R$, the rest by `grupo`. Every
+ * calendar day gets a point even with no sales (valor 0), so the x-axis
+ * never skips a day. */
 function computeDailyPoints(
   salesData: Sale[],
   catKey: ChartCategoryKey,
@@ -39,14 +52,15 @@ function computeDailyPoints(
   metaDiaria: number,
   superMetaDiaria: number,
 ): DailyPoint[] {
-  const isUnit = catKey === 'LEVMEL' || catKey === 'CHIP';
+  const isUnit = isUnitChartCategory(catKey);
   const list = isUnit ? (catKey === 'LEVMEL' ? specialLists?.levmel : specialLists?.chip) : undefined;
   const byDay = new Map<string, number>();
   salesData.forEach((s) => {
     if (!s.dataISO || s.dataISO < monthFirst || s.dataISO > monthLast) return;
     const matches = catKey === 'MER' ? true : isUnit ? matchesSpecialList(s.produto, list) : s.grupo === catKey;
     if (!matches) return;
-    byDay.set(s.dataISO, (byDay.get(s.dataISO) ?? 0) + (Number(s.valor) || 0));
+    const amount = isUnit ? Number(s.qtd) || 0 : Number(s.valor) || 0;
+    byDay.set(s.dataISO, (byDay.get(s.dataISO) ?? 0) + amount);
   });
 
   const totalDays = Number(monthLast.slice(8, 10));
@@ -100,6 +114,7 @@ interface DailyEvolutionChartProps {
 export function useDailyEvolutionChart({ salesData, collaboratorsData, goals, specialLists, monthFirst, monthLast }: DailyEvolutionChartProps) {
   const [catKey, setCatKey] = useState<ChartCategoryKey>('MER');
   const active = CHART_CATEGORIES.find((c) => c.key === catKey)!;
+  const isUnit = isUnitChartCategory(catKey);
 
   const metaDiaria = useMemo(
     () => getGoal(goals[catKey], 'dia', salesData, collaboratorsData),
@@ -124,11 +139,11 @@ export function useDailyEvolutionChart({ salesData, collaboratorsData, goals, sp
     return { axisTop: fallback, axisMid: fallback / 2 };
   }, [metaDiaria, superMetaDiaria, points]);
 
-  return { catKey, setCatKey, active, points, axisTop, axisMid };
+  return { catKey, setCatKey, active, isUnit, points, axisTop, axisMid };
 }
 
 export function DailyEvolutionChart(props: DailyEvolutionChartProps) {
-  const { catKey, setCatKey, active, points, axisTop, axisMid } = useDailyEvolutionChart(props);
+  const { catKey, setCatKey, active, isUnit, points, axisTop, axisMid } = useDailyEvolutionChart(props);
   const CHART_H = 130;
 
   return (
@@ -166,9 +181,9 @@ export function DailyEvolutionChart(props: DailyEvolutionChartProps) {
         {/* Y-axis: 3 marks (0, meta diária, super meta diária) against the
             active category's own goals — see useDailyEvolutionChart above. */}
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: CHART_H, fontSize: 9, color: '#8b90bf', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0, textAlign: 'right', paddingBottom: 18 }}>
-          <span>{fmtMoney(axisTop)}</span>
-          <span>{fmtMoney(axisMid)}</span>
-          <span>R$ 0,00</span>
+          <span>{formatChartValue(axisTop, isUnit)}</span>
+          <span>{formatChartValue(axisMid, isUnit)}</span>
+          <span>{formatChartValue(0, isUnit)}</span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, flex: 1, minWidth: points.length * 16 }}>
@@ -182,7 +197,7 @@ export function DailyEvolutionChart(props: DailyEvolutionChartProps) {
             return (
               <div key={p.dateISO} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, minWidth: 14 }}>
                 <div
-                  title={`Realizado no dia: ${fmtMoney(p.valor)}`}
+                  title={`Realizado no dia: ${formatChartValue(p.valor, isUnit)}`}
                   style={{ position: 'relative', width: '100%', height: CHART_H, display: 'flex', alignItems: 'flex-end', cursor: 'default' }}
                 >
                   {(showMeta || showSuper) && (

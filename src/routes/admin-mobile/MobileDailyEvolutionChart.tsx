@@ -1,8 +1,7 @@
-import { CHART_CATEGORIES, useDailyEvolutionChart } from '../../components/dashboard/DailyEvolutionChart';
+import { CHART_CATEGORIES, formatChartValue, useDailyEvolutionChart } from '../../components/dashboard/DailyEvolutionChart';
 import type { GoalCategoryKey } from '../../lib/business/classification';
 import type { SpecialListItem } from '../../lib/business/summary';
 import type { Collaborator, Goal, Sale } from '../../lib/business/types';
-import { fmtMoney } from '../../lib/format';
 
 // Mobile take on the desktop DailyEvolutionChart: same data/axis (see
 // useDailyEvolutionChart), but bars run horizontally, one per row, in a
@@ -24,7 +23,7 @@ export function MobileDailyEvolutionChart({
   monthFirst: string;
   monthLast: string;
 }) {
-  const { catKey, setCatKey, active, points, axisTop, axisMid } = useDailyEvolutionChart({
+  const { catKey, setCatKey, active, isUnit, points, axisTop, axisMid } = useDailyEvolutionChart({
     salesData,
     collaboratorsData,
     goals,
@@ -85,9 +84,9 @@ export function MobileDailyEvolutionChart({
           paddingLeft: 30,
         }}
       >
-        <span>R$ 0,00</span>
-        <span>{fmtMoney(axisMid)}</span>
-        <span>{fmtMoney(axisTop)}</span>
+        <span>{formatChartValue(0, isUnit)}</span>
+        <span>{formatChartValue(axisMid, isUnit)}</span>
+        <span>{formatChartValue(axisTop, isUnit)}</span>
       </div>
 
       <div>
@@ -116,7 +115,7 @@ export function MobileDailyEvolutionChart({
               >
                 {p.day}
               </div>
-              <div title={`Realizado no dia: ${fmtMoney(p.valor)}`} style={{ position: 'relative', flex: 1, height: 16 }}>
+              <div title={`Realizado no dia: ${formatChartValue(p.valor, isUnit)}`} style={{ position: 'relative', flex: 1, height: 16 }}>
                 <div style={{ width: '100%', height: '100%', borderRadius: 999, background: '#080818', border: '1px solid #212948', overflow: 'hidden' }}>
                   <div style={{ height: '100%', width: `${pct}%`, borderRadius: 999, background: 'linear-gradient(90deg, #ff3df0, #ff8bf5)' }} />
                 </div>
