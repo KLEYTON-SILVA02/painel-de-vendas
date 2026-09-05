@@ -277,8 +277,13 @@ export function ListaVendasPage() {
                   {month.days.map((day) => {
                     const dayKey = day.dayISO;
                     const dayOpen = openDays.has(dayKey);
-                    const page = dayPage[dayKey] ?? 0;
                     const totalPages = Math.ceil(day.sales.length / PAGE_SIZE);
+                    // Clamped, not just `?? 0` — a stored page index can outlive
+                    // the row count it was set for (switching tabs, a
+                    // reclassify shrinking this day), which would otherwise
+                    // slice past the end and show an empty page instead of the
+                    // last real one.
+                    const page = Math.min(dayPage[dayKey] ?? 0, Math.max(0, totalPages - 1));
                     const pageRows = day.sales.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
                     return (
                       <div key={dayKey} className="border-b border-slate-800/60 last:border-b-0">
