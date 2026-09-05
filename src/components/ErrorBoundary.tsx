@@ -31,6 +31,20 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
     return { error };
   }
 
+  // Mounting here only happens once per real page load — i.e. once the
+  // browser has successfully fetched and run the CURRENT (non-stale) entry
+  // bundle. That proves any earlier stale-chunk incident is behind us, so
+  // the one-shot auto-reload budget below is reset for whatever the *next*
+  // deploy brings, instead of never firing again for the rest of this tab's
+  // lifetime (sessionStorage persists across reloads until the tab closes).
+  componentDidMount() {
+    try {
+      sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+    } catch {
+      // sessionStorage unavailable (private mode) — nothing to reset.
+    }
+  }
+
   componentDidCatch(error: Error) {
     if (isChunkLoadError(error)) {
       let alreadyTried = false;
