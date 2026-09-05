@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Suspense, lazy, useState } from 'react';
 import { Link, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { ChampionHeaderButton } from '../components/dashboard/ChampionOfDay';
 import { ClosingClock } from '../components/ClosingClock';
 import { ConquistaCelebrationHost } from '../components/ConquistaCelebration';
 import { HamburgerIcon, MedalIcon } from '../components/icons/NavIcons';
@@ -149,6 +150,7 @@ export function AppShell() {
                 )}
               </div>
               <div className="flex items-center gap-2 justify-self-end">
+                <ChampionHeaderButton />
                 <Link
                   to="/conquistas"
                   title="Galeria de Conquistas"
