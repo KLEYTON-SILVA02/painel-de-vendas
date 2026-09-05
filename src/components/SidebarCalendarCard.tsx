@@ -1,12 +1,13 @@
 import type { CSSProperties } from 'react';
 import { todayISO } from '../lib/dateRange';
-import { monthName } from '../lib/format';
 import { useDateRange } from '../routes/DateRangeContext';
 
 // Ported 1:1 from legacy/index-original.html — renderCalendarCard(). Distinct
 // from MetricsFilterBar: this is the Início sidebar's own "Período rápido"
-// widget (month-nav arrows + a conventional 7-column month grid), not the
-// unified metrics-filter-bar used on Ranking/Category screens.
+// widget (a conventional 7-column month grid), not the unified
+// metrics-filter-bar used on Ranking/Category screens. The month-nav
+// arrows ("‹ mês/ano ›") this used to have were removed in favor of giving
+// the 6-per-row month grid the extra space.
 
 const MESES_ABREV = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 const DOW_ABBR = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
@@ -20,7 +21,6 @@ export function SidebarCalendarCard() {
     dashTo,
     modoGeral,
     quickMonth,
-    navigateMonth,
     pickDay,
     toggleBuscaPeriodo,
     setModoGeral,
@@ -44,20 +44,23 @@ export function SidebarCalendarCard() {
       <div style={{ fontSize: 10, color: '#8b90bf', textTransform: 'uppercase', letterSpacing: '.06em', fontWeight: 700, marginBottom: 6 }}>
         📅 Período rápido {refYear}
       </div>
-      <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 2, paddingBottom: 6, marginBottom: 8, borderBottom: '1px solid #212948' }}>
+      {/* 2 rows of 6 months instead of all 12 squeezed onto one line — the
+          "‹ mês/ano ›" nav that used to sit below this (navigateMonth) is
+          gone, so the Busca período/Modo Geral row right after now moves up
+          into that freed space naturally, no separate repositioning needed. */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 3, paddingBottom: 6, marginBottom: 8, borderBottom: '1px solid #212948' }}>
         {MESES_ABREV.map((lbl, i) => (
           <button
             key={i}
             onClick={() => quickMonth(i)}
             style={{
-              flex: '1 1 0',
               minWidth: 0,
               background: i === refMonth ? NEON_CYAN : 'transparent',
               color: i === refMonth ? '#02181c' : '#8b90bf',
               border: `1px solid ${NEON_CYAN}`,
               borderRadius: 5,
-              padding: '3px 1px',
-              fontSize: 7,
+              padding: '4px 1px',
+              fontSize: 9,
               fontWeight: 700,
               cursor: 'pointer',
               textAlign: 'center',
@@ -66,24 +69,6 @@ export function SidebarCalendarCard() {
             {lbl}
           </button>
         ))}
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 10, color: '#a82bff', fontSize: 13, fontWeight: 700, letterSpacing: '.04em' }}>
-        <button
-          onClick={() => navigateMonth(-1)}
-          style={{ background: 'transparent', border: '1px solid #212948', color: '#8b90bf', width: 24, height: 24, borderRadius: 8, cursor: 'pointer' }}
-        >
-          ‹
-        </button>
-        <span>
-          {monthName(refMonth)} / {refYear}
-        </span>
-        <button
-          onClick={() => navigateMonth(1)}
-          style={{ background: 'transparent', border: '1px solid #212948', color: '#8b90bf', width: 24, height: 24, borderRadius: 8, cursor: 'pointer' }}
-        >
-          ›
-        </button>
       </div>
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>

@@ -223,6 +223,7 @@ export type Database = {
       collaborators: {
         Row: {
           apelido: string | null
+          celular: string | null
           created_at: string
           data_nascimento: string | null
           foto_conquista_url: string | null
@@ -236,6 +237,7 @@ export type Database = {
         }
         Insert: {
           apelido?: string | null
+          celular?: string | null
           created_at?: string
           data_nascimento?: string | null
           foto_conquista_url?: string | null
@@ -249,6 +251,7 @@ export type Database = {
         }
         Update: {
           apelido?: string | null
+          celular?: string | null
           created_at?: string
           data_nascimento?: string | null
           foto_conquista_url?: string | null

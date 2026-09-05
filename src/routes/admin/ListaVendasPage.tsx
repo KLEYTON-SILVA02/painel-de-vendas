@@ -6,7 +6,7 @@ import type { CategoryKey } from '../../lib/business/classification';
 import type { Collaborator, Sale } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney, monthName } from '../../lib/format';
 import { useReclassifyProdutos } from '../../lib/mutations';
-import { useCatalog, useCollaborators, useSales, useSalesMonthTotals } from '../../lib/queries';
+import { useCatalog, useCollaborators, useSalesDetailList, useSalesMonthTotals } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 
 const TIPO_LABEL: Record<string, string> = {
@@ -72,7 +72,7 @@ function groupByMonthAndDay(sales: Sale[]): MonthGroup[] {
 export function ListaVendasPage() {
   const { profile } = useAuth();
   const { salesListEnabled, toggleSalesListEnabled } = useDateRange();
-  const { data: sales } = useSales(salesListEnabled);
+  const { data: sales, loadedCount } = useSalesDetailList(salesListEnabled);
   const { data: monthTotals } = useSalesMonthTotals();
   const { data: collaborators } = useCollaborators();
   const { data: catalog } = useCatalog();
@@ -103,8 +103,32 @@ export function ListaVendasPage() {
   const months = useMemo(() => groupByMonthAndDay(salesForTab), [salesForTab]);
 
   if (!collaborators || !catalog) return <PageLoading />;
-  if (salesListEnabled && !sales) return <PageLoading />;
   if (!salesListEnabled && !monthTotals) return <PageLoading />;
+  // Own loading state (not the generic PageLoading) while the detailed list
+  // is being fetched on demand — `loadedCount` ticks up page by page
+  // (useSalesDetailList) so the ADM sees the list is actively loading
+  // rather than the screen looking frozen on a full-history fetch.
+  if (salesListEnabled && !sales) {
+    return (
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 flex flex-col items-center gap-3">
+        <div style={{ width: '100%', maxWidth: 280, height: 8, borderRadius: 8, background: '#080818', border: '1px solid #212948', overflow: 'hidden' }}>
+          <div
+            style={{
+              height: '100%',
+              width: '40%',
+              borderRadius: 8,
+              background: 'linear-gradient(90deg, #00f0ff, #a82bff)',
+              animation: 'lista-vendas-load-pulse 1.1s ease-in-out infinite',
+            }}
+          />
+        </div>
+        <p className="text-xs text-slate-400">
+          Carregando lista de vendas detalhada… {loadedCount > 0 ? `${loadedCount.toLocaleString('pt-BR')} registro(s)` : ''}
+        </p>
+        <style>{`@keyframes lista-vendas-load-pulse { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }`}</style>
+      </div>
+    );
+  }
 
   function toggleMonth(key: string) {
     setOpenMonths((prev) => {

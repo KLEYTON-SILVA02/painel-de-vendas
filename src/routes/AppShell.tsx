@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Suspense, lazy, useState } from 'react';
 import { Link, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { BackButton } from '../components/BackButton';
 import { ChampionHeaderButton } from '../components/dashboard/ChampionOfDay';
 import { ClosingClock } from '../components/ClosingClock';
 import { ConquistaCelebrationHost } from '../components/ConquistaCelebration';
@@ -137,6 +138,13 @@ export function AppShell() {
                 <button className="sb-hamburger" onClick={() => setMobileOpen(true)} aria-label="Abrir menu">
                   <HamburgerIcon />
                 </button>
+                {/* Only the ADM maintenance screens (Colaboradores,
+                    Produtos, Importar, etc.) are reached exclusively by
+                    drilling into the /admin landing grid, with no sidebar
+                    link of their own — that's the "secondary screen" this
+                    back button targets. Every other route already has a
+                    sidebar link to get back to it directly. */}
+                {location.pathname.startsWith('/admin/') && <BackButton />}
                 <div className="min-w-0">
                   <h1 className="text-lg font-semibold truncate">{storeQuery.data?.nome_loja || 'Painel de Gestão de Vendas'}</h1>
                   <p className="text-xs text-slate-400">Administrador</p>

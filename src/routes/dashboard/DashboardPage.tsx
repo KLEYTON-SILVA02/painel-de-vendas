@@ -2,6 +2,7 @@ import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { DailyEvolutionChart } from '../../components/dashboard/DailyEvolutionChart';
+import { SemicircleGauge } from '../../components/SemicircleGauge';
 import { SidebarCalendarCard } from '../../components/SidebarCalendarCard';
 import { GenerateImageScopeModal } from '../../components/ranking/GenerateImageScopeModal';
 import { MultiRankingImageModal } from '../../components/ranking/MultiRankingImageModal';
@@ -150,19 +151,8 @@ function CategoryGauge({ label, valor, goal, color }: { label: string; valor: nu
   const pct = goal > 0 ? Math.min(100, (valor / goal) * 100) : 0;
   return (
     <div style={{ textAlign: 'center', containerType: 'inline-size' } as CSSProperties}>
-      <div style={{ width: '100%', maxWidth: 88, aspectRatio: '2/1', overflow: 'hidden', position: 'relative', margin: '0 auto' }}>
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            width: '100%',
-            aspectRatio: '1/1',
-            borderRadius: '50%',
-            background: `conic-gradient(${color} ${pct}%, rgba(255,255,255,.07) 0)`,
-          }}
-        >
-          <div style={{ position: 'absolute', inset: '12%', borderRadius: '50%', background: '#0b0e1d' }} />
-        </div>
+      <div style={{ width: '100%', maxWidth: 88, margin: '0 auto' }}>
+        <SemicircleGauge pct={pct} color={color} trackColor="rgba(255,255,255,.07)" strokeWidth={16} />
       </div>
       <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'clamp(11px, 15cqi, 16px)', fontWeight: 700, marginTop: 4, color }}>
         {pct.toFixed(0)}%
@@ -588,7 +578,8 @@ export function DashboardPage() {
         <div className="lg:col-start-2 lg:row-start-1 grid grid-cols-2 gap-2">
           <StatCard label={metaLabel} value={fmtMoney(metaExibida)} color="#00f0ff" badge={atingiuMeta ? 'MG ✓' : undefined} />
           <StatCard label={faltaLabel} value={fmtMoney(faltaValor)} color="#a82bff" />
-          <StatCard label="Saldo" value={`${saldo >= 0 ? '' : '-'}${fmtMoney(Math.abs(saldo))}`} color={saldo >= 0 ? '#ffb700' : '#ff3df0'} />
+          {/* Sign hidden by design (visual only) — `saldo` itself stays negative for every calculation elsewhere. */}
+          <StatCard label="Saldo" value={fmtMoney(Math.abs(saldo))} color={saldo >= 0 ? '#ffb700' : '#ff3df0'} />
           <StatCard label="Itens Vendidos" value={`${totalItens} un.`} color="#14ff00" />
         </div>
 

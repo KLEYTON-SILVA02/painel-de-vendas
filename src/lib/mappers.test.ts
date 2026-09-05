@@ -30,6 +30,7 @@ function collaborator(overrides: Partial<Tables<'collaborators'>>): Tables<'coll
     matricula: '70209751',
     nome: 'ANGELICA CRHYSTINA DE FATIMA M',
     apelido: 'ANGÉLICA',
+    celular: null,
     foto_url: null,
     foto_conquista_url: null,
     setor: 'Balcão',

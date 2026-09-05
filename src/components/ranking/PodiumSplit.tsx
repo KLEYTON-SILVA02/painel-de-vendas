@@ -80,7 +80,12 @@ export const DEFAULT_PODIUM_SPOTS: PodiumSpots = {
 };
 
 const MAX_LISTED = 15;
-const COL_SIZE = 6;
+const PILL_HEIGHT = 38;
+
+interface PillSlot<T> {
+  row: T | null;
+  pos: number;
+}
 
 export function PodiumSplit<T extends StaircaseRow>({
   ranking,
@@ -105,8 +110,18 @@ export function PodiumSplit<T extends StaircaseRow>({
   const effectiveSpots = spots || DEFAULT_PODIUM_SPOTS;
   const top3 = ranking.slice(0, 3);
   const rest = ranking.slice(3, MAX_LISTED);
-  const col1 = rest.slice(0, COL_SIZE);
-  const col2 = rest.slice(COL_SIZE, COL_SIZE * 2);
+  // Split into two even columns instead of always filling col1 first — that
+  // used to leave col2 several bars short (e.g. 9 left over → 6/3) whenever
+  // the total wasn't a multiple of 2. Halving first means the two columns
+  // never differ by more than one bar, and the shorter one gets a single
+  // data-less placeholder slot (row: null) to match — same structural
+  // height, not counted as a position/sale/collaborator, just keeps the
+  // two columns' bars aligned row-for-row.
+  const col1Count = Math.ceil(rest.length / 2);
+  const col1: PillSlot<T>[] = rest.slice(0, col1Count).map((row, i) => ({ row, pos: 4 + i }));
+  const col2: PillSlot<T>[] = rest.slice(col1Count).map((row, i) => ({ row, pos: 4 + col1Count + i }));
+  while (col1.length < col2.length) col1.push({ row: null, pos: -1 });
+  while (col2.length < col1.length) col2.push({ row: null, pos: -1 });
 
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'stretch' }}>
@@ -133,8 +148,8 @@ export function PodiumSplit<T extends StaircaseRow>({
 
       {rest.length > 0 && (
         <div style={{ flex: '2 1 380px', display: 'flex', gap: 16, minWidth: 0 }}>
-          <PillColumn rows={col1} startPos={4} getValue={getValue} formatValue={formatValue} />
-          {col2.length > 0 && <PillColumn rows={col2} startPos={4 + COL_SIZE} getValue={getValue} formatValue={formatValue} />}
+          <PillColumn slots={col1} getValue={getValue} formatValue={formatValue} />
+          {col2.length > 0 && <PillColumn slots={col2} getValue={getValue} formatValue={formatValue} />}
         </div>
       )}
     </div>
@@ -225,98 +240,71 @@ function PodiumText<T extends StaircaseRow>({
   );
 }
 
-// Pills stretch to fill whatever vertical space the column has (matching the
-// podium's height) instead of stacking at a fixed size and leaving blank
-// space below when few collaborators are listed: each row is `flex:1` with a
-// generous max-height, and its own internal sizes scale with its rendered
-// height (`containerType:'size'` + `cqh` units, clamped so a very short list
-// doesn't blow up into oversized pills) — a short list gets fewer, taller
-// pills; a full list looks the same as before.
+// Pills keep their traditional fixed height (PILL_HEIGHT) regardless of how
+// many rows the column has — they no longer stretch to fill the podium's
+// height. The leftover vertical space is instead distributed as spacing
+// between pills (justifyContent: 'space-between'), so a short list still
+// uses the full column height without inflating each bar. `slots` already
+// pads the shorter of the two columns with `row: null` placeholders (see
+// the split above) so both columns render the same number of bars — a
+// placeholder keeps the same PILL_HEIGHT box but renders no background, no
+// text, no data, and isn't a real ranking position.
 function PillColumn<T extends StaircaseRow>({
-  rows,
-  startPos,
+  slots,
   getValue,
   formatValue,
 }: {
-  rows: T[];
-  startPos: number;
+  slots: PillSlot<T>[];
   getValue: (r: T) => number;
   formatValue: (v: number) => string;
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: '1 1 0', minWidth: 0 }}>
-      {rows.map((r, i) => (
-        <div
-          key={r.matricula}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'clamp(6px, 14cqh, 12px)',
-            flex: '1 1 0',
-            minHeight: 38,
-            maxHeight: 96,
-            boxSizing: 'border-box',
-            padding: '0 clamp(10px, 18cqh, 16px)',
-            borderRadius: 9999,
-            background: 'linear-gradient(90deg,#1D3557 0%,#2A4D80 100%)',
-            containerType: 'size',
-          }}
-        >
-          <span
+    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: '1 1 0', minWidth: 0 }}>
+      {slots.map((slot, i) =>
+        slot.row === null ? (
+          <div key={`placeholder-${i}`} aria-hidden="true" style={{ height: PILL_HEIGHT, flexShrink: 0 }} />
+        ) : (
+          <div
+            key={slot.row.matricula}
             style={{
-              fontFamily: "'Orbitron', sans-serif",
-              fontWeight: 800,
-              fontSize: 'clamp(12px, 34cqh, 20px)',
-              color: '#fff',
-              width: 'clamp(18px, 40cqh, 26px)',
-              textAlign: 'center',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              height: PILL_HEIGHT,
               flexShrink: 0,
+              boxSizing: 'border-box',
+              padding: '0 12px',
+              borderRadius: 9999,
+              background: 'linear-gradient(90deg,#1D3557 0%,#2A4D80 100%)',
             }}
           >
-            {startPos + i}
-          </span>
-          <span
-            style={{
-              width: 'clamp(22px, 60cqh, 36px)',
-              aspectRatio: '1/1',
-              borderRadius: '50%',
-              border: '2px solid #8A2BE2',
-              background: '#0b0e1d',
-              overflow: 'hidden',
-              flexShrink: 0,
-            }}
-          >
-            {r.foto && <img src={r.foto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-          </span>
-          <span
-            style={{
-              flex: 1,
-              minWidth: 0,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              textTransform: 'uppercase',
-              fontWeight: 700,
-              fontSize: 'clamp(11px, 28cqh, 15px)',
-              color: '#fff',
-            }}
-          >
-            {r.apelido || r.nome}
-          </span>
-          <span
-            style={{
-              marginLeft: 'auto',
-              flexShrink: 0,
-              fontFamily: "'JetBrains Mono', monospace",
-              fontWeight: 800,
-              fontSize: 'clamp(11px, 28cqh, 15px)',
-              color: '#64B5F6',
-            }}
-          >
-            {formatValue(getValue(r))}
-          </span>
-        </div>
-      ))}
+            <span style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: 13, color: '#fff', width: 20, textAlign: 'center', flexShrink: 0 }}>
+              {slot.pos}
+            </span>
+            <span style={{ width: 26, height: 26, borderRadius: '50%', border: '2px solid #8A2BE2', background: '#0b0e1d', overflow: 'hidden', flexShrink: 0 }}>
+              {slot.row.foto && <img src={slot.row.foto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+            </span>
+            <span
+              style={{
+                flex: 1,
+                minWidth: 0,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                textTransform: 'uppercase',
+                fontWeight: 700,
+                fontSize: 12,
+                color: '#fff',
+              }}
+            >
+              {slot.row.apelido || slot.row.nome}
+            </span>
+            <span style={{ marginLeft: 'auto', flexShrink: 0, fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, fontSize: 12, color: '#64B5F6' }}>
+              {formatValue(getValue(slot.row))}
+            </span>
+          </div>
+        ),
+      )}
     </div>
   );
 }

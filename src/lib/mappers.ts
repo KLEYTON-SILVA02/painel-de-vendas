@@ -11,6 +11,7 @@ export function mapCollaborator(row: Tables<'collaborators'>): Collaborator {
     matricula: normalizeMatricula(row.matricula),
     nome: row.nome,
     apelido: row.apelido,
+    celular: row.celular,
     foto: row.foto_url,
     fotoConquista: row.foto_conquista_url,
     setor: row.setor,

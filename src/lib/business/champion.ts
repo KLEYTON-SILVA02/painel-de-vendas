@@ -4,6 +4,7 @@
 // day/month window used to pick the champion — mirrors exactly what the
 // Galeria de Conquistas screen would show as an achiever for that period.
 import { computeConquistas, type ConquistaCategoria } from './conquistas';
+import { normalizeMatricula } from './parsing';
 import type { SpecialListItem } from './summary';
 import type { Collaborator, Sale } from './types';
 
@@ -34,8 +35,9 @@ export function computeChampionStars(
   from: string,
   to: string,
 ): ChampionStar[] {
+  const target = normalizeMatricula(matricula);
   return CHAMPION_STAR_CATEGORIES.map(({ key, label }) => {
     const achievers = computeConquistas(sales, collaborators, from, to, key, specialLists);
-    return { key, label, achieved: achievers.some((r) => r.matricula === matricula) };
+    return { key, label, achieved: achievers.some((r) => normalizeMatricula(r.matricula) === target) };
   });
 }

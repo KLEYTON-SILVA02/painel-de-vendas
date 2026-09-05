@@ -17,6 +17,10 @@ export interface Collaborator {
   matricula: string;
   nome: string;
   apelido: string | null;
+  /** Optional for the same reason as `fotoConquista`/`dataNascimento` below —
+   * most business-logic tests don't exercise it, and legacy collaborator
+   * rows created before this field existed read back as null. */
+  celular?: string | null;
   foto: string | null;
   /** Separate photo cropped specifically for Galeria de Conquistas cards —
    * falls back to `foto` when unset (see conquistaImage.ts). Optional so

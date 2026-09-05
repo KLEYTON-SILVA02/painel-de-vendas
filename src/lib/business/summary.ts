@@ -1,6 +1,7 @@
 // Ported 1:1 from legacy/index-original.html (computeSummary / catTotals).
 import { CAT_KEYS, type CategoryKey } from './classification';
 import { firstName, normalize } from './normalize';
+import { normalizeMatricula } from './parsing';
 import type { Collaborator, Sale, SummaryRow } from './types';
 
 export interface SpecialListItem {
@@ -42,10 +43,16 @@ export function computeSummary(
   catFilter?: CategoryKey | 'ALL' | 'LEVMEL' | 'CHIP' | null,
   specialLists?: { levmel: SpecialListItem[]; chip: SpecialListItem[] },
 ): SummaryRow[] {
+  // Keyed by normalized matricula (leading zeros stripped) rather than the
+  // raw stored value — collaborators and sales are both normalized before
+  // insert (see mutations.ts / ImportarPage.tsx), but normalizing again
+  // here too means a sale ↔ collaborator link never silently breaks over a
+  // formatting difference in older rows written before that was in place.
   const map: Record<string, SummaryRow> = {};
-  const registeredMatriculas = new Set(collaborators.map((c) => c.matricula));
+  const registeredMatriculas = new Set(collaborators.map((c) => normalizeMatricula(c.matricula)));
   collaborators.forEach((c) => {
-    map[c.matricula] = {
+    const key = normalizeMatricula(c.matricula);
+    map[key] = {
       matricula: c.matricula,
       nome: c.nome,
       apelido: c.apelido || firstName(c.nome),
@@ -67,12 +74,13 @@ export function computeSummary(
       return;
     }
 
-    if (!map[s.matricula]) {
+    const key = normalizeMatricula(s.matricula);
+    if (!map[key]) {
       // Placeholder — the sale's own vendedor text is often just an import
       // artifact ("VENDEDOR", blank, a store-code stand-in), not someone's
       // real name, so it's replaced with a stable "Vend. N" label below
       // rather than shown as-is.
-      map[s.matricula] = {
+      map[key] = {
         matricula: s.matricula,
         nome: s.matricula,
         apelido: s.matricula,
@@ -83,7 +91,7 @@ export function computeSummary(
         itens: 0,
       };
     }
-    const row = map[s.matricula];
+    const row = map[key];
     const g = s.grupo;
     const qtdv = Number(s.qtd) || 0;
     const valor = Number(s.valor) || 0;
@@ -125,9 +133,10 @@ export function catTotals(sales: Sale[], fromDate: string | null, toDate: string
 
 /** Last sale date for a matricula — used to flag 60+ days of inactivity. */
 export function lastSaleDateFor(sales: Sale[], matricula: string): string | null {
+  const target = normalizeMatricula(matricula);
   let last: string | null = null;
   sales.forEach((s) => {
-    if (s.matricula === matricula && s.dataISO) {
+    if (normalizeMatricula(s.matricula) === target && s.dataISO) {
       if (!last || s.dataISO > last) last = s.dataISO;
     }
   });

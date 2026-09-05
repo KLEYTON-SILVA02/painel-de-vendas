@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react';
-import { NavLink, Route, Routes } from 'react-router-dom';
+import { NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
+import { BackButton } from '../../components/BackButton';
 import { ConquistaCelebrationHost } from '../../components/ConquistaCelebration';
 import { FunctionIcon } from '../../components/icons/FunctionIcon';
 import {
@@ -83,6 +84,7 @@ export function MobileAdminShell() {
   const { data: store } = useStore();
   const { data: storeSettings } = useStoreSettings();
   const { data: categoryTypes } = useCategoryTypes();
+  const location = useLocation();
   const hasBio = (categoryTypes ?? []).some((c) => c.chave === 'biosintetica');
   const categories = hasBio ? [...CATEGORIES_BEFORE_BIO, BIO_CATEGORY, ...CATEGORIES_AFTER_BIO] : [...CATEGORIES_BEFORE_BIO, ...CATEGORIES_AFTER_BIO];
 
@@ -90,8 +92,14 @@ export function MobileAdminShell() {
     <div className="mv2" style={{ minHeight: '100vh' }}>
       <ConquistaCelebrationHost />
       <header className="mv2-topbar">
-        <div className="mv2-store-info" title={store?.nome_loja || undefined}>
-          🛍️ {store?.nome_loja || 'Gestão de Vendas'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          {/* Same reasoning as AppShell.tsx's desktop back button: only the
+              /admin/* maintenance screens are reached exclusively by
+              drilling into the ADM grid, with no menu link of their own. */}
+          {location.pathname.startsWith('/admin/') && <BackButton style={{ borderColor: 'var(--mv2-ciano-claro)', color: 'var(--mv2-ciano-claro)' }} />}
+          <div className="mv2-store-info" title={store?.nome_loja || undefined}>
+            🛍️ {store?.nome_loja || 'Gestão de Vendas'}
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {storeSettings && (
@@ -100,7 +108,7 @@ export function MobileAdminShell() {
           <button className="mv2-icon-btn" title="Atualizar" onClick={() => window.location.reload()}>
             <RefreshIcon width={14} height={14} />
           </button>
-          <button className="mv2-icon-btn" title="Sair" onClick={() => signOut()}>
+          <button className="mv2-icon-btn" title="Sair" onClick={() => signOut()} style={{ fontSize: 10 }}>
             ⏻
           </button>
         </div>

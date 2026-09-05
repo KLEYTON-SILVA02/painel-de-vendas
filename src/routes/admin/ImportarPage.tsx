@@ -5,6 +5,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { Spinner } from '../../components/Spinner';
 import { classifyProductTier } from '../../lib/business/classification';
 import { autoMapColumns, detectHeaderRow, type ColumnMap, type ImportField } from '../../lib/business/importMapping';
+import { firstName, normalize } from '../../lib/business/normalize';
 import { dateFromCell, idFromCell, normalizeMatricula, parseNumeroBR } from '../../lib/business/parsing';
 import { buildClassificationInputs } from '../../lib/mappers';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
@@ -37,6 +38,28 @@ const FIELDS: ImportField[] = ['data', 'matricula', 'vendedor', 'codigo', 'produ
 const FOOTER_ROW_PATTERN = /^(sub)?tota(l|is)\b/i;
 const NEON_CYAN = '#00f0ff';
 const NEON_PURPLE = '#a82bff';
+
+// Second-pass validation (matrícula stays the primary identifier — this
+// never reassigns a sale, it only flags it): when a row's normalized
+// matrícula matched a registered collaborator, check whether the
+// spreadsheet's own "vendedor" name text is at least plausibly the same
+// person. The vendedor column is frequently unreliable on its own (an
+// import artifact, blank, or a store-code stand-in — see computeSummary's
+// comment on this), so this only flags an actual divergence: a non-empty,
+// letter-containing name whose first name doesn't match the collaborator's
+// registered first name/apelido in either direction. Never flags a blank
+// or code-like cell — that's just "no name to cross-check", not a mismatch.
+function sellerNameDiverges(vendedorRaw: string, collaborator: { nome: string; apelido: string | null }): boolean {
+  const v = normalize(vendedorRaw);
+  if (!v || v.length < 3 || !/[a-z]/.test(v)) return false;
+  const vFirst = firstName(v);
+  const nomeNorm = normalize(collaborator.nome);
+  const nomeFirst = firstName(nomeNorm);
+  const apelidoFirst = collaborator.apelido ? firstName(normalize(collaborator.apelido)) : '';
+  if (vFirst === nomeFirst || (apelidoFirst && vFirst === apelidoFirst)) return false;
+  if (nomeNorm.includes(vFirst) || v.includes(nomeFirst)) return false;
+  return true;
+}
 
 interface ParsedSheet {
   name: string;
@@ -81,6 +104,7 @@ export function ImportarPage() {
         duplicateCount: number;
         footerRowSkipped: number;
         unmatchedSeller: number;
+        nameMismatch: number;
         unclassified: number;
         replacedDates: string[];
         rejected: RejectedRow[];
@@ -211,7 +235,10 @@ export function ImportarPage() {
     const { data: freshExistingSales } = await refetchSales();
     const existingSalesNow = freshExistingSales ?? existingSales ?? [];
 
-    const knownMatriculas = new Set((collaborators ?? []).map((c) => c.matricula));
+    // Matrícula is the primary identifier — normalized on both sides (see
+    // normalizeMatricula) so a collaborator record typed with leading
+    // zeros still matches a spreadsheet that isn't, or vice versa.
+    const collaboratorByMatricula = new Map((collaborators ?? []).map((c) => [normalizeMatricula(c.matricula), c]));
 
     // First pass: parse every row (same field extraction as before) into a
     // flat candidate list, without yet deciding what to insert — the
@@ -235,6 +262,7 @@ export function ImportarPage() {
     let noProduto = 0;
     let footerRowSkipped = 0;
     let unmatchedSeller = 0;
+    let nameMismatch = 0;
     let unclassified = 0;
 
     for (const sheet of sheets) {
@@ -254,7 +282,17 @@ export function ImportarPage() {
         if (!dataISO) invalidDate++;
         const codigo = sheet.map.codigo >= 0 ? idFromCell(rr[sheet.map.codigo], r[sheet.map.codigo]) : '';
         const matricula = sheet.map.matricula >= 0 ? normalizeMatricula(idFromCell(rr[sheet.map.matricula], r[sheet.map.matricula])) : '';
-        if (matricula && knownMatriculas.size > 0 && !knownMatriculas.has(matricula)) unmatchedSeller++;
+        const vendedorRaw = sheet.map.vendedor >= 0 ? String(r[sheet.map.vendedor] ?? '').trim() : '';
+        // First verification: matrícula → colaborador (primary identifier).
+        // Second verification: does the sheet's own name text for this row
+        // plausibly agree with that collaborator's registered name? A
+        // divergence is only ever flagged for review — matrícula still
+        // decides who the sale belongs to, this never silently reassigns it.
+        if (matricula && collaboratorByMatricula.size > 0) {
+          const matched = collaboratorByMatricula.get(matricula);
+          if (!matched) unmatchedSeller++;
+          else if (sellerNameDiverges(vendedorRaw, matched)) nameMismatch++;
+        }
         const qtd = sheet.map.qtd >= 0 ? parseNumeroBR(r[sheet.map.qtd]) : 0;
         const valor = sheet.map.valor >= 0 ? parseNumeroBR(r[sheet.map.valor]) : 0;
 
@@ -266,7 +304,7 @@ export function ImportarPage() {
           data_raw: dataStr,
           data_iso: dataISO,
           matricula,
-          vendedor: sheet.map.vendedor >= 0 ? String(r[sheet.map.vendedor] ?? '').trim() : '',
+          vendedor: vendedorRaw,
           produto,
           codigo: codigo || null,
           qtd,
@@ -370,6 +408,7 @@ export function ImportarPage() {
         duplicateCount,
         footerRowSkipped,
         unmatchedSeller,
+        nameMismatch,
         unclassified,
         replacedDates: replaceDates,
         rejected,
@@ -601,6 +640,7 @@ export function ImportarPage() {
                 {confirmResult.noProduto ? ` · ${confirmResult.noProduto} sem produto` : ''}
                 {confirmResult.footerRowSkipped ? ` · ${confirmResult.footerRowSkipped} linha(s) de total ignorada(s)` : ''}
                 {confirmResult.unmatchedSeller ? ` · ${confirmResult.unmatchedSeller} de vendedor não cadastrado` : ''}
+                {confirmResult.nameMismatch ? ` · ${confirmResult.nameMismatch} com nome divergente da matrícula` : ''}
                 {confirmResult.unclassified ? ` · ${confirmResult.unclassified} de produto não classificado` : ''}
               </p>
               {confirmResult.replacedDates.length > 0 && (
@@ -620,6 +660,13 @@ export function ImportarPage() {
                 <p className="text-xs text-slate-500 mb-3">
                   {confirmResult.unmatchedSeller} venda(s) têm matrícula que não corresponde a nenhum colaborador cadastrado —
                   foram importadas normalmente, mas vale cadastrar esses vendedores em <b>ADM → Colaboradores</b>.
+                </p>
+              )}
+              {confirmResult.nameMismatch > 0 && (
+                <p className="text-xs text-amber-400 mb-3">
+                  {confirmResult.nameMismatch} venda(s) foram vinculadas por matrícula a um colaborador cujo nome cadastrado não
+                  bate com o nome da planilha para aquela linha — foram importadas normalmente (a matrícula continua sendo o
+                  identificador principal), mas vale conferir se não houve troca de matrícula entre colaboradores.
                 </p>
               )}
               {confirmResult.rejected.length > 0 && (
