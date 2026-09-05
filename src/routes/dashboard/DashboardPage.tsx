@@ -1,6 +1,8 @@
-import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
+import { DailyEvolutionChart } from '../../components/dashboard/DailyEvolutionChart';
+import { TrophyIcon } from '../../components/icons/NavIcons';
 import { SidebarCalendarCard } from '../../components/SidebarCalendarCard';
 import { GenerateImageScopeModal } from '../../components/ranking/GenerateImageScopeModal';
 import { MultiRankingImageModal } from '../../components/ranking/MultiRankingImageModal';
@@ -226,6 +228,8 @@ export function DashboardPage() {
   const [generatingProgress, setGeneratingProgress] = useState({ done: 0, total: 0 });
   const [rankingImageModal, setRankingImageModal] = useState<{ url: string; copied: boolean } | null>(null);
   const [multiImages, setMultiImages] = useState<MultiImageResult[] | null>(null);
+  const [bestDayExpanded, setBestDayExpanded] = useState(false);
+  const [championModalOpen, setChampionModalOpen] = useState(false);
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
   const { data: goals } = useGoals();
@@ -304,6 +308,29 @@ export function DashboardPage() {
         : null,
     [campeaoMatricula, salesData, collaboratorsData, specialLists, campeaoFrom, campeaoTo],
   );
+
+  // "Melhor Dia de Vendas" always tracks the real current month (like the
+  // achievement-celebration check), regardless of which month the date
+  // picker (refYear/refMonth) is currently browsing — it's meant to answer
+  // "what's our record day so far this month", not "in the period I'm
+  // looking at". Naturally re-picks the new leader the moment a day's total
+  // surpasses the previous best, since it's just a max over the month's
+  // sales rather than a value stored anywhere.
+  const bestDay = useMemo(() => {
+    const now = new Date();
+    const currentMonthFirst = monthFirstISO(now.getFullYear(), now.getMonth());
+    const currentMonthLast = monthLastISO(now.getFullYear(), now.getMonth());
+    const byDay = new Map<string, number>();
+    salesData.forEach((s) => {
+      if (!s.dataISO || s.dataISO < currentMonthFirst || s.dataISO > currentMonthLast) return;
+      byDay.set(s.dataISO, (byDay.get(s.dataISO) ?? 0) + (Number(s.valor) || 0));
+    });
+    let best: { dateISO: string; valor: number } | null = null;
+    byDay.forEach((valor, dateISO) => {
+      if (!best || valor > best.valor) best = { dateISO, valor };
+    });
+    return best;
+  }, [salesData]);
 
   const rankingFiltered = useMemo(
     () =>
@@ -439,27 +466,45 @@ export function DashboardPage() {
           single-column layout (no lg: placement) keeps its original stacking
           order. */}
       <div className="lg:col-start-1 lg:row-start-1 min-w-0" style={{ background: 'rgba(0,0,0,.35)', border: '1px solid #00f0ff', borderRadius: 18, padding: '11px 16px' }}>
-          {/* Saudação, venda total e atingimento share one row instead of the
-              venda total sitting in its own stacked row below — same info,
-              less vertical footprint. */}
-          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ minWidth: 130 }}>
-              <div style={{ color: '#00f0ff', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 700 }}>
-                {saudacao.toUpperCase()},
+          {/* Logo | separador | venda total (esquerda) ... atingimento
+              (direita) | separador | Melhor Dia de Vendas. The dividers use
+              alignSelf:stretch + a top/bottom margin instead of a full-height
+              border so they read as a short rule floating inside the row —
+              never touching the card's own top/bottom edges (OBS 2). */}
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 130 }}>
+              {store?.logo_url ? (
+                <img src={store.logo_url} alt="" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+              ) : (
+                <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#212948', flexShrink: 0 }} />
+              )}
+              <div>
+                <div style={{ color: '#00f0ff', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 700 }}>
+                  {saudacao.toUpperCase()},
+                </div>
+                <div style={{ fontSize: 15, margin: '2px 0', fontWeight: 700 }}>{store?.nome_equipe || 'Equipe'}</div>
+                <div style={{ color: '#8b90bf', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>Painel Geral</div>
               </div>
-              <div style={{ fontSize: 15, margin: '2px 0', fontWeight: 700 }}>{store?.nome_equipe || 'Equipe'}</div>
-              <div style={{ color: '#8b90bf', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>Painel Geral</div>
             </div>
-            <div style={{ minWidth: 160 }}>
-              <div style={{ color: '#ffb700', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 700 }}>
-                ⭐ Venda total do período
+
+            <div style={{ alignSelf: 'stretch', width: 1, background: '#212948', margin: '5px 0' }} />
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flex: '1 1 auto', minWidth: 200 }}>
+              <div>
+                <div style={{ color: '#ffb700', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 700 }}>
+                  ⭐ Venda total do período
+                </div>
+                <div style={{ fontSize: 26, textShadow: '0 0 10px rgba(0,240,255,.55)' }}>{fmtMoney(totalValor)}</div>
               </div>
-              <div style={{ fontSize: 26, textShadow: '0 0 10px rgba(0,240,255,.55)' }}>{fmtMoney(totalValor)}</div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ color: '#8b90bf', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.08em' }}>Atingim. período</div>
+                <div style={{ fontSize: 26, textShadow: '0 0 10px rgba(0,240,255,.55)', color: '#00f0ff' }}>{pct.toFixed(0)}%</div>
+              </div>
             </div>
-            <div style={{ textAlign: 'right', minWidth: 100 }}>
-              <div style={{ color: '#8b90bf', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.08em' }}>Atingim. período</div>
-              <div style={{ fontSize: 26, textShadow: '0 0 10px rgba(0,240,255,.55)', color: '#00f0ff' }}>{pct.toFixed(0)}%</div>
-            </div>
+
+            <div style={{ alignSelf: 'stretch', width: 1, background: '#212948', margin: '5px 0' }} />
+
+            <BestDayCard bestDay={bestDay} expanded={bestDayExpanded} onToggle={() => setBestDayExpanded((v) => !v)} />
           </div>
           <div style={{ position: 'relative', height: 8, borderRadius: 5, background: '#080818', border: '1px solid #212948', overflow: 'hidden', marginTop: 8 }}>
             <div style={{ height: '100%', width: `${pct}%`, background: 'linear-gradient(90deg,#00f0ff,#a82bff)', borderRadius: 5 }} />
@@ -543,9 +588,25 @@ export function DashboardPage() {
           </div>
         </div>
 
-        <div className="lg:col-start-1 lg:row-start-3 min-w-0 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+        <div className="lg:col-start-1 lg:row-start-3 min-w-0">
+          <DailyEvolutionChart
+            salesData={salesData}
+            collaboratorsData={collaboratorsData}
+            goals={goals}
+            specialLists={specialLists}
+            monthFirst={monthFirst}
+            monthLast={monthLast}
+          />
+        </div>
+
+        {/* Vendas por Categoria now spans both columns — with the champion
+            card gone from the sidebar (shrunk to the small trophy icon
+            below), row 4's right column is otherwise empty, so this card
+            stretches into that freed width instead of being capped at the
+            left column's ~70%. */}
+        <div className="lg:col-start-1 lg:row-start-4 lg:col-span-2 min-w-0 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <h3 className="text-cyan-400 font-semibold text-sm mb-3">Vendas por Categoria</h3>
-          <div className="grid grid-cols-2 min-[1051px]:grid-cols-4 gap-1.5">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-1.5">
             {gaugeData.map((g) => (
               <CategoryGauge key={g.key} label={CAT_LABEL[g.key]} valor={g.valor} goal={g.goal} color={CAT_COLOR[g.key]} />
             ))}
@@ -555,7 +616,8 @@ export function DashboardPage() {
         {/* Meta/Falta/Saldo/Itens sit at the top of the sidebar, level with
             the venda-total summary bar in the left column; the date filter
             comes next, level with the "Ranking Geral" card; the champion
-            card moves below the date filter instead of above it. */}
+            icon now sits level with Evolução Diária instead of holding its
+            own full card. */}
         <div className="lg:col-start-2 lg:row-start-1 grid grid-cols-2 gap-2">
           <StatCard label={metaLabel} value={fmtMoney(metaExibida)} color="#00f0ff" badge={atingiuMeta ? 'MG ✓' : undefined} />
           <StatCard label={faltaLabel} value={fmtMoney(faltaValor)} color="#a82bff" />
@@ -569,8 +631,18 @@ export function DashboardPage() {
 
         {campeao && (
           <div className="lg:col-start-2 lg:row-start-3">
-            <ChampionCard campeao={campeao} campeaoLabel={campeaoLabel} campeaoStars={campeaoStars} storeName={store?.nome_loja} />
+            <ChampionIconCard onClick={() => setChampionModalOpen(true)} />
           </div>
+        )}
+
+        {campeao && championModalOpen && (
+          <ChampionCelebrationModal
+            campeao={campeao}
+            campeaoLabel={campeaoLabel}
+            campeaoStars={campeaoStars}
+            storeName={store?.nome_loja}
+            onClose={() => setChampionModalOpen(false)}
+          />
         )}
 
       {imageScopeOpen && (
@@ -610,19 +682,191 @@ export function DashboardPage() {
   );
 }
 
-function ChampionCard({
+function ToggleSwitch({ on, onToggle, title }: { on: boolean; onToggle: () => void; title?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={title}
+      style={{
+        width: 34,
+        height: 18,
+        borderRadius: 999,
+        border: '1px solid #212948',
+        background: on ? '#14ff00' : '#0b0e1d',
+        position: 'relative',
+        cursor: 'pointer',
+        flexShrink: 0,
+        transition: 'background .18s',
+      }}
+    >
+      <span
+        style={{
+          position: 'absolute',
+          top: 1,
+          left: on ? 17 : 1,
+          width: 14,
+          height: 14,
+          borderRadius: '50%',
+          background: on ? '#0b0e1d' : '#8b90bf',
+          transition: 'left .18s',
+        }}
+      />
+    </button>
+  );
+}
+
+// Collapsed by default (OBS in the spec): only the toggle + "M.V." label show
+// until switched on, so the top bar stays compact until an ADM actually wants
+// to see the record day. `bestDay` always tracks the real current month (see
+// its useMemo in DashboardPage), so a new record replaces the shown value
+// automatically the moment that day's total overtakes it — nothing here
+// needs to "know" a value changed, it just re-renders with the new max.
+function BestDayCard({
+  bestDay,
+  expanded,
+  onToggle,
+}: {
+  bestDay: { dateISO: string; valor: number } | null;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  if (!expanded) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ color: '#8b90bf', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', fontWeight: 700 }}>M.V.</div>
+        <ToggleSwitch on={expanded} onToggle={onToggle} title="Exibir Melhor Dia de Vendas" />
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 170 }}>
+      <div>
+        <div style={{ color: '#8b90bf', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', fontWeight: 700 }}>
+          🔥 Melhor Dia de Vendas
+        </div>
+        {bestDay ? (
+          <>
+            <div style={{ fontSize: 12.5, color: '#8b90bf' }}>{fmtDateBR(bestDay.dateISO)}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#14ff00', fontFamily: "'JetBrains Mono', monospace" }}>
+              {fmtMoney(bestDay.valor)}
+            </div>
+          </>
+        ) : (
+          <div style={{ fontSize: 12, color: '#8b90bf' }}>Sem vendas ainda</div>
+        )}
+      </div>
+      <ToggleSwitch on={expanded} onToggle={onToggle} title="Ocultar Melhor Dia de Vendas" />
+    </div>
+  );
+}
+
+// Replaces the old full-width ChampionCard: now just a small yellow-bordered
+// trophy button sitting where the champion card used to be, opening
+// ChampionCelebrationModal (below) with the full celebration + stars on click.
+function ChampionIconCard({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      title="Ver Campeão do dia"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        width: '100%',
+        height: '100%',
+        minHeight: 64,
+        background: '#0b0e1d',
+        border: '1px solid #ffb700',
+        boxShadow: '0 0 18px rgba(255,183,0,.35)',
+        borderRadius: 18,
+        cursor: 'pointer',
+        boxSizing: 'border-box',
+      }}
+    >
+      <TrophyIcon width={26} height={26} style={{ color: '#ffb700' }} />
+      <span style={{ fontSize: 9, color: '#ffb700', textTransform: 'uppercase', letterSpacing: '.06em', fontWeight: 700 }}>Campeão</span>
+    </button>
+  );
+}
+
+// Full-screen celebration opened from ChampionIconCard — same confetti
+// particle animation as ConquistaCelebrationOverlay (components/
+// ConquistaCelebration.tsx), kept as a separate self-contained copy since
+// this one centers on the champion's stars/image-generation flow instead of
+// a single conquista tier. Stars fill left-to-right naturally: campeaoStars
+// is already ordered that way (computeChampionStars), so `.map()` renders
+// them in that order with no extra sorting needed.
+function ChampionCelebrationModal({
   campeao,
   campeaoLabel,
   campeaoStars,
   storeName,
+  onClose,
 }: {
   campeao: SummaryRow;
   campeaoLabel: string;
   campeaoStars: ChampionStar[] | null;
   storeName: string | undefined;
+  onClose: () => void;
 }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [generating, setGenerating] = useState(false);
   const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    let raf: number;
+    const colors = ['#00f0ff', '#a82bff', '#ffb700', '#14ff00', '#ff3df0'];
+    function resize() {
+      canvas!.width = window.innerWidth;
+      canvas!.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    const particles = Array.from({ length: 160 }, () => ({
+      x: Math.random() * canvas.width,
+      y: -20 - Math.random() * canvas.height,
+      r: 4 + Math.random() * 5,
+      vy: 2 + Math.random() * 3,
+      vx: -1.5 + Math.random() * 3,
+      rot: Math.random() * Math.PI * 2,
+      vrot: -0.15 + Math.random() * 0.3,
+      color: colors[Math.floor(Math.random() * colors.length)],
+    }));
+
+    function tick() {
+      ctx!.clearRect(0, 0, canvas!.width, canvas!.height);
+      particles.forEach((p) => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.rot += p.vrot;
+        if (p.y > canvas!.height + 20) {
+          p.y = -20;
+          p.x = Math.random() * canvas!.width;
+        }
+        ctx!.save();
+        ctx!.translate(p.x, p.y);
+        ctx!.rotate(p.rot);
+        ctx!.fillStyle = p.color;
+        ctx!.fillRect(-p.r / 2, -p.r / 2, p.r, p.r * 0.6);
+        ctx!.restore();
+      });
+      raf = requestAnimationFrame(tick);
+    }
+    tick();
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', resize);
+    };
+  }, []);
 
   async function handleGenerateImage() {
     setGenerating(true);
@@ -645,53 +889,51 @@ function ChampionCard({
   }
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        borderColor: '#ffb700',
-        boxShadow: '0 0 18px rgba(255,183,0,.35)',
-        padding: '10px 12px',
-        background: '#0b0e1d',
-        border: '1px solid #ffb700',
-        borderRadius: 18,
-        height: '100%',
-        boxSizing: 'border-box',
-      }}
-    >
-      {campeao.foto ? (
-        <img src={campeao.foto} alt="" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
-      ) : (
-        <div style={{ width: 38, height: 38, borderRadius: '50%', background: '#212948', flexShrink: 0 }} />
-      )}
-      <div style={{ minWidth: 0, overflow: 'hidden', flex: 1 }}>
-        <div style={{ fontSize: 9, color: '#ffb700', textTransform: 'uppercase', letterSpacing: '.04em', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center">
+      <canvas ref={canvasRef} className="absolute inset-0" style={{ pointerEvents: 'none' }} />
+      <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,.6)' }} onClick={onClose} />
+      <div
+        className="relative rounded-3xl p-6 flex flex-col items-center text-center gap-2 shadow-2xl"
+        style={{
+          width: 320,
+          background: 'linear-gradient(160deg, #12142b, #0b0e1d)',
+          border: '2px solid #ffb700',
+          boxShadow: '0 0 40px rgba(255,183,0,.45)',
+        }}
+      >
+        <button onClick={onClose} className="absolute top-3 right-3 text-slate-400 hover:text-slate-200">
+          ✕
+        </button>
+        <div className="text-xs uppercase tracking-wide font-bold" style={{ color: '#ffb700' }}>
           👑 {campeaoLabel}
         </div>
-        <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{campeao.apelido || campeao.nome}</div>
-        <div style={{ fontSize: 10.5, color: '#8b90bf', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {campeao.foto ? (
+          <img src={campeao.foto} alt="" className="w-20 h-20 rounded-full object-cover border-2" style={{ borderColor: '#ffb700' }} />
+        ) : (
+          <div className="w-20 h-20 rounded-full bg-slate-700 border-2" style={{ borderColor: '#ffb700' }} />
+        )}
+        <div className="text-lg font-bold">{campeao.apelido || campeao.nome}</div>
+        <div className="font-mono text-sm" style={{ color: '#14ff00' }}>
           {fmtMoney(campeao.valor)} · {campeao.itens} it.
         </div>
         {campeaoStars && (
-          <div style={{ marginTop: 2 }} title={campeaoStars.map((s) => `${s.achieved ? '✓' : '✗'} ${s.label}`).join(' · ')}>
+          <div title={campeaoStars.map((s) => `${s.achieved ? '✓' : '✗'} ${s.label}`).join(' · ')}>
             {campeaoStars.map((s) => (
-              <span key={s.key} style={{ fontSize: 12, color: s.achieved ? '#ffb700' : '#2b3350' }}>
+              <span key={s.key} style={{ fontSize: 22, color: s.achieved ? '#ffb700' : '#2b3350' }}>
                 ★
               </span>
             ))}
           </div>
         )}
+        <button
+          onClick={handleGenerateImage}
+          disabled={generating}
+          className="mt-2 rounded-lg px-4 py-1.5 text-xs font-bold uppercase tracking-wide disabled:opacity-50"
+          style={{ background: '#ffb700', color: '#231a02' }}
+        >
+          {generating ? 'Gerando…' : '🖼️ Gerar imagem do card'}
+        </button>
       </div>
-      <button
-        onClick={handleGenerateImage}
-        disabled={generating}
-        title="Gerar imagem do card de campeão"
-        className="rounded-lg text-slate-950 font-semibold disabled:opacity-50 flex-shrink-0"
-        style={{ background: '#ffb700', padding: '6px 10px', fontSize: 11 }}
-      >
-        {generating ? '…' : '🖼️'}
-      </button>
 
       {imageModal && (
         <RankingImageModal

@@ -115,6 +115,39 @@
   flex-shrink: 0;
   padding: 10px 8px;
   border-top: 1px solid #212948;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sb-logout-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  background: transparent;
+  color: #8b90bf;
+  border: 1px solid #212948;
+  border-radius: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  transition: .18s;
+}
+.sb-logout-btn:hover {
+  color: #ff3df0;
+  border-color: #ff3df0;
+}
+.app-shell.is-collapsed .sb-logout-btn {
+  justify-content: center;
+  padding: 10px 8px;
+}
+.app-shell.is-collapsed .sb-logout-btn .sb-label {
+  display: none;
 }
 .sb-import-btn {
   display: flex;
