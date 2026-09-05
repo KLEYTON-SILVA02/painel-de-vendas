@@ -13,6 +13,7 @@ import { tryCopyImage } from '../../lib/rankingImage';
 import { useCollaborators, useDynamics, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { GoalGauge } from './GoalGauge';
+import { MobileDailyEvolutionChart } from './MobileDailyEvolutionChart';
 import { MobileDateFilter } from './MobileDateFilter';
 
 const CAT_LABEL: Record<CategoryKey, string> = { DERM: 'Dermocosméticos', GEN: 'Genéricos', MP: 'Marcas Excl.', MER: 'Merc. Geral' };
@@ -143,6 +144,15 @@ export function MobileInicioPage() {
       <div style={{ margin: '0 18px 16px' }}>
         <PodiumStaircase ranking={rankingList} getValue={(r) => r.valor} formatValue={fmtMoney} variant={storeSettings.modelo_ranking as 'escadinha' | 'lista'} />
       </div>
+
+      <MobileDailyEvolutionChart
+        salesData={salesData}
+        collaboratorsData={collaboratorsData}
+        goals={goals}
+        specialLists={specialLists}
+        monthFirst={monthFirst}
+        monthLast={monthLast}
+      />
 
       <div className="mv2-goals-grid">
         {gaugeData.map((g) => {
