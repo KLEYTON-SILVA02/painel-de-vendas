@@ -7,6 +7,7 @@ import {
   computeDinamicaRanking,
   dynamicStatus,
 } from '../../lib/business/dynamics';
+import { useReauthGuard } from '../../hooks/useReauthGuard';
 import type { Collaborator, Dynamic, Sale } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { useCreateDynamic, useDeleteDynamic } from '../../lib/mutations';
@@ -24,6 +25,7 @@ export function DinamicasPage() {
   const [tab, setTab] = useState<'ativas' | 'galeria'>('ativas');
   const createDynamic = useCreateDynamic(profile?.store_id);
   const deleteDynamic = useDeleteDynamic();
+  const { guard, reauthModal } = useReauthGuard();
 
   if (!dynamics || !sales || !collaborators || !storeSettings) {
     return <PageLoading />;
@@ -42,8 +44,13 @@ export function DinamicasPage() {
     if (diasProximaEncerrar === null || dias < diasProximaEncerrar) diasProximaEncerrar = dias;
   });
 
+  function handleDeleteDynamic(id: string) {
+    guard('Excluir esta dinâmica? Essa ação não pode ser desfeita. Confirme sua senha para continuar.', () => deleteDynamic.mutate(id));
+  }
+
   return (
     <div className="flex flex-col gap-3">
+      {reauthModal}
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <h3 className="text-purple-400 font-semibold">🎯 Dinâmicas Comerciais</h3>
         <p className="text-xs text-slate-500 mt-1">
@@ -119,7 +126,7 @@ export function DinamicasPage() {
                     sales={sales}
                     collaborators={collaborators}
                     modeloRanking={storeSettings.modelo_ranking as 'escadinha' | 'lista'}
-                    onDelete={() => deleteDynamic.mutate(d.id)}
+                    onDelete={() => handleDeleteDynamic(d.id)}
                   />
                 ))}
               </div>

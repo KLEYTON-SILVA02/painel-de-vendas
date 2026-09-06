@@ -9,6 +9,7 @@ import {
   type CardZoneShapeKind,
   type ConquistaCardTemplate,
 } from '../../lib/conquistaCardRender';
+import { useReauthGuard } from '../../hooks/useReauthGuard';
 import { magicWandSelect } from '../../lib/magicWand';
 import { loadImg } from '../../lib/rankingImage';
 import {
@@ -240,6 +241,7 @@ export function CardConquistaPage() {
   const saveTemplate = useSaveConquistaCardTemplate(profile?.store_id);
   const deleteTemplate = useDeleteConquistaCardTemplate();
   const setDefault = useSetDefaultConquistaCardTemplate(profile?.store_id);
+  const { guard, reauthModal } = useReauthGuard();
 
   const [editing, setEditingRaw] = useState<EditorState | null>(null);
   const [history, setHistory] = useState<EditorState[]>([]);
@@ -424,14 +426,14 @@ export function CardConquistaPage() {
   }
 
   function handleDelete(t: ConquistaCardTemplateRow) {
-    if (!window.confirm(`Excluir o modelo "${t.name}"?`)) return;
-    deleteTemplate.mutate(t.id);
+    guard(`Excluir o modelo "${t.name}"? Essa ação não pode ser desfeita. Confirme sua senha para continuar.`, () => deleteTemplate.mutate(t.id));
   }
 
   const hasDefaultTemplate = !!templates?.some((t) => t.isDefault);
 
   return (
     <div className="flex flex-col gap-3">
+      {reauthModal}
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <h3 className="font-semibold mb-1">Modelos de Card — Galeria de Conquistas</h3>
         <p className="text-xs text-slate-500">
