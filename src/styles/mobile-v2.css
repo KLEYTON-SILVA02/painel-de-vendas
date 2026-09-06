@@ -43,6 +43,12 @@
   --mv2-radius-md: 12px;
   --mv2-radius-lg: 24px;
 
+  /* Altura real da barra superior do ADM mobile (.mv2-topbar) — usada tanto
+     para fixar sua própria altura quanto para reservar, acima dela, um
+     espaço de mesmo tamanho (ver .mv2-topbar abaixo). Um único valor em vez
+     de repetir o número nos dois lugares. */
+  --mv2-topbar-h: 48px;
+
   background: var(--mv2-bg-principal);
   color: var(--mv2-texto);
   font-family: 'Poppins', 'Segoe UI', sans-serif;
@@ -254,15 +260,26 @@
    ============================================================ */
 
 /* ---------- 1. Barra fixa superior ---------- */
+/* position: fixed (não sticky) travada a --mv2-topbar-h do topo real da
+   tela — deixa, permanentemente, um espaço vazio acima da barra do mesmo
+   tamanho dela (pedido do cliente para dar "respiro" abaixo da barra de
+   status do celular/APK), em vez de sticky, que reverte a barra para
+   colada no topo assim que a rolagem passa do respiro inicial. O conteúdo
+   abaixo (.mv2-category-menu) recebe a margem equivalente para nunca ficar
+   escondido atrás dela — ver mais abaixo. */
 .mv2-topbar {
-  position: sticky;
-  top: 0;
+  position: fixed;
+  top: var(--mv2-topbar-h);
+  left: 0;
+  right: 0;
+  height: var(--mv2-topbar-h);
   z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   padding: 8px 12px;
+  box-sizing: border-box;
   background: #080a08;
 }
 .mv2-topbar .mv2-store-info {
@@ -306,6 +323,11 @@
 
 /* ---------- 2. Barra fixa do menu (categorias) ---------- */
 .mv2-category-menu {
+  /* .mv2-topbar agora é position: fixed, ocupando de --mv2-topbar-h a
+     2×--mv2-topbar-h a partir do topo real da tela — esse é o primeiro
+     elemento em fluxo normal logo abaixo dela, então recebe essa margem
+     inteira (respiro + altura da barra) para não renderizar por baixo. */
+  margin-top: calc(var(--mv2-topbar-h) * 2);
   display: flex;
   gap: 10px;
   padding: 8px 10px;

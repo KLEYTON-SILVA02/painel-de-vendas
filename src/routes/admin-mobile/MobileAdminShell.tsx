@@ -1,13 +1,15 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useState } from 'react';
 import { NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { BackButton } from '../../components/BackButton';
 import { ConquistaCelebrationHost } from '../../components/ConquistaCelebration';
 import { FunctionIcon } from '../../components/icons/FunctionIcon';
+import { Sidebar } from '../../components/Sidebar';
 import {
   BagIcon,
   CpuIcon,
   DropletIcon,
+  HamburgerIcon,
   HexagonIcon,
   HomeIcon,
   LeafIcon,
@@ -85,14 +87,32 @@ export function MobileAdminShell() {
   const { data: storeSettings } = useStoreSettings();
   const { data: categoryTypes } = useCategoryTypes();
   const location = useLocation();
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const hasBio = (categoryTypes ?? []).some((c) => c.chave === 'biosintetica');
   const categories = hasBio ? [...CATEGORIES_BEFORE_BIO, BIO_CATEGORY, ...CATEGORIES_AFTER_BIO] : [...CATEGORIES_BEFORE_BIO, ...CATEGORIES_AFTER_BIO];
 
   return (
-    <div className="mv2" style={{ minHeight: '100vh' }}>
+    <div className={`mv2 app-shell ${drawerOpen ? 'is-mobile-open' : ''}`} style={{ minHeight: '100vh' }}>
       <ConquistaCelebrationHost />
+      {/* Same slide-out drawer the desktop Sidebar already uses below 640px
+          (Sidebar.css) — reused here instead of duplicating a second nav,
+          just without the "Importar Vendas" shortcut (desktop-only; see
+          showImportButton). onToggleCollapsed closes the drawer instead of
+          collapsing it to icons, since mobile has no collapsed/icons-only
+          state to toggle into. */}
+      <Sidebar
+        collapsed={false}
+        onToggleCollapsed={() => setDrawerOpen(false)}
+        logoUrl={store?.logo_url}
+        onNavigate={() => setDrawerOpen(false)}
+        showImportButton={false}
+      />
+      <div className="sb-backdrop" onClick={() => setDrawerOpen(false)} />
       <header className="mv2-topbar">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <button className="sb-hamburger" onClick={() => setDrawerOpen(true)} aria-label="Abrir menu">
+            <HamburgerIcon />
+          </button>
           {/* Same reasoning as AppShell.tsx's desktop back button: only the
               /admin/* maintenance screens are reached exclusively by
               drilling into the ADM grid, with no menu link of their own. */}

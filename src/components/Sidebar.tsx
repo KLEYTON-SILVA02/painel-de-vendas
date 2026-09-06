@@ -65,12 +65,17 @@ export function Sidebar({
   onToggleCollapsed,
   logoUrl,
   onNavigate,
+  showImportButton = true,
 }: {
   collapsed: boolean;
   onToggleCollapsed: () => void;
   logoUrl?: string | null;
   /** Called on any nav-item / import-button click, so the mobile drawer can close itself. */
   onNavigate?: () => void;
+  /** The ADM mobile shell reuses this same sidebar as its slide-out drawer,
+   * but "Carregar Vendas" (bulk sales import) stays a desktop-only action —
+   * hidden here instead of duplicating the whole nav/footer markup. */
+  showImportButton?: boolean;
 }) {
   // BIOSINTÉTICA only shows up here when this store actually has a
   // category_types row for it — new stores don't get one seeded
@@ -157,10 +162,12 @@ export function Sidebar({
           <LogoutIcon width={13} height={13} />
           <span className="sb-label">Sair</span>
         </button>
-        <NavLink to="/admin/importar" className="sb-import-btn" onClick={onNavigate}>
-          <UploadIcon width={26} height={26} />
-          <span className="sb-label">Importar Vendas</span>
-        </NavLink>
+        {showImportButton && (
+          <NavLink to="/admin/importar" className="sb-import-btn" onClick={onNavigate}>
+            <UploadIcon width={26} height={26} />
+            <span className="sb-label">Importar Vendas</span>
+          </NavLink>
+        )}
       </div>
     </aside>
   );
