@@ -52,3 +52,34 @@ jobs:
           name: app-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
+
+      # Build de release assinado com uma keystore própria (em vez da chave de
+      # debug automática do Android) — instalar um APK assinado com uma chave
+      # de verdade é menos propenso a acionar o aviso de segurança do Google
+      # Play Protect do que um build de debug. Só roda quando os 4 secrets de
+      # assinatura estão configurados no repositório; sem eles, esse passo é
+      # pulado e o workflow segue publicando só o APK de debug normalmente.
+      - name: Decode release keystore
+        id: keystore
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        working-directory: android/app
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > release.keystore
+          echo "has_keystore=true" >> "$GITHUB_OUTPUT"
+
+      - name: Build signed release APK
+        if: ${{ steps.keystore.outputs.has_keystore == 'true' }}
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PATH: app/release.keystore
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ steps.keystore.outputs.has_keystore == 'true' }}
+        with:
+          name: app-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 30
