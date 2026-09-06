@@ -11,6 +11,7 @@ import { CollaboratorBioPage } from './CollaboratorBioPage';
 import { CollaboratorComissoesPage } from './CollaboratorComissoesPage';
 import { CollaboratorConfiguracoesPage } from './CollaboratorConfiguracoesPage';
 import { CollaboratorDinamicasPage } from './CollaboratorDinamicasPage';
+import { CollaboratorNotificacoesPage } from './CollaboratorNotificacoesPage';
 import { CollaboratorRankingPage } from './CollaboratorRankingPage';
 import { MetasVendasPage } from './MetasVendasPage';
 
@@ -95,6 +96,7 @@ export function CollaboratorShell() {
             {isBalcao && hasBio && <Route path="/bio" element={<CollaboratorBioPage />} />}
             <Route path="/dinamicas" element={<CollaboratorDinamicasPage />} />
             <Route path="/configuracoes" element={<CollaboratorConfiguracoesPage />} />
+            <Route path="/notificacoes" element={<CollaboratorNotificacoesPage />} />
           </Routes>
         </main>
       </div>

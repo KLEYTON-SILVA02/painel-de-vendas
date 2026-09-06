@@ -19,3 +19,14 @@ body {
     transform: rotate(1turn);
   }
 }
+
+/* Ranking (desktop): scrollbar invisível só nas colunas de categoria, para
+   não comprometer a visualização — scroll continua funcionando normalmente
+   por mouse/trackpad/toque, só a barra some. */
+.ranking-col-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.ranking-col-scroll::-webkit-scrollbar {
+  display: none;
+}
