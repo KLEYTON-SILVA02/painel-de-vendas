@@ -32,7 +32,19 @@ export interface Collaborator {
   /** Optional for the same reason as `fotoConquista` above — most tests
    * don't exercise it. */
   dataNascimento?: string | null;
+  /** Category keys (DERM/GEN/MP/MER/LEVMEL/CHIP/'biosintetica') this
+   * collaborator may view — only meaningful when `setor === VISITANTE_SETOR`.
+   * Optional for the same reason as the fields above. */
+  categoriasVisitante?: string[];
 }
+
+/** `collaborators.setor` value for a view-only collaborator: no sales are
+ * ever expected to reference them, and once logged in they see only the
+ * category screens listed in `categoriasVisitante` instead of the usual
+ * Metas/Vendas/Ranking/Comissões/Dinâmicas tabs. Checked as a plain string
+ * (like BALCAO_SETOR elsewhere) rather than a boolean column, since setor
+ * already drives ranking-eligibility logic throughout the app. */
+export const VISITANTE_SETOR = 'Visitante';
 
 export interface SummaryRow {
   matricula: string;

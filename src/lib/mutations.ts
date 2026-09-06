@@ -247,11 +247,22 @@ export function useCreateDynamic(storeId: string | undefined) {
 export function useCreateCollaborator(storeId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { matricula: string; nome: string; apelido: string; setor: string; celular?: string | null }) => {
+    mutationFn: async (input: {
+      matricula: string;
+      nome: string;
+      apelido: string;
+      setor: string;
+      celular?: string | null;
+      categoriasVisitante?: string[];
+    }) => {
       if (!storeId) throw new Error('store not loaded');
-      const { error } = await supabase
-        .from('collaborators')
-        .insert({ store_id: storeId, ...input, matricula: normalizeMatricula(input.matricula) });
+      const { categoriasVisitante, ...rest } = input;
+      const { error } = await supabase.from('collaborators').insert({
+        store_id: storeId,
+        ...rest,
+        matricula: normalizeMatricula(input.matricula),
+        ...(categoriasVisitante && { categorias_visitante: categoriasVisitante }),
+      });
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['collaborators'] }),
@@ -600,6 +611,17 @@ export function useDeleteDynamic() {
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('dynamics').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['dynamics'] }),
+  });
+}
+
+export function useUpdateDynamic() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, patch }: { id: string; patch: TablesUpdate<'dynamics'> }) => {
+      const { error } = await supabase.from('dynamics').update(patch).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['dynamics'] }),

@@ -66,6 +66,7 @@ const PAGE_TITLES: Record<string, { label: string; color: string }> = {
   '/categoria/LEVMEL': { label: '🍯 Levmel', color: '#ffb700' },
   '/categoria/CHIP': { label: '🔴 Chip', color: '#00e5ff' },
   '/bio': { label: '🧪 BIOSINTÉTICA — Ranking Balcão', color: '#14ff00' },
+  '/dinamicas': { label: '🎯 Dinâmicas Comerciais', color: '#a82bff' },
 };
 
 export function AppShell() {

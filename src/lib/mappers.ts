@@ -17,6 +17,7 @@ export function mapCollaborator(row: Tables<'collaborators'>): Collaborator {
     setor: row.setor,
     metaIndividual: Number(row.meta_individual) || 0,
     dataNascimento: row.data_nascimento,
+    categoriasVisitante: row.categorias_visitante ?? [],
   };
 }
 

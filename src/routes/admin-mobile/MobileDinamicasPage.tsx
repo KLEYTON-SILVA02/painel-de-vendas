@@ -9,9 +9,10 @@ import type { Collaborator, Dynamic, Sale } from '../../lib/business/types';
 import { todayISO } from '../../lib/dateRange';
 import { generateDinamicaCardBlob } from '../../lib/dinamicaImage';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
-import { useCreateDynamic, useDeleteDynamic } from '../../lib/mutations';
+import { useCreateDynamic, useDeleteDynamic, useUpdateDynamic } from '../../lib/mutations';
 import { tryCopyImage } from '../../lib/rankingImage';
 import { useCollaborators, useDynamics, useSales, useStore } from '../../lib/queries';
+import { EditDynamicModal } from '../dinamicas/DinamicasPage';
 import { MobileDateFilter } from './MobileDateFilter';
 
 const STATUS_LABEL: Record<DynamicStatus, string> = { ativa: 'Ativa', agendada: 'Agendada', encerrada: 'Encerrada' };
@@ -26,7 +27,9 @@ export function MobileDinamicasPage() {
   const { data: store } = useStore();
   const [tab, setTab] = useState<'ativas' | 'galeria'>('ativas');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Dynamic | null>(null);
   const createDynamic = useCreateDynamic(profile?.store_id);
+  const updateDynamic = useUpdateDynamic();
   const deleteDynamic = useDeleteDynamic();
   const { guard, reauthModal } = useReauthGuard();
 
@@ -140,11 +143,28 @@ export function MobileDinamicasPage() {
                 expanded={expanded === d.id}
                 onToggle={() => setExpanded(expanded === d.id ? null : d.id)}
                 onDelete={tab === 'ativas' ? () => handleDeleteDynamic(d.id) : undefined}
+                onEdit={() => setEditing(d)}
               />
             ))}
           </div>
         )}
       </div>
+
+      {editing && (
+        <EditDynamicModal
+          dynamic={editing}
+          collaborators={collaborators}
+          productNames={productNames}
+          saving={updateDynamic.isPending}
+          onClose={() => setEditing(null)}
+          onSave={(patch) => {
+            updateDynamic.mutate(
+              { id: editing.id, patch },
+              { onSuccess: () => setEditing(null) },
+            );
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -343,6 +363,7 @@ function MobileDinamicaAccordionItem({
   expanded,
   onToggle,
   onDelete,
+  onEdit,
 }: {
   d: Dynamic;
   status: DynamicStatus;
@@ -352,6 +373,7 @@ function MobileDinamicaAccordionItem({
   expanded: boolean;
   onToggle: () => void;
   onDelete?: () => void;
+  onEdit: () => void;
 }) {
   const [cardMatricula, setCardMatricula] = useState<string | null>(null);
   const isUnidade = d.metrica === 'unidade';
@@ -370,6 +392,15 @@ function MobileDinamicaAccordionItem({
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontSize: 7, fontWeight: 700, color: STATUS_COLOR[status] }}>{STATUS_LABEL[status]}</span>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit();
+            }}
+            style={{ background: 'none', border: 'none', color: 'var(--mv2-texto-2)', cursor: 'pointer', fontSize: 11 }}
+          >
+            ✎
+          </button>
           {onDelete && (
             <button
               onClick={(e) => {
