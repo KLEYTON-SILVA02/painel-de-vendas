@@ -1,6 +1,6 @@
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { LoginPage } from './auth/LoginPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -8,6 +8,7 @@ import { PageLoading } from './components/PageLoading';
 import { queryPersister } from './lib/queryPersister';
 import { useNativeStatusBarInset } from './lib/useNativeStatusBarInset';
 import { AppShell } from './routes/AppShell';
+import { PrivacyPolicyPage } from './routes/PrivacyPolicyPage';
 
 // Defaults (staleTime 0, refetchOnWindowFocus true) meant every navigation
 // and every tab/app focus re-ran every mounted query in the background —
@@ -57,6 +58,18 @@ const PERSISTED_QUERY_KEYS = new Set([
 ]);
 
 function Root() {
+  return (
+    <Routes>
+      {/* Sem login — precisa ser alcançável por qualquer pessoa, incluindo
+          o revisor da Play Store/App Store, que nunca terá uma conta de
+          colaborador/ADM. */}
+      <Route path="/privacidade" element={<PrivacyPolicyPage />} />
+      <Route path="*" element={<AuthedRoot />} />
+    </Routes>
+  );
+}
+
+function AuthedRoot() {
   const { session, loading } = useAuth();
 
   if (loading) {
