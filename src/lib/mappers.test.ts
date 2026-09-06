@@ -36,6 +36,7 @@ function collaborator(overrides: Partial<Tables<'collaborators'>>): Tables<'coll
     setor: 'Balcão',
     meta_individual: 0,
     data_nascimento: null,
+    categorias_visitante: [],
     created_at: '2026-08-01T00:00:00Z',
     ...overrides,
   };

@@ -229,6 +229,7 @@ export function ConquistasPage() {
           title="Imagem da galeria de conquistas"
           filename="galeria-conquistas.png"
           alt="Galeria de Conquistas"
+          compact={filtered.length === 1}
         />
       )}
     </div>

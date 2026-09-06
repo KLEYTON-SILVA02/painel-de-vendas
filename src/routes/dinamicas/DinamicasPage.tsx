@@ -10,8 +10,9 @@ import {
 import { useReauthGuard } from '../../hooks/useReauthGuard';
 import type { Collaborator, Dynamic, Sale } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
-import { useCreateDynamic, useDeleteDynamic } from '../../lib/mutations';
+import { useCreateDynamic, useDeleteDynamic, useUpdateDynamic } from '../../lib/mutations';
 import { useCollaborators, useDynamics, useSales } from '../../lib/queries';
+import type { TablesUpdate } from '../../types/database';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const SETOR_ALVO_LABEL: Record<Dynamic['setorAlvo'], string> = { balcao: 'Balcão', caixa: 'Caixa', ambos: 'Balcão + Caixa' };
@@ -22,7 +23,9 @@ export function DinamicasPage() {
   const { data: sales } = useSales();
   const { data: collaborators } = useCollaborators();
   const [tab, setTab] = useState<'ativas' | 'galeria'>('ativas');
+  const [editing, setEditing] = useState<Dynamic | null>(null);
   const createDynamic = useCreateDynamic(profile?.store_id);
+  const updateDynamic = useUpdateDynamic();
   const deleteDynamic = useDeleteDynamic();
   const { guard, reauthModal } = useReauthGuard();
 
@@ -63,13 +66,6 @@ export function DinamicasPage() {
   return (
     <div className="flex flex-col gap-3">
       {reauthModal}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <h3 className="text-purple-400 font-semibold">🎯 Dinâmicas Comerciais</h3>
-        <p className="text-xs text-slate-500 mt-1">
-          Campanhas e metas temporárias da loja, com período, produtos e participantes próprios.
-        </p>
-      </div>
-
       <div className="grid grid-cols-3 gap-3">
         <StatCard label="Dinâmicas cadastradas" value={String(list.length)} color="#a82bff" />
         <StatCard label="Ativas agora" value={String(ativas.length)} color="#14ff00" />
@@ -111,6 +107,7 @@ export function DinamicasPage() {
                   sales={sales}
                   collaborators={collaborators}
                   onDelete={() => handleDeleteDynamic(d.id)}
+                  onEdit={() => setEditing(d)}
                 />
               ))}
             </div>
@@ -138,12 +135,29 @@ export function DinamicasPage() {
                     sales={sales}
                     collaborators={collaborators}
                     onDelete={() => handleDeleteDynamic(d.id)}
+                    onEdit={() => setEditing(d)}
                   />
                 ))}
               </div>
             )}
           </div>
         </>
+      )}
+
+      {editing && (
+        <EditDynamicModal
+          dynamic={editing}
+          collaborators={collaborators}
+          productNames={productNames}
+          saving={updateDynamic.isPending}
+          onClose={() => setEditing(null)}
+          onSave={(patch) => {
+            updateDynamic.mutate(
+              { id: editing.id, patch },
+              { onSuccess: () => setEditing(null) },
+            );
+          }}
+        />
       )}
     </div>
   );
@@ -173,12 +187,14 @@ function DinamicaCard({
   sales,
   collaborators,
   onDelete,
+  onEdit,
 }: {
   d: Dynamic;
   status: 'ativa' | 'agendada' | 'encerrada';
   sales: Sale[];
   collaborators: Collaborator[];
   onDelete: () => void;
+  onEdit: () => void;
 }) {
   const isUnidade = d.metrica === 'unidade';
   const realizado = computeDinamicaProgresso(d, sales, collaborators);
@@ -194,9 +210,14 @@ function DinamicaCard({
           <b className="text-sm">{d.titulo}</b>
           <span className={`text-[10px] px-2 py-0.5 rounded-full ${STATUS_PILL[status]}`}>{STATUS_LABEL[status]}</span>
         </div>
-        <button onClick={onDelete} className="text-slate-500 hover:text-rose-400 text-sm">
-          ✕
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={onEdit} className="text-slate-500 hover:text-cyan-400 text-sm">
+            ✎
+          </button>
+          <button onClick={onDelete} className="text-slate-500 hover:text-rose-400 text-sm">
+            ✕
+          </button>
+        </div>
       </div>
       <div className="text-xs text-slate-400 mt-1.5">
         {fmtDateBR(d.dataInicio)} → {fmtDateBR(d.dataFim)}
@@ -406,6 +427,166 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
     <div>
       <label className="block text-xs text-slate-400 mb-1">{label}</label>
       {children}
+    </div>
+  );
+}
+
+export function EditDynamicModal({
+  dynamic,
+  collaborators,
+  productNames,
+  saving,
+  onClose,
+  onSave,
+}: {
+  dynamic: Dynamic;
+  collaborators: { id: string; matricula: string; nome: string; apelido: string | null }[];
+  productNames: string[];
+  saving: boolean;
+  onClose: () => void;
+  onSave: (patch: TablesUpdate<'dynamics'>) => void;
+}) {
+  const [titulo, setTitulo] = useState(dynamic.titulo);
+  const [descricao, setDescricao] = useState(dynamic.descricao);
+  const [dataInicio, setDataInicio] = useState(dynamic.dataInicio);
+  const [dataFim, setDataFim] = useState(dynamic.dataFim);
+  const [setorAlvo, setSetorAlvo] = useState<Dynamic['setorAlvo']>(dynamic.setorAlvo);
+  const [metrica, setMetrica] = useState<'valor' | 'unidade'>(dynamic.metrica);
+  const [metaValor, setMetaValor] = useState(dynamic.metaValor);
+  const [produtoInput, setProdutoInput] = useState('');
+  const [produtos, setProdutos] = useState<string[]>(dynamic.produtos);
+  const [participantes, setParticipantes] = useState<string[]>(dynamic.participantes);
+  const produtosListId = useId();
+
+  function addProduto() {
+    const nome = produtoInput.trim();
+    if (!nome) return;
+    setProdutos((prev) => [...prev, nome]);
+    setProdutoInput('');
+  }
+
+  function toggleParticipante(matricula: string) {
+    setParticipantes((prev) => (prev.includes(matricula) ? prev.filter((m) => m !== matricula) : [...prev, matricula]));
+  }
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!titulo.trim() || !dataInicio || !dataFim) return;
+    onSave({
+      titulo: titulo.trim(),
+      descricao,
+      data_inicio: dataInicio,
+      data_fim: dataFim,
+      meta_valor: metaValor,
+      metrica,
+      produtos,
+      participantes,
+      setor_alvo: setorAlvo,
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50" onClick={onClose}>
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-5 max-h-[90vh] overflow-y-auto flex flex-col gap-3"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="font-semibold">Editar dinâmica</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Field label="Nome da dinâmica">
+            <input value={titulo} onChange={(e) => setTitulo(e.target.value)} className="input" />
+          </Field>
+          <Field label="Início">
+            <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="input" />
+          </Field>
+          <Field label="Fim">
+            <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="input" />
+          </Field>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label="Métrica da meta">
+            <select value={metrica} onChange={(e) => setMetrica(e.target.value as 'valor' | 'unidade')} className="input">
+              <option value="valor">Moeda (R$)</option>
+              <option value="unidade">Unidade (un.)</option>
+            </select>
+          </Field>
+          <Field label="Meta (opcional)">
+            <input type="number" value={metaValor} onChange={(e) => setMetaValor(Number(e.target.value))} className="input" />
+          </Field>
+        </div>
+        <Field label="Setor participante">
+          <select value={setorAlvo} onChange={(e) => setSetorAlvo(e.target.value as Dynamic['setorAlvo'])} className="input">
+            <option value="ambos">Balcão + Caixa</option>
+            <option value="balcao">Balcão</option>
+            <option value="caixa">Caixa</option>
+          </select>
+        </Field>
+        <Field label="Descrição">
+          <input
+            value={descricao}
+            onChange={(e) => setDescricao(e.target.value)}
+            placeholder="Premiação, regras, grupo de WhatsApp..."
+            className="input"
+          />
+        </Field>
+
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">Produtos participantes (opcional — vazio = todos os produtos)</label>
+          <div className="flex gap-2">
+            <input
+              list={produtosListId}
+              value={produtoInput}
+              onChange={(e) => setProdutoInput(e.target.value)}
+              placeholder="buscar produto já vendido, ou digitar nome exato / palavra-chave"
+              className="input flex-1"
+            />
+            <datalist id={produtosListId}>
+              {productNames.map((nome) => (
+                <option key={nome} value={nome} />
+              ))}
+            </datalist>
+            <button type="button" onClick={addProduto} className="rounded-md bg-amber-500 text-slate-950 px-3 py-1.5 text-xs font-medium">
+              + Add
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {produtos.length === 0 ? (
+              <span className="text-xs text-slate-500">Nenhum produto adicionado — vale para todos.</span>
+            ) : (
+              produtos.map((p, i) => (
+                <span key={i} className="text-xs bg-slate-800 rounded-full px-2 py-1 flex items-center gap-1.5">
+                  {p}
+                  <button type="button" onClick={() => setProdutos((prev) => prev.filter((_, idx) => idx !== i))} className="text-slate-500 hover:text-rose-400">
+                    ✕
+                  </button>
+                </span>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">Colaboradores participantes (opcional — nenhum marcado = todos)</label>
+          <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+            {collaborators.map((c) => (
+              <label key={c.id} className="flex items-center gap-1.5 text-xs bg-slate-800 rounded-full px-2.5 py-1 cursor-pointer">
+                <input type="checkbox" checked={participantes.includes(c.matricula)} onChange={() => toggleParticipante(c.matricula)} />
+                {c.apelido || c.nome}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex gap-2 mt-2">
+          <button type="button" onClick={onClose} className="flex-1 rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-300">
+            Cancelar
+          </button>
+          <button type="submit" disabled={saving} className="flex-1 rounded-lg bg-cyan-500 text-slate-950 font-medium px-3 py-2 text-sm disabled:opacity-50">
+            {saving ? 'Salvando…' : 'Salvar'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

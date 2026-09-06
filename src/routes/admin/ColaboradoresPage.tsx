@@ -9,13 +9,40 @@ import { grantCollaboratorLogin, resetCollaboratorLogin } from '../../lib/collab
 import { daysSince } from '../../lib/business/summary';
 import { normalizeMatricula } from '../../lib/business/parsing';
 import type { Collaborator } from '../../lib/business/types';
+import { VISITANTE_SETOR } from '../../lib/business/types';
+import { VISITOR_CATEGORY_OPTIONS } from '../../lib/business/visitorCategories';
 import { fmtMoney } from '../../lib/format';
 import { useBulkUpsertCollaborators, useCreateCollaborator, useDeleteCollaborators, useUpdateCollaborator } from '../../lib/mutations';
 import { PASSWORD_HINT, PASSWORD_MIN_LENGTH, validatePassword } from '../../lib/passwordPolicy';
-import { useCollaborators, useCollaboratorsWithLogin, useSales } from '../../lib/queries';
+import { useCategoryTypes, useCollaborators, useCollaboratorsWithLogin, useSales } from '../../lib/queries';
 import { uploadPhoto } from '../../lib/storage';
 
-const SETORES = ['Balcão', 'Caixa', 'Dermoconsultora', 'Farmacêutico', 'Gerência'];
+const SETORES = ['Balcão', 'Caixa', 'Dermoconsultora', 'Farmacêutico', 'Gerência', VISITANTE_SETOR];
+
+function VisitorCategoryChecklist({
+  hasBio,
+  selected,
+  onToggle,
+}: {
+  hasBio: boolean;
+  selected: string[];
+  onToggle: (key: string) => void;
+}) {
+  const options = VISITOR_CATEGORY_OPTIONS.filter((o) => o.key !== 'biosintetica' || hasBio);
+  return (
+    <div>
+      <label className="block text-xs text-slate-400 mb-1">Categorias visíveis para o visitante</label>
+      <div className="flex flex-wrap gap-x-3 gap-y-1">
+        {options.map((o) => (
+          <label key={o.key} className="flex items-center gap-1.5 text-xs text-slate-300">
+            <input type="checkbox" checked={selected.includes(o.key)} onChange={() => onToggle(o.key)} />
+            {o.label}
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function ColaboradoresPage() {
   const { profile } = useAuth();
@@ -23,6 +50,8 @@ export function ColaboradoresPage() {
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
   const { data: withLogin } = useCollaboratorsWithLogin();
+  const { data: categoryTypes } = useCategoryTypes();
+  const hasBio = (categoryTypes ?? []).some((c) => c.chave === 'biosintetica');
   const createCollaborator = useCreateCollaborator(profile?.store_id);
   const bulkUpsertCollaborators = useBulkUpsertCollaborators(profile?.store_id);
   const updateCollaborator = useUpdateCollaborator();
@@ -34,6 +63,7 @@ export function ColaboradoresPage() {
   const [apelido, setApelido] = useState('');
   const [celular, setCelular] = useState('');
   const [setor, setSetor] = useState(SETORES[0]);
+  const [categoriasVisitante, setCategoriasVisitante] = useState<string[]>([]);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<Collaborator | null>(null);
@@ -81,11 +111,17 @@ export function ColaboradoresPage() {
       apelido: apelido.trim(),
       setor,
       celular: celular.trim() || null,
+      ...(setor === VISITANTE_SETOR && { categoriasVisitante }),
     });
     setMatricula('');
     setNome('');
     setApelido('');
     setCelular('');
+    setCategoriasVisitante([]);
+  }
+
+  function toggleNovoCategoriaVisitante(key: string) {
+    setCategoriasVisitante((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
   }
 
   function toggleSelected(id: string) {
@@ -146,6 +182,11 @@ export function ColaboradoresPage() {
             + Adicionar
           </button>
         </div>
+        {setor === VISITANTE_SETOR && (
+          <div className="mt-3">
+            <VisitorCategoryChecklist hasBio={hasBio} selected={categoriasVisitante} onToggle={toggleNovoCategoriaVisitante} />
+          </div>
+        )}
       </form>
 
       <SimpleSheetImportPanel
@@ -281,6 +322,7 @@ export function ColaboradoresPage() {
         <EditCollaboratorModal
           collaborator={editing}
           storeId={profile?.store_id}
+          hasBio={hasBio}
           onClose={() => setEditing(null)}
           onSave={(patch) => {
             updateCollaborator.mutate({ id: editing.id, patch });
@@ -298,11 +340,13 @@ export function ColaboradoresPage() {
 function EditCollaboratorModal({
   collaborator,
   storeId,
+  hasBio,
   onClose,
   onSave,
 }: {
   collaborator: Collaborator;
   storeId: string | undefined;
+  hasBio: boolean;
   onClose: () => void;
   onSave: (patch: {
     nome: string;
@@ -310,6 +354,7 @@ function EditCollaboratorModal({
     celular: string | null;
     setor: string;
     data_nascimento: string | null;
+    categorias_visitante: string[];
     foto_url?: string;
     foto_conquista_url?: string;
   }) => void;
@@ -319,6 +364,7 @@ function EditCollaboratorModal({
   const [celular, setCelular] = useState(collaborator.celular || '');
   const [setor, setSetor] = useState(collaborator.setor || SETORES[0]);
   const [dataNascimento, setDataNascimento] = useState(collaborator.dataNascimento || '');
+  const [categoriasVisitante, setCategoriasVisitante] = useState<string[]>(collaborator.categoriasVisitante ?? []);
   const [foto, setFoto] = useState(collaborator.foto);
   const [fotoConquista, setFotoConquista] = useState(collaborator.fotoConquista ?? null);
   const [cropTarget, setCropTarget] = useState<'avatar' | 'conquista' | null>(null);
@@ -385,6 +431,15 @@ function EditCollaboratorModal({
             <label className="block text-xs text-slate-400 mb-1">Data de nascimento</label>
             <input type="date" value={dataNascimento} onChange={(e) => setDataNascimento(e.target.value)} className="input" />
           </div>
+          {setor === VISITANTE_SETOR && (
+            <VisitorCategoryChecklist
+              hasBio={hasBio}
+              selected={categoriasVisitante}
+              onToggle={(key) =>
+                setCategoriasVisitante((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
+              }
+            />
+          )}
         </div>
         <div className="flex gap-2 mt-4">
           <button onClick={onClose} className="flex-1 rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-300">
@@ -398,6 +453,7 @@ function EditCollaboratorModal({
                 celular: celular.trim() || null,
                 setor,
                 data_nascimento: dataNascimento || null,
+                categorias_visitante: setor === VISITANTE_SETOR ? categoriasVisitante : [],
                 ...(foto !== collaborator.foto && { foto_url: foto ?? undefined }),
                 ...(fotoConquista !== collaborator.fotoConquista && { foto_conquista_url: fotoConquista ?? undefined }),
               })

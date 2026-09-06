@@ -27,7 +27,7 @@ export function DinamicaProgressList({
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: 8 }}>
       {ranking.map((r, i) => {
         const realizado = isUnidade ? r.itens : r.valor;
         const rawPct = metaValor > 0 ? (realizado / metaValor) * 100 : 0;
