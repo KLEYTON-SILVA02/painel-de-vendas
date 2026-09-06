@@ -23,6 +23,38 @@ const queryClient = new QueryClient({
   },
 });
 
+// Allowlist for what's worth persisting to IndexedDB for an instant cold
+// paint (see PersistQueryClientProvider below) — small, settings-shaped
+// queries only. This is the actual fix for the app freezing on
+// Configurações (and anywhere else with several mutations in a row): with
+// no filter here, EVERY query still resident in the cache — starting with
+// Dashboard's full sales history (queryKey ['sales'], routinely tens of
+// thousands of rows) plus catalog/collaborators/keyword lists from
+// whatever else was visited earlier in the session — got re-dehydrated,
+// JSON.stringify'd and written to IndexedDB on every single mutation
+// anywhere in the app (the persister subscribes to every cache
+// add/update/remove event). Configurações felt like the culprit mainly
+// because it's usually opened last (cache at its largest) and has the
+// most back-to-back mutations of any screen (add/remove keyword, toggle a
+// schedule, save weights...), but the actual cost scaled with the whole
+// cache, not with anything Configurações itself does. An allowlist (opt
+// IN) is used instead of excluding the known-big queries (opt out) so a
+// future heavy query defaults to NOT being persisted instead of silently
+// reintroducing this.
+const PERSISTED_QUERY_KEYS = new Set([
+  'store_settings',
+  'store',
+  'goals',
+  'function_icons',
+  'commission_rates',
+  'category_types',
+  'notification_schedules',
+  'exclusive_brands',
+  'brand_keywords',
+  'bio_group_goals',
+  'bio_groups',
+]);
+
 function Root() {
   const { session, loading } = useAuth();
 
@@ -56,6 +88,12 @@ export default function App() {
           // know how to read them.
           buster: 'v1',
           maxAge: 24 * 60 * 60 * 1000,
+          dehydrateOptions: {
+            shouldDehydrateQuery: (query) =>
+              query.state.status === 'success' &&
+              typeof query.queryKey[0] === 'string' &&
+              PERSISTED_QUERY_KEYS.has(query.queryKey[0]),
+          },
         }}
       >
         <BrowserRouter>
