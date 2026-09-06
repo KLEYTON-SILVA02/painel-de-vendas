@@ -1,7 +1,7 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useId, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
-import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
+import { DinamicaProgressList } from '../../components/ranking/DinamicaProgressList';
 import {
   computeDinamicaProgresso,
   computeDinamicaRanking,
@@ -11,7 +11,7 @@ import { useReauthGuard } from '../../hooks/useReauthGuard';
 import type { Collaborator, Dynamic, Sale } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { useCreateDynamic, useDeleteDynamic } from '../../lib/mutations';
-import { useCollaborators, useDynamics, useSales, useStoreSettings } from '../../lib/queries';
+import { useCollaborators, useDynamics, useSales } from '../../lib/queries';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const SETOR_ALVO_LABEL: Record<Dynamic['setorAlvo'], string> = { balcao: 'Balcão', caixa: 'Caixa', ambos: 'Balcão + Caixa' };
@@ -21,13 +21,25 @@ export function DinamicasPage() {
   const { data: dynamics } = useDynamics();
   const { data: sales } = useSales();
   const { data: collaborators } = useCollaborators();
-  const { data: storeSettings } = useStoreSettings();
   const [tab, setTab] = useState<'ativas' | 'galeria'>('ativas');
   const createDynamic = useCreateDynamic(profile?.store_id);
   const deleteDynamic = useDeleteDynamic();
   const { guard, reauthModal } = useReauthGuard();
 
-  if (!dynamics || !sales || !collaborators || !storeSettings) {
+  // Real product names as they appear in the sales history — the same
+  // strings computeDinamicaProgresso/computeDinamicaRanking match against
+  // (via normalize()) — so a suggestion picked here is guaranteed to
+  // actually match sales, unlike names pulled from the separate
+  // keyword-classification `products` table.
+  const productNames = useMemo(() => {
+    const set = new Set<string>();
+    (sales ?? []).forEach((s) => {
+      if (s.produto) set.add(s.produto);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [sales]);
+
+  if (!dynamics || !sales || !collaborators) {
     return <PageLoading />;
   }
 
@@ -98,8 +110,7 @@ export function DinamicasPage() {
                   status="encerrada"
                   sales={sales}
                   collaborators={collaborators}
-                  modeloRanking={storeSettings.modelo_ranking as 'escadinha' | 'lista'}
-                  onDelete={() => deleteDynamic.mutate(d.id)}
+                  onDelete={() => handleDeleteDynamic(d.id)}
                 />
               ))}
             </div>
@@ -109,6 +120,7 @@ export function DinamicasPage() {
         <>
           <NewDynamicForm
             collaborators={collaborators}
+            productNames={productNames}
             onCreate={(input) => createDynamic.mutate(input)}
             creating={createDynamic.isPending}
           />
@@ -125,7 +137,6 @@ export function DinamicasPage() {
                     status={dynamicStatus(d, today)}
                     sales={sales}
                     collaborators={collaborators}
-                    modeloRanking={storeSettings.modelo_ranking as 'escadinha' | 'lista'}
                     onDelete={() => handleDeleteDynamic(d.id)}
                   />
                 ))}
@@ -161,22 +172,20 @@ function DinamicaCard({
   status,
   sales,
   collaborators,
-  modeloRanking,
   onDelete,
 }: {
   d: Dynamic;
   status: 'ativa' | 'agendada' | 'encerrada';
   sales: Sale[];
   collaborators: Collaborator[];
-  modeloRanking: 'escadinha' | 'lista';
   onDelete: () => void;
 }) {
   const isUnidade = d.metrica === 'unidade';
   const realizado = computeDinamicaProgresso(d, sales, collaborators);
   const pct = d.metaValor > 0 ? Math.min(100, (realizado / d.metaValor) * 100) : null;
-  const ranking = computeDinamicaRanking(d, sales, collaborators)
-    .filter((r) => r.valor > 0 || r.itens > 0)
-    .slice(0, 10);
+  // Every eligible participant, not just the ones already ahead — this is
+  // the campaign's roster, so someone at 0% still belongs on it.
+  const ranking = computeDinamicaRanking(d, sales, collaborators);
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
@@ -206,26 +215,21 @@ function DinamicaCard({
           <div className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-fuchsia-500" style={{ width: `${pct}%` }} />
         </div>
       )}
-      {ranking.length > 0 && (
-        <div className="mt-3">
-          <PodiumStaircase
-            ranking={ranking}
-            getValue={(r) => (isUnidade ? r.itens : r.valor)}
-            formatValue={(v) => (isUnidade ? `${v} un.` : fmtMoney(v))}
-            variant={modeloRanking}
-          />
-        </div>
-      )}
+      <div className="mt-3">
+        <DinamicaProgressList ranking={ranking} metaValor={d.metaValor} isUnidade={isUnidade} />
+      </div>
     </div>
   );
 }
 
 function NewDynamicForm({
   collaborators,
+  productNames,
   onCreate,
   creating,
 }: {
   collaborators: { id: string; matricula: string; nome: string; apelido: string | null }[];
+  productNames: string[];
   onCreate: (input: {
     titulo: string;
     descricao: string;
@@ -251,6 +255,7 @@ function NewDynamicForm({
   const [produtos, setProdutos] = useState<string[]>([]);
   const [participantes, setParticipantes] = useState<string[]>([]);
   const [expanded, setExpanded] = useState(false);
+  const produtosListId = useId();
 
   function addProduto() {
     const nome = produtoInput.trim();
@@ -340,11 +345,17 @@ function NewDynamicForm({
         <label className="block text-xs text-slate-400 mb-1">Produtos participantes (opcional — vazio = todos os produtos)</label>
         <div className="flex gap-2">
           <input
+            list={produtosListId}
             value={produtoInput}
             onChange={(e) => setProdutoInput(e.target.value)}
-            placeholder="nome do produto"
+            placeholder="buscar produto já vendido, ou digitar nome exato / palavra-chave"
             className="input flex-1"
           />
+          <datalist id={produtosListId}>
+            {productNames.map((nome) => (
+              <option key={nome} value={nome} />
+            ))}
+          </datalist>
           <button type="button" onClick={addProduto} className="rounded-md bg-amber-500 text-slate-950 px-3 py-1.5 text-xs font-medium">
             + Add
           </button>
