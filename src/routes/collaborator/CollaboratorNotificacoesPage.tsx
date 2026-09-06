@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMarkNotificationRead } from '../../lib/mutations';
 import { useNotifications } from '../../lib/queries';
 
@@ -17,19 +17,29 @@ function formatWhen(iso: string): string {
 }
 
 // Full-screen notification list, reached by tapping the sino on the
-// collaborator topbar — replaces the old small dropdown panel. "Hoje" shows
-// today's notifications (what the collaborator actually opened this screen
-// for, most of the time); "Antigas" holds everything before today, still
-// reachable without cluttering the main tab.
+// collaborator topbar — replaces the old small dropdown panel. The two tabs
+// split by READ STATUS, not by calendar date: "Hoje" is whatever was still
+// pending (unread) when this screen was opened — tapping one marks it read
+// but it stays put in "Hoje" for the rest of this visit, so the list
+// doesn't shuffle under the collaborator's finger while they're still
+// reading it; only leaving and reopening the screen (a fresh mount of this
+// component, since it's its own route) moves read items into "Antigas". A
+// notification that arrives while the screen is already open (the 60s poll
+// in useNotifications) still lands in "Hoje", since it wasn't part of the
+// "already read" snapshot either.
 export function CollaboratorNotificacoesPage() {
   const { data: notifications } = useNotifications();
   const markRead = useMarkNotificationRead();
   const [tab, setTab] = useState<'hoje' | 'antigas'>('hoje');
+  const alreadyReadAtOpenRef = useRef<Set<string> | null>(null);
 
-  const now = new Date();
   const list = notifications ?? [];
-  const hoje = list.filter((n) => new Date(n.created_at).toDateString() === now.toDateString());
-  const antigas = list.filter((n) => new Date(n.created_at).toDateString() !== now.toDateString());
+  if (notifications && alreadyReadAtOpenRef.current === null) {
+    alreadyReadAtOpenRef.current = new Set(notifications.filter((n) => n.read_at).map((n) => n.id));
+  }
+  const alreadyReadAtOpen = alreadyReadAtOpenRef.current;
+  const hoje = alreadyReadAtOpen ? list.filter((n) => !alreadyReadAtOpen.has(n.id)) : list;
+  const antigas = alreadyReadAtOpen ? list.filter((n) => alreadyReadAtOpen.has(n.id)) : [];
   const shown = tab === 'hoje' ? hoje : antigas;
 
   return (
