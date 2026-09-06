@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { PASSWORD_HINT, PASSWORD_MIN_LENGTH, validatePassword } from '../lib/passwordPolicy';
 import { supabase } from '../lib/supabase';
 import { buildWhatsAppLink } from '../lib/whatsapp';
@@ -62,6 +63,10 @@ export function LoginPage() {
             <InstagramIcon />
           </button>
         </div>
+
+        <Link to="/privacidade" style={{ display: 'block', textAlign: 'center', marginTop: 14, fontSize: 11, color: 'var(--mv2-texto-2, #94a3b8)' }}>
+          Política de Privacidade
+        </Link>
       </div>
 
       {socialModal && (
