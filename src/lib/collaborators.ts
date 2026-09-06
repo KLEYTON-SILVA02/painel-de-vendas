@@ -24,3 +24,15 @@ export async function resetCollaboratorLogin(collaboratorId: string, senha: stri
   if (error) throw error;
   return data;
 }
+
+/** Collaborator self-service: updates only their own foto_url/
+ * foto_conquista_url via a narrow SECURITY DEFINER RPC (see
+ * update_own_collaborator_photo, migration 0047) — `null` for either arg
+ * means "leave that one unchanged". */
+export async function updateOwnCollaboratorPhoto(fotoUrl: string | null, fotoConquistaUrl: string | null) {
+  const { error } = await supabase.rpc('update_own_collaborator_photo', {
+    new_foto_url: fotoUrl,
+    new_foto_conquista_url: fotoConquistaUrl,
+  });
+  if (error) throw error;
+}

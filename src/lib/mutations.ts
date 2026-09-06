@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CategoryKey, GoalCategoryKey } from './business/classification';
 import { normalize } from './business/normalize';
 import { normalizeMatricula } from './business/parsing';
+import { updateOwnCollaboratorPhoto } from './collaborators';
 import { uploadCategoryIcon } from './storage';
 import { supabase } from './supabase';
 import type { TablesInsert, TablesUpdate } from '../types/database';
@@ -310,6 +311,50 @@ export function useMarkNotificationRead() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+  });
+}
+
+/** Collaborator-side: fires a "solicitar nova senha" request the ADM sees
+ * in the mobile admin shell's password-request badge (see
+ * usePendingPasswordRequests). */
+export function useRequestNewPassword(storeId: string | undefined, collaboratorId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      if (!storeId || !collaboratorId) throw new Error('colaborador não carregado');
+      const { error } = await supabase.from('password_requests').insert({ store_id: storeId, collaborator_id: collaboratorId });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['password_requests'] }),
+  });
+}
+
+/** ADM-side: marks a password_requests row atendido — called right when the
+ * ADM opens ColaboradoresPage to generate the new senha for that
+ * colaborador (see the password-request badge dropdown). */
+export function useResolvePasswordRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('password_requests')
+        .update({ status: 'atendido', resolved_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['password_requests'] }),
+  });
+}
+
+/** Collaborator self-service: updates only their own avatar/Conquistas
+ * photo — see update_own_collaborator_photo (migration 0047). */
+export function useUpdateOwnCollaboratorPhoto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { fotoUrl?: string | null; fotoConquistaUrl?: string | null }) => {
+      await updateOwnCollaboratorPhoto(input.fotoUrl ?? null, input.fotoConquistaUrl ?? null);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['collaborators'] }),
   });
 }
 

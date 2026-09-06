@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { useLocation } from 'react-router-dom';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
@@ -15,6 +16,7 @@ const SETORES = ['Balcão', 'Caixa', 'Dermoconsultora', 'Farmacêutico', 'Gerên
 
 export function ColaboradoresPage() {
   const { profile } = useAuth();
+  const location = useLocation();
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
   const { data: withLogin } = useCollaboratorsWithLogin();
@@ -33,6 +35,17 @@ export function ColaboradoresPage() {
   const [editing, setEditing] = useState<Collaborator | null>(null);
   const [grantingFor, setGrantingFor] = useState<Collaborator | null>(null);
   const [resettingFor, setResettingFor] = useState<Collaborator | null>(null);
+
+  // Arriving here from the ADM shell's password-request badge ("gerar nova
+  // senha" for a colaborador who solicited one) — jump straight to the
+  // reset modal instead of making the ADM find them in the grid again.
+  const openResetFor = (location.state as { openResetFor?: string } | null)?.openResetFor;
+  useEffect(() => {
+    if (!openResetFor || !collaborators) return;
+    const target = collaborators.find((c) => c.id === openResetFor);
+    if (target) setResettingFor(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openResetFor, collaborators]);
 
   if (!collaborators || !sales || !withLogin) return <PageLoading />;
 

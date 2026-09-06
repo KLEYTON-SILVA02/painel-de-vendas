@@ -1,5 +1,5 @@
 import { Suspense, lazy, useState } from 'react';
-import { NavLink, Route, Routes, useLocation } from 'react-router-dom';
+import { NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { BackButton } from '../../components/BackButton';
 import { ConquistaCelebrationHost } from '../../components/ConquistaCelebration';
@@ -21,7 +21,8 @@ import {
   TrophyIcon,
 } from '../../components/icons/NavIcons';
 import type { Horario } from '../../lib/business/horario';
-import { useCategoryTypes, useStore, useStoreSettings } from '../../lib/queries';
+import { useResolvePasswordRequest } from '../../lib/mutations';
+import { useCategoryTypes, useCollaborators, usePendingPasswordRequests, useStore, useStoreSettings } from '../../lib/queries';
 import { AdminLandingPage } from '../admin/AdminLandingPage';
 import { AuditoriaPage } from '../admin/AuditoriaPage';
 import { ListaVendasPage } from '../admin/ListaVendasPage';
@@ -86,10 +87,21 @@ export function MobileAdminShell() {
   const { data: store } = useStore();
   const { data: storeSettings } = useStoreSettings();
   const { data: categoryTypes } = useCategoryTypes();
+  const { data: collaborators } = useCollaborators();
+  const { data: pendingPasswordRequests } = usePendingPasswordRequests();
+  const resolvePasswordRequest = useResolvePasswordRequest();
   const location = useLocation();
+  const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [pwMenuOpen, setPwMenuOpen] = useState(false);
   const hasBio = (categoryTypes ?? []).some((c) => c.chave === 'biosintetica');
   const categories = hasBio ? [...CATEGORIES_BEFORE_BIO, BIO_CATEGORY, ...CATEGORIES_AFTER_BIO] : [...CATEGORIES_BEFORE_BIO, ...CATEGORIES_AFTER_BIO];
+
+  function handleAttendRequest(requestId: string, collaboratorId: string) {
+    resolvePasswordRequest.mutate(requestId);
+    setPwMenuOpen(false);
+    navigate('/admin/colaboradores', { state: { openResetFor: collaboratorId } });
+  }
 
   return (
     <div className={`mv2 app-shell ${drawerOpen ? 'is-mobile-open' : ''}`} style={{ minHeight: '100vh' }}>
@@ -125,6 +137,56 @@ export function MobileAdminShell() {
           {storeSettings && (
             <MobileClosingTimer horario={storeSettings.horario as unknown as Horario} feriadosDatas={storeSettings.feriados_datas} />
           )}
+          <div className="mv2-collab-menu-wrap">
+            <button
+              className="mv2-icon-btn"
+              title="Solicitações de nova senha"
+              onClick={() => setPwMenuOpen((v) => !v)}
+              style={{ position: 'relative', fontSize: 12 }}
+            >
+              🔑
+              {!!pendingPasswordRequests?.length && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: -4,
+                    right: -4,
+                    background: '#ff3df0',
+                    color: '#0b0e1d',
+                    borderRadius: '50%',
+                    width: 15,
+                    height: 15,
+                    fontSize: 9,
+                    fontWeight: 800,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {pendingPasswordRequests.length}
+                </span>
+              )}
+            </button>
+            {pwMenuOpen && (
+              <>
+                <div className="mv2-collab-menu-backdrop" onClick={() => setPwMenuOpen(false)} />
+                <div className="mv2-collab-menu" style={{ minWidth: 220, right: 0, left: 'auto' }}>
+                  {!pendingPasswordRequests || pendingPasswordRequests.length === 0 ? (
+                    <div style={{ padding: 10, fontSize: 11, color: 'var(--mv2-texto-2)' }}>Nenhuma solicitação pendente.</div>
+                  ) : (
+                    pendingPasswordRequests.map((req) => {
+                      const c = collaborators?.find((col) => col.id === req.collaborator_id);
+                      return (
+                        <button key={req.id} onClick={() => handleAttendRequest(req.id, req.collaborator_id)}>
+                          🔑 {c?.apelido || c?.nome || 'Colaborador'}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </>
+            )}
+          </div>
           <button className="mv2-icon-btn" title="Atualizar" onClick={() => window.location.reload()}>
             <RefreshIcon width={14} height={14} />
           </button>
