@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "457041871333",
+    "project_id": "painel-de-vendas-33888",
+    "storage_bucket": "painel-de-vendas-33888.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:457041871333:android:8a98e0b2e5bc7d91446f0c",
+        "android_client_info": {
+          "package_name": "com.gestaodevendas.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD5nBnJ2Qll-1ynz9qdrc2ryNlGudH1EKA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
