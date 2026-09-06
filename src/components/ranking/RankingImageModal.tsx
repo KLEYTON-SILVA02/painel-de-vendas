@@ -18,6 +18,7 @@ export function RankingImageModal({
   title = 'Imagem do ranking',
   filename = 'ranking-vendas.png',
   alt = 'Ranking',
+  compact = false,
 }: {
   url: string;
   copied: boolean;
@@ -25,6 +26,16 @@ export function RankingImageModal({
   title?: string;
   filename?: string;
   alt?: string;
+  /** Portrait "figurinha" cards (single achiever in Galeria de Conquistas,
+   * ~750×1150) render at nearly full modal width with no height cap, which
+   * on a normal viewport towers well past the screen — nothing else in the
+   * modal (buttons, title) fit alongside it. Landscape ranking/dinâmica
+   * exports don't have this problem at the default max-w-xl, so this only
+   * shrinks the modal for callers that opt in: same small centered card
+   * size as ChampionCelebrationModal's own confetti notification (320px),
+   * with the image capped to a height that still leaves the buttons
+   * visible below it. */
+  compact?: boolean;
 }) {
   const { data: store } = useStore();
   const [copyState, setCopyState] = useState<'idle' | 'copying' | 'copied' | 'failed'>(copied ? 'copied' : 'idle');
@@ -58,7 +69,10 @@ export function RankingImageModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50" onClick={onClose}>
-      <div className="w-full max-w-xl rounded-2xl border border-slate-800 bg-slate-900 p-5" onClick={(e) => e.stopPropagation()}>
+      <div
+        className={`w-full ${compact ? 'max-w-xs' : 'max-w-xl'} max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-5`}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold">{title}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-200">
@@ -72,7 +86,11 @@ export function RankingImageModal({
               ? 'A imagem já foi copiada para a área de transferência — é só colar no WhatsApp.'
               : 'Baixe a imagem, copie pra área de transferência ou envie direto por WhatsApp.'}
         </p>
-        <img src={url} alt={alt} className="w-full rounded-lg border border-slate-800" />
+        <img
+          src={url}
+          alt={alt}
+          className={`mx-auto rounded-lg border border-slate-800 ${compact ? 'max-h-[45vh] w-auto max-w-full object-contain' : 'w-full'}`}
+        />
         <div className="flex gap-2 mt-3">
           <button onClick={onClose} className="flex-1 rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800">
             Fechar
