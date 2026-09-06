@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useLocation } from 'react-router-dom';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
@@ -6,7 +6,8 @@ import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImport
 import { PhotoCropModal } from '../../components/PhotoCropModal';
 import { useReauthGuard } from '../../hooks/useReauthGuard';
 import { grantCollaboratorLogin, resetCollaboratorLogin } from '../../lib/collaborators';
-import { daysSince, lastSaleDateFor } from '../../lib/business/summary';
+import { daysSince } from '../../lib/business/summary';
+import { normalizeMatricula } from '../../lib/business/parsing';
 import type { Collaborator } from '../../lib/business/types';
 import { fmtMoney } from '../../lib/format';
 import { useBulkUpsertCollaborators, useCreateCollaborator, useDeleteCollaborators, useUpdateCollaborator } from '../../lib/mutations';
@@ -49,6 +50,25 @@ export function ColaboradoresPage() {
     if (target) setResettingFor(target);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openResetFor, collaborators]);
+
+  // A per-collaborator full re-scan of `sales` (routinely tens of
+  // thousands of rows) on every render — as this used to do by calling
+  // lastSaleDateFor(sales, c.matricula) inside the .map() below — meant
+  // typing a single character in the "Novo colaborador" form (or any other
+  // state change on this screen) re-ran collaborators.length × sales.length
+  // comparisons synchronously before the next paint. Indexing once per
+  // `sales` change instead turns that into a single O(sales) pass, reused
+  // for every collaborator's card.
+  const lastSaleByMatricula = useMemo(() => {
+    const map = new Map<string, string>();
+    (sales ?? []).forEach((s) => {
+      if (!s.dataISO) return;
+      const key = normalizeMatricula(s.matricula);
+      const current = map.get(key);
+      if (!current || s.dataISO > current) map.set(key, s.dataISO);
+    });
+    return map;
+  }, [sales]);
 
   if (!collaborators || !sales || !withLogin) return <PageLoading />;
 
@@ -181,7 +201,7 @@ export function ColaboradoresPage() {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             {collaborators.map((c) => {
-              const last = lastSaleDateFor(sales, c.matricula);
+              const last = lastSaleByMatricula.get(normalizeMatricula(c.matricula)) ?? null;
               const days = daysSince(last);
               const inativo = days !== null && days >= 60;
               const semVenda = last === null;
@@ -204,7 +224,10 @@ export function ColaboradoresPage() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      deleteCollaborators.mutate([c.id]);
+                      guard(
+                        `Excluir "${c.apelido || c.nome}"? Essa ação não pode ser desfeita. Confirme sua senha para continuar.`,
+                        () => deleteCollaborators.mutate([c.id]),
+                      );
                     }}
                     className="absolute top-2 right-2 text-slate-500 hover:text-rose-400"
                   >
