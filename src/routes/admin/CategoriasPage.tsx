@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
-import { useCreateCategoryType } from '../../lib/mutations';
+import { useReauthGuard } from '../../hooks/useReauthGuard';
+import { useCreateCategoryType, useDeleteCategoryType } from '../../lib/mutations';
 import { useCategoryTypes, useCollaborators } from '../../lib/queries';
 
 /** Gerenciar Categorias — lets the ADM create a new partnership category
@@ -9,14 +10,16 @@ import { useCategoryTypes, useCollaborators } from '../../lib/queries';
  * groups/products with keyword classification, its own scoring, and a
  * sidebar button (Sidebar.tsx renders one per row here beyond
  * 'biosintetica'). See CategoryTypePage.tsx for the screen a new category
- * actually gets. Deleting a category isn't offered yet — that needs the
- * ADM login/password re-confirmation gate planned for every deletion in
- * the system, not built yet. */
+ * actually gets. Deletion (behind the standing ADM password re-check —
+ * useReauthGuard) is only offered for categories the ADM created; `sistema`
+ * rows (Biosintética) aren't removable here. */
 export function CategoriasPage() {
   const { profile } = useAuth();
   const { data: categoryTypes } = useCategoryTypes();
   const { data: collaborators } = useCollaborators();
   const createCategory = useCreateCategoryType(profile?.store_id);
+  const deleteCategory = useDeleteCategoryType();
+  const { guard, reauthModal } = useReauthGuard();
   const [creating, setCreating] = useState(false);
   const [nome, setNome] = useState('');
   const [iconFile, setIconFile] = useState<File | null>(null);
@@ -60,8 +63,16 @@ export function CategoriasPage() {
     return <PageLoading />;
   }
 
+  function handleDelete(id: string, nome: string) {
+    guard(
+      `Excluir a categoria "${nome}"? Isso apaga também seus grupos, produtos e metas cadastrados. Essa ação não pode ser desfeita. Confirme sua senha para continuar.`,
+      () => deleteCategory.mutate(id),
+    );
+  }
+
   return (
     <div className="flex flex-col gap-3">
+      {reauthModal}
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <h3 className="font-semibold mb-1">Gerenciar Categorias</h3>
         <p className="text-xs text-slate-500">
@@ -167,7 +178,13 @@ export function CategoriasPage() {
                 {c.icone_url ? <img src={c.icone_url} alt="" className="w-7 h-7 object-contain" /> : <span className="text-slate-600 text-xs">—</span>}
               </div>
               <div className="text-xs text-center text-slate-300">{c.nome}</div>
-              {c.sistema && <div className="text-[10px] text-slate-600 uppercase tracking-wide">Sistema</div>}
+              {c.sistema ? (
+                <div className="text-[10px] text-slate-600 uppercase tracking-wide">Sistema</div>
+              ) : (
+                <button onClick={() => handleDelete(c.id, c.nome)} className="text-[11px] text-slate-500 hover:text-rose-400">
+                  Excluir
+                </button>
+              )}
             </div>
           ))}
         </div>
