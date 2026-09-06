@@ -3,7 +3,7 @@ import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
 import { PhotoCropModal } from '../../components/PhotoCropModal';
-import { grantCollaboratorLogin } from '../../lib/collaborators';
+import { grantCollaboratorLogin, resetCollaboratorLogin } from '../../lib/collaborators';
 import { daysSince, lastSaleDateFor } from '../../lib/business/summary';
 import type { Collaborator } from '../../lib/business/types';
 import { fmtMoney } from '../../lib/format';
@@ -32,6 +32,7 @@ export function ColaboradoresPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<Collaborator | null>(null);
   const [grantingFor, setGrantingFor] = useState<Collaborator | null>(null);
+  const [resettingFor, setResettingFor] = useState<Collaborator | null>(null);
 
   if (!collaborators || !sales || !withLogin) return <PageLoading />;
 
@@ -202,7 +203,7 @@ export function ColaboradoresPage() {
                   >
                     {inativo ? `Inativo${semVenda ? '' : ` · ${days}d`}` : 'Ativo'}
                   </span>
-                  {!hasLogin && (
+                  {!hasLogin ? (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -211,6 +212,16 @@ export function ColaboradoresPage() {
                       className="text-[11px] rounded-lg border border-slate-700 px-2 py-1 text-slate-300 hover:bg-slate-800 w-full"
                     >
                       🔑 Criar acesso
+                    </button>
+                  ) : (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setResettingFor(c);
+                      }}
+                      className="text-[11px] rounded-lg border border-slate-700 px-2 py-1 text-slate-300 hover:bg-slate-800 w-full"
+                    >
+                      🔑 Gerar nova senha
                     </button>
                   )}
                 </div>
@@ -233,6 +244,7 @@ export function ColaboradoresPage() {
       )}
 
       {grantingFor && <GrantLoginModal collaborator={grantingFor} onClose={() => setGrantingFor(null)} />}
+      {resettingFor && <ResetLoginModal collaborator={resettingFor} onClose={() => setResettingFor(null)} />}
     </div>
   );
 }
@@ -434,6 +446,55 @@ function GrantLoginModal({ collaborator, onClose }: { collaborator: Collaborator
           </button>
           <button type="submit" disabled={busy} className="flex-1 rounded-lg bg-cyan-500 text-slate-950 font-medium px-3 py-2 text-sm disabled:opacity-50">
             {busy ? 'Criando…' : 'Criar acesso'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function ResetLoginModal({ collaborator, onClose }: { collaborator: Collaborator; onClose: () => void }) {
+  const [senha, setSenha] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      await resetCollaboratorLogin(collaborator.id, senha);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao gerar nova senha');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50" onClick={onClose}>
+      <form onSubmit={handleSubmit} className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-5" onClick={(e) => e.stopPropagation()}>
+        <h3 className="font-semibold mb-1">Gerar nova senha — {collaborator.apelido || collaborator.nome}</h3>
+        <p className="text-xs text-slate-500 mb-4">
+          Isso substitui a senha atual do colaborador (matrícula <b>#{collaborator.matricula}</b>) pela informada abaixo.
+        </p>
+        <input
+          type="password"
+          required
+          minLength={6}
+          placeholder="Nova senha (mín. 6 caracteres)"
+          value={senha}
+          onChange={(e) => setSenha(e.target.value)}
+          className="input"
+        />
+        {error && <p className="text-xs text-rose-400 mt-2">{error}</p>}
+        <div className="flex gap-2 mt-4">
+          <button type="button" onClick={onClose} className="flex-1 rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-300">
+            Cancelar
+          </button>
+          <button type="submit" disabled={busy} className="flex-1 rounded-lg bg-cyan-500 text-slate-950 font-medium px-3 py-2 text-sm disabled:opacity-50">
+            {busy ? 'Salvando…' : 'Gerar nova senha'}
           </button>
         </div>
       </form>

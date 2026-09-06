@@ -120,6 +120,8 @@ interface EditorState {
   /** Contain-fit scale for the logo within its zone — independent of the
    * zone's own w/h, which just define the placement area. */
   logoScale: number;
+  /** Whether the logo zone renders at all (image + its mask/moldura). */
+  mostrarLogo: boolean;
   referenceObjectUrl: string | null;
   foto: CardZone;
   logo: CardZone;
@@ -217,6 +219,7 @@ function blankEditor(): EditorState {
     logoUrl: null,
     uploadingLogo: false,
     logoScale: 0.85,
+    mostrarLogo: true,
     referenceObjectUrl: null,
     foto: DEFAULT_FOTO_ZONE(),
     logo: DEFAULT_LOGO_ZONE(),
@@ -311,6 +314,7 @@ export function CardConquistaPage() {
       logoUrl: t.logoUrl ?? null,
       uploadingLogo: false,
       logoScale: t.logoScale ?? 0.85,
+      mostrarLogo: t.mostrarLogo ?? true,
       referenceObjectUrl: null,
       foto: t.foto,
       logo: t.logo,
@@ -339,6 +343,7 @@ export function CardConquistaPage() {
       logoUrl: BUILT_IN_TEMPLATE.logoUrl ?? null,
       uploadingLogo: false,
       logoScale: BUILT_IN_TEMPLATE.logoScale ?? 0.85,
+      mostrarLogo: BUILT_IN_TEMPLATE.mostrarLogo ?? true,
       referenceObjectUrl: null,
       foto: BUILT_IN_TEMPLATE.foto,
       logo: BUILT_IN_TEMPLATE.logo,
@@ -405,6 +410,7 @@ export function CardConquistaPage() {
         backgroundUrl: editing.backgroundUrl,
         logoUrl: editing.logoUrl,
         logoScale: editing.logoScale,
+        mostrarLogo: editing.mostrarLogo,
         foto: editing.foto as unknown as Json,
         logo: editing.logo as unknown as Json,
         textLayers: editing.textLayers as unknown as Json,
@@ -893,6 +899,7 @@ function TemplateEditor({
     backgroundUrl: editing.backgroundUrl ?? BUILT_IN_TEMPLATE.backgroundUrl,
     logoUrl: editing.logoUrl,
     logoScale: editing.logoScale,
+    mostrarLogo: editing.mostrarLogo,
     foto: editing.foto,
     logo: editing.logo,
     textLayers: editing.textLayers,
@@ -914,7 +921,7 @@ function TemplateEditor({
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing.backgroundUrl, editing.logoUrl, editing.logoScale, editing.foto, editing.logo, editing.textLayers, logoUrl]);
+  }, [editing.backgroundUrl, editing.logoUrl, editing.logoScale, editing.mostrarLogo, editing.foto, editing.logo, editing.textLayers, logoUrl]);
 
   function finishPen() {
     if (!penPoints || penPoints.length < 3) return;
@@ -1005,12 +1012,22 @@ function TemplateEditor({
 
         <div className="flex-1 min-w-0 rounded-lg border border-slate-800 px-3 py-2 flex flex-col gap-1">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] text-slate-500 truncate">Logo deste card (opcional)</span>
-            <label className="shrink-0 cursor-pointer text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-700 text-slate-300 hover:bg-slate-800">
+            <label className="flex items-center gap-1.5 text-[11px] text-slate-500 truncate cursor-pointer">
+              <input
+                type="checkbox"
+                checked={editing.mostrarLogo}
+                onChange={(e) => setEditing({ ...editing, mostrarLogo: e.target.checked })}
+              />
+              Logo deste card (opcional)
+            </label>
+            <label
+              className={`shrink-0 cursor-pointer text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-700 text-slate-300 hover:bg-slate-800 ${!editing.mostrarLogo ? 'opacity-50' : ''}`}
+            >
               <input
                 type="file"
                 accept="image/*"
                 className="hidden"
+                disabled={!editing.mostrarLogo}
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (f) onUploadLogo(f);
@@ -1020,6 +1037,9 @@ function TemplateEditor({
               {editing.uploadingLogo ? 'Enviando…' : editing.logoUrl ? 'Substituir logo' : 'Carregar logo'}
             </label>
           </div>
+          {!editing.mostrarLogo && (
+            <span className="text-[10px] text-amber-400">Logo e moldura de recorte desligadas — o card renderiza sem essa zona.</span>
+          )}
           {editing.logoUrl && (
             <button onClick={onRemoveLogo} className="self-start text-[10px] text-slate-500 hover:text-rose-400">
               Usar a logo da loja
@@ -1027,12 +1047,13 @@ function TemplateEditor({
           )}
         </div>
 
-        <div className="sm:w-[190px] shrink-0 rounded-lg border border-slate-800 px-3 py-2">
+        <div className={`sm:w-[190px] shrink-0 rounded-lg border border-slate-800 px-3 py-2 ${!editing.mostrarLogo ? 'opacity-50' : ''}`}>
           <label className="text-[10px] uppercase tracking-wide text-slate-500">Escala da logo ({Math.round(editing.logoScale * 100)}%)</label>
           <input
             type="range"
             min={30}
             max={150}
+            disabled={!editing.mostrarLogo}
             value={Math.round(editing.logoScale * 100)}
             onChange={(e) => setEditing({ ...editing, logoScale: Number(e.target.value) / 100 })}
             className="w-full"

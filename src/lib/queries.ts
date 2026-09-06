@@ -254,7 +254,7 @@ export function useCommissionRates() {
     queryFn: async () => {
       const { data, error } = await supabase.from('commission_rates').select('*').order('slot');
       if (error) throw error;
-      const byCategory: Record<CommissionRate['categoria'], CommissionRate[]> = { DERM: [], GEN: [], MP: [] };
+      const byCategory: Record<CommissionRate['categoria'], CommissionRate[]> = { MER: [], DERM: [], GEN: [], MP: [] };
       data.forEach((row) => {
         const rate = mapCommissionRate(row);
         byCategory[rate.categoria].push(rate);
@@ -283,6 +283,7 @@ export function useConquistaCardTemplates() {
         backgroundUrl: row.background_url,
         logoUrl: row.logo_url,
         logoScale: row.logo_scale ?? undefined,
+        mostrarLogo: row.mostrar_logo,
         textFontFamily: row.text_font_family ?? undefined,
         foto: row.foto as unknown as CardZone,
         logo: row.logo as unknown as CardZone,

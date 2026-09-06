@@ -85,6 +85,12 @@ export interface ConquistaCardTemplate {
   /** Contain-fit scale multiplier for the logo within its zone (defaults to
    * 0.85 — the previous hardcoded value — when unset). */
   logoScale?: number;
+  /** Whether the logo zone (image + its mask/moldura de recorte) renders at
+   * all — defaults to true (unset) so templates saved before this toggle
+   * existed keep showing their logo exactly as before. Turning it off skips
+   * the whole zone, mask included: there's no point drawing an empty
+   * cutout frame with nothing inside it. */
+  mostrarLogo?: boolean;
   /** Up to 3 independent text layers — the multi-text-layer editor's data
    * model. Takes over text rendering entirely when set (even to an empty
    * array); `texto`/`textFontFamily` below are read only when it's unset,
@@ -350,8 +356,13 @@ export async function renderConquistaCard(template: ConquistaCardTemplate, conte
   // this is a no-op wait on every render after the first.
   if (typeof document !== 'undefined' && document.fonts) await document.fonts.ready;
 
+  const showLogo = template.mostrarLogo ?? true;
   const effectiveLogoUrl = template.logoUrl ?? content.logoUrl;
-  const [bg, photo, logo] = await Promise.all([loadImg(template.backgroundUrl), loadImg(content.photoUrl), loadImg(effectiveLogoUrl)]);
+  const [bg, photo, logo] = await Promise.all([
+    loadImg(template.backgroundUrl),
+    loadImg(content.photoUrl),
+    showLogo ? loadImg(effectiveLogoUrl) : Promise.resolve(null),
+  ]);
 
   const canvas = document.createElement('canvas');
   canvas.width = CANVAS_W;
@@ -362,7 +373,9 @@ export async function renderConquistaCard(template: ConquistaCardTemplate, conte
   if (bg) ctx.drawImage(bg, 0, 0, CANVAS_W, CANVAS_H);
 
   await drawZone(ctx, template.foto, CANVAS_W, CANVAS_H, (octx, rect) => drawCover(octx, photo, rect, '#334155'));
-  await drawZone(ctx, template.logo, CANVAS_W, CANVAS_H, (octx, rect) => drawContain(octx, logo, rect, '#ffffff', template.logoScale ?? 0.85));
+  if (showLogo) {
+    await drawZone(ctx, template.logo, CANVAS_W, CANVAS_H, (octx, rect) => drawContain(octx, logo, rect, '#ffffff', template.logoScale ?? 0.85));
+  }
 
   if (template.textLayers) {
     for (const layer of template.textLayers) {

@@ -85,11 +85,11 @@ export interface BioGroupGoal {
   peso: number;
 }
 
-/** Commission % config — Dermocosméticos/Genéricos/Marcas Exclusivas only.
- * `slot` lets a category register more than one independent commission
- * (Marcas Exclusivas uses slots 1-3; Dermo/Genéricos use slot 1 only). */
+/** Commission % config — Mercadoria Geral/Dermocosméticos/Genéricos/Marcas
+ * Exclusivas. `slot` lets a category register more than one independent
+ * commission (Marcas Exclusivas uses slots 1-3; the rest use slot 1 only). */
 export interface CommissionRate {
-  categoria: 'DERM' | 'GEN' | 'MP';
+  categoria: 'MER' | 'DERM' | 'GEN' | 'MP';
   slot: number;
   percentual: number;
   ativo: boolean;

@@ -10,9 +10,10 @@ import { fmtMoney } from '../../lib/format';
 import { useIndividualGoals, useUpdateCommissionRate, useUpdateGoal, useUpsertIndividualGoal } from '../../lib/mutations';
 import { useCollaborators, useCommissionRates, useGoals, useSales } from '../../lib/queries';
 
-// One editor per commission slot — Dermo/Genéricos keep a single slot (1),
-// Marcas Exclusivas registers 3 independent commissions.
-const COMMISSION_SLOTS: { categoria: 'DERM' | 'GEN' | 'MP'; slot: number; label: string }[] = [
+// One editor per commission slot — Mercadoria Geral/Dermo/Genéricos keep a
+// single slot (1), Marcas Exclusivas registers 3 independent commissions.
+const COMMISSION_SLOTS: { categoria: 'MER' | 'DERM' | 'GEN' | 'MP'; slot: number; label: string }[] = [
+  { categoria: 'MER', slot: 1, label: 'Mercadoria Geral' },
   { categoria: 'DERM', slot: 1, label: 'Dermocosméticos' },
   { categoria: 'GEN', slot: 1, label: 'Genérico' },
   { categoria: 'MP', slot: 1, label: 'Marcas Exclusivas — Comissão 1' },
@@ -485,17 +486,21 @@ function MetasComissoes() {
 
   if (!rates) return <PageLoading />;
 
-  function slotKey(categoria: 'DERM' | 'GEN' | 'MP', slot: number) {
+  function slotKey(categoria: 'MER' | 'DERM' | 'GEN' | 'MP', slot: number) {
     return `${categoria}-${slot}`;
   }
-  function fieldValue<K extends 'percentual' | 'ativo'>(categoria: 'DERM' | 'GEN' | 'MP', slot: number, field: K): { percentual: number; ativo: boolean }[K] {
+  function fieldValue<K extends 'percentual' | 'ativo'>(
+    categoria: 'MER' | 'DERM' | 'GEN' | 'MP',
+    slot: number,
+    field: K,
+  ): { percentual: number; ativo: boolean }[K] {
     const key = slotKey(categoria, slot);
     const edit = edits[key]?.[field];
     if (edit !== undefined) return edit;
     const stored = rates![categoria].find((r) => r.slot === slot);
     return (stored?.[field] ?? (field === 'ativo' ? false : 0)) as { percentual: number; ativo: boolean }[K];
   }
-  function setField(categoria: 'DERM' | 'GEN' | 'MP', slot: number, field: 'percentual' | 'ativo', value: number | boolean) {
+  function setField(categoria: 'MER' | 'DERM' | 'GEN' | 'MP', slot: number, field: 'percentual' | 'ativo', value: number | boolean) {
     const key = slotKey(categoria, slot);
     setEdits((prev) => ({
       ...prev,
@@ -520,7 +525,7 @@ function MetasComissoes() {
   return (
     <div className="flex flex-col gap-3">
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <h3 className="font-semibold mb-1">Comissões — Dermo / Genéricos / Marcas Exclusivas</h3>
+        <h3 className="font-semibold mb-1">Comissões — Mercadoria Geral / Dermo / Genéricos / Marcas Exclusivas</h3>
         <p className="text-xs text-slate-500 mb-4">
           Percentual de comissão por categoria, aplicado sobre o valor de cada venda. Marcas Exclusivas aceita até 3
           comissões independentes. "Exibir comissão" liga o botão liga/desliga correspondente na tela de detalhamento

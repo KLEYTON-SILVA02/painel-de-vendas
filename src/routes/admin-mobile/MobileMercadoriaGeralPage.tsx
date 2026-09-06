@@ -18,8 +18,10 @@ const ACCENT = '#f26122'; // laranja — mesma cor de mv2-cat-mercgeral
 // calls for here specifically: Total Vendido/Itens Vendidos, Falta p/
 // Meta/Dias Restantes, Meta Geral/Super Meta — each of the last pair
 // showing its own % opposite the value instead of separate "Atingimento"
-// cards. Mercadoria Geral has no commission_rates support (DB check
-// constraint limits that table to DERM/GEN/MP), so no commission bar here.
+// cards. Mercadoria Geral's own commission % (now configurable in
+// Configurações → Comissões, same as DERM/GEN/MP) isn't broken out into a
+// per-vendedor bar on this specific screen — that's covered by the
+// collaborator-facing "Comissões" mobile screen instead.
 export function MobileMercadoriaGeralPage() {
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
