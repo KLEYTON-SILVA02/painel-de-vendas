@@ -1049,6 +1049,7 @@ export type Database = {
           horario: Json
           meta_geral_fallback: number
           modelo_ranking: string
+          notify_on_sales_import: boolean
           ranking_moderno: boolean
           ranking_podium_bg_url: string | null
           ranking_podium_spots: Json | null
@@ -1063,6 +1064,7 @@ export type Database = {
           horario?: Json
           meta_geral_fallback?: number
           modelo_ranking?: string
+          notify_on_sales_import?: boolean
           ranking_moderno?: boolean
           ranking_podium_bg_url?: string | null
           ranking_podium_spots?: Json | null
@@ -1077,6 +1079,7 @@ export type Database = {
           horario?: Json
           meta_geral_fallback?: number
           modelo_ranking?: string
+          notify_on_sales_import?: boolean
           ranking_moderno?: boolean
           ranking_podium_bg_url?: string | null
           ranking_podium_spots?: Json | null

@@ -178,6 +178,8 @@ export function ConfiguracoesPage() {
 
       <NotificationSchedulesCard />
 
+      <ImportNotificationToggleCard />
+
       <DangerZoneCard />
     </div>
   );
@@ -274,6 +276,41 @@ function NotificationSchedulesCard() {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+/** ADM screen for store_settings.notify_on_sales_import: a second,
+ * independent trigger for the same push pipeline as NotificationSchedulesCard
+ * above — instead of (or alongside) a fixed horário, this one fires right
+ * after every spreadsheet import, one personalized sales summary per
+ * collaborator who appears in it that day (see the sales_notify_on_import
+ * trigger in supabase/migrations/0041_notifications_on_sales_import.sql).
+ * Both can be on at once; this toggle only controls the import-triggered one. */
+function ImportNotificationToggleCard() {
+  const { profile } = useAuth();
+  const { data: storeSettings } = useStoreSettings();
+  const updateSettings = useUpdateStoreSettings(profile?.store_id);
+
+  if (!storeSettings) return null;
+  const enabled = storeSettings.notify_on_sales_import;
+
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+      <h3 className="text-amber-400 font-semibold mb-1">📥 Notificação automática ao importar vendas</h3>
+      <p className="text-xs text-slate-500 mb-3">
+        Toda vez que uma planilha de vendas for importada, cada colaborador que aparece nela recebe na hora um resumo
+        pessoal das vendas do dia, filtrado pelas categorias do próprio setor. Funciona junto com os horários
+        programados acima — pode deixar os dois ligados, só um deles, ou nenhum.
+      </p>
+      <button
+        onClick={() => updateSettings.mutate({ notify_on_sales_import: !enabled })}
+        disabled={updateSettings.isPending}
+        className="rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+        style={enabled ? { borderColor: '#14ff00', color: '#14ff00' } : { borderColor: '#334155', color: '#94a3b8' }}
+      >
+        {enabled ? 'Ativado' : 'Desativado'}
+      </button>
     </div>
   );
 }
