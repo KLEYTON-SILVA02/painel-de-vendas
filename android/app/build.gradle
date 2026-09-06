@@ -29,6 +29,15 @@ android {
                 storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
                 keyAlias System.getenv('ANDROID_KEY_ALIAS')
                 keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+                // Declarado explicitamente (em vez de depender do padrão
+                // implícito do Android Gradle Plugin) para deixar auditável
+                // que o pacote de release sai assinado nos esquemas v1
+                // (compatibilidade com aparelhos antigos) e v2/v3 (os
+                // exigidos pelas checagens modernas de integridade do
+                // Android/Play Protect).
+                enableV1Signing true
+                enableV2Signing true
+                enableV3Signing true
             }
         }
     }
