@@ -1,11 +1,15 @@
-import { conquistaTierLabel, isUnitConquista, type ConquistaCategoria, type ConquistaRow } from './business/conquistas';
-import { fmtDateBR, fmtMoney } from './format';
-import { loadImg, roundRect } from './rankingImage';
+import { conquistaTierLabel, conquistaTierParts, type ConquistaCategoria, type ConquistaRow } from './business/conquistas';
+import { CANVAS_H, CANVAS_W, renderConquistaCard, type ConquistaCardTemplate } from './conquistaCardRender';
+import { fmtDateBR } from './format';
 
-// "Copiar galeria (imagem)" for Galeria de Conquistas — adaptive layout:
-// 1-3 achievers get large centered cards (70px avatar), 4-10 get a
-// horizontal strip of smaller cards (32px avatar) evenly distributed.
-// Reuses loadImg/roundRect from rankingImage.ts (same canvas primitives).
+// "Copiar galeria (imagem)" for Galeria de Conquistas — now renders each
+// achiever through the exact same engine as the on-screen figurinha
+// (renderConquistaCard, using the ADM's active template), instead of the
+// old hand-drawn generic box. A single achiever is copied as that card
+// alone (matching "Baixar imagem"/"Copiar imagem" for one figurinha
+// one-for-one); 2+ achievers get their real cards laid out in a grid on
+// one canvas, with a small header/footer so the result still reads as a
+// gallery rather than a loose pile of cards.
 
 export async function generateConquistaImageBlob(
   rows: ConquistaRow[],
@@ -13,14 +17,47 @@ export async function generateConquistaImageBlob(
   catLabel: string,
   fromDate: string,
   toDate: string,
-  storeName?: string,
+  storeName: string | undefined,
+  template: ConquistaCardTemplate,
+  logoUrl: string | null | undefined,
+  color: string,
 ): Promise<Blob | null> {
-  const isUnit = isUnitConquista(categoria);
-  const formatMetric = (r: ConquistaRow) => (isUnit ? `${r.itens} un.` : fmtMoney(r.valor));
   const achievers = rows.slice(0, 10);
+  if (achievers.length === 0) return null;
 
-  const W = 1000;
-  const H = 620;
+  const cards = await Promise.all(
+    achievers.map((r) => {
+      const { valor: valorText, categoria: categoriaText } = conquistaTierParts(categoria, r.tier);
+      return renderConquistaCard(template, {
+        photoUrl: r.foto,
+        logoUrl: logoUrl ?? null,
+        tierText: conquistaTierLabel(categoria, r.tier),
+        valorText,
+        categoriaText,
+        color,
+      });
+    }),
+  );
+
+  // A single achiever: the card itself IS the deliverable — no gallery
+  // chrome wrapped around it, straight copy of what the template produces.
+  if (cards.length === 1) {
+    return new Promise((resolve) => cards[0].toBlob((blob) => resolve(blob), 'image/png'));
+  }
+
+  const cardAspect = CANVAS_H / CANVAS_W;
+  const cardW = cards.length <= 3 ? 260 : cards.length <= 6 ? 210 : 170;
+  const cardH = Math.round(cardW * cardAspect);
+  const gap = 24;
+  const cols = Math.min(cards.length, cards.length <= 3 ? cards.length : 5);
+  const rowsCount = Math.ceil(cards.length / cols);
+  const margin = 40;
+  const headerH = 110;
+  const footerH = 40;
+
+  const W = cols * cardW + (cols - 1) * gap + margin * 2;
+  const H = headerH + rowsCount * cardH + (rowsCount - 1) * gap + footerH + margin;
+
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
@@ -37,82 +74,23 @@ export async function generateConquistaImageBlob(
   ctx.font = '700 15px Arial';
   ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'center';
-  ctx.fillText('🏆 GALERIA DE CONQUISTAS', W / 2, 46);
+  ctx.fillText('🏆 GALERIA DE CONQUISTAS', W / 2, 40);
   ctx.fillStyle = '#ffffff';
-  ctx.font = '800 34px Arial';
-  ctx.fillText(catLabel.toUpperCase(), W / 2, 86);
+  ctx.font = '800 30px Arial';
+  ctx.fillText(catLabel.toUpperCase(), W / 2, 74);
   ctx.fillStyle = '#00f0ff';
-  ctx.font = '600 14px Arial';
-  ctx.fillText(`${fmtDateBR(fromDate)} a ${fmtDateBR(toDate)}`, W / 2, 112);
+  ctx.font = '600 13px Arial';
+  ctx.fillText(`${fmtDateBR(fromDate)} a ${fmtDateBR(toDate)}`, W / 2, 96);
 
-  if (achievers.length === 0) {
-    ctx.fillStyle = '#8b90bf';
-    ctx.font = '600 18px Arial';
-    ctx.fillText('Nenhuma conquista no período.', W / 2, H / 2);
-  } else {
-    const imgs = await Promise.all(achievers.map((r) => loadImg(r.foto)));
-    const large = achievers.length <= 3;
-    const cardW = large ? 240 : 180;
-    const cardH = large ? 300 : 150;
-    const gap = large ? 40 : 20;
-    const totalW = achievers.length * cardW + (achievers.length - 1) * gap;
-    const startX = (W - totalW) / 2;
-    const cardY = large ? 190 : 260;
-    const avR = large ? 35 : 16;
-    const color = '#ffb700';
-
-    achievers.forEach((r, i) => {
-      const x = startX + i * (cardW + gap);
-      const cx = x + cardW / 2;
-
-      ctx.fillStyle = 'rgba(255,255,255,0.04)';
-      roundRect(ctx, x, cardY, cardW, cardH, 16);
-      ctx.fill();
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      roundRect(ctx, x, cardY, cardW, cardH, 16);
-      ctx.stroke();
-
-      const avCy = cardY + (large ? 60 : 40);
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(cx, avCy, avR, 0, Math.PI * 2);
-      ctx.closePath();
-      ctx.fillStyle = '#101426';
-      ctx.fill();
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      ctx.clip();
-      if (imgs[i]) {
-        ctx.drawImage(imgs[i]!, cx - avR, avCy - avR, avR * 2, avR * 2);
-      } else {
-        ctx.fillStyle = color;
-        ctx.font = `700 ${large ? 26 : 14}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText((r.apelido || r.nome || '?').charAt(0).toUpperCase(), cx, avCy);
-      }
-      ctx.restore();
-
-      ctx.fillStyle = '#ffffff';
-      ctx.font = `700 ${large ? 16 : 12}px Arial`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'alphabetic';
-      let nome = (r.apelido || r.nome || '').toUpperCase();
-      const maxLen = large ? 16 : 12;
-      if (nome.length > maxLen) nome = nome.slice(0, maxLen - 1) + '…';
-      ctx.fillText(nome, cx, avCy + avR + (large ? 26 : 18));
-
-      ctx.fillStyle = '#14ff00';
-      ctx.font = `700 ${large ? 15 : 12}px Arial`;
-      ctx.fillText(formatMetric(r), cx, avCy + avR + (large ? 48 : 36));
-
-      ctx.fillStyle = '#ffb700';
-      ctx.font = `800 ${large ? 14 : 11}px Arial`;
-      ctx.fillText(conquistaTierLabel(categoria, r.tier), cx, avCy + avR + (large ? 70 : 52));
-    });
-  }
+  const totalRowW = cols * cardW + (cols - 1) * gap;
+  const startX = (W - totalRowW) / 2;
+  cards.forEach((card, i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const x = startX + col * (cardW + gap);
+    const y = headerH + row * (cardH + gap);
+    ctx.drawImage(card, x, y, cardW, cardH);
+  });
 
   ctx.fillStyle = '#8b90bf';
   ctx.font = '500 12px Arial';
@@ -120,7 +98,7 @@ export async function generateConquistaImageBlob(
   ctx.fillText(
     `Gerado pelo Gestão de Vendas${storeName ? ' — ' + storeName : ''} · ${achievers.length} conquista${achievers.length === 1 ? '' : 's'}`,
     W / 2,
-    H - 18,
+    H - 16,
   );
 
   return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), 'image/png'));

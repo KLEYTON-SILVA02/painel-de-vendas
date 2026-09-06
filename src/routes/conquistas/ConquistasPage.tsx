@@ -80,7 +80,7 @@ export function ConquistasPage() {
   async function handleCopyImage() {
     setGenerating(true);
     try {
-      const blob = await generateConquistaImageBlob(filtered, catKey, info.label, dashFrom, dashTo, store?.nome_loja);
+      const blob = await generateConquistaImageBlob(filtered, catKey, info.label, dashFrom, dashTo, store?.nome_loja, activeTemplate, store?.logo_url, info.color);
       if (!blob) return;
       const copiedToClipboard = await tryCopyImage(blob);
       setImageModal({ url: URL.createObjectURL(blob), copied: copiedToClipboard });
