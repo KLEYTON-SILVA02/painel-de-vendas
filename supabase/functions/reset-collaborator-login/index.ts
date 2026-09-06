@@ -54,7 +54,11 @@ Deno.serve(async (req: Request) => {
   }
   const senha = body.senha || '';
   if (!body.collaborator_id || !senha) return jsonResponse({ error: 'collaborator_id and senha are required' }, 400);
-  if (senha.length < 6) return jsonResponse({ error: 'senha must be at least 6 characters' }, 400);
+  // Mirrors src/lib/passwordPolicy.ts — a client-side check alone is
+  // trivially bypassed by calling this function directly.
+  if (senha.length < 8 || !/[A-Za-z]/.test(senha) || !/\d/.test(senha)) {
+    return jsonResponse({ error: 'senha must be at least 8 characters and include both letters and numbers' }, 400);
+  }
 
   // callerClient (not admin) so this naturally stays scoped to the caller's store via RLS.
   const { data: collaborator, error: collabErr } = await callerClient

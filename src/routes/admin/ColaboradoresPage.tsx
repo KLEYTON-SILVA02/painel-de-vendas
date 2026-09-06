@@ -9,6 +9,7 @@ import { daysSince, lastSaleDateFor } from '../../lib/business/summary';
 import type { Collaborator } from '../../lib/business/types';
 import { fmtMoney } from '../../lib/format';
 import { useBulkUpsertCollaborators, useCreateCollaborator, useDeleteCollaborators, useUpdateCollaborator } from '../../lib/mutations';
+import { PASSWORD_HINT, PASSWORD_MIN_LENGTH, validatePassword } from '../../lib/passwordPolicy';
 import { useCollaborators, useCollaboratorsWithLogin, useSales } from '../../lib/queries';
 import { uploadPhoto } from '../../lib/storage';
 
@@ -425,6 +426,11 @@ function GrantLoginModal({ collaborator, onClose }: { collaborator: Collaborator
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    const policyError = validatePassword(senha);
+    if (policyError) {
+      setError(policyError);
+      return;
+    }
     setBusy(true);
     try {
       await grantCollaboratorLogin(collaborator.id, senha);
@@ -446,8 +452,8 @@ function GrantLoginModal({ collaborator, onClose }: { collaborator: Collaborator
         <input
           type="password"
           required
-          minLength={6}
-          placeholder="Senha (mín. 6 caracteres)"
+          minLength={PASSWORD_MIN_LENGTH}
+          placeholder={PASSWORD_HINT}
           value={senha}
           onChange={(e) => setSenha(e.target.value)}
           className="input"
@@ -474,6 +480,11 @@ function ResetLoginModal({ collaborator, onClose }: { collaborator: Collaborator
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    const policyError = validatePassword(senha);
+    if (policyError) {
+      setError(policyError);
+      return;
+    }
     setBusy(true);
     try {
       await resetCollaboratorLogin(collaborator.id, senha);
@@ -495,8 +506,8 @@ function ResetLoginModal({ collaborator, onClose }: { collaborator: Collaborator
         <input
           type="password"
           required
-          minLength={6}
-          placeholder="Nova senha (mín. 6 caracteres)"
+          minLength={PASSWORD_MIN_LENGTH}
+          placeholder={PASSWORD_HINT}
           value={senha}
           onChange={(e) => setSenha(e.target.value)}
           className="input"

@@ -27,7 +27,12 @@ export function BackupPage() {
     try {
       const backup: Record<string, unknown> = { exported_at: new Date().toISOString() };
       for (const table of BACKUP_TABLES) {
-        const { data, error } = await supabase.from(table).select('*');
+        // collaborators.celular/data_nascimento are no longer selectable via
+        // a plain table query (see migration 0050) — only list_store_collaborators()
+        // can read them, since it's the one place that decides row-by-row
+        // whether the caller is allowed to see those two columns.
+        const { data, error } =
+          table === 'collaborators' ? await supabase.rpc('list_store_collaborators') : await supabase.from(table).select('*');
         if (error) throw error;
         backup[table] = data;
       }

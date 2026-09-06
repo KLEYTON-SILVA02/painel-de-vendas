@@ -9,11 +9,19 @@ import { mapBioGroupGoal, mapCollaborator, mapCommissionRate, mapDynamic, mapGoa
 import type { BulkDeletableTable } from './mutations';
 import { supabase } from './supabase';
 
+// Goes through list_store_collaborators() (a SECURITY DEFINER RPC) instead
+// of a plain `.from('collaborators').select('*')` — celular/data_nascimento
+// are personal data only the ADM and the row's own collaborator should see,
+// and a raw table SELECT can't tell those two cases apart from "any other
+// colleague in the store" (which migration 0042 deliberately opened up, for
+// the Ranking's peer comparison). The RPC does that check per row and masks
+// the two columns to null for everyone else; the base table's grant for
+// those columns is revoked so this is the only way to read them in bulk.
 export function useCollaborators() {
   return useQuery({
     queryKey: ['collaborators'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('collaborators').select('*').order('nome');
+      const { data, error } = await supabase.rpc('list_store_collaborators').order('nome');
       if (error) throw error;
       return data.map(mapCollaborator);
     },

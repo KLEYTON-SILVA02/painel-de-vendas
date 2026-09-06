@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { PASSWORD_HINT, PASSWORD_MIN_LENGTH, validatePassword } from '../lib/passwordPolicy';
 import { supabase } from '../lib/supabase';
 import { buildWhatsAppLink } from '../lib/whatsapp';
 import '../styles/login-retro-future.css';
@@ -165,6 +166,11 @@ function AdminLoginForm() {
         const { error: err } = await supabase.auth.signInWithPassword({ email, password });
         if (err) setError('E-mail ou senha inválidos.');
       } else {
+        const policyError = validatePassword(password);
+        if (policyError) {
+          setError(policyError);
+          return;
+        }
         const { error: err } = await supabase.auth.signUp({ email, password });
         if (err) setError(err.message);
         else setError('Conta criada. Verifique o e-mail se a confirmação estiver ativa, ou apenas entre.');
@@ -182,7 +188,14 @@ function AdminLoginForm() {
       </label>
       <label className="mv2-input-group">
         <LockIcon />
-        <input type="password" required minLength={6} placeholder="Senha" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <input
+          type="password"
+          required
+          minLength={mode === 'signup' ? PASSWORD_MIN_LENGTH : undefined}
+          placeholder={mode === 'signup' ? PASSWORD_HINT : 'Senha'}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
       </label>
 
       <div className="mv2-form-row">
@@ -225,11 +238,17 @@ function CollaboratorLoginForm() {
     setError(null);
     setBusy(true);
     try {
+      // Same error message whether the matrícula doesn't exist or the senha
+      // is wrong — a distinct "matrícula não encontrada" message here would
+      // let anyone probe matrículas one by one and read the response as an
+      // oracle for which ones exist (and in which loja, since a resolved
+      // login email embeds the store's id). resolve_collaborator_email is
+      // also rate-limited server-side for the same reason.
       const { data: email, error: resolveErr } = await supabase.rpc('resolve_collaborator_email', {
         p_matricula: matricula,
       });
       if (resolveErr || !email) {
-        setError('Matrícula não encontrada.');
+        setError('Matrícula ou senha inválidos.');
         return;
       }
       const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
