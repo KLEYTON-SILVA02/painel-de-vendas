@@ -14,6 +14,7 @@ import {
   aggregateByDate,
   compareDateAggregate,
   deleteSalesForDates,
+  dispatchTodaysImportNotifications,
   findExistingImport,
   hashBytes,
   insertSalesInBatches,
@@ -23,6 +24,7 @@ import {
   updateSalesImportProgress,
   type RejectedRow,
 } from '../../lib/salesImport';
+import { todayISO } from '../../lib/dateRange';
 
 const MAX_SIZE = 50 * 1024 * 1024;
 const FIELDS: ImportField[] = ['data', 'matricula', 'vendedor', 'codigo', 'produto', 'qtd', 'valor'];
@@ -401,6 +403,14 @@ export function ImportarPage() {
         unclassifiedCount: unclassified,
         processingMs,
       });
+      // Fires once for the whole import, now that every batch has finished
+      // — see dispatchTodaysImportNotifications for why this used to be a
+      // per-batch trigger and what that cost (duplicate notifications +
+      // most of a 7-minute import time).
+      dispatchTodaysImportNotifications(
+        importRow.id,
+        rows.some((r) => r.data_iso === todayISO()),
+      );
       setConfirmResult({
         count: insertedCount,
         invalidDate,
