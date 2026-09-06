@@ -1,0 +1,12 @@
+-- CRÍTICO (auditoria de segurança): remove_inactive_collaborators() (migration
+-- 0021) é SECURITY DEFINER e varre/apaga colaboradores de TODAS as lojas do
+-- banco, sem nenhum filtro por store_id nem verificação de quem chamou —
+-- foi pensada para ser disparada só por um cron interno. Toda outra função
+-- de manutenção deste projeto (0002, 0025, 0034, 0036, 0039, 0041, 0047)
+-- revoga execute de public/anon/authenticated logo após ser criada; esta
+-- foi a única esquecida, deixando o Postgres com o GRANT automático a
+-- PUBLIC que toda função recebe ao ser criada — e por isso exposta via
+-- POST /rest/v1/rpc/remove_inactive_collaborators para qualquer usuário
+-- autenticado (e possivelmente anônimo) de qualquer loja, que poderia
+-- disparar a exclusão de colaboradores de OUTRAS lojas à vontade.
+revoke execute on function public.remove_inactive_collaborators() from public, anon, authenticated;
