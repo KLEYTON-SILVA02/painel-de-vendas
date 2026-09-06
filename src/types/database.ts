@@ -695,6 +695,48 @@ export type Database = {
           },
         ]
       }
+      password_requests: {
+        Row: {
+          collaborator_id: string
+          created_at: string
+          id: string
+          resolved_at: string | null
+          status: string
+          store_id: string
+        }
+        Insert: {
+          collaborator_id: string
+          created_at?: string
+          id?: string
+          resolved_at?: string | null
+          status?: string
+          store_id: string
+        }
+        Update: {
+          collaborator_id?: string
+          created_at?: string
+          id?: string
+          resolved_at?: string | null
+          status?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "password_requests_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "password_requests_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           categoria: string
@@ -1156,6 +1198,10 @@ export type Database = {
       sales_month_totals: {
         Args: never
         Returns: { year_month: string; valor_total: number; itens_total: number; vendas_total: number }[]
+      }
+      update_own_collaborator_photo: {
+        Args: { new_foto_url: string | null; new_foto_conquista_url: string | null }
+        Returns: undefined
       }
     }
     Enums: {

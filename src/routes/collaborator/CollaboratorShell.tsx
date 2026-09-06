@@ -1,12 +1,15 @@
+import { useState } from 'react';
 import { NavLink, Route, Routes } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
-import { HomeIcon, LeafIcon, TargetIcon, TrophyIcon } from '../../components/icons/NavIcons';
+import { CoinIcon, HomeIcon, LeafIcon, LogoutIcon, SettingsIcon, TargetIcon, TrophyIcon } from '../../components/icons/NavIcons';
 import { NotificationBell } from '../../components/NotificationBell';
 import { BALCAO_SETOR } from '../../lib/business/bio';
 import { useNativePushRegistration } from '../../lib/useNativePushRegistration';
 import { useCategoryTypes, useCollaborators } from '../../lib/queries';
 import '../../styles/mobile-v2.css';
 import { CollaboratorBioPage } from './CollaboratorBioPage';
+import { CollaboratorComissoesPage } from './CollaboratorComissoesPage';
+import { CollaboratorConfiguracoesPage } from './CollaboratorConfiguracoesPage';
 import { CollaboratorDinamicasPage } from './CollaboratorDinamicasPage';
 import { CollaboratorRankingPage } from './CollaboratorRankingPage';
 import { MetasVendasPage } from './MetasVendasPage';
@@ -32,10 +35,12 @@ export function CollaboratorShell() {
   // collaborator at a store that never created it shouldn't get a tab
   // pointing at a screen that has nothing to show.
   const hasBio = (categoryTypes ?? []).some((c) => c.chave === 'biosintetica');
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const tabs = [
     { to: '/', end: true, label: 'Metas/Vendas', icon: HomeIcon },
     { to: '/ranking', end: false, label: 'Ranking', icon: TrophyIcon },
+    { to: '/comissoes', end: false, label: 'Comissões', icon: CoinIcon },
     ...(isBalcao && hasBio ? [{ to: '/bio', end: false, label: 'Biosintética', icon: LeafIcon }] : []),
     { to: '/dinamicas', end: false, label: 'Dinâmicas', icon: TargetIcon },
   ];
@@ -43,18 +48,32 @@ export function CollaboratorShell() {
   return (
     <div className="mv2 mv2-collab-shell">
       <header className="mv2-collab-header">
-        <div className="mv2-collab-user">
-          {me?.foto ? <img src={me.foto} alt="" className="mv2-avatar" /> : <div className="mv2-avatar" />}
-          <div style={{ minWidth: 0 }}>
-            <div className="mv2-collab-name">{me?.apelido || me?.nome || 'Minhas vendas'}</div>
-            <div className="mv2-collab-role">Colaborador{me?.setor ? ` · ${me.setor}` : ''}</div>
-          </div>
+        <div className="mv2-collab-menu-wrap">
+          <button className="mv2-collab-user-btn" onClick={() => setMenuOpen((v) => !v)}>
+            {me?.foto ? <img src={me.foto} alt="" className="mv2-avatar" /> : <div className="mv2-avatar" />}
+            <div style={{ minWidth: 0 }}>
+              <div className="mv2-collab-name">{me?.apelido || me?.nome || 'Minhas vendas'}</div>
+              <div className="mv2-collab-role">Colaborador{me?.setor ? ` · ${me.setor}` : ''}</div>
+            </div>
+          </button>
+          {menuOpen && (
+            <>
+              <div className="mv2-collab-menu-backdrop" onClick={() => setMenuOpen(false)} />
+              <div className="mv2-collab-menu">
+                <NavLink to="/configuracoes" onClick={() => setMenuOpen(false)}>
+                  <SettingsIcon width={16} height={16} />
+                  Configurações
+                </NavLink>
+                <button onClick={() => signOut()}>
+                  <LogoutIcon width={16} height={16} />
+                  Sair
+                </button>
+              </div>
+            </>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <NotificationBell />
-          <button className="mv2-collab-signout" onClick={() => signOut()}>
-            Sair
-          </button>
         </div>
       </header>
 
@@ -72,8 +91,10 @@ export function CollaboratorShell() {
           <Routes>
             <Route path="/" element={<MetasVendasPage />} />
             <Route path="/ranking" element={<CollaboratorRankingPage />} />
+            <Route path="/comissoes" element={<CollaboratorComissoesPage />} />
             {isBalcao && hasBio && <Route path="/bio" element={<CollaboratorBioPage />} />}
             <Route path="/dinamicas" element={<CollaboratorDinamicasPage />} />
+            <Route path="/configuracoes" element={<CollaboratorConfiguracoesPage />} />
           </Routes>
         </main>
       </div>

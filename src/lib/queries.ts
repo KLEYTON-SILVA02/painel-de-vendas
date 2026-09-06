@@ -370,6 +370,46 @@ export function useNotifications() {
   });
 }
 
+/** ADM-only: pending "solicitar nova senha" requests from collaborators
+ * (see password_requests, migration 0045) — shown as a badge/list in the
+ * mobile admin shell so the ADM knows who's waiting for a new senha. Short
+ * polling for the same reason as useNotifications above: infrequent event,
+ * not worth a realtime subscription. */
+export function usePendingPasswordRequests() {
+  return useQuery({
+    queryKey: ['password_requests', 'pendente'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('password_requests')
+        .select('*')
+        .eq('status', 'pendente')
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return data;
+    },
+    refetchInterval: 60_000,
+  });
+}
+
+/** Collaborator-only: their own most recent password_requests row, if any —
+ * used to show "solicitação enviada" instead of letting them fire off a new
+ * one every time they open Configurações while one is still pendente. */
+export function useMyPasswordRequest() {
+  return useQuery({
+    queryKey: ['password_requests', 'mine'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('password_requests')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
 /** ADM-only: every notification_schedules row for the store, used by the
  * Configurações screen to list/create/edit the automatic dispatch times. */
 export function useNotificationSchedules() {

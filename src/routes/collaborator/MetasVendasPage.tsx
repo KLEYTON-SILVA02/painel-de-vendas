@@ -3,7 +3,8 @@ import { useAuth } from '../../auth/AuthContext';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
 import { diasRestantesNoMes, effectiveMetaGeral, getSuperMeta, goalProration } from '../../lib/business/goals';
 import { catTotals, computeSummary } from '../../lib/business/summary';
-import { fmtDateBR, fmtMoney } from '../../lib/format';
+import { monthFirstISO } from '../../lib/dateRange';
+import { fmtMoney } from '../../lib/format';
 import { useIndividualGoals } from '../../lib/mutations';
 import { useCollaborators, useGoals, useSales, useStoreSettings } from '../../lib/queries';
 import { MobileDateFilter } from '../admin-mobile/MobileDateFilter';
@@ -96,10 +97,15 @@ export function MetasVendasPage() {
   const myAtingimento = myMeta > 0 ? Math.min(999, (myValor / myMeta) * 100) : null;
   const myFalta = Math.max(0, (mySuper > myMeta ? mySuper : myMeta) - myValor);
 
-  const extract = mySales
-    .filter((s) => !s.dataISO || (s.dataISO >= dashFrom && s.dataISO <= dashTo))
-    .slice()
-    .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''));
+  // ---- Meta diária individual: (meta mensal - já vendido este mês) / dias
+  // restantes no mês — mesma fórmula de computeMetaDiariaRedistribuida, mas
+  // calculada aqui direto (em vez de reusar aquela função) porque ela
+  // filtra vendas pelo `grupo` literal da categoria, e MER nesta tela é meu
+  // total geral (todas as categorias), não um grupo específico — mesma
+  // convenção já usada acima para a coluna "Vendido".
+  const now = new Date();
+  const monthFirstStr = monthFirstISO(now.getFullYear(), now.getMonth());
+  const todayISOStr = now.toISOString().slice(0, 10);
 
   return (
     <div>
@@ -145,6 +151,7 @@ export function MetasVendasPage() {
               <th>Categoria</th>
               <th>Vendido</th>
               <th>Minha meta</th>
+              <th>Meta diária</th>
               <th>Atingim.</th>
             </tr>
           </thead>
@@ -159,6 +166,13 @@ export function MetasVendasPage() {
               const t = k === 'MER' ? { valor: myValor, qtd: myItens } : catTotals(mySales, dashFrom, dashTo, k);
               const metaIndividual = row?.participa ? Number(row.valor_meta) || 0 : 0;
               const pct = metaIndividual > 0 ? Math.min(999, (t.valor / metaIndividual) * 100) : null;
+              const realizadoMes =
+                k === 'MER'
+                  ? mySales
+                      .filter((s) => !s.dataISO || (s.dataISO >= monthFirstStr && s.dataISO <= todayISOStr))
+                      .reduce((a, s) => a + (Number(s.valor) || 0), 0)
+                  : catTotals(mySales, monthFirstStr, todayISOStr, k).valor;
+              const metaDiaria = metaIndividual > 0 ? Math.max(0, metaIndividual - realizadoMes) / Math.max(1, dias) : 0;
               return (
                 <tr key={k}>
                   <td>
@@ -169,42 +183,13 @@ export function MetasVendasPage() {
                   </td>
                   <td className="mv2-valor">{fmtMoney(t.valor)}</td>
                   <td>{metaIndividual > 0 ? fmtMoney(metaIndividual) : '—'}</td>
+                  <td>{metaIndividual > 0 ? fmtMoney(metaDiaria) : '—'}</td>
                   <td>{pct !== null ? `${pct.toFixed(0)}%` : '—'}</td>
                 </tr>
               );
             })}
           </tbody>
         </table>
-      </div>
-
-      <div className="mv2-card">
-        <div className="mv2-card-title">Minhas vendas</div>
-        {extract.length === 0 ? (
-          <div style={{ fontSize: 10, color: 'var(--mv2-texto-2)', padding: '8px 0', textAlign: 'center' }}>Nenhuma venda no período.</div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="mv2-data-table">
-              <thead>
-                <tr>
-                  <th>Data</th>
-                  <th>Produto</th>
-                  <th>Qtd</th>
-                  <th>Valor</th>
-                </tr>
-              </thead>
-              <tbody>
-                {extract.map((s) => (
-                  <tr key={s.id}>
-                    <td>{fmtDateBR(s.dataISO)}</td>
-                    <td>{s.produto}</td>
-                    <td>{s.qtd}</td>
-                    <td className="mv2-valor">{fmtMoney(s.valor)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
       </div>
     </div>
   );
