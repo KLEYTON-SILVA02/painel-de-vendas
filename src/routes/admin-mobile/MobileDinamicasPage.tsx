@@ -1,5 +1,6 @@
-import { useState, type FormEvent } from 'react';
+import { useId, useMemo, useState, type FormEvent } from 'react';
 import { useAuth } from '../../auth/AuthContext';
+import { DinamicaProgressList } from '../../components/ranking/DinamicaProgressList';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { useReauthGuard } from '../../hooks/useReauthGuard';
 import { computeDinamicaProgresso, computeDinamicaRanking, dynamicStatus, type DynamicStatus } from '../../lib/business/dynamics';
@@ -28,6 +29,16 @@ export function MobileDinamicasPage() {
   const createDynamic = useCreateDynamic(profile?.store_id);
   const deleteDynamic = useDeleteDynamic();
   const { guard, reauthModal } = useReauthGuard();
+
+  // Real product names as they appear in the sales history — see the same
+  // comment on DinamicasPage.tsx's desktop counterpart.
+  const productNames = useMemo(() => {
+    const set = new Set<string>();
+    (sales ?? []).forEach((s) => {
+      if (s.produto) set.add(s.produto);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [sales]);
 
   if (!dynamics || !sales || !collaborators) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
@@ -100,7 +111,12 @@ export function MobileDinamicasPage() {
       <MobileDateFilter />
 
       {tab === 'ativas' && (
-        <MobileNewDynamicForm collaborators={collaborators} onCreate={(input) => createDynamic.mutate(input)} creating={createDynamic.isPending} />
+        <MobileNewDynamicForm
+          collaborators={collaborators}
+          productNames={productNames}
+          onCreate={(input) => createDynamic.mutate(input)}
+          creating={createDynamic.isPending}
+        />
       )}
 
       <div style={{ margin: '0 18px' }}>
@@ -135,10 +151,12 @@ export function MobileDinamicasPage() {
 
 function MobileNewDynamicForm({
   collaborators,
+  productNames,
   onCreate,
   creating,
 }: {
   collaborators: Collaborator[];
+  productNames: string[];
   onCreate: (input: {
     titulo: string;
     descricao: string;
@@ -163,6 +181,7 @@ function MobileNewDynamicForm({
   const [produtos, setProdutos] = useState<string[]>([]);
   const [participantes, setParticipantes] = useState<string[]>([]);
   const [expanded, setExpanded] = useState(false);
+  const produtosListId = useId();
 
   function addProduto() {
     const nome = produtoInput.trim();
@@ -244,7 +263,18 @@ function MobileNewDynamicForm({
 
       <div>
         <div className="mv2-row" style={{ gap: 6 }}>
-          <input style={{ flex: 1 }} placeholder="Produtos participantes" value={produtoInput} onChange={(e) => setProdutoInput(e.target.value)} />
+          <input
+            style={{ flex: 1 }}
+            list={produtosListId}
+            placeholder="Buscar produto ou digitar nome/palavra-chave"
+            value={produtoInput}
+            onChange={(e) => setProdutoInput(e.target.value)}
+          />
+          <datalist id={produtosListId}>
+            {productNames.map((nome) => (
+              <option key={nome} value={nome} />
+            ))}
+          </datalist>
           <button type="button" className="mv2-btn-outline" style={{ flex: 'none', padding: '0 14px' }} onClick={addProduto}>
             Adicionar
           </button>
@@ -384,50 +414,20 @@ function MobileDinamicaAccordionItem({
             </table>
           </div>
 
-          <div style={{ fontSize: 9, fontWeight: 700, margin: '10px 0 4px' }}>Detalhamento por Colaborador</div>
-          <div style={{ overflowX: 'auto' }}>
-            <table className="mv2-data-table">
-              <thead>
-                <tr>
-                  <th>Nome</th>
-                  <th>Meta</th>
-                  <th>Realizado</th>
-                  <th>% Alcançado</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {ranking.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} style={{ textAlign: 'center', color: 'var(--mv2-texto-2)', padding: 8 }}>
-                      Nenhum participante com vendas ainda.
-                    </td>
-                  </tr>
-                ) : (
-                  ranking.map((r) => {
-                    const rValor = isUnidade ? r.itens : r.valor;
-                    const rPct = d.metaValor > 0 ? Math.min(999, (rValor / d.metaValor) * 100) : 0;
-                    return (
-                      <tr key={r.matricula}>
-                        <td>{r.apelido || r.nome}</td>
-                        <td>{d.metaValor > 0 ? (isUnidade ? `${d.metaValor} un.` : fmtMoney(d.metaValor)) : '—'}</td>
-                        <td>{isUnidade ? `${rValor} un.` : fmtMoney(rValor)}</td>
-                        <td className={rPct >= 100 ? 'mv2-ok' : rPct < 50 ? 'mv2-low' : undefined}>{rPct.toFixed(0)}%</td>
-                        <td>
-                          <button
-                            onClick={() => setCardMatricula(r.matricula)}
-                            style={{ background: 'none', border: '1px solid var(--mv2-ciano-claro)', borderRadius: 999, color: '#fff', fontSize: 6.5, padding: '2px 6px', cursor: 'pointer' }}
-                          >
-                            Cartão
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+          <div style={{ fontSize: 9, fontWeight: 700, margin: '10px 0 4px' }}>Ranking dos Participantes</div>
+          <DinamicaProgressList
+            ranking={ranking}
+            metaValor={d.metaValor}
+            isUnidade={isUnidade}
+            renderAction={(r) => (
+              <button
+                onClick={() => setCardMatricula(r.matricula)}
+                style={{ background: 'none', border: '1px solid var(--mv2-ciano-claro)', borderRadius: 999, color: '#fff', fontSize: 6.5, padding: '2px 6px', cursor: 'pointer' }}
+              >
+                Cartão
+              </button>
+            )}
+          />
         </div>
       )}
 
