@@ -574,6 +574,27 @@ export function useCreateCategoryType(storeId: string | undefined) {
   });
 }
 
+/** Deletes a partnership category (Gerenciar Categorias). `on delete
+ * cascade` on bio_groups.category_type_id / bio_group_goals.category_type_id
+ * (migration 0025) takes its groups/products/goals down with it — nothing
+ * orphaned. The RLS delete policy already blocks this for non-admins; the
+ * screen itself also hides the delete button for `sistema` rows
+ * (Biosintética), which aren't meant to be removable. */
+export function useDeleteCategoryType() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('category_types').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['category_types'] });
+      qc.invalidateQueries({ queryKey: ['bio_groups'] });
+      qc.invalidateQueries({ queryKey: ['bio_group_goals'] });
+    },
+  });
+}
+
 export function useDeleteDynamic() {
   const qc = useQueryClient();
   return useMutation({
