@@ -275,3 +275,24 @@ export async function insertSalesInBatches(
   }
   return { insertedCount, rejected };
 }
+
+/** Fires the "resumo de vendas atualizado" notification exactly once for
+ * this import, after every batch has finished inserting — previously this
+ * lived in an AFTER STATEMENT trigger on `sales`, which fired once per
+ * 500-row batch instead of once per import (insertSalesInBatches above
+ * chunks a large file into several separate INSERT statements), causing
+ * both a duplicate notification per collaborator per batch and a full
+ * recompute of their day+month totals on every one of those firings. The
+ * RPC itself no-ops if this import didn't touch today's date (see
+ * migration 0052), so it's safe to call unconditionally — but skipping the
+ * call entirely for a purely-historical import avoids the network round
+ * trip. Best-effort: a failure here shouldn't surface as an import error
+ * when the rows themselves saved fine. */
+export async function dispatchTodaysImportNotifications(importId: string, hasTodayRow: boolean): Promise<void> {
+  if (!hasTodayRow) return;
+  try {
+    await supabase.rpc('dispatch_todays_import_notifications', { p_import_id: importId });
+  } catch {
+    // best-effort — see comment above
+  }
+}

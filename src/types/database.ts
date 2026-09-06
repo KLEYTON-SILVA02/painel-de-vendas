@@ -1207,6 +1207,10 @@ export type Database = {
           created_at: string
         }[]
       }
+      dispatch_todays_import_notifications: {
+        Args: { p_import_id: string }
+        Returns: undefined
+      }
       remove_inactive_collaborators: { Args: never; Returns: undefined }
       resolve_collaborator_email: {
         Args: { p_matricula: string }
