@@ -318,6 +318,7 @@ export type Database = {
           logo: Json
           logo_scale: number | null
           logo_url: string | null
+          mostrar_logo: boolean
           name: string
           store_id: string
           text_font_family: string | null
@@ -333,6 +334,7 @@ export type Database = {
           logo: Json
           logo_scale?: number | null
           logo_url?: string | null
+          mostrar_logo?: boolean
           name: string
           store_id: string
           text_font_family?: string | null
@@ -348,6 +350,7 @@ export type Database = {
           logo?: Json
           logo_scale?: number | null
           logo_url?: string | null
+          mostrar_logo?: boolean
           name?: string
           store_id?: string
           text_font_family?: string | null

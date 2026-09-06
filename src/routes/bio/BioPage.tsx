@@ -4,10 +4,11 @@ import { useAuth } from '../../auth/AuthContext';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
 import { SalesListLockedNotice } from '../../components/SalesListLockedNotice';
-import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
+import { PodiumSplit, type PodiumSpots } from '../../components/ranking/PodiumSplit';
 import {
   auditBioOutsideBalcao,
   BALCAO_SETOR,
+  computeBioOutsideRanking,
   computeBioSummary,
   groupBioRows,
   type BioSummaryRow,
@@ -101,7 +102,8 @@ export function BioPage() {
         .slice(0, 150)
     : [];
 
-  const modeloRanking = storeSettings.modelo_ranking as 'escadinha' | 'lista';
+  const outsideRanking = computeBioOutsideRanking(sales, collaborators, bioGroups, bioWeights, dashFrom, dashTo, bioFilter, setoresElegiveis);
+  const premiumRanking = [...ranking.filter((r) => r.itens > 0), ...outsideRanking].sort((a, b) => b.pontos - a.pontos);
   const totalItensBio = ranking.reduce((a, r) => a + r.itens, 0);
   const vendedoresAtivos = ranking.filter((r) => r.itens > 0).length;
   const dias = diasRestantesNoMes();
@@ -179,12 +181,12 @@ export function BioPage() {
         {collaborators.filter((c) => c.setor === BALCAO_SETOR).length === 0 ? (
           <div className="text-sm text-slate-500 py-4 text-center">Nenhum colaborador cadastrado no setor Balcão.</div>
         ) : (
-          <PodiumStaircase
-            ranking={ranking.filter((r) => r.itens > 0)}
+          <PodiumSplit
+            ranking={premiumRanking}
             getValue={(r) => r.pontos}
             formatValue={(v) => `${v.toFixed(1)} pts`}
-            getSub={(r) => `${r.itens} un.`}
-            variant={modeloRanking}
+            bgUrl={storeSettings.ranking_podium_bg_url}
+            spots={storeSettings.ranking_podium_spots as unknown as PodiumSpots | null}
           />
         )}
       </div>

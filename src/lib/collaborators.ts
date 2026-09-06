@@ -12,3 +12,15 @@ export async function grantCollaboratorLogin(collaboratorId: string, senha: stri
   if (error) throw error;
   return data;
 }
+
+/** Calls the reset-collaborator-login edge function (service-role only
+ * operation: overwrites the password of a collaborator that already has a
+ * login). Grant only ever creates — this is the counterpart for a
+ * colaborador who forgot their senha and needs the ADM to set a new one. */
+export async function resetCollaboratorLogin(collaboratorId: string, senha: string) {
+  const { data, error } = await supabase.functions.invoke<{ ok: true }>('reset-collaborator-login', {
+    body: { collaborator_id: collaboratorId, senha },
+  });
+  if (error) throw error;
+  return data;
+}

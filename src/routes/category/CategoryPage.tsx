@@ -245,7 +245,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   const vendasAvailableRates =
     catKey === 'MP'
       ? [1, 2, 3].map((slot) => commissionRates.MP.find((r) => r.slot === slot) ?? { categoria: 'MP' as const, slot, percentual: 0, ativo: false })
-      : catKey === 'DERM' || catKey === 'GEN'
+      : catKey === 'DERM' || catKey === 'GEN' || catKey === 'MER'
         ? commissionRates[catKey].filter((r) => r.ativo)
         : [];
   const vendasActiveRate =
@@ -500,7 +500,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
           from={dashFrom}
           to={dashTo}
           extract={extract}
-          commissionRates={catKey === 'DERM' || catKey === 'GEN' || catKey === 'MP' ? commissionRates[catKey] : []}
+          commissionRates={catKey === 'DERM' || catKey === 'GEN' || catKey === 'MP' || catKey === 'MER' ? commissionRates[catKey] : []}
           isMP={catKey === 'MP'}
           onClose={() => setExtractMatricula(null)}
         />

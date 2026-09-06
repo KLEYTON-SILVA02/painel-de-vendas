@@ -144,7 +144,7 @@ export function useDailyEvolutionChart({ salesData, collaboratorsData, goals, sp
 
 export function DailyEvolutionChart(props: DailyEvolutionChartProps) {
   const { catKey, setCatKey, active, isUnit, points, axisTop, axisMid } = useDailyEvolutionChart(props);
-  const CHART_H = 130;
+  const CHART_H = 170;
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
@@ -177,7 +177,14 @@ export function DailyEvolutionChart(props: DailyEvolutionChartProps) {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 6, overflowX: 'auto' }}>
+      {/* `overflowX: 'auto'` here makes the browser force overflowY to
+          'auto' too (the CSS overflow spec computes a `visible` axis to
+          `auto` as soon as its sibling axis isn't `visible`), which was
+          silently clipping the SM/MG badge whenever it poked above the
+          column wrapper's own box (pct at/near 100%). paddingTop reserves
+          room for the tallest possible badge stack so it never needs to
+          render past this container's top edge. */}
+      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingTop: 28 }}>
         {/* Y-axis: 3 marks (0, meta diária, super meta diária) against the
             active category's own goals — see useDailyEvolutionChart above. */}
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: CHART_H, fontSize: 9, color: '#8b90bf', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0, textAlign: 'right', paddingBottom: 18 }}>
