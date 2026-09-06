@@ -6,6 +6,7 @@ import { LoginPage } from './auth/LoginPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { PageLoading } from './components/PageLoading';
 import { queryPersister } from './lib/queryPersister';
+import { useNativeStatusBarInset } from './lib/useNativeStatusBarInset';
 import { AppShell } from './routes/AppShell';
 
 // Defaults (staleTime 0, refetchOnWindowFocus true) meant every navigation
@@ -66,6 +67,8 @@ function Root() {
 }
 
 export default function App() {
+  useNativeStatusBarInset();
+
   return (
     <ErrorBoundary>
       <PersistQueryClientProvider

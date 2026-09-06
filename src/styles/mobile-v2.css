@@ -266,10 +266,16 @@
    status do celular/APK), em vez de sticky, que reverte a barra para
    colada no topo assim que a rolagem passa do respiro inicial. O conteúdo
    abaixo (.mv2-category-menu) recebe a margem equivalente para nunca ficar
-   escondido atrás dela — ver mais abaixo. */
+   escondido atrás dela — ver mais abaixo.
+   env(safe-area-inset-top) é reforço, não a correção principal: no APK
+   instalado, quem realmente evita a barra de status do Android sobrepor o
+   conteúdo é o plugin nativo (useNativeStatusBarInset.ts, StatusBar.
+   setOverlaysWebView) — isso aqui só entra em jogo em contextos onde esse
+   plugin não se aplica (navegador comum, PWA), e some sozinho (vira 0)
+   quando o WebView já não desenha sob a área de sistema. */
 .mv2-topbar {
   position: fixed;
-  top: var(--mv2-topbar-h);
+  top: calc(var(--mv2-topbar-h) + env(safe-area-inset-top, 0px));
   left: 0;
   right: 0;
   height: var(--mv2-topbar-h);
@@ -324,10 +330,11 @@
 /* ---------- 2. Barra fixa do menu (categorias) ---------- */
 .mv2-category-menu {
   /* .mv2-topbar agora é position: fixed, ocupando de --mv2-topbar-h a
-     2×--mv2-topbar-h a partir do topo real da tela — esse é o primeiro
-     elemento em fluxo normal logo abaixo dela, então recebe essa margem
-     inteira (respiro + altura da barra) para não renderizar por baixo. */
-  margin-top: calc(var(--mv2-topbar-h) * 2);
+     2×--mv2-topbar-h (mais a área de sistema, se houver) a partir do topo
+     real da tela — esse é o primeiro elemento em fluxo normal logo abaixo
+     dela, então recebe essa margem inteira (respiro + altura da barra) para
+     não renderizar por baixo. */
+  margin-top: calc((var(--mv2-topbar-h) * 2) + env(safe-area-inset-top, 0px));
   display: flex;
   gap: 10px;
   padding: 8px 10px;
@@ -1186,7 +1193,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 10px 16px;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px;
   background: #080a08;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
