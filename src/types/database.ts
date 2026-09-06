@@ -1190,6 +1190,23 @@ export type Database = {
       current_role: { Args: never; Returns: string }
       current_store_id: { Args: never; Returns: string }
       is_admin: { Args: never; Returns: boolean }
+      list_store_collaborators: {
+        Args: never
+        Returns: {
+          id: string
+          store_id: string
+          matricula: string
+          nome: string
+          apelido: string | null
+          celular: string | null
+          foto_url: string | null
+          foto_conquista_url: string | null
+          setor: string | null
+          meta_individual: number
+          data_nascimento: string | null
+          created_at: string
+        }[]
+      }
       remove_inactive_collaborators: { Args: never; Returns: undefined }
       resolve_collaborator_email: {
         Args: { p_matricula: string }

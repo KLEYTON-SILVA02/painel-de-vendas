@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
+import { ReauthModal } from '../../components/ReauthModal';
 import { useAuth } from '../../auth/AuthContext';
 import { DIA_KEYS, DIA_LABELS, type DiaKey } from '../../lib/business/horario';
 import type { BioWeights } from '../../lib/business/types';
@@ -664,6 +665,7 @@ function DangerZoneCard() {
   const [checking, setChecking] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [showReauth, setShowReauth] = useState(false);
   const bulkDelete = useBulkDeleteTable(target, target);
 
   const targetInfo = DELETE_TARGETS.find((t) => t.key === target)!;
@@ -689,18 +691,22 @@ function DangerZoneCard() {
     }
   }
 
-  async function handleDelete() {
+  const periodo = scoped ? ` de ${monthName(month)}/${year}` : '';
+
+  function handleDeleteClick() {
     if (previewCount === null) {
-      await handleCheck();
+      handleCheck();
       return;
     }
     if (previewCount === 0) {
       setResult('Nada para excluir.');
       return;
     }
-    const periodo = scoped ? ` de ${monthName(month)}/${year}` : '';
-    const ok = window.confirm(`Excluir ${previewCount} registro(s) de ${targetInfo.label}${periodo}? Essa ação não pode ser desfeita.`);
-    if (!ok) return;
+    setShowReauth(true);
+  }
+
+  async function handleConfirmedDelete() {
+    setShowReauth(false);
     setDeleting(true);
     setResult(null);
     try {
@@ -801,7 +807,7 @@ function DangerZoneCard() {
         </button>
         {previewCount !== null && <span className="text-xs text-amber-400">{previewCount} registro(s) encontrado(s)</span>}
         <button
-          onClick={handleDelete}
+          onClick={handleDeleteClick}
           disabled={deleting}
           className="rounded-lg bg-rose-600 text-white px-3 py-1.5 text-xs font-medium disabled:opacity-50"
         >
@@ -809,6 +815,13 @@ function DangerZoneCard() {
         </button>
       </div>
       {result && <p className="text-xs text-slate-400 mt-2">{result}</p>}
+      {showReauth && (
+        <ReauthModal
+          message={`Isso exclui permanentemente ${previewCount} registro(s) de ${targetInfo.label}${periodo}. Confirme sua senha para continuar.`}
+          onConfirm={handleConfirmedDelete}
+          onCancel={() => setShowReauth(false)}
+        />
+      )}
     </div>
   );
 }
