@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
+import { useReauthGuard } from '../../hooks/useReauthGuard';
 import { computeDinamicaProgresso, computeDinamicaRanking, dynamicStatus, type DynamicStatus } from '../../lib/business/dynamics';
 import { normalize } from '../../lib/business/normalize';
 import type { Collaborator, Dynamic, Sale } from '../../lib/business/types';
@@ -26,6 +27,7 @@ export function MobileDinamicasPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const createDynamic = useCreateDynamic(profile?.store_id);
   const deleteDynamic = useDeleteDynamic();
+  const { guard, reauthModal } = useReauthGuard();
 
   if (!dynamics || !sales || !collaborators) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
@@ -51,8 +53,13 @@ export function MobileDinamicasPage() {
 
   const visibleList = tab === 'ativas' ? listaAtual : encerradas;
 
+  function handleDeleteDynamic(id: string) {
+    guard('Excluir esta dinâmica? Essa ação não pode ser desfeita. Confirme sua senha para continuar.', () => deleteDynamic.mutate(id));
+  }
+
   return (
     <div>
+      {reauthModal}
       <div className="mv2-screen-title mv2-dinamicas">DINÂMICAS</div>
 
       <div className="mv2-metrics-grid">
@@ -116,7 +123,7 @@ export function MobileDinamicasPage() {
                 nomeLoja={store?.nome_loja}
                 expanded={expanded === d.id}
                 onToggle={() => setExpanded(expanded === d.id ? null : d.id)}
-                onDelete={tab === 'ativas' ? () => deleteDynamic.mutate(d.id) : undefined}
+                onDelete={tab === 'ativas' ? () => handleDeleteDynamic(d.id) : undefined}
               />
             ))}
           </div>

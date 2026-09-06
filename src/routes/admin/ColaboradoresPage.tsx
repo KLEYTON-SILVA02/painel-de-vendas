@@ -4,6 +4,7 @@ import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
 import { PhotoCropModal } from '../../components/PhotoCropModal';
+import { useReauthGuard } from '../../hooks/useReauthGuard';
 import { grantCollaboratorLogin, resetCollaboratorLogin } from '../../lib/collaborators';
 import { daysSince, lastSaleDateFor } from '../../lib/business/summary';
 import type { Collaborator } from '../../lib/business/types';
@@ -25,6 +26,7 @@ export function ColaboradoresPage() {
   const bulkUpsertCollaborators = useBulkUpsertCollaborators(profile?.store_id);
   const updateCollaborator = useUpdateCollaborator();
   const deleteCollaborators = useDeleteCollaborators();
+  const { guard, reauthModal } = useReauthGuard();
 
   const [matricula, setMatricula] = useState('');
   const [nome, setNome] = useState('');
@@ -77,13 +79,20 @@ export function ColaboradoresPage() {
 
   function handleDeleteSelected() {
     if (selected.size === 0) return;
-    deleteCollaborators.mutate(Array.from(selected));
-    setSelected(new Set());
-    setSelectMode(false);
+    const count = selected.size;
+    guard(
+      `Excluir ${count} colaborador(es) selecionado(s)? Essa ação não pode ser desfeita. Confirme sua senha para continuar.`,
+      () => {
+        deleteCollaborators.mutate(Array.from(selected));
+        setSelected(new Set());
+        setSelectMode(false);
+      },
+    );
   }
 
   return (
     <div className="flex flex-col gap-3">
+      {reauthModal}
       <form onSubmit={handleAdd} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <h3 className="font-semibold mb-3">Novo colaborador</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 items-end">
