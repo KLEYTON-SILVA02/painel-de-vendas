@@ -165,12 +165,12 @@ export function BioPage() {
         </div>
       )}
 
-      <div className="flex gap-1">
+      <div className="flex gap-2">
         {(['ALL', ...BIO_GROUP_KEYS] as const).map((k) => (
           <button
             key={k}
             onClick={() => setBioFilter(k)}
-            className={`rounded-lg px-3 py-1.5 text-xs ${bioFilter === k ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+            className={`flex-1 rounded-lg px-3 py-2.5 text-sm font-medium text-center ${bioFilter === k ? 'bg-cyan-500 text-slate-950' : 'border border-slate-700 text-slate-300'}`}
           >
             {k === 'ALL' ? 'Todos' : k}
           </button>

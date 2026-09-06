@@ -60,8 +60,9 @@ export function CollaboratorComissoesPage() {
                 .filter((s) => !s.dataISO || (s.dataISO >= dashFrom && s.dataISO <= dashTo))
                 .reduce((acc, s) => ({ valor: acc.valor + (Number(s.valor) || 0), qtd: acc.qtd + (Number(s.qtd) || 0) }), { valor: 0, qtd: 0 })
             : catTotals(mySales, dashFrom, dashTo, key);
-        const rates = (commissionRates[key] ?? []).filter((r) => r.ativo);
-        const comissao = rates.reduce((a, r) => a + (t.valor * r.percentual) / 100, 0);
+        // Marcas Exclusivas tem 3 comissões independentes (slots 1-3) —
+        // cada uma vira seu próprio card, em vez de somadas num só valor.
+        const rates = (commissionRates[key] ?? []).filter((r) => r.ativo).sort((a, b) => a.slot - b.slot);
         const catSales = mySales
           .filter((s) => !s.dataISO || (s.dataISO >= dashFrom && s.dataISO <= dashTo))
           .filter((s) => key === 'MER' || s.grupo === key)
@@ -82,10 +83,25 @@ export function CollaboratorComissoesPage() {
                 <div className="mv2-value">{t.qtd} un.</div>
               </div>
             </div>
-            <div className="mv2-metric-card" style={{ ['--mv2-card-color' as string]: '#ffd700', marginBottom: 8 }}>
-              <div className="mv2-label">Comissão do mês</div>
-              <div className="mv2-value">{fmtMoney(comissao)}</div>
-            </div>
+            {key === 'MP' ? (
+              <div className="mv2-metrics-grid" style={{ margin: '0 0 8px', gridTemplateColumns: 'repeat(3, 1fr)' }}>
+                {[1, 2, 3].map((slot) => {
+                  const rate = rates.find((r) => r.slot === slot);
+                  const valor = rate ? (t.valor * rate.percentual) / 100 : 0;
+                  return (
+                    <div key={slot} className="mv2-metric-card" style={{ ['--mv2-card-color' as string]: '#ffd700' }}>
+                      <div className="mv2-label">Comissão {slot}</div>
+                      <div className="mv2-value">{fmtMoney(valor)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="mv2-metric-card" style={{ ['--mv2-card-color' as string]: '#ffd700', marginBottom: 8 }}>
+                <div className="mv2-label">Comissão do mês</div>
+                <div className="mv2-value">{fmtMoney(rates.reduce((a, r) => a + (t.valor * r.percentual) / 100, 0))}</div>
+              </div>
+            )}
 
             {!salesListEnabled ? (
               <MobileSalesListLockedNotice onEnable={toggleSalesListEnabled} />

@@ -249,7 +249,7 @@ export function MobileBioPage() {
 
       <MobileDateFilter />
 
-      <div className="mv2-group-tabs" style={{ margin: '0 18px 8px' }}>
+      <div className="mv2-group-tabs mv2-group-tabs-lg" style={{ margin: '0 18px 8px' }}>
         {(['ALL', ...BIO_GROUP_KEYS] as const).map((k) => (
           <button key={k} className={groupFilter === k ? 'active' : ''} onClick={() => setGroupFilter(k)}>
             {k === 'ALL' ? 'Todos' : k}

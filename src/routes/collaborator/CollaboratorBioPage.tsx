@@ -53,7 +53,7 @@ export function CollaboratorBioPage() {
     <div>
       <div className="mv2-screen-title mv2-biosintetica">BIOSINTÉTICA</div>
 
-      <div className="mv2-chip-row">
+      <div className="mv2-chip-row mv2-chip-row-lg">
         {(['ALL', ...BIO_GROUP_KEYS] as const).map((k) => (
           <button
             key={k}

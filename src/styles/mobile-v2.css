@@ -1060,6 +1060,13 @@
   background: var(--mv2-dourado);
   color: #080a08;
 }
+/* Filtro Todos/G1-G4 do ranking da Biosintética — maior que as abas comuns
+   de "Gerenciar Grupos" acima, ocupando a largura toda da tela. */
+.mv2-group-tabs.mv2-group-tabs-lg button {
+  padding: 11px 0;
+  font-size: 13px;
+  font-weight: 700;
+}
 .mv2-product-form input,
 .mv2-product-form select {
   width: 100%;
@@ -1348,10 +1355,20 @@
 }
 .mv2-chip-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
-  overflow-x: auto;
   margin: 0 18px 8px;
-  padding-bottom: 2px;
+}
+/* Filtro Todos/G1-G4 da Biosintética (colaborador) — maior, ocupando a
+   largura toda da tela, em vez dos chips compactos padrão. */
+.mv2-chip-row-lg {
+  gap: 8px;
+}
+.mv2-chip-row-lg .mv2-chip {
+  flex: 1;
+  text-align: center;
+  padding: 11px 0;
+  font-size: 12px;
 }
 .mv2-chip {
   flex-shrink: 0;

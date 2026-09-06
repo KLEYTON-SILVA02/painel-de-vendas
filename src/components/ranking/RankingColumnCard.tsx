@@ -101,7 +101,7 @@ export function RankingColumnCard({
         <span>{title}</span>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 360, overflowY: 'auto' }}>
+      <div className="ranking-col-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 360, overflowY: 'auto' }}>
         {ranking.length === 0 ? (
           <div style={{ padding: '16px 0' }} className="text-sm text-slate-500 text-center">
             Sem vendas.
