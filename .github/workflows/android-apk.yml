@@ -19,6 +19,12 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # `secrets.X` não pode ser referenciado direto num `if:` de step —
+      # o GitHub Actions rejeita a expressão com "Unrecognized named-value:
+      # 'secrets'" nesse contexto. Passar pelo `env` do job primeiro é o
+      # jeito documentado de contornar isso.
+      HAS_RELEASE_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -61,7 +67,7 @@ jobs:
       # pulado e o workflow segue publicando só o APK de debug normalmente.
       - name: Decode release keystore
         id: keystore
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        if: ${{ env.HAS_RELEASE_KEYSTORE == 'true' }}
         working-directory: android/app
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > release.keystore
