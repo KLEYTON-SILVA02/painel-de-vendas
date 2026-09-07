@@ -79,6 +79,12 @@ export interface Dynamic {
   participantes: string[]; // matriculas; empty = everyone
   /** Which sector(s) may participate — 'ambos' (default) means no restriction. */
   setorAlvo: 'balcao' | 'caixa' | 'ambos';
+  /** 'geral' (default): every participant is measured against the single
+   * shared metaValor. 'individual': each participant has their own target
+   * in metasIndividuais instead — metaValor is unused in that mode. */
+  metaModo: 'geral' | 'individual';
+  /** matricula -> individual target, only meaningful when metaModo === 'individual'. */
+  metasIndividuais: Record<string, number>;
 }
 
 export type BioGroupsProducts = Record<BioGroupKey, { nome: string; palavras: string[] }[]>;

@@ -6,6 +6,7 @@ import { CAT_KEYS, GOAL_UNIT_KEYS, type CategoryKey, type GoalCategoryKey } from
 import { computeMetaDiariaRedistribuida } from '../../lib/business/goals';
 import { distributeIndividualGoalsAuto } from '../../lib/business/individualGoals';
 import type { Goal } from '../../lib/business/types';
+import { VISITANTE_SETOR } from '../../lib/business/types';
 import { fmtMoney } from '../../lib/format';
 import { useIndividualGoals, useUpdateCommissionRate, useUpdateGoal, useUpsertIndividualGoal } from '../../lib/mutations';
 import { useCollaborators, useCommissionRates, useGoals, useSales } from '../../lib/queries';
@@ -335,31 +336,41 @@ function MetasIndividuais() {
   const { profile } = useAuth();
   const { data: goals } = useGoals();
   const { data: sales } = useSales();
-  const { data: collaborators } = useCollaborators();
+  const { data: collaboratorsRaw } = useCollaborators();
   const [catKey, setCatKey] = useState<CategoryKey>('DERM');
   const [alvo, setAlvo] = useState<'meta' | 'super'>('meta');
   const { data: individualGoals } = useIndividualGoals(catKey);
   const upsert = useUpsertIndividualGoal(profile?.store_id);
+  const updateGoal = useUpdateGoal(profile?.store_id);
   const [distributing, setDistributing] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkValue, setBulkValue] = useState(0);
+  const [applyingBulk, setApplyingBulk] = useState(false);
 
-  if (!goals || !sales || !collaborators || !individualGoals) {
+  if (!goals || !sales || !collaboratorsRaw || !individualGoals) {
     return <PageLoading />;
   }
+
+  // Visitante collaborators are view-only — they never sell, so they never
+  // belong in the palette of collaborators an individual goal can be
+  // assigned to (auto-distribute or bulk-apply alike).
+  const collaborators = collaboratorsRaw.filter((c) => c.setor !== VISITANTE_SETOR);
 
   const goal = goals[catKey] ?? defaultGoal(catKey);
   const isUnidade = goal.metrica === 'unidade';
   const campo = alvo === 'meta' ? 'valor_meta' : 'valor_super';
   const byCollaborator = new Map(individualGoals.map((r) => [r.collaborator_id, r]));
   const participantes = collaborators.filter((c) => byCollaborator.get(c.id)?.participa);
+  const allSelected = collaborators.length > 0 && collaborators.every((c) => selected.has(c.id));
 
   async function handleDistribuir() {
     setDistributing(true);
     try {
-      const participantMatriculas = collaborators!
+      const participantMatriculas = collaborators
         .filter((c) => byCollaborator.get(c.id)?.participa)
         .map((c) => c.matricula);
-      const result = distributeIndividualGoalsAuto(goal, alvo, participantMatriculas, sales!, collaborators!);
-      for (const c of collaborators!) {
+      const result = distributeIndividualGoalsAuto(goal, alvo, participantMatriculas, sales!, collaborators);
+      for (const c of collaborators) {
         if (result[c.matricula] === undefined) continue;
         await upsert.mutateAsync({
           categoria: catKey,
@@ -369,6 +380,29 @@ function MetasIndividuais() {
       }
     } finally {
       setDistributing(false);
+    }
+  }
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function toggleSelectAll() {
+    setSelected(allSelected ? new Set() : new Set(collaborators.map((c) => c.id)));
+  }
+
+  async function handleApplyBulk() {
+    setApplyingBulk(true);
+    try {
+      for (const id of selected) {
+        await upsert.mutateAsync({ categoria: catKey, collaboratorId: id, patch: { [campo]: bulkValue } });
+      }
+    } finally {
+      setApplyingBulk(false);
     }
   }
 
@@ -413,14 +447,71 @@ function MetasIndividuais() {
           {distributing ? 'Distribuindo…' : 'Distribuir automaticamente entre participantes'}
         </button>
       </div>
+
+      {/* Marca qual dos dois tipos de meta desta categoria (Meta Geral /
+          Super Meta) recebe redistribuição automática — mesmo flag que a
+          aba "Por Categoria" edita (goal.autoRedistribuir/superMetaAuto),
+          exposto aqui também para não precisar trocar de aba ao configurar
+          uma meta individual. */}
+      <div className="rounded-xl border border-slate-700 bg-slate-950/40 p-3 mb-3 flex flex-wrap gap-4">
+        <span className="text-xs text-slate-400 self-center">Redistribuição automática:</span>
+        <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+          <input
+            type="checkbox"
+            checked={goal.autoRedistribuir}
+            onChange={(e) => updateGoal.mutate({ categoria: catKey, patch: { auto_redistribuir: e.target.checked } })}
+          />
+          Meta Geral
+        </label>
+        <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+          <input
+            type="checkbox"
+            checked={goal.superMetaAuto}
+            onChange={(e) => updateGoal.mutate({ categoria: catKey, patch: { super_meta_auto: e.target.checked } })}
+          />
+          Super Meta
+        </label>
+      </div>
+
       <p className="text-xs text-slate-500 mb-3">
         Métrica desta categoria: <b>{isUnidade ? 'Unidade (un.)' : 'R$'}</b> · Participantes marcados:{' '}
         <b>{participantes.length}</b>
       </p>
+
+      {/* Seleção em massa: marca colaboradores na tabela abaixo, digita um
+          valor manual aqui e aplica de uma vez a todos os selecionados. */}
+      <div className="rounded-xl border border-slate-700 bg-slate-950/40 p-3 mb-3 flex flex-wrap items-end gap-3">
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">
+            Valor manual — {alvo === 'meta' ? 'Meta Geral' : 'Super Meta'} ({isUnidade ? 'un.' : 'R$'})
+          </label>
+          {isUnidade ? (
+            <input
+              type="number"
+              value={bulkValue}
+              onChange={(e) => setBulkValue(Number(e.target.value))}
+              className="w-32 rounded-md bg-slate-800 border border-slate-700 px-2 py-1.5 text-sm"
+            />
+          ) : (
+            <MoneyInput value={bulkValue} onChange={setBulkValue} className="w-32 rounded-md bg-slate-800 border border-slate-700 px-2 py-1.5 text-sm" />
+          )}
+        </div>
+        <button
+          onClick={handleApplyBulk}
+          disabled={applyingBulk || selected.size === 0}
+          className="rounded-lg bg-amber-500 text-slate-950 font-medium px-3 py-1.5 text-sm disabled:opacity-50"
+        >
+          {applyingBulk ? 'Aplicando…' : `Aplicar aos selecionados (${selected.size})`}
+        </button>
+      </div>
+
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-slate-400 border-b border-slate-800">
+              <th className="py-2 pr-3">
+                <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} title="Selecionar todos" />
+              </th>
               <th className="py-2 pr-3">Participa</th>
               <th className="py-2 pr-3">Colaborador</th>
               <th className="py-2 pr-3">
@@ -433,6 +524,9 @@ function MetasIndividuais() {
               const row = byCollaborator.get(c.id);
               return (
                 <tr key={c.id} className="border-b border-slate-900">
+                  <td className="py-2 pr-3">
+                    <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggleSelected(c.id)} />
+                  </td>
                   <td className="py-2 pr-3">
                     <input
                       type="checkbox"

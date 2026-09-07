@@ -818,6 +818,10 @@ interface SheetSummary {
 }
 
 const PREVIEW_ROWS_LIMIT = 200;
+// Both "sem regra" and "reclassificados" preview columns in VerifyStep show
+// at most this many products each — enough to spot-check without the
+// review screen growing unbounded on a large file.
+const RECLASSIFICATION_PREVIEW_LIMIT = 20;
 
 async function summarize(
   sheets: ParsedSheet[],
@@ -853,7 +857,7 @@ async function summarize(
       const { categoria, tier } = classifyProductTier(produto, codigo, inputs);
       if (tier >= 4) {
         baixaConfianca++;
-        if (amostras.length < 25) amostras.push({ produto, categoria: categoria!, tier });
+        if (amostras.length < RECLASSIFICATION_PREVIEW_LIMIT) amostras.push({ produto, categoria: categoria!, tier });
       }
       if (tier === 5 && categoria !== 'MP') produtosNovosSet.add(produto.toLowerCase());
 
@@ -889,7 +893,7 @@ async function summarize(
     total,
     baixaConfianca,
     produtosNovos: produtosNovosSet.size,
-    produtosNovosNomes: Array.from(produtosNovosSet).slice(0, 30),
+    produtosNovosNomes: Array.from(produtosNovosSet).slice(0, RECLASSIFICATION_PREVIEW_LIMIT),
     itensTotais,
     valorTotal,
     diasDistintos: diasSet.size,
@@ -965,23 +969,61 @@ function VerifyStep({
         </div>
       </div>
 
-      {options.produtos && s.produtosNovos > 0 && (
-        <>
-          <p className="text-xs text-slate-500 mb-2">
-            {s.produtosNovos} produto(s) sem regra de classificação cadastrada serão importados normalmente (com a
-            categoria padrão) e ficarão sinalizados em <b>ADM → Auditoria → Pendentes de Revisão</b> pra classificação
-            futura:
-          </p>
-          <div className="rounded-xl border border-amber-700/40 bg-slate-950/60 p-3 mb-3 max-h-32 overflow-y-auto">
-            <div className="flex flex-wrap gap-1.5">
-              {s.produtosNovosNomes.map((p) => (
-                <span key={p} className="text-xs bg-amber-900/40 text-amber-200 rounded-full px-2.5 py-1">
-                  {p}
-                </span>
-              ))}
+      {options.produtos && (s.produtosNovos > 0 || s.amostras.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+          {/* Lado esquerdo: sem categoria definida (nenhuma regra bateu). */}
+          <div>
+            <p className="text-xs text-slate-500 mb-2">
+              {s.produtosNovos} produto(s) sem regra de classificação cadastrada (prévia de até {RECLASSIFICATION_PREVIEW_LIMIT}) — serão
+              importados com a categoria padrão e ficarão sinalizados em <b>ADM → Auditoria → Pendentes de Revisão</b>:
+            </p>
+            <div className="rounded-xl border border-amber-700/40 bg-slate-950/60 p-3 h-56 overflow-y-auto">
+              {s.produtosNovosNomes.length === 0 ? (
+                <div className="text-xs text-slate-600 text-center py-4">Nenhum produto sem categoria.</div>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {s.produtosNovosNomes.map((p) => (
+                    <span key={p} className="text-xs bg-amber-900/40 text-amber-200 rounded-full px-2.5 py-1">
+                      {p}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
-        </>
+
+          {/* Lado direito: já reclassificados, com a categoria estipulada. */}
+          <div>
+            <p className="text-xs text-slate-500 mb-2">
+              Produtos já reclassificados, com a categoria estipulada (prévia de até {RECLASSIFICATION_PREVIEW_LIMIT}) — revise depois em
+              Auditoria se necessário:
+            </p>
+            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 h-56 overflow-y-auto">
+              {s.amostras.length === 0 ? (
+                <div className="text-xs text-slate-600 text-center py-4">Nenhum produto reclassificado.</div>
+              ) : (
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-left text-slate-400 border-b border-slate-800">
+                      <th className="py-1.5 pr-3">Produto</th>
+                      <th className="py-1.5 pr-3">Categoria</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {s.amostras.map((a, i) => (
+                      <tr key={i} className="border-b border-slate-900">
+                        <td className="py-1.5 pr-3">{a.produto}</td>
+                        <td className="py-1.5 pr-3">
+                          <span className="bg-slate-800 rounded-full px-2 py-0.5">{a.categoria}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {showVendedores && options.vendedores && (
@@ -994,32 +1036,6 @@ function VerifyStep({
             ))}
           </div>
         </div>
-      )}
-
-      {options.produtos && s.amostras.length > 0 && (
-        <>
-          <p className="text-xs text-slate-500 mb-2">Amostra de produtos com baixa confiança (revise depois em Auditoria se necessário):</p>
-          <div className="overflow-x-auto mb-3">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-left text-slate-400 border-b border-slate-800">
-                  <th className="py-1.5 pr-3">Produto</th>
-                  <th className="py-1.5 pr-3">Categoria sugerida</th>
-                </tr>
-              </thead>
-              <tbody>
-                {s.amostras.map((a, i) => (
-                  <tr key={i} className="border-b border-slate-900">
-                    <td className="py-1.5 pr-3">{a.produto}</td>
-                    <td className="py-1.5 pr-3">
-                      <span className="bg-slate-800 rounded-full px-2 py-0.5">{a.categoria}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
       )}
 
       {options.listaVendas && s.previewRows.length > 0 && (
@@ -1055,7 +1071,14 @@ function VerifyStep({
       )}
 
       {error && <p className="text-xs text-rose-400 mb-3">{error}</p>}
-      <div className="flex gap-2">
+      {/* Fica na mesma posição de sempre dentro do card, mas gruda no rodapé
+          da tela (position: sticky) enquanto a revisão é rolada pra cima ou
+          pra baixo — assim os dois botões continuam alcançáveis mesmo numa
+          planilha grande, sem precisar rolar até o final da página. */}
+      <div
+        className="flex gap-2 sticky bottom-0 py-2 -mx-4 px-4 rounded-b-2xl border-t border-slate-800"
+        style={{ background: 'rgba(15,23,42,.97)', backdropFilter: 'blur(4px)' }}
+      >
         <button onClick={onBack} className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300">
           ← Voltar ao mapeamento
         </button>

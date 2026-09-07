@@ -5,6 +5,7 @@
 // individual-goal configuration now lives exclusively in ADM > Metas >
 // Metas Individuais, and an achievement here is always one of the fixed
 // tiers below.
+import { normalizeMatricula } from './parsing';
 import { computeSummary, type SpecialListItem } from './summary';
 import type { Collaborator, Sale, SummaryRow } from './types';
 
@@ -181,4 +182,63 @@ export function computeConquistasDayGallery(
     ).length;
     return { dia, count };
   });
+}
+
+/** All 5 conquista categories in the app's fixed display order — used by
+ * the "Galeria de Figurinhas" monthly calendar, where each star maps to one
+ * category reached that day (5 categories = 5 stars). */
+export const ALL_CONQUISTA_CATEGORIAS: ConquistaCategoria[] = ['DERM', 'GEN', 'MP', 'LEVMEL', 'CHIP'];
+
+export interface DayAchievement {
+  dia: string;
+  /** Which of the 5 categories this collaborator reached a tier in, on this
+   * single day — length is the star count for that day (1-5), in the same
+   * fixed order as ALL_CONQUISTA_CATEGORIAS. */
+  categorias: ConquistaCategoria[];
+}
+
+/** Per-day achievement record for ONE collaborator across [fromDate,
+ * toDate] (a calendar month, for the Galeria de Figurinhas) — every day in
+ * range that has at least one category tier reached, with the list of which
+ * categories. Same day-by-day, tier-never-summed-across-days rule as
+ * computeConquistas (see its own doc comment); only days with 1+ achievement
+ * are returned, so a full month of zeros doesn't have to be rendered by the
+ * caller as literal empty entries. */
+export function computeCollaboratorDayAchievements(
+  sales: Sale[],
+  collaborators: Collaborator[],
+  matricula: string,
+  fromDate: string,
+  toDate: string,
+  specialLists?: { levmel: SpecialListItem[]; chip: SpecialListItem[] },
+): DayAchievement[] {
+  const targetKey = normalizeMatricula(matricula);
+  const salesByDay = bucketSalesByDay(sales, fromDate, toDate);
+  const results: DayAchievement[] = [];
+
+  for (let d = new Date(`${fromDate}T00:00:00`); d.toISOString().slice(0, 10) <= toDate; d.setDate(d.getDate() + 1)) {
+    const dia = d.toISOString().slice(0, 10);
+    const daySales = salesByDay.get(dia);
+    if (!daySales) continue;
+    const categorias: ConquistaCategoria[] = [];
+    for (const cat of ALL_CONQUISTA_CATEGORIAS) {
+      const tiers = CONQUISTA_TIERS_BY_CAT[cat];
+      const rows = computeSummary(daySales, collaborators, dia, dia, cat, specialLists);
+      const row = rows.find((r) => normalizeMatricula(r.matricula) === targetKey);
+      if (!row) continue;
+      if (tierForMetric(tiers, conquistaMetric(cat, row)) > 0) categorias.push(cat);
+    }
+    if (categorias.length > 0) results.push({ dia, categorias });
+  }
+  return results;
+}
+
+/** Total stars earned in the month + attainment percentage (stars earned /
+ * max possible stars, i.e. 5 × days in the month) — the header stats for
+ * the Galeria de Figurinhas PDF/summary. */
+export function conquistaCalendarTotals(achievements: DayAchievement[], diasNoMes: number): { totalEstrelas: number; percentual: number } {
+  const totalEstrelas = achievements.reduce((sum, a) => sum + a.categorias.length, 0);
+  const maxEstrelas = ALL_CONQUISTA_CATEGORIAS.length * diasNoMes;
+  const percentual = maxEstrelas > 0 ? (totalEstrelas / maxEstrelas) * 100 : 0;
+  return { totalEstrelas, percentual };
 }

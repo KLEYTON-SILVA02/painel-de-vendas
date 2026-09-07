@@ -6,18 +6,18 @@ import { fmtMoney } from '../../lib/format';
 // MobileDinamicasPage): a list, one row per participating collaborator —
 // not just the ones who already sold something, since the point is to show
 // who's IN the campaign, not only who's currently ahead — with a progress
-// bar showing how much of the dynamic's shared goal (metaValor) that
-// person's own realizado represents. This is independent of the store-wide
-// modelo_ranking setting (escadinha/lista, used for Dashboard/Category/Bio
-// rankings): Dinâmicas always renders this bar-list, per explicit request.
+// bar showing how much of that row's own goal (r.metaIndividual — either
+// the dynamic's single shared metaValor, or that participant's own target
+// in metaModo 'individual'; see computeDinamicaRanking) their realizado
+// represents. This is independent of the store-wide modelo_ranking setting
+// (escadinha/lista, used for Dashboard/Category/Bio rankings): Dinâmicas
+// always renders this bar-list, per explicit request.
 export function DinamicaProgressList({
   ranking,
-  metaValor,
   isUnidade,
   renderAction,
 }: {
   ranking: DinamicaRankingRow[];
-  metaValor: number;
   isUnidade: boolean;
   /** Optional per-row action (e.g. mobile's "Cartão" image-export button). */
   renderAction?: (r: DinamicaRankingRow) => ReactNode;
@@ -30,6 +30,7 @@ export function DinamicaProgressList({
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: 8 }}>
       {ranking.map((r, i) => {
         const realizado = isUnidade ? r.itens : r.valor;
+        const metaValor = r.metaIndividual;
         const rawPct = metaValor > 0 ? (realizado / metaValor) * 100 : 0;
         const barPct = Math.min(100, rawPct);
         const batida = metaValor > 0 && realizado >= metaValor;

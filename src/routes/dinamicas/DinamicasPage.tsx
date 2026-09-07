@@ -5,17 +5,17 @@ import { DinamicaProgressList } from '../../components/ranking/DinamicaProgressL
 import {
   computeDinamicaProgresso,
   computeDinamicaRanking,
+  dinamicaMetaTotal,
   dynamicStatus,
 } from '../../lib/business/dynamics';
 import { useReauthGuard } from '../../hooks/useReauthGuard';
 import type { Collaborator, Dynamic, Sale } from '../../lib/business/types';
+import { VISITANTE_SETOR } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { todayISO } from '../../lib/dateRange';
 import { useCreateDynamic, useDeleteDynamic, useUpdateDynamic } from '../../lib/mutations';
 import { useCollaborators, useDynamics, useSales } from '../../lib/queries';
 import type { TablesUpdate } from '../../types/database';
-
-const SETOR_ALVO_LABEL: Record<Dynamic['setorAlvo'], string> = { balcao: 'Balcão', caixa: 'Caixa', ambos: 'Balcão + Caixa' };
 
 export function DinamicasPage() {
   const { profile } = useAuth();
@@ -45,6 +45,13 @@ export function DinamicasPage() {
   if (!dynamics || !sales || !collaborators) {
     return <PageLoading />;
   }
+
+  // Visitante collaborators are view-only — they never sell, so they never
+  // belong in a picker used to assign them as dynamic participants (they'd
+  // just sit at 0 forever). Only affects the participant checklist; the
+  // ranking display below still gets the full `collaborators` list, same as
+  // any other read-only view.
+  const participantCollaborators = collaborators.filter((c) => c.setor !== VISITANTE_SETOR);
 
   const today = todayISO();
   const list = dynamics.slice().sort((a, b) => (b.dataInicio || '').localeCompare(a.dataInicio || ''));
@@ -116,7 +123,7 @@ export function DinamicasPage() {
       ) : (
         <>
           <NewDynamicForm
-            collaborators={collaborators}
+            collaborators={participantCollaborators}
             productNames={productNames}
             onCreate={(input) => createDynamic.mutate(input)}
             creating={createDynamic.isPending}
@@ -147,7 +154,7 @@ export function DinamicasPage() {
       {editing && (
         <EditDynamicModal
           dynamic={editing}
-          collaborators={collaborators}
+          collaborators={participantCollaborators}
           productNames={productNames}
           saving={updateDynamic.isPending}
           onClose={() => setEditing(null)}
@@ -198,7 +205,8 @@ function DinamicaCard({
 }) {
   const isUnidade = d.metrica === 'unidade';
   const realizado = computeDinamicaProgresso(d, sales, collaborators);
-  const pct = d.metaValor > 0 ? Math.min(100, (realizado / d.metaValor) * 100) : null;
+  const metaTotal = dinamicaMetaTotal(d, collaborators);
+  const pct = metaTotal > 0 ? Math.min(100, (realizado / metaTotal) * 100) : null;
   // Every eligible participant, not just the ones already ahead — this is
   // the campaign's roster, so someone at 0% still belongs on it.
   const ranking = computeDinamicaRanking(d, sales, collaborators);
@@ -219,25 +227,15 @@ function DinamicaCard({
           </button>
         </div>
       </div>
-      <div className="text-xs text-slate-400 mt-1.5">
-        {fmtDateBR(d.dataInicio)} → {fmtDateBR(d.dataFim)}
-        {d.metaValor > 0 && ` · meta ${isUnidade ? `${d.metaValor} un.` : fmtMoney(d.metaValor)}`}
-        {d.produtos.length ? ` · ${d.produtos.length} produto(s) específico(s)` : ' · todos os produtos'}
-        {d.participantes.length ? ` · ${d.participantes.length} participante(s)` : ' · todos os colaboradores'}
-        {` · Setor: ${SETOR_ALVO_LABEL[d.setorAlvo]}`}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-3">
+        <StatCard label="Realizado" value={isUnidade ? `${realizado} un.` : fmtMoney(realizado)} color="#14ff00" />
+        <StatCard label="% da meta" value={pct !== null ? `${pct.toFixed(0)}%` : '—'} color="#ffb700" />
+        <StatCard label="Período" value={`${fmtDateBR(d.dataInicio)} → ${fmtDateBR(d.dataFim)}`} color="#00f0ff" />
+        <StatCard label="Meta total" value={metaTotal > 0 ? (isUnidade ? `${metaTotal} un.` : fmtMoney(metaTotal)) : '—'} color="#a82bff" />
+        <StatCard label="Participantes" value={String(ranking.length)} color="#ff3df0" />
       </div>
-      {d.descricao && <div className="text-xs text-slate-400 mt-1">{d.descricao}</div>}
-      <div className="text-xs font-mono text-green-400 mt-2">
-        Realizado: {isUnidade ? `${realizado} un.` : fmtMoney(realizado)}
-        {pct !== null && ` · ${pct.toFixed(0)}% da meta`}
-      </div>
-      {pct !== null && (
-        <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden mt-1">
-          <div className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-fuchsia-500" style={{ width: `${pct}%` }} />
-        </div>
-      )}
       <div className="mt-3">
-        <DinamicaProgressList ranking={ranking} metaValor={d.metaValor} isUnidade={isUnidade} />
+        <DinamicaProgressList ranking={ranking} isUnidade={isUnidade} />
       </div>
     </div>
   );
@@ -261,6 +259,8 @@ function NewDynamicForm({
     produtos: string[];
     participantes: string[];
     setor_alvo: Dynamic['setorAlvo'];
+    meta_modo: Dynamic['metaModo'];
+    metas_individuais: Record<string, number>;
   }) => void;
   creating: boolean;
 }) {
@@ -270,7 +270,9 @@ function NewDynamicForm({
   const [dataFim, setDataFim] = useState(today);
   const [setorAlvo, setSetorAlvo] = useState<Dynamic['setorAlvo']>('ambos');
   const [metrica, setMetrica] = useState<'valor' | 'unidade'>('valor');
+  const [metaModo, setMetaModo] = useState<Dynamic['metaModo']>('geral');
   const [metaValor, setMetaValor] = useState(0);
+  const [metasIndividuais, setMetasIndividuais] = useState<Record<string, number>>({});
   const [descricao, setDescricao] = useState('');
   const [produtoInput, setProdutoInput] = useState('');
   const [produtos, setProdutos] = useState<string[]>([]);
@@ -289,6 +291,10 @@ function NewDynamicForm({
     setParticipantes((prev) => (prev.includes(matricula) ? prev.filter((m) => m !== matricula) : [...prev, matricula]));
   }
 
+  function setMetaIndividual(matricula: string, value: number) {
+    setMetasIndividuais((prev) => ({ ...prev, [matricula]: value }));
+  }
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!titulo.trim() || !dataInicio || !dataFim) return;
@@ -302,11 +308,15 @@ function NewDynamicForm({
       produtos,
       participantes,
       setor_alvo: setorAlvo,
+      meta_modo: metaModo,
+      metas_individuais: metasIndividuais,
     });
     setTitulo('');
     setDescricao('');
     setSetorAlvo('ambos');
+    setMetaModo('geral');
     setMetaValor(0);
+    setMetasIndividuais({});
     setProdutos([]);
     setParticipantes([]);
     setExpanded(false);
@@ -335,16 +345,24 @@ function NewDynamicForm({
           <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="input" />
         </Field>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Field label="Métrica da meta">
           <select value={metrica} onChange={(e) => setMetrica(e.target.value as 'valor' | 'unidade')} className="input">
             <option value="valor">Moeda (R$)</option>
             <option value="unidade">Unidade (un.)</option>
           </select>
         </Field>
-        <Field label="Meta (opcional)">
-          <input type="number" value={metaValor} onChange={(e) => setMetaValor(Number(e.target.value))} className="input" />
+        <Field label="Modo da meta">
+          <select value={metaModo} onChange={(e) => setMetaModo(e.target.value as Dynamic['metaModo'])} className="input">
+            <option value="geral">Meta geral (compartilhada)</option>
+            <option value="individual">Meta individual por colaborador</option>
+          </select>
         </Field>
+        {metaModo === 'geral' && (
+          <Field label="Meta (opcional)">
+            <input type="number" value={metaValor} onChange={(e) => setMetaValor(Number(e.target.value))} className="input" />
+          </Field>
+        )}
       </div>
       <Field label="Setor participante">
         <select value={setorAlvo} onChange={(e) => setSetorAlvo(e.target.value as Dynamic['setorAlvo'])} className="input">
@@ -398,14 +416,31 @@ function NewDynamicForm({
       </div>
 
       <div>
-        <label className="block text-xs text-slate-400 mb-1">Colaboradores participantes (opcional — nenhum marcado = todos)</label>
+        <label className="block text-xs text-slate-400 mb-1">
+          Colaboradores participantes (opcional — nenhum marcado = todos)
+          {metaModo === 'individual' && ' — marque e defina a meta de cada um'}
+        </label>
         <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
-          {collaborators.map((c) => (
-            <label key={c.id} className="flex items-center gap-1.5 text-xs bg-slate-800 rounded-full px-2.5 py-1 cursor-pointer">
-              <input type="checkbox" checked={participantes.includes(c.matricula)} onChange={() => toggleParticipante(c.matricula)} />
-              {c.apelido || c.nome}
-            </label>
-          ))}
+          {collaborators.map((c) => {
+            const checked = participantes.includes(c.matricula);
+            return (
+              <div key={c.id} className="flex items-center gap-1.5 text-xs bg-slate-800 rounded-full px-2.5 py-1">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked={checked} onChange={() => toggleParticipante(c.matricula)} />
+                  {c.apelido || c.nome}
+                </label>
+                {metaModo === 'individual' && checked && (
+                  <input
+                    type="number"
+                    value={metasIndividuais[c.matricula] ?? 0}
+                    onChange={(e) => setMetaIndividual(c.matricula, Number(e.target.value))}
+                    placeholder="meta"
+                    className="w-16 rounded bg-slate-900 border border-slate-700 px-1.5 py-0.5 text-[11px]"
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -452,7 +487,9 @@ export function EditDynamicModal({
   const [dataFim, setDataFim] = useState(dynamic.dataFim);
   const [setorAlvo, setSetorAlvo] = useState<Dynamic['setorAlvo']>(dynamic.setorAlvo);
   const [metrica, setMetrica] = useState<'valor' | 'unidade'>(dynamic.metrica);
+  const [metaModo, setMetaModo] = useState<Dynamic['metaModo']>(dynamic.metaModo);
   const [metaValor, setMetaValor] = useState(dynamic.metaValor);
+  const [metasIndividuais, setMetasIndividuais] = useState<Record<string, number>>(dynamic.metasIndividuais);
   const [produtoInput, setProdutoInput] = useState('');
   const [produtos, setProdutos] = useState<string[]>(dynamic.produtos);
   const [participantes, setParticipantes] = useState<string[]>(dynamic.participantes);
@@ -469,6 +506,10 @@ export function EditDynamicModal({
     setParticipantes((prev) => (prev.includes(matricula) ? prev.filter((m) => m !== matricula) : [...prev, matricula]));
   }
 
+  function setMetaIndividual(matricula: string, value: number) {
+    setMetasIndividuais((prev) => ({ ...prev, [matricula]: value }));
+  }
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!titulo.trim() || !dataInicio || !dataFim) return;
@@ -482,6 +523,8 @@ export function EditDynamicModal({
       produtos,
       participantes,
       setor_alvo: setorAlvo,
+      meta_modo: metaModo,
+      metas_individuais: metasIndividuais,
     });
   }
 
@@ -504,16 +547,24 @@ export function EditDynamicModal({
             <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="input" />
           </Field>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Field label="Métrica da meta">
             <select value={metrica} onChange={(e) => setMetrica(e.target.value as 'valor' | 'unidade')} className="input">
               <option value="valor">Moeda (R$)</option>
               <option value="unidade">Unidade (un.)</option>
             </select>
           </Field>
-          <Field label="Meta (opcional)">
-            <input type="number" value={metaValor} onChange={(e) => setMetaValor(Number(e.target.value))} className="input" />
+          <Field label="Modo da meta">
+            <select value={metaModo} onChange={(e) => setMetaModo(e.target.value as Dynamic['metaModo'])} className="input">
+              <option value="geral">Meta geral (compartilhada)</option>
+              <option value="individual">Meta individual por colaborador</option>
+            </select>
           </Field>
+          {metaModo === 'geral' && (
+            <Field label="Meta (opcional)">
+              <input type="number" value={metaValor} onChange={(e) => setMetaValor(Number(e.target.value))} className="input" />
+            </Field>
+          )}
         </div>
         <Field label="Setor participante">
           <select value={setorAlvo} onChange={(e) => setSetorAlvo(e.target.value as Dynamic['setorAlvo'])} className="input">
@@ -567,14 +618,31 @@ export function EditDynamicModal({
         </div>
 
         <div>
-          <label className="block text-xs text-slate-400 mb-1">Colaboradores participantes (opcional — nenhum marcado = todos)</label>
+          <label className="block text-xs text-slate-400 mb-1">
+            Colaboradores participantes (opcional — nenhum marcado = todos)
+            {metaModo === 'individual' && ' — marque e defina a meta de cada um'}
+          </label>
           <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
-            {collaborators.map((c) => (
-              <label key={c.id} className="flex items-center gap-1.5 text-xs bg-slate-800 rounded-full px-2.5 py-1 cursor-pointer">
-                <input type="checkbox" checked={participantes.includes(c.matricula)} onChange={() => toggleParticipante(c.matricula)} />
-                {c.apelido || c.nome}
-              </label>
-            ))}
+            {collaborators.map((c) => {
+              const checked = participantes.includes(c.matricula);
+              return (
+                <div key={c.id} className="flex items-center gap-1.5 text-xs bg-slate-800 rounded-full px-2.5 py-1">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input type="checkbox" checked={checked} onChange={() => toggleParticipante(c.matricula)} />
+                    {c.apelido || c.nome}
+                  </label>
+                  {metaModo === 'individual' && checked && (
+                    <input
+                      type="number"
+                      value={metasIndividuais[c.matricula] ?? 0}
+                      onChange={(e) => setMetaIndividual(c.matricula, Number(e.target.value))}
+                      placeholder="meta"
+                      className="w-16 rounded bg-slate-900 border border-slate-700 px-1.5 py-0.5 text-[11px]"
+                    />
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 

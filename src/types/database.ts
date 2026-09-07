@@ -416,7 +416,9 @@ export type Database = {
           data_inicio: string
           descricao: string
           id: string
+          meta_modo: string
           meta_valor: number
+          metas_individuais: Json
           metrica: string
           participantes: string[]
           produtos: string[]
@@ -430,7 +432,9 @@ export type Database = {
           data_inicio: string
           descricao?: string
           id?: string
+          meta_modo?: string
           meta_valor?: number
+          metas_individuais?: Json
           metrica?: string
           participantes?: string[]
           produtos?: string[]
@@ -444,7 +448,9 @@ export type Database = {
           data_inicio?: string
           descricao?: string
           id?: string
+          meta_modo?: string
           meta_valor?: number
+          metas_individuais?: Json
           metrica?: string
           participantes?: string[]
           produtos?: string[]

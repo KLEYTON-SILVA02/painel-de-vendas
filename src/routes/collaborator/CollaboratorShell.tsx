@@ -1,4 +1,4 @@
-import { useState, type ReactElement } from 'react';
+import { lazy, Suspense, useState, type ReactElement } from 'react';
 import { NavLink, Route, Routes } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import {
@@ -17,24 +17,37 @@ import {
   TrophyIcon,
 } from '../../components/icons/NavIcons';
 import { NotificationBell } from '../../components/NotificationBell';
+import { PageLoading } from '../../components/PageLoading';
 import { BALCAO_SETOR } from '../../lib/business/bio';
 import { VISITANTE_SETOR } from '../../lib/business/types';
 import { useNativePushRegistration } from '../../lib/useNativePushRegistration';
 import { useCategoryTypes, useCollaborators } from '../../lib/queries';
 import '../../styles/mobile-v2.css';
-import { MobileChipPage } from '../admin-mobile/MobileChipPage';
-import { MobileExclusivasPage } from '../admin-mobile/MobileExclusivasPage';
-import { MobileGenericosPage } from '../admin-mobile/MobileGenericosPage';
-import { MobileLevmelPage } from '../admin-mobile/MobileLevmelPage';
-import { MobileMercadoriaGeralPage } from '../admin-mobile/MobileMercadoriaGeralPage';
-import { MobileDermoPage } from '../admin-mobile/MobileDermoPage';
-import { CollaboratorBioPage } from './CollaboratorBioPage';
-import { CollaboratorComissoesPage } from './CollaboratorComissoesPage';
-import { CollaboratorConfiguracoesPage } from './CollaboratorConfiguracoesPage';
-import { CollaboratorDinamicasPage } from './CollaboratorDinamicasPage';
-import { CollaboratorNotificacoesPage } from './CollaboratorNotificacoesPage';
-import { CollaboratorRankingPage } from './CollaboratorRankingPage';
-import { MetasVendasPage } from './MetasVendasPage';
+
+// Lazy-loaded (previously static top-of-file imports): this shell mounts at
+// every viewport width for every collaborator — the largest user group in
+// the app — so any screen imported eagerly here is fetched+parsed on every
+// cold open regardless of which single tab the collaborator actually opens.
+// Mirrors the same fix applied to MobileAdminShell.tsx.
+const MobileChipPage = lazy(() => import('../admin-mobile/MobileChipPage').then((m) => ({ default: m.MobileChipPage })));
+const MobileExclusivasPage = lazy(() => import('../admin-mobile/MobileExclusivasPage').then((m) => ({ default: m.MobileExclusivasPage })));
+const MobileGenericosPage = lazy(() => import('../admin-mobile/MobileGenericosPage').then((m) => ({ default: m.MobileGenericosPage })));
+const MobileLevmelPage = lazy(() => import('../admin-mobile/MobileLevmelPage').then((m) => ({ default: m.MobileLevmelPage })));
+const MobileMercadoriaGeralPage = lazy(() =>
+  import('../admin-mobile/MobileMercadoriaGeralPage').then((m) => ({ default: m.MobileMercadoriaGeralPage })),
+);
+const MobileDermoPage = lazy(() => import('../admin-mobile/MobileDermoPage').then((m) => ({ default: m.MobileDermoPage })));
+const CollaboratorBioPage = lazy(() => import('./CollaboratorBioPage').then((m) => ({ default: m.CollaboratorBioPage })));
+const CollaboratorComissoesPage = lazy(() => import('./CollaboratorComissoesPage').then((m) => ({ default: m.CollaboratorComissoesPage })));
+const CollaboratorConfiguracoesPage = lazy(() =>
+  import('./CollaboratorConfiguracoesPage').then((m) => ({ default: m.CollaboratorConfiguracoesPage })),
+);
+const CollaboratorDinamicasPage = lazy(() => import('./CollaboratorDinamicasPage').then((m) => ({ default: m.CollaboratorDinamicasPage })));
+const CollaboratorNotificacoesPage = lazy(() =>
+  import('./CollaboratorNotificacoesPage').then((m) => ({ default: m.CollaboratorNotificacoesPage })),
+);
+const CollaboratorRankingPage = lazy(() => import('./CollaboratorRankingPage').then((m) => ({ default: m.CollaboratorRankingPage })));
+const MetasVendasPage = lazy(() => import('./MetasVendasPage').then((m) => ({ default: m.MetasVendasPage })));
 
 // A view-only "Visitante" collaborator (VISITANTE_SETOR) has no
 // Metas/Vendas/Ranking/Comissões/Dinâmicas — categoriasVisitante drives an
@@ -142,6 +155,7 @@ export function CollaboratorShell() {
         </nav>
 
         <main className="mv2-collab-main">
+          <Suspense fallback={<PageLoading />}>
           <Routes>
             {isVisitante ? (
               visitorCategoryKeys.length === 0 ? (
@@ -170,6 +184,7 @@ export function CollaboratorShell() {
             <Route path="/configuracoes" element={<CollaboratorConfiguracoesPage />} />
             <Route path="/notificacoes" element={<CollaboratorNotificacoesPage />} />
           </Routes>
+          </Suspense>
         </main>
       </div>
     </div>

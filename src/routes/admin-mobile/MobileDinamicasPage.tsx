@@ -3,9 +3,10 @@ import { useAuth } from '../../auth/AuthContext';
 import { DinamicaProgressList } from '../../components/ranking/DinamicaProgressList';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { useReauthGuard } from '../../hooks/useReauthGuard';
-import { computeDinamicaProgresso, computeDinamicaRanking, dynamicStatus, type DynamicStatus } from '../../lib/business/dynamics';
+import { computeDinamicaProgresso, computeDinamicaRanking, dinamicaMetaTotal, dynamicStatus, metaFor, type DynamicStatus } from '../../lib/business/dynamics';
 import { normalize } from '../../lib/business/normalize';
 import type { Collaborator, Dynamic, Sale } from '../../lib/business/types';
+import { VISITANTE_SETOR } from '../../lib/business/types';
 import { todayISO } from '../../lib/dateRange';
 import { generateDinamicaCardBlob } from '../../lib/dinamicaImage';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
@@ -47,6 +48,10 @@ export function MobileDinamicasPage() {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
+  // Visitante collaborators are view-only — never sell, never belong in the
+  // participant picker (see the same filter on the desktop DinamicasPage).
+  const participantCollaborators = collaborators.filter((c) => c.setor !== VISITANTE_SETOR);
+
   const today = todayISO();
   const list = dynamics.slice().sort((a, b) => (b.dataInicio || '').localeCompare(a.dataInicio || ''));
   const ativas = list.filter((d) => dynamicStatus(d, today) === 'ativa');
@@ -57,7 +62,8 @@ export function MobileDinamicasPage() {
   const atingimentoMedio = ativas.length
     ? ativas.reduce((sum, d) => {
         const realizado = computeDinamicaProgresso(d, sales, collaborators);
-        const pct = d.metaValor > 0 ? Math.min(999, (realizado / d.metaValor) * 100) : 0;
+        const metaTotal = dinamicaMetaTotal(d, collaborators);
+        const pct = metaTotal > 0 ? Math.min(999, (realizado / metaTotal) * 100) : 0;
         return sum + pct;
       }, 0) / ativas.length
     : 0;
@@ -115,7 +121,7 @@ export function MobileDinamicasPage() {
 
       {tab === 'ativas' && (
         <MobileNewDynamicForm
-          collaborators={collaborators}
+          collaborators={participantCollaborators}
           productNames={productNames}
           onCreate={(input) => createDynamic.mutate(input)}
           creating={createDynamic.isPending}
@@ -153,7 +159,7 @@ export function MobileDinamicasPage() {
       {editing && (
         <EditDynamicModal
           dynamic={editing}
-          collaborators={collaborators}
+          collaborators={participantCollaborators}
           productNames={productNames}
           saving={updateDynamic.isPending}
           onClose={() => setEditing(null)}
@@ -187,6 +193,8 @@ function MobileNewDynamicForm({
     produtos: string[];
     participantes: string[];
     setor_alvo: Dynamic['setorAlvo'];
+    meta_modo: Dynamic['metaModo'];
+    metas_individuais: Record<string, number>;
   }) => void;
   creating: boolean;
 }) {
@@ -196,7 +204,9 @@ function MobileNewDynamicForm({
   const [dataFim, setDataFim] = useState(today);
   const [setorAlvo, setSetorAlvo] = useState<Dynamic['setorAlvo']>('ambos');
   const [metrica, setMetrica] = useState<'valor' | 'unidade'>('valor');
+  const [metaModo, setMetaModo] = useState<Dynamic['metaModo']>('geral');
   const [metaValor, setMetaValor] = useState(0);
+  const [metasIndividuais, setMetasIndividuais] = useState<Record<string, number>>({});
   const [produtoInput, setProdutoInput] = useState('');
   const [produtos, setProdutos] = useState<string[]>([]);
   const [participantes, setParticipantes] = useState<string[]>([]);
@@ -214,6 +224,10 @@ function MobileNewDynamicForm({
     setParticipantes((prev) => (prev.includes(matricula) ? prev.filter((m) => m !== matricula) : [...prev, matricula]));
   }
 
+  function setMetaIndividual(matricula: string, value: number) {
+    setMetasIndividuais((prev) => ({ ...prev, [matricula]: value }));
+  }
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!titulo.trim() || !dataInicio || !dataFim) return;
@@ -227,10 +241,14 @@ function MobileNewDynamicForm({
       produtos,
       participantes,
       setor_alvo: setorAlvo,
+      meta_modo: metaModo,
+      metas_individuais: metasIndividuais,
     });
     setTitulo('');
     setSetorAlvo('ambos');
+    setMetaModo('geral');
     setMetaValor(0);
+    setMetasIndividuais({});
     setProdutos([]);
     setParticipantes([]);
     setExpanded(false);
@@ -278,8 +296,14 @@ function MobileNewDynamicForm({
           <option value="valor">Meta em R$</option>
           <option value="unidade">Meta em un.</option>
         </select>
-        <input style={{ flex: 1 }} type="number" placeholder="Meta" value={metaValor} onChange={(e) => setMetaValor(Number(e.target.value))} />
+        <select style={{ flex: 1 }} value={metaModo} onChange={(e) => setMetaModo(e.target.value as Dynamic['metaModo'])}>
+          <option value="geral">Meta geral</option>
+          <option value="individual">Meta individual</option>
+        </select>
       </div>
+      {metaModo === 'geral' && (
+        <input type="number" placeholder="Meta" value={metaValor} onChange={(e) => setMetaValor(Number(e.target.value))} />
+      )}
 
       <div>
         <div className="mv2-row" style={{ gap: 6 }}>
@@ -319,30 +343,35 @@ function MobileNewDynamicForm({
         </div>
       </div>
 
-      <div style={{ margin: '8px 0 4px', fontSize: 8, color: 'var(--mv2-texto-2)', textTransform: 'uppercase' }}>Participantes</div>
+      <div style={{ margin: '8px 0 4px', fontSize: 8, color: 'var(--mv2-texto-2)', textTransform: 'uppercase' }}>
+        Participantes{metaModo === 'individual' && ' — defina a meta de cada um'}
+      </div>
       <div className="mv2-tag-list" style={{ marginTop: 0 }}>
-        {collaborators.map((c) => (
-          <label
-            key={c.id}
-            className="mv2-tag"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-              cursor: 'pointer',
-              background: participantes.includes(c.matricula) ? 'var(--mv2-ciano-claro)' : undefined,
-              color: participantes.includes(c.matricula) ? '#000' : undefined,
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={participantes.includes(c.matricula)}
-              onChange={() => toggleParticipante(c.matricula)}
-              style={{ width: 8, height: 8 }}
-            />
-            {c.apelido || c.nome}
-          </label>
-        ))}
+        {collaborators.map((c) => {
+          const checked = participantes.includes(c.matricula);
+          return (
+            <span key={c.id} className="mv2-tag" style={{ display: 'flex', alignItems: 'center', gap: 4, background: checked ? 'var(--mv2-ciano-claro)' : undefined, color: checked ? '#000' : undefined }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggleParticipante(c.matricula)}
+                  style={{ width: 8, height: 8 }}
+                />
+                {c.apelido || c.nome}
+              </label>
+              {metaModo === 'individual' && checked && (
+                <input
+                  type="number"
+                  value={metasIndividuais[c.matricula] ?? 0}
+                  onChange={(e) => setMetaIndividual(c.matricula, Number(e.target.value))}
+                  placeholder="meta"
+                  style={{ width: 36, fontSize: 7, padding: '1px 3px', borderRadius: 4 }}
+                />
+              )}
+            </span>
+          );
+        })}
       </div>
 
       <button type="submit" className="mv2-btn-primary" style={{ width: '100%', marginTop: 12 }} disabled={creating}>
@@ -378,7 +407,8 @@ function MobileDinamicaAccordionItem({
   const [cardMatricula, setCardMatricula] = useState<string | null>(null);
   const isUnidade = d.metrica === 'unidade';
   const realizado = computeDinamicaProgresso(d, sales, collaborators);
-  const pct = d.metaValor > 0 ? Math.min(999, (realizado / d.metaValor) * 100) : 0;
+  const metaTotal = dinamicaMetaTotal(d, collaborators);
+  const pct = metaTotal > 0 ? Math.min(999, (realizado / metaTotal) * 100) : 0;
   const ranking = computeDinamicaRanking(d, sales, collaborators);
 
   return (
@@ -437,7 +467,7 @@ function MobileDinamicaAccordionItem({
                   <td>
                     {fmtDateBR(d.dataInicio)}–{fmtDateBR(d.dataFim)}
                   </td>
-                  <td>{d.metaValor > 0 ? (isUnidade ? `${d.metaValor} un.` : fmtMoney(d.metaValor)) : '—'}</td>
+                  <td>{metaTotal > 0 ? (isUnidade ? `${metaTotal} un.` : fmtMoney(metaTotal)) : '—'}</td>
                   <td>{isUnidade ? `${realizado} un.` : fmtMoney(realizado)}</td>
                   <td className={pct >= 100 ? 'mv2-ok' : pct < 50 ? 'mv2-low' : undefined}>{pct.toFixed(0)}%</td>
                 </tr>
@@ -448,7 +478,6 @@ function MobileDinamicaAccordionItem({
           <div style={{ fontSize: 9, fontWeight: 700, margin: '10px 0 4px' }}>Ranking dos Participantes</div>
           <DinamicaProgressList
             ranking={ranking}
-            metaValor={d.metaValor}
             isUnidade={isUnidade}
             renderAction={(r) => (
               <button
@@ -514,9 +543,10 @@ function MobileDinamicaExportCardModal({
       porDia[dia].itens += Number(s.qtd) || 0;
     });
     const myTotal = isUnidade ? myItens : myValor;
-    const pct = d.metaValor > 0 ? Math.min(999, (myTotal / d.metaValor) * 100) : 0;
+    const myMeta = metaFor(d, matricula);
+    const pct = myMeta > 0 ? Math.min(999, (myTotal / myMeta) * 100) : 0;
     const dias = Object.keys(porDia).sort();
-    return { din: d, isUnidade, myValor, myItens, porDia, pct, dias };
+    return { din: d, isUnidade, myValor, myItens, myMeta, porDia, pct, dias };
   });
 
   async function handleGenerateImage() {
@@ -529,14 +559,14 @@ function MobileDinamicaExportCardModal({
         lojaNome: nomeLoja,
         dinamicas: entries.map((e) => ({
           titulo: e.din.titulo,
-          metaLabel: e.din.metaValor > 0 ? (e.isUnidade ? `${e.din.metaValor} un.` : fmtMoney(e.din.metaValor)) : '—',
+          metaLabel: e.myMeta > 0 ? (e.isUnidade ? `${e.myMeta} un.` : fmtMoney(e.myMeta)) : '—',
           realizadoLabel: e.isUnidade ? `${e.myItens} un.` : fmtMoney(e.myValor),
           pct: e.pct,
           dias: e.dias.map((dia) => ({
             label: fmtDateBR(dia),
             valorLabel:
               (e.isUnidade ? `${e.porDia[dia].itens} un.` : fmtMoney(e.porDia[dia].valor)) +
-              (e.din.metaValor > 0 ? ` · ${(((e.isUnidade ? e.porDia[dia].itens : e.porDia[dia].valor) / e.din.metaValor) * 100).toFixed(0)}%` : ''),
+              (e.myMeta > 0 ? ` · ${(((e.isUnidade ? e.porDia[dia].itens : e.porDia[dia].valor) / e.myMeta) * 100).toFixed(0)}%` : ''),
           })),
         })),
       });
@@ -568,13 +598,13 @@ function MobileDinamicaExportCardModal({
           </div>
         </div>
 
-        {entries.map(({ din: d, isUnidade, myValor, myItens, porDia, pct, dias }) => (
+        {entries.map(({ din: d, isUnidade, myValor, myItens, myMeta, porDia, pct, dias }) => (
           <div key={d.id} style={{ marginBottom: 10, borderTop: '1px solid rgba(255,255,255,.08)', paddingTop: 8 }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: '#fff' }}>{d.titulo}</div>
             <div className="mv2-stat-row" style={{ marginTop: 6 }}>
               <div className="mv2-stat">
                 <div style={{ fontSize: 6.5, color: 'var(--mv2-texto-2)' }}>META</div>
-                <div style={{ fontSize: 10, fontWeight: 700 }}>{d.metaValor > 0 ? (isUnidade ? `${d.metaValor} un.` : fmtMoney(d.metaValor)) : '—'}</div>
+                <div style={{ fontSize: 10, fontWeight: 700 }}>{myMeta > 0 ? (isUnidade ? `${myMeta} un.` : fmtMoney(myMeta)) : '—'}</div>
               </div>
               <div className="mv2-stat">
                 <div style={{ fontSize: 6.5, color: 'var(--mv2-texto-2)' }}>REALIZADO</div>
@@ -593,7 +623,7 @@ function MobileDinamicaExportCardModal({
                     <span>{fmtDateBR(dia)}</span>
                     <span>
                       {isUnidade ? `${porDia[dia].itens} un.` : fmtMoney(porDia[dia].valor)}
-                      {d.metaValor > 0 && ` · ${((isUnidade ? porDia[dia].itens : porDia[dia].valor) / d.metaValor * 100).toFixed(0)}%`}
+                      {myMeta > 0 && ` · ${((isUnidade ? porDia[dia].itens : porDia[dia].valor) / myMeta * 100).toFixed(0)}%`}
                     </span>
                   </div>
                 ))}

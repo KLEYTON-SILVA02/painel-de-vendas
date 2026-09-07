@@ -7,6 +7,7 @@ import { ChampionHeaderButton } from '../components/dashboard/ChampionOfDay';
 import { ClosingClock } from '../components/ClosingClock';
 import { ConquistaCelebrationHost } from '../components/ConquistaCelebration';
 import { HamburgerIcon, MedalIcon } from '../components/icons/NavIcons';
+import { NotificationBell } from '../components/NotificationBell';
 import { PageLoading } from '../components/PageLoading';
 import { Sidebar } from '../components/Sidebar';
 import type { Horario } from '../lib/business/horario';
@@ -34,6 +35,7 @@ const AdminLandingPage = lazy(() => import('./admin/AdminLandingPage').then((m) 
 const BioPage = lazy(() => import('./bio/BioPage').then((m) => ({ default: m.BioPage })));
 const CategoryPage = lazy(() => import('./category/CategoryPage').then((m) => ({ default: m.CategoryPage })));
 const ConquistasPage = lazy(() => import('./conquistas/ConquistasPage').then((m) => ({ default: m.ConquistasPage })));
+const GaleriaFigurinhasPage = lazy(() => import('./conquistas/GaleriaFigurinhasPage').then((m) => ({ default: m.GaleriaFigurinhasPage })));
 const DashboardPage = lazy(() => import('./dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })));
 const DinamicasPage = lazy(() => import('./dinamicas/DinamicasPage').then((m) => ({ default: m.DinamicasPage })));
 const MetasPage = lazy(() => import('./metas/MetasPage').then((m) => ({ default: m.MetasPage })));
@@ -51,6 +53,12 @@ const IconesPage = lazy(() => import('./admin/IconesPage').then((m) => ({ defaul
 const CardConquistaPage = lazy(() => import('./admin/CardConquistaPage').then((m) => ({ default: m.CardConquistaPage })));
 const CategoriasPage = lazy(() => import('./admin/CategoriasPage').then((m) => ({ default: m.CategoriasPage })));
 const CategoryTypePage = lazy(() => import('./category-type/CategoryTypePage').then((m) => ({ default: m.CategoryTypePage })));
+// Reused as-is from the collaborator shell — the notification list itself
+// (tabs, read-state handling) has nothing collaborator-specific in it, it
+// just renders whatever useNotifications() returns for the signed-in user.
+const CollaboratorNotificacoesPage = lazy(() =>
+  import('./collaborator/CollaboratorNotificacoesPage').then((m) => ({ default: m.CollaboratorNotificacoesPage })),
+);
 
 // Screen titles that used to open each screen's own filter-bar cell now live
 // here instead, centered in the top bar next to the store name — freeing up
@@ -173,6 +181,7 @@ export function AppShell() {
                   <MedalIcon width={15} height={15} />
                   Galeria de Conquistas
                 </Link>
+                <NotificationBell />
                 {storeSettings && (
                   <ClosingClock horario={storeSettings.horario as unknown as Horario} feriadosDatas={storeSettings.feriados_datas} />
                 )}
@@ -194,6 +203,8 @@ export function AppShell() {
             <Route path="/dinamicas" element={<DinamicasPage />} />
             <Route path="/bio" element={<BioPage />} />
             <Route path="/conquistas" element={<ConquistasPage />} />
+            <Route path="/conquistas/figurinhas" element={<GaleriaFigurinhasPage />} />
+            <Route path="/notificacoes" element={<CollaboratorNotificacoesPage />} />
             <Route
               path="/categoria-parceria/:chave"
               element={
