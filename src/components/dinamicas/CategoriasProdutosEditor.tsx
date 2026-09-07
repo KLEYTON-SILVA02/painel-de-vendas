@@ -64,7 +64,13 @@ export function CategoriasProdutosEditor({
         <>
           <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(220px, 1fr))` }}>
             {categorias.map((cat, i) => (
-              <CategoriaColumn key={cat.id} categoria={cat} productNames={productNames} onChange={(patch) => updateCategoria(i, patch)} />
+              <CategoriaColumn
+                key={cat.id}
+                categoria={cat}
+                productNames={productNames}
+                multiplicadorAtivo={multiplicador.ativo}
+                onChange={(patch) => updateCategoria(i, patch)}
+              />
             ))}
           </div>
 
@@ -100,10 +106,12 @@ export function CategoriasProdutosEditor({
 function CategoriaColumn({
   categoria,
   productNames,
+  multiplicadorAtivo,
   onChange,
 }: {
   categoria: DynamicProductCategory;
   productNames: string[];
+  multiplicadorAtivo: boolean;
   onChange: (patch: Partial<DynamicProductCategory>) => void;
 }) {
   const [produtoInput, setProdutoInput] = useState('');
@@ -115,6 +123,18 @@ function CategoriaColumn({
     if (!nome) return;
     onChange({ produtos: [...categoria.produtos, nome] });
     setProdutoInput('');
+  }
+
+  function removeProduto(nome: string) {
+    onChange({
+      produtos: categoria.produtos.filter((p) => p !== nome),
+      produtosEspeciais: (categoria.produtosEspeciais ?? []).filter((e) => e.produto !== nome),
+    });
+  }
+
+  function setValorEspecial(nome: string, valor: number) {
+    const resto = (categoria.produtosEspeciais ?? []).filter((e) => e.produto !== nome);
+    onChange({ produtosEspeciais: valor > 0 ? [...resto, { produto: nome, valor }] : resto });
   }
 
   return (
@@ -160,19 +180,28 @@ function CategoriaColumn({
               + Add
             </button>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {categoria.produtos.map((p, i) => (
-              <span key={i} className="text-xs bg-slate-800 rounded-full px-2 py-1 flex items-center gap-1.5">
-                {p}
-                <button
-                  type="button"
-                  onClick={() => onChange({ produtos: categoria.produtos.filter((_, idx) => idx !== i) })}
-                  className="text-slate-500 hover:text-rose-400"
-                >
-                  ✕
-                </button>
-              </span>
-            ))}
+          <div className="flex flex-col gap-1">
+            {categoria.produtos.map((p, i) => {
+              const valorEspecial = categoria.produtosEspeciais?.find((e) => e.produto === p)?.valor ?? 0;
+              return (
+                <div key={i} className="flex items-center gap-1.5 text-xs bg-slate-800 rounded-lg px-2 py-1">
+                  <span className="flex-1 truncate">{p}</span>
+                  {multiplicadorAtivo && (
+                    <input
+                      type="number"
+                      value={valorEspecial || ''}
+                      onChange={(e) => setValorEspecial(p, Number(e.target.value))}
+                      placeholder="R$/item"
+                      title="Valor específico por item vendido deste produto (substitui o multiplicador geral só para ele)"
+                      className="w-16 rounded bg-slate-900 border border-slate-700 px-1 py-0.5 text-[10px]"
+                    />
+                  )}
+                  <button type="button" onClick={() => removeProduto(p)} className="text-slate-500 hover:text-rose-400">
+                    ✕
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </>
       )}

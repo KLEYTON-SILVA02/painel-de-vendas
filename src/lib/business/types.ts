@@ -108,6 +108,13 @@ export interface DynamicProductCategory {
    * category catch every product sharing a naming pattern (e.g. a brand)
    * without enumerating each one by hand. */
   palavraChave: string;
+  /** Per-product multiplier overrides: when a sale's product matches one of
+   * these (normalized), its sold quantity is scored at this `valor` per
+   * item instead of the dynamic's shared multiplicador.valor, and excluded
+   * from that shared multiplication — the two amounts are summed into the
+   * categoria's final pontuacao, so nothing is counted twice. Optional
+   * because dynamics saved before this feature existed have no such field. */
+  produtosEspeciais?: { produto: string; valor: number }[];
 }
 
 export type BioGroupsProducts = Record<BioGroupKey, { nome: string; palavras: string[] }[]>;
