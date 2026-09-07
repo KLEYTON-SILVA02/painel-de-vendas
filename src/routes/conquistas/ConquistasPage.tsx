@@ -97,24 +97,6 @@ export function ConquistasPage() {
             <h3 className="text-lg font-semibold" style={{ color: '#ffb700' }}>
               🏆 Galeria de Conquistas — {info.label}
             </h3>
-            {/* Ajustar Metas / Galeria de Figurinhas / Modelos de Card — no
-                canto superior direito, empurrando os filtros de categoria e
-                tier abaixo para baixo. */}
-            <div className="flex flex-wrap gap-2">
-              <Link to="/metas" className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800">
-                ⚙️ Ajustar Metas
-              </Link>
-              <Link
-                to="/conquistas/figurinhas"
-                className="rounded-lg border px-3 py-1.5 text-sm font-semibold"
-                style={{ borderColor: '#ffb700', color: '#ffb700' }}
-              >
-                🖼️ Galeria de Figurinhas
-              </Link>
-              <Link to="/admin/card-conquista" className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800">
-                🎨 Modelos de Card
-              </Link>
-            </div>
           </div>
 
           <div className="flex flex-wrap gap-2 mb-3">
@@ -197,6 +179,30 @@ export function ConquistasPage() {
       </div>
 
       <div className="flex flex-col gap-3">
+        {/* Ajustar Metas / Modelos de Card / Galeria de Figurinhas — em cima
+            da célula do filtro de datas, uma célula por botão: os dois
+            primeiros lado a lado, o terceiro ocupando a linha de baixo. */}
+        <div className="grid grid-cols-2 gap-2">
+          <Link
+            to="/metas"
+            className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800 text-center"
+          >
+            ⚙️ Ajustar Metas
+          </Link>
+          <Link
+            to="/admin/card-conquista"
+            className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800 text-center"
+          >
+            🎨 Modelos de Card
+          </Link>
+          <Link
+            to="/conquistas/figurinhas"
+            className="col-span-2 rounded-lg border px-3 py-1.5 text-sm font-semibold text-center"
+            style={{ borderColor: '#ffb700', color: '#ffb700' }}
+          >
+            🖼️ Galeria de Figurinhas
+          </Link>
+        </div>
         <SidebarCalendarCard />
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <h3 className="text-xs font-semibold mb-3 text-slate-300 uppercase tracking-wide">Galeria de dias</h3>
