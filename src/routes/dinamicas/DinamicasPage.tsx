@@ -261,7 +261,7 @@ function DinamicaCard({
         </div>
       )}
       <div className="mt-3">
-        <DinamicaProgressList ranking={ranking} isUnidade={isUnidade} din={d} sales={sales} />
+        <DinamicaProgressList ranking={ranking} isUnidade={isUnidade} din={d} sales={sales} showSaleDates />
       </div>
     </div>
   );

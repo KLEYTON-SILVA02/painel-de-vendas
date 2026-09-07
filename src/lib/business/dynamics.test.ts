@@ -164,6 +164,37 @@ describe('computeDinamicaCategoriaTotais', () => {
     const dinNarrow = { ...dinComCategorias, categoriasProdutos: [dinComCategorias.categoriasProdutos[0]] };
     expect(computeDinamicaProgresso(dinNarrow, sales, collaborators)).toBe(300); // only cat1's "Produto X"
   });
+
+  it('scores a produtoEspecial at its own valor per item, excluded from the shared multiplicador', () => {
+    // cat1's only product ("Produto X") is flagged as especial with its own
+    // per-item value — the shared multiplicador.valor should contribute
+    // nothing (no "restante" items left), only the especial value applies.
+    const din2 = {
+      ...dinComCategorias,
+      categoriasProdutos: [
+        { ...dinComCategorias.categoriasProdutos[0], produtosEspeciais: [{ produto: 'Produto X', valor: 50 }] },
+        dinComCategorias.categoriasProdutos[1],
+      ],
+      multiplicador: { ativo: true, valor: 10 },
+    };
+    const totais = computeDinamicaCategoriaTotais(din2, sales, collaborators);
+    const cat1 = totais.find((c) => c.id === 'c1')!;
+    expect(cat1.itens).toBe(3); // valor/itens totals are unaffected
+    expect(cat1.pontuacao).toBe(150); // 3 itens * 50 (not * 10 — no double counting)
+  });
+
+  it('sums the especial score with the remaining items scored at the shared multiplicador', () => {
+    const catMista = { id: 'c3', nome: 'Mista', produtos: ['Produto X', 'Produto Y (not in list)'], palavraChave: '' };
+    const din2 = {
+      ...dinComCategorias,
+      categoriasProdutos: [{ ...catMista, produtosEspeciais: [{ produto: 'Produto Y (not in list)', valor: 20 }] }],
+      multiplicador: { ativo: true, valor: 10 },
+    };
+    const totais = computeDinamicaCategoriaTotais(din2, sales, collaborators);
+    const cat3 = totais.find((c) => c.id === 'c3')!;
+    expect(cat3.itens).toBe(8); // 3 (Produto X) + 5 (Produto Y)
+    expect(cat3.pontuacao).toBe(130); // 3*10 (restante) + 5*20 (especial)
+  });
 });
 
 describe('dinamicaUnidadeLabel', () => {

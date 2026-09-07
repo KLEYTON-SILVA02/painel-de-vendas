@@ -34,8 +34,9 @@ export function DinamicaProgressList({
   sales: Sale[];
   /** Optional per-row action (e.g. mobile's "Cartão" image-export button). */
   renderAction?: (r: DinamicaRankingRow) => ReactNode;
-  /** Mobile only: show each sale's date (DD/MM) in the "produtos vendidos"
-   * popup, one row per sale date instead of one aggregated row per product. */
+  /** Show each sale's date (DD/MM) in the "produtos vendidos" popup, one row
+   * per sale date instead of one aggregated row per product — both desktop
+   * and mobile call sites pass this. */
   showSaleDates?: boolean;
 }) {
   const [produtosMatricula, setProdutosMatricula] = useState<string | null>(null);

@@ -70,7 +70,14 @@ export interface DinamicaCategoriaTotal {
 /** Per-categoria totals for the "cards abaixo dos cards de métricas" view —
  * one entry per registered categoria, each with its own valor/itens summed
  * from sales matching that categoria (within the dynamic's period and
- * setorAlvo), plus its multiplier score when the dynamic has one active. */
+ * setorAlvo), plus its multiplier score when the dynamic has one active.
+ *
+ * When a categoria flags one or more products via produtosEspeciais, those
+ * products' sold quantities are excluded from the shared
+ * multiplicador.valor multiplication and instead multiplied by their own
+ * override value — the two amounts are summed into pontuacao, so a flagged
+ * product's items are never counted twice. valor/itens themselves are
+ * unaffected: they always reflect every sale matching the categoria. */
 export function computeDinamicaCategoriaTotais(
   din: Dynamic,
   sales: Sale[],
@@ -80,8 +87,11 @@ export function computeDinamicaCategoriaTotais(
   const participantesSet = din.participantes.length ? new Set(din.participantes.map(normalizeMatricula)) : null;
 
   return din.categoriasProdutos.map((categoria) => {
+    const especiais = categoria.produtosEspeciais ?? [];
     let valor = 0;
     let itens = 0;
+    let itensRestantes = 0;
+    const itensPorEspecial = new Map<string, number>();
     sales.forEach((s) => {
       if (!s.dataISO || s.dataISO < din.dataInicio || s.dataISO > din.dataFim) return;
       if (!productMatchesCategoria(s.produto, categoria)) return;
@@ -89,16 +99,27 @@ export function computeDinamicaCategoriaTotais(
       if (participantesSet && !participantesSet.has(key)) return;
       const c = collaboratorByMatricula.get(key);
       if (!c || !dynamicAllowsCollaborator(din, c)) return;
+      const qtd = Number(s.qtd) || 0;
       valor += Number(s.valor) || 0;
-      itens += Number(s.qtd) || 0;
+      itens += qtd;
+
+      const especial = especiais.find((e) => normalize(e.produto) === normalize(s.produto));
+      if (especial) {
+        itensPorEspecial.set(especial.produto, (itensPorEspecial.get(especial.produto) ?? 0) + qtd);
+      } else {
+        itensRestantes += qtd;
+      }
     });
-    return {
-      id: categoria.id,
-      nome: categoria.nome,
-      valor,
-      itens,
-      pontuacao: din.multiplicador.ativo ? itens * din.multiplicador.valor : null,
-    };
+
+    let pontuacao: number | null = null;
+    if (din.multiplicador.ativo) {
+      pontuacao = itensRestantes * din.multiplicador.valor;
+      especiais.forEach((e) => {
+        pontuacao! += (itensPorEspecial.get(e.produto) ?? 0) * e.valor;
+      });
+    }
+
+    return { id: categoria.id, nome: categoria.nome, valor, itens, pontuacao };
   });
 }
 
