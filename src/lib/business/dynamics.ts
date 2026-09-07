@@ -11,6 +11,18 @@ export interface DinamicaRankingRow {
   foto: string | null;
   valor: number;
   itens: number;
+  /** This row's own target — din.metasIndividuais[matricula] in
+   * metaModo 'individual', or the dynamic's single shared metaValor
+   * otherwise, so callers never need to branch on metaModo themselves. */
+  metaIndividual: number;
+}
+
+/** The target a given participant is measured against — their own entry in
+ * metasIndividuais when metaModo is 'individual' (0 if unset), or the
+ * dynamic's single shared metaValor otherwise. */
+export function metaFor(din: Dynamic, matricula: string): number {
+  if (din.metaModo === 'individual') return Number(din.metasIndividuais[normalizeMatricula(matricula)]) || 0;
+  return din.metaValor;
 }
 
 /** Whether a collaborator's sector matches the dynamic's target sector —
@@ -68,6 +80,7 @@ export function computeDinamicaRanking(
       foto: c.foto,
       valor: 0,
       itens: 0,
+      metaIndividual: metaFor(din, c.matricula),
     };
   });
 
@@ -86,6 +99,7 @@ export function computeDinamicaRanking(
         foto: c ? c.foto : null,
         valor: 0,
         itens: 0,
+        metaIndividual: metaFor(din, s.matricula),
       };
     }
     map[key].valor += Number(s.valor) || 0;
@@ -93,6 +107,21 @@ export function computeDinamicaRanking(
   });
 
   return Object.values(map).sort((a, b) => (din.metrica === 'unidade' ? b.itens - a.itens : b.valor - a.valor));
+}
+
+/** "Meta total" for the active-dynamic stat cards: the single shared
+ * metaValor in 'geral' mode, or the sum of every eligible participant's own
+ * target in 'individual' mode (participantes/setorAlvo still narrow who
+ * counts, same as the ranking above). */
+export function dinamicaMetaTotal(din: Dynamic, collaborators: Collaborator[]): number {
+  if (din.metaModo !== 'individual') return din.metaValor;
+  const participantesSet = din.participantes.length ? new Set(din.participantes.map(normalizeMatricula)) : null;
+  return collaborators.reduce((sum, c) => {
+    const key = normalizeMatricula(c.matricula);
+    if (participantesSet && !participantesSet.has(key)) return sum;
+    if (!dynamicAllowsCollaborator(din, c)) return sum;
+    return sum + (Number(din.metasIndividuais[key]) || 0);
+  }, 0);
 }
 
 /** A dynamic is "active" while its end date hasn't passed; ended dynamics move
