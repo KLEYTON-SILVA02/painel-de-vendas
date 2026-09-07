@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
@@ -45,13 +45,69 @@ export function BioPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => setModoGeral(), []);
 
+  // Safe stand-ins so the useMemo calls below always run in the same order,
+  // regardless of whether every query has resolved yet — the "Carregando…"
+  // guard has to come after them, not before (see the same pattern in
+  // DashboardPage/CategoryPage).
+  const salesData = sales ?? [];
+  const collaboratorsData = collaborators ?? [];
+  const bioGroupRowsData = bioGroupRows ?? [];
+  const bioWeightsData = (storeSettings?.bio_weights ?? {}) as unknown as BioWeights;
+  const setoresElegiveisData = bioCategoryType?.setores_elegiveis ?? [BALCAO_SETOR];
+
+  const bioGroups = useMemo(() => groupBioRows(bioGroupRowsData), [bioGroupRowsData]);
+
+  // Each of these walks the full `sales` array and re-classifies every row
+  // (classifyBio scans every G1-G4 keyword per sale) — previously recomputed
+  // from scratch on every render of this screen (any click, not just a
+  // change to sales/date range/filter), which is what made Biosintética one
+  // of the heaviest screens to navigate. Memoizing ties that work to the
+  // data actually changing instead.
+  const ranking = useMemo(
+    () => computeBioSummary(salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, bioFilter, setoresElegiveisData),
+    [salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, bioFilter, setoresElegiveisData],
+  );
+  const foraDoBalcao = useMemo(
+    () =>
+      auditBioOutsideBalcao(
+        salesData.filter((s) => !s.dataISO || (s.dataISO >= dashFrom && s.dataISO <= dashTo)),
+        collaboratorsData,
+        bioGroups,
+        setoresElegiveisData,
+      ),
+    [salesData, collaboratorsData, bioGroups, setoresElegiveisData, dashFrom, dashTo],
+  );
+  // Only Biosintética products (G1-G4) matter on this screen — every sale
+  // shown here is G1-G4, regardless of the seller's sector. A sale by
+  // someone outside Balcão isn't hidden, just flagged with "!" in the row
+  // (see the pink alert bar above the table).
+  const salesForTable = useMemo(() => {
+    if (!salesListEnabled) return [];
+    return salesData
+      .filter((s) => {
+        if (s.dataISO && s.dataISO < dashFrom) return false;
+        if (s.dataISO && s.dataISO > dashTo) return false;
+        return !!classifyBio(s.produto, bioGroups);
+      })
+      .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
+      .slice(0, 150);
+  }, [salesListEnabled, salesData, dashFrom, dashTo, bioGroups]);
+  const outsideRanking = useMemo(
+    () =>
+      computeBioOutsideRanking(salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, bioFilter, setoresElegiveisData),
+    [salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, bioFilter, setoresElegiveisData],
+  );
+  // computeBioSummary already scopes its rows to the category's eligible sector(s).
+  const demonstrativo = useMemo(
+    () => computeBioSummary(salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, 'ALL', setoresElegiveisData),
+    [salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, setoresElegiveisData],
+  );
+
   if (!collaborators || !sales || !storeSettings || !bioCategoryType || !bioGroupRows || !groupGoals) {
     return <PageLoading />;
   }
 
-  const bioGroups = groupBioRows(bioGroupRows);
-  const bioWeights = storeSettings.bio_weights as unknown as BioWeights;
-  const setoresElegiveis = bioCategoryType.setores_elegiveis;
+  const bioWeights = bioWeightsData;
 
   if (view === 'grupos') {
     return (
@@ -65,8 +121,6 @@ export function BioPage() {
     );
   }
   if (view === 'pontos') {
-    // computeBioSummary already scopes its rows to the category's eligible sector(s).
-    const demonstrativo = computeBioSummary(sales, collaborators, bioGroups, bioWeights, dashFrom, dashTo, 'ALL', setoresElegiveis);
     return (
       <BioPontosView
         storeId={profile?.store_id}
@@ -79,30 +133,7 @@ export function BioPage() {
     );
   }
 
-  const ranking = computeBioSummary(sales, collaborators, bioGroups, bioWeights, dashFrom, dashTo, bioFilter, setoresElegiveis);
-  const foraDoBalcao = auditBioOutsideBalcao(
-    sales.filter((s) => (!s.dataISO || (s.dataISO >= dashFrom && s.dataISO <= dashTo))),
-    collaborators,
-    bioGroups,
-    setoresElegiveis,
-  );
   const balcaoMatriculas = new Set(collaborators.filter((c) => c.setor === BALCAO_SETOR).map((c) => c.matricula));
-  // Only Biosintética products (G1-G4) matter on this screen — every sale
-  // shown here is G1-G4, regardless of the seller's sector. A sale by
-  // someone outside Balcão isn't hidden, just flagged with "!" in the row
-  // (see the pink alert bar above the table).
-  const salesForTable = salesListEnabled
-    ? sales
-        .filter((s) => {
-          if (s.dataISO && s.dataISO < dashFrom) return false;
-          if (s.dataISO && s.dataISO > dashTo) return false;
-          return !!classifyBio(s.produto, bioGroups);
-        })
-        .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
-        .slice(0, 150)
-    : [];
-
-  const outsideRanking = computeBioOutsideRanking(sales, collaborators, bioGroups, bioWeights, dashFrom, dashTo, bioFilter, setoresElegiveis);
   const premiumRanking = [...ranking.filter((r) => r.itens > 0), ...outsideRanking].sort((a, b) => b.pontos - a.pontos);
   const totalItensBio = ranking.reduce((a, r) => a + r.itens, 0);
   const vendedoresAtivos = ranking.filter((r) => r.itens > 0).length;

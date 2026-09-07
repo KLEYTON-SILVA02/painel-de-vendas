@@ -9,6 +9,7 @@ import { firstName, normalize } from '../../lib/business/normalize';
 import { dateFromCell, idFromCell, normalizeMatricula, parseNumeroBR } from '../../lib/business/parsing';
 import { buildClassificationInputs } from '../../lib/mappers';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
+import { yieldToMain } from '../../lib/scheduler';
 import { useBrandKeywords, useCatalog, useCollaborators, useExclusiveBrands, useProducts, useSales, useSalesImports } from '../../lib/queries';
 import {
   aggregateByDate,
@@ -267,6 +268,7 @@ export function ImportarPage() {
     let nameMismatch = 0;
     let unclassified = 0;
 
+    let processedRows = 0;
     for (const sheet of sheets) {
       for (const [ri, r] of sheet.rows.entries()) {
         const rr = sheet.rawRows[ri] ?? [];
@@ -298,8 +300,13 @@ export function ImportarPage() {
         const qtd = sheet.map.qtd >= 0 ? parseNumeroBR(r[sheet.map.qtd]) : 0;
         const valor = sheet.map.valor >= 0 ? parseNumeroBR(r[sheet.map.valor]) : 0;
 
+        // Classifying is the most expensive step per row (scans the whole
+        // catalog/keyword lists) — call it once and derive "sem regra
+        // nenhuma bateu" (tier 5 with no exclusive-brand override) from that
+        // single result instead of running the whole classification a
+        // second time with useFallback=false just to check that.
         const { categoria, tier } = classifyProductTier(produto, codigo, inputs);
-        if (classifyProductTier(produto, codigo, inputs, false).categoria === null) unclassified++;
+        if (tier === 5 && categoria !== 'MP') unclassified++;
 
         candidates.push({
           store_id: profile.store_id,
@@ -314,6 +321,16 @@ export function ImportarPage() {
           grupo: categoria,
           classification_tier: tier,
         });
+
+        // Yields to the browser every ~250 rows so a large spreadsheet keeps
+        // the tab responsive (repaints, doesn't look frozen) while this pass
+        // runs, instead of blocking the main thread until every row is done.
+        processedRows++;
+        if (processedRows % 250 === 0) {
+          setProgress(`Classificando vendas… ${processedRows} linha(s)`);
+          // eslint-disable-next-line no-await-in-loop
+          await yieldToMain();
+        }
       }
     }
 
@@ -447,11 +464,15 @@ export function ImportarPage() {
 
   function runAnalysis() {
     setStep('analyze');
+    setProgress('Analisando planilha…');
     // Same brief-pause pattern as the file read step: lets the "Analisando…"
-    // bar paint before the (synchronous) reclassification pass, which can be
-    // heavy on large files, blocks the thread.
-    setTimeout(() => {
-      setSummary(summarize(sheets, inputs));
+    // bar paint before the reclassification pass starts. The pass itself
+    // now yields to the browser every ~250 rows (see summarize), so a large
+    // file no longer freezes the tab while it classifies every row.
+    setTimeout(async () => {
+      const result = await summarize(sheets, inputs, (processed) => setProgress(`Analisando planilha… ${processed} linha(s)`));
+      setSummary(result);
+      setProgress(null);
       setStep('verify');
     }, 250);
   }
@@ -612,7 +633,7 @@ export function ImportarPage() {
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <h3 className="font-semibold mb-1 text-sm">🔍 Analisando produtos…</h3>
           <p className="text-xs text-slate-500 mb-3">
-            Conferindo a categorização de cada produto e preparando a pré-visualização.
+            {progress || 'Conferindo a categorização de cada produto e preparando a pré-visualização.'}
           </p>
           <div style={{ width: '100%', height: 14, borderRadius: 8, background: '#080818', border: '1px solid #212948', overflow: 'hidden' }}>
             <div
@@ -798,7 +819,11 @@ interface SheetSummary {
 
 const PREVIEW_ROWS_LIMIT = 200;
 
-function summarize(sheets: ParsedSheet[], inputs: ReturnType<typeof buildClassificationInputs>): SheetSummary {
+async function summarize(
+  sheets: ParsedSheet[],
+  inputs: ReturnType<typeof buildClassificationInputs>,
+  onProgress?: (processed: number) => void,
+): Promise<SheetSummary> {
   let total = 0;
   let baixaConfianca = 0;
   let itensTotais = 0;
@@ -809,27 +834,28 @@ function summarize(sheets: ParsedSheet[], inputs: ReturnType<typeof buildClassif
   const amostras: { produto: string; categoria: string; tier: number }[] = [];
   const previewRows: { data: string; vendedor: string; produto: string; qtd: number; valor: number }[] = [];
 
-  sheets.forEach((sheet) => {
+  let processedRows = 0;
+  for (const sheet of sheets) {
     const map = sheet.map;
-    sheet.rows.forEach((r, ri) => {
+    for (const [ri, r] of sheet.rows.entries()) {
       const rr = sheet.rawRows[ri] ?? [];
       const dataStr = map.data >= 0 ? String(r[map.data] ?? '').trim() : '';
-      if (FOOTER_ROW_PATTERN.test(dataStr)) return;
+      if (FOOTER_ROW_PATTERN.test(dataStr)) continue;
       const produto = map.produto >= 0 ? String(r[map.produto] ?? '').trim() : '';
-      if (!produto) return;
+      if (!produto) continue;
       total++;
       const codigo = map.codigo >= 0 ? idFromCell(rr[map.codigo], r[map.codigo]) : '';
+      // Classify once — "produto novo" (nenhuma regra bateu, nem catálogo,
+      // palavra-chave ou heurística — mesmo critério da aba "Pendentes de
+      // Revisão" da Auditoria) is derivable from that single result (tier 5
+      // with no exclusive-brand override) instead of classifying again with
+      // useFallback=false just to check it.
       const { categoria, tier } = classifyProductTier(produto, codigo, inputs);
       if (tier >= 4) {
         baixaConfianca++;
         if (amostras.length < 25) amostras.push({ produto, categoria: categoria!, tier });
       }
-      // "Produto novo" = nenhuma regra específica bateu (nem catálogo, palavra-chave
-      // ou heurística) — o mesmo critério que a aba "Pendentes de Revisão" da
-      // Auditoria usa (useFallback=false). Continua sendo importado com a
-      // classificação padrão; só fica sinalizado pra revisão futura.
-      const semRegra = classifyProductTier(produto, codigo, inputs, false).categoria === null;
-      if (semRegra) produtosNovosSet.add(produto.toLowerCase());
+      if (tier === 5 && categoria !== 'MP') produtosNovosSet.add(produto.toLowerCase());
 
       const qtd = map.qtd >= 0 ? parseNumeroBR(r[map.qtd]) : 0;
       const valor = map.valor >= 0 ? parseNumeroBR(r[map.valor]) : 0;
@@ -847,8 +873,17 @@ function summarize(sheets: ParsedSheet[], inputs: ReturnType<typeof buildClassif
       if (previewRows.length < PREVIEW_ROWS_LIMIT) {
         previewRows.push({ data: dataISO ?? dataStr, vendedor: vendedor || matricula, produto, qtd, valor });
       }
-    });
-  });
+
+      // Same main-thread yielding as the confirm-step classification loop —
+      // keeps "Analisando…" responsive instead of frozen on a large file.
+      processedRows++;
+      if (processedRows % 250 === 0) {
+        onProgress?.(processedRows);
+        // eslint-disable-next-line no-await-in-loop
+        await yieldToMain();
+      }
+    }
+  }
 
   return {
     total,
