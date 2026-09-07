@@ -273,6 +273,26 @@
    setOverlaysWebView) — isso aqui só entra em jogo em contextos onde esse
    plugin não se aplica (navegador comum, PWA), e some sozinho (vira 0)
    quando o WebView já não desenha sob a área de sistema. */
+/* Both .mv2-topbar (fixed) and .mv2-category-menu (sticky, pinned right
+   below it — see its own comment) are removed from or start at the very
+   top of the normal document flow, so without this the flow never
+   reserves the ~96px (respiro + barra) they visually occupy: .mv2-topbar
+   is `position: fixed` and contributes zero height to the flow, and
+   .mv2-category-menu's *static* flow position sits at y=0 (nothing above
+   it takes up flow space either) even though it renders pinned at
+   y=96 — its reserved flow slot is only its own ~54px, not the 96px+54px
+   it actually occupies on screen. The result: scrolling the page moves
+   content up faster than the bars' real footprint accounts for, so
+   content that should stay below the bars slides in and gets covered by
+   them ("passa por baixo das barras"). Padding the shell itself pushes
+   the flow's start down to exactly y=96 — matching .mv2-category-menu's
+   own sticky `top` — so its reserved slot lines up with where it's
+   actually painted, and every element after it (the routed page content)
+   is reserved the correct amount of space, at rest and while scrolling. */
+.mv2.app-shell {
+  padding-top: calc((var(--mv2-topbar-h) * 2) + env(safe-area-inset-top, 0px));
+}
+
 .mv2-topbar {
   position: fixed;
   top: calc(var(--mv2-topbar-h) + env(safe-area-inset-top, 0px));

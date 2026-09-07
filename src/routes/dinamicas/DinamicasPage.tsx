@@ -174,13 +174,14 @@ export function DinamicasPage() {
   );
 }
 
-function StatCard({ label, value, color }: { label: string; value: string; color: string }) {
+function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
       <div className="text-[11px] text-slate-400 mb-1">{label}</div>
       <div className="text-sm font-mono font-semibold" style={{ color }}>
         {value}
       </div>
+      {sub && <div className="text-[10px] text-slate-500 mt-0.5">{sub}</div>}
     </div>
   );
 }
@@ -253,6 +254,7 @@ function DinamicaCard({
                     ? `${cat.itens} ${unidadeLabel}`
                     : fmtMoney(cat.valor)
               }
+              sub={cat.pontuacao !== null ? `${cat.itens} ${unidadeLabel} vendido${cat.itens === 1 ? '' : 's'}` : undefined}
               color="#00b6da"
             />
           ))}
