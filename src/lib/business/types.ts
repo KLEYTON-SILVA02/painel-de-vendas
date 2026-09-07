@@ -90,8 +90,12 @@ export interface Dynamic {
    * `produtos` behavior (no split). */
   categoriasProdutos: DynamicProductCategory[];
   /** When ativo, each categoria's own item count (not R$) is multiplied by
-   * valor to produce a per-categoria score, shown alongside its total. */
+   * valor to produce a per-categoria score, shown alongside its total — the
+   * score itself is always shown as currency, regardless of medidaLabel. */
   multiplicador: { ativo: boolean; valor: number };
+  /** Custom unit name shown next to realized/meta values when metrica is
+   * 'unidade' (e.g. "caixas", "pares") — empty falls back to generic "un.". */
+  medidaLabel: string;
 }
 
 export interface DynamicProductCategory {

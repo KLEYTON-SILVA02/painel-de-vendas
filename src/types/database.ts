@@ -417,6 +417,7 @@ export type Database = {
           data_inicio: string
           descricao: string
           id: string
+          medida_label: string
           meta_modo: string
           meta_valor: number
           metas_individuais: Json
@@ -436,6 +437,7 @@ export type Database = {
           data_inicio: string
           descricao?: string
           id?: string
+          medida_label?: string
           meta_modo?: string
           meta_valor?: number
           metas_individuais?: Json
@@ -455,6 +457,7 @@ export type Database = {
           data_inicio?: string
           descricao?: string
           id?: string
+          medida_label?: string
           meta_modo?: string
           meta_valor?: number
           metas_individuais?: Json
