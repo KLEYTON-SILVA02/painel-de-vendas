@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   computeDinamicaCategoriaTotais,
   computeDinamicaColaboradorProdutos,
+  computeDinamicaColaboradorVendas,
   computeDinamicaProgresso,
   computeDinamicaRanking,
   dinamicaUnidadeLabel,
@@ -193,6 +194,26 @@ describe('computeDinamicaColaboradorProdutos', () => {
 
   it('returns an empty list for a matricula with no matching sales', () => {
     expect(computeDinamicaColaboradorProdutos(din, sales, 'M99')).toEqual([]);
+  });
+});
+
+describe('computeDinamicaColaboradorVendas', () => {
+  it('keeps each sale date as its own row, most recent day first', () => {
+    const linhas = computeDinamicaColaboradorVendas({ ...din, produtos: [] }, sales, 'M2');
+    expect(linhas).toEqual([
+      { dataISO: '2026-08-06', produto: 'Produto X', qtd: 1, valor: 100 },
+      { dataISO: '2026-08-06', produto: 'Produto Y (not in list)', qtd: 5, valor: 500 },
+    ]);
+  });
+
+  it('respects the dynamic product filter and period', () => {
+    const linhas = computeDinamicaColaboradorVendas(din, sales, 'M1'); // din.produtos = ['Produto X']
+    // s4 (2026-07-20) is outside the period and excluded.
+    expect(linhas).toEqual([{ dataISO: '2026-08-05', produto: 'Produto X', qtd: 2, valor: 200 }]);
+  });
+
+  it('returns an empty list for a matricula with no matching sales', () => {
+    expect(computeDinamicaColaboradorVendas(din, sales, 'M99')).toEqual([]);
   });
 });
 

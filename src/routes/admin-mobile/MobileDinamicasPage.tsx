@@ -1,6 +1,7 @@
 import { useId, useMemo, useState, type FormEvent } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { CategoriasProdutosEditor } from '../../components/dinamicas/CategoriasProdutosEditor';
+import { ParticipantesPicker } from '../../components/dinamicas/ParticipantesPicker';
 import { DinamicaProgressList } from '../../components/ranking/DinamicaProgressList';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { useReauthGuard } from '../../hooks/useReauthGuard';
@@ -388,33 +389,14 @@ function MobileNewDynamicForm({
       <div style={{ margin: '8px 0 4px', fontSize: 8, color: 'var(--mv2-texto-2)', textTransform: 'uppercase' }}>
         Participantes{metaModo === 'individual' && ' — defina a meta de cada um'}
       </div>
-      <div className="mv2-tag-list" style={{ marginTop: 0 }}>
-        {collaborators.map((c) => {
-          const checked = participantes.includes(c.matricula);
-          return (
-            <span key={c.id} className="mv2-tag" style={{ display: 'flex', alignItems: 'center', gap: 4, background: checked ? 'var(--mv2-ciano-claro)' : undefined, color: checked ? '#000' : undefined }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => toggleParticipante(c.matricula)}
-                  style={{ width: 8, height: 8 }}
-                />
-                {c.apelido || c.nome}
-              </label>
-              {metaModo === 'individual' && checked && (
-                <input
-                  type="number"
-                  value={metasIndividuais[c.matricula] ?? 0}
-                  onChange={(e) => setMetaIndividual(c.matricula, Number(e.target.value))}
-                  placeholder="meta"
-                  style={{ width: 36, fontSize: 7, padding: '1px 3px', borderRadius: 4 }}
-                />
-              )}
-            </span>
-          );
-        })}
-      </div>
+      <ParticipantesPicker
+        collaborators={collaborators}
+        participantes={participantes}
+        onToggle={toggleParticipante}
+        metaModo={metaModo}
+        metasIndividuais={metasIndividuais}
+        onMetaChange={setMetaIndividual}
+      />
 
       <button type="submit" className="mv2-btn-primary" style={{ width: '100%', marginTop: 12 }} disabled={creating}>
         {creating ? 'Criando…' : 'Criar Dinâmica'}
@@ -538,6 +520,7 @@ function MobileDinamicaAccordionItem({
             isUnidade={isUnidade}
             din={d}
             sales={sales}
+            showSaleDates
             renderAction={(r) => (
               <button
                 onClick={() => setCardMatricula(r.matricula)}

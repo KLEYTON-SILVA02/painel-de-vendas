@@ -1,7 +1,12 @@
 import { useMemo, useState, type MouseEvent, type ReactNode } from 'react';
-import { computeDinamicaColaboradorProdutos, dinamicaUnidadeLabel, type DinamicaRankingRow } from '../../lib/business/dynamics';
+import {
+  computeDinamicaColaboradorProdutos,
+  computeDinamicaColaboradorVendas,
+  dinamicaUnidadeLabel,
+  type DinamicaRankingRow,
+} from '../../lib/business/dynamics';
 import type { Dynamic, Sale } from '../../lib/business/types';
-import { fmtMoney } from '../../lib/format';
+import { fmtDateShortBR, fmtMoney } from '../../lib/format';
 
 // Dedicated ranking display for Dinâmicas (desktop DinamicasPage + mobile
 // MobileDinamicasPage): a list, one row per participating collaborator —
@@ -21,6 +26,7 @@ export function DinamicaProgressList({
   din,
   sales,
   renderAction,
+  showSaleDates,
 }: {
   ranking: DinamicaRankingRow[];
   isUnidade: boolean;
@@ -28,6 +34,9 @@ export function DinamicaProgressList({
   sales: Sale[];
   /** Optional per-row action (e.g. mobile's "Cartão" image-export button). */
   renderAction?: (r: DinamicaRankingRow) => ReactNode;
+  /** Mobile only: show each sale's date (DD/MM) in the "produtos vendidos"
+   * popup, one row per sale date instead of one aggregated row per product. */
+  showSaleDates?: boolean;
 }) {
   const [produtosMatricula, setProdutosMatricula] = useState<string | null>(null);
   const unidadeLabel = dinamicaUnidadeLabel(din);
@@ -67,9 +76,16 @@ export function DinamicaProgressList({
                 {r.apelido || r.nome}
               </div>
               {batida && <span style={{ fontSize: 13, flexShrink: 0 }}>⭐</span>}
-              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, fontSize: 12, color: batida ? '#14ff00' : '#ffb700', flexShrink: 0, whiteSpace: 'nowrap' }}>
-                {isUnidade ? `${realizado} ${unidadeLabel}` : fmtMoney(realizado)}
-                {metaValor > 0 && ` · ${rawPct.toFixed(0)}%`}
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, fontSize: 12, color: batida ? '#14ff00' : '#ffb700', whiteSpace: 'nowrap' }}>
+                  {isUnidade ? `${realizado} ${unidadeLabel}` : fmtMoney(realizado)}
+                  {metaValor > 0 && ` · ${rawPct.toFixed(0)}%`}
+                </div>
+                {!isUnidade && (
+                  <div style={{ fontSize: 10, color: '#7783a8', whiteSpace: 'nowrap' }}>
+                    {r.itens} {unidadeLabel} vendido{r.itens === 1 ? '' : 's'}
+                  </div>
+                )}
               </div>
               {renderAction && (
                 <div style={{ flexShrink: 0 }} onClick={(e: MouseEvent) => e.stopPropagation()}>
@@ -100,6 +116,7 @@ export function DinamicaProgressList({
           sales={sales}
           isUnidade={isUnidade}
           unidadeLabel={unidadeLabel}
+          showSaleDates={showSaleDates}
           onClose={() => setProdutosMatricula(null)}
         />
       )}
@@ -113,6 +130,7 @@ function DinamicaColaboradorProdutosModal({
   sales,
   isUnidade,
   unidadeLabel,
+  showSaleDates,
   onClose,
 }: {
   row: DinamicaRankingRow;
@@ -120,9 +138,15 @@ function DinamicaColaboradorProdutosModal({
   sales: Sale[];
   isUnidade: boolean;
   unidadeLabel: string;
+  showSaleDates?: boolean;
   onClose: () => void;
 }) {
-  const linhas = useMemo(() => computeDinamicaColaboradorProdutos(din, sales, row.matricula), [din, sales, row.matricula]);
+  const linhasProdutos = useMemo(() => computeDinamicaColaboradorProdutos(din, sales, row.matricula), [din, sales, row.matricula]);
+  const linhasVendas = useMemo(
+    () => (showSaleDates ? computeDinamicaColaboradorVendas(din, sales, row.matricula) : []),
+    [din, sales, row.matricula, showSaleDates],
+  );
+  const vazio = showSaleDates ? linhasVendas.length === 0 : linhasProdutos.length === 0;
 
   return (
     <div
@@ -147,11 +171,25 @@ function DinamicaColaboradorProdutosModal({
           </button>
         </div>
         <div className="text-xs text-slate-400 mb-2">Produtos vendidos nesta dinâmica</div>
-        {linhas.length === 0 ? (
+        {vazio ? (
           <div className="text-sm text-slate-500 py-4 text-center">Nenhuma venda registrada.</div>
+        ) : showSaleDates ? (
+          <div className="flex flex-col gap-1.5">
+            {linhasVendas.map((l, i) => (
+              <div key={`${l.dataISO}-${l.produto}-${i}`} className="flex items-center gap-3 text-xs bg-slate-800/60 rounded-lg px-2.5 py-1.5">
+                <span className="font-mono flex-shrink-0" style={{ color: '#00f0ff' }}>
+                  {fmtDateShortBR(l.dataISO)}
+                </span>
+                <span className="truncate flex-1">{l.produto}</span>
+                <span className="font-mono font-semibold flex-shrink-0" style={{ color: '#ffb700' }}>
+                  {isUnidade ? `${l.qtd} ${unidadeLabel}` : fmtMoney(l.valor)}
+                </span>
+              </div>
+            ))}
+          </div>
         ) : (
           <div className="flex flex-col gap-1.5">
-            {linhas.map((l) => (
+            {linhasProdutos.map((l) => (
               <div key={l.produto} className="flex items-center justify-between gap-3 text-xs bg-slate-800/60 rounded-lg px-2.5 py-1.5">
                 <span className="truncate">{l.produto}</span>
                 <span className="font-mono font-semibold flex-shrink-0" style={{ color: '#ffb700' }}>
