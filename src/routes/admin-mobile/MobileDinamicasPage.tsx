@@ -6,6 +6,7 @@ import { useReauthGuard } from '../../hooks/useReauthGuard';
 import { computeDinamicaProgresso, computeDinamicaRanking, dynamicStatus, type DynamicStatus } from '../../lib/business/dynamics';
 import { normalize } from '../../lib/business/normalize';
 import type { Collaborator, Dynamic, Sale } from '../../lib/business/types';
+import { VISITANTE_SETOR } from '../../lib/business/types';
 import { todayISO } from '../../lib/dateRange';
 import { generateDinamicaCardBlob } from '../../lib/dinamicaImage';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
@@ -46,6 +47,10 @@ export function MobileDinamicasPage() {
   if (!dynamics || !sales || !collaborators) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
+
+  // Visitante collaborators are view-only — never sell, never belong in the
+  // participant picker (see the same filter on the desktop DinamicasPage).
+  const participantCollaborators = collaborators.filter((c) => c.setor !== VISITANTE_SETOR);
 
   const today = todayISO();
   const list = dynamics.slice().sort((a, b) => (b.dataInicio || '').localeCompare(a.dataInicio || ''));
@@ -115,7 +120,7 @@ export function MobileDinamicasPage() {
 
       {tab === 'ativas' && (
         <MobileNewDynamicForm
-          collaborators={collaborators}
+          collaborators={participantCollaborators}
           productNames={productNames}
           onCreate={(input) => createDynamic.mutate(input)}
           creating={createDynamic.isPending}
@@ -153,7 +158,7 @@ export function MobileDinamicasPage() {
       {editing && (
         <EditDynamicModal
           dynamic={editing}
-          collaborators={collaborators}
+          collaborators={participantCollaborators}
           productNames={productNames}
           saving={updateDynamic.isPending}
           onClose={() => setEditing(null)}

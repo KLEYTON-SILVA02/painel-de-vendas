@@ -4,6 +4,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { BackButton } from '../../components/BackButton';
 import { ConquistaCelebrationHost } from '../../components/ConquistaCelebration';
 import { FunctionIcon } from '../../components/icons/FunctionIcon';
+import { PageLoading } from '../../components/PageLoading';
 import { Sidebar } from '../../components/Sidebar';
 import {
   BagIcon,
@@ -23,31 +24,41 @@ import {
 import type { Horario } from '../../lib/business/horario';
 import { useResolvePasswordRequest } from '../../lib/mutations';
 import { useCategoryTypes, useCollaborators, usePendingPasswordRequests, useStore, useStoreSettings } from '../../lib/queries';
-import { AdminLandingPage } from '../admin/AdminLandingPage';
-import { AuditoriaPage } from '../admin/AuditoriaPage';
-import { ListaVendasPage } from '../admin/ListaVendasPage';
-import { BackupPage } from '../admin/BackupPage';
-import { CardConquistaPage } from '../admin/CardConquistaPage';
-import { CategoriasPage } from '../admin/CategoriasPage';
-import { ColaboradoresPage } from '../admin/ColaboradoresPage';
-import { ConfiguracoesPage } from '../admin/ConfiguracoesPage';
-import { IconesPage } from '../admin/IconesPage';
-import { MinhaLojaPage } from '../admin/MinhaLojaPage';
-import { ProdutosPage } from '../admin/ProdutosPage';
-import { VendasArquivadasPage } from '../admin/VendasArquivadasPage';
-import { ConquistasPage } from '../conquistas/ConquistasPage';
-import { MetasPage } from '../metas/MetasPage';
-import { MobileBioPage } from './MobileBioPage';
-import { MobileDinamicasPage } from './MobileDinamicasPage';
 import { MobileClosingTimer } from './MobileClosingTimer';
-import { MobileDermoPage } from './MobileDermoPage';
-import { MobileExclusivasPage } from './MobileExclusivasPage';
-import { MobileGenericosPage } from './MobileGenericosPage';
-import { MobileChipPage } from './MobileChipPage';
-import { MobileInicioPage } from './MobileInicioPage';
-import { MobileLevmelPage } from './MobileLevmelPage';
-import { MobileMercadoriaGeralPage } from './MobileMercadoriaGeralPage';
-import { MobileRankingPage } from './MobileRankingPage';
+
+// Every screen below is lazy-loaded: this shell previously imported all of
+// them (plus every desktop /admin/* maintenance page) statically at the top
+// of the file, which forces the bundler to fetch+parse every one of those
+// chunks up front before the shell can render anything — on mobile that's
+// ~65kB gzip of JS the device has to download and parse before "Início"
+// even paints, regardless of which single screen the user actually opened.
+// AppShell.tsx (desktop) already lazy-loads these same pages; this mirrors
+// that so the mobile shell gets the same benefit instead of quietly
+// re-eagering them via its own static imports.
+const AdminLandingPage = lazy(() => import('../admin/AdminLandingPage').then((m) => ({ default: m.AdminLandingPage })));
+const AuditoriaPage = lazy(() => import('../admin/AuditoriaPage').then((m) => ({ default: m.AuditoriaPage })));
+const ListaVendasPage = lazy(() => import('../admin/ListaVendasPage').then((m) => ({ default: m.ListaVendasPage })));
+const BackupPage = lazy(() => import('../admin/BackupPage').then((m) => ({ default: m.BackupPage })));
+const CardConquistaPage = lazy(() => import('../admin/CardConquistaPage').then((m) => ({ default: m.CardConquistaPage })));
+const CategoriasPage = lazy(() => import('../admin/CategoriasPage').then((m) => ({ default: m.CategoriasPage })));
+const ColaboradoresPage = lazy(() => import('../admin/ColaboradoresPage').then((m) => ({ default: m.ColaboradoresPage })));
+const ConfiguracoesPage = lazy(() => import('../admin/ConfiguracoesPage').then((m) => ({ default: m.ConfiguracoesPage })));
+const IconesPage = lazy(() => import('../admin/IconesPage').then((m) => ({ default: m.IconesPage })));
+const MinhaLojaPage = lazy(() => import('../admin/MinhaLojaPage').then((m) => ({ default: m.MinhaLojaPage })));
+const ProdutosPage = lazy(() => import('../admin/ProdutosPage').then((m) => ({ default: m.ProdutosPage })));
+const VendasArquivadasPage = lazy(() => import('../admin/VendasArquivadasPage').then((m) => ({ default: m.VendasArquivadasPage })));
+const ConquistasPage = lazy(() => import('../conquistas/ConquistasPage').then((m) => ({ default: m.ConquistasPage })));
+const MetasPage = lazy(() => import('../metas/MetasPage').then((m) => ({ default: m.MetasPage })));
+const MobileBioPage = lazy(() => import('./MobileBioPage').then((m) => ({ default: m.MobileBioPage })));
+const MobileDinamicasPage = lazy(() => import('./MobileDinamicasPage').then((m) => ({ default: m.MobileDinamicasPage })));
+const MobileDermoPage = lazy(() => import('./MobileDermoPage').then((m) => ({ default: m.MobileDermoPage })));
+const MobileExclusivasPage = lazy(() => import('./MobileExclusivasPage').then((m) => ({ default: m.MobileExclusivasPage })));
+const MobileGenericosPage = lazy(() => import('./MobileGenericosPage').then((m) => ({ default: m.MobileGenericosPage })));
+const MobileChipPage = lazy(() => import('./MobileChipPage').then((m) => ({ default: m.MobileChipPage })));
+const MobileInicioPage = lazy(() => import('./MobileInicioPage').then((m) => ({ default: m.MobileInicioPage })));
+const MobileLevmelPage = lazy(() => import('./MobileLevmelPage').then((m) => ({ default: m.MobileLevmelPage })));
+const MobileMercadoriaGeralPage = lazy(() => import('./MobileMercadoriaGeralPage').then((m) => ({ default: m.MobileMercadoriaGeralPage })));
+const MobileRankingPage = lazy(() => import('./MobileRankingPage').then((m) => ({ default: m.MobileRankingPage })));
 
 // Mobile v2 admin shell: the spec's sticky topbar + horizontal category
 // icon menu, replacing the desktop Sidebar below the 1024px breakpoint
@@ -205,40 +216,35 @@ export function MobileAdminShell() {
       </nav>
 
       <main style={{ paddingBottom: 24 }}>
-        <Routes>
-          <Route path="/" element={<MobileInicioPage />} />
-          <Route path="/ranking" element={<MobileRankingPage />} />
-          <Route path="/categoria/DERM" element={<MobileDermoPage />} />
-          <Route path="/categoria/GEN" element={<MobileGenericosPage />} />
-          <Route path="/categoria/MP" element={<MobileExclusivasPage />} />
-          <Route path="/categoria/MER" element={<MobileMercadoriaGeralPage />} />
-          <Route path="/categoria/LEVMEL" element={<MobileLevmelPage />} />
-          <Route path="/categoria/CHIP" element={<MobileChipPage />} />
-          <Route path="/metas" element={<MetasPage />} />
-          <Route path="/dinamicas" element={<MobileDinamicasPage />} />
-          <Route path="/bio" element={<MobileBioPage />} />
-          <Route path="/conquistas" element={<ConquistasPage />} />
-          <Route path="/admin" element={<AdminLandingPage />} />
-          <Route path="/admin/colaboradores" element={<ColaboradoresPage />} />
-          <Route path="/admin/produtos" element={<ProdutosPage />} />
-          <Route
-            path="/admin/importar"
-            element={
-              <Suspense fallback={<div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>}>
-                <ImportarPage />
-              </Suspense>
-            }
-          />
-          <Route path="/admin/auditoria" element={<AuditoriaPage />} />
-          <Route path="/admin/vendas" element={<ListaVendasPage />} />
-          <Route path="/admin/vendas-arquivadas" element={<VendasArquivadasPage />} />
-          <Route path="/admin/backup" element={<BackupPage />} />
-          <Route path="/admin/minha-loja" element={<MinhaLojaPage />} />
-          <Route path="/admin/configuracoes" element={<ConfiguracoesPage />} />
-          <Route path="/admin/icones" element={<IconesPage />} />
-          <Route path="/admin/card-conquista" element={<CardConquistaPage />} />
-          <Route path="/admin/categorias" element={<CategoriasPage />} />
-        </Routes>
+        <Suspense fallback={<PageLoading />}>
+          <Routes>
+            <Route path="/" element={<MobileInicioPage />} />
+            <Route path="/ranking" element={<MobileRankingPage />} />
+            <Route path="/categoria/DERM" element={<MobileDermoPage />} />
+            <Route path="/categoria/GEN" element={<MobileGenericosPage />} />
+            <Route path="/categoria/MP" element={<MobileExclusivasPage />} />
+            <Route path="/categoria/MER" element={<MobileMercadoriaGeralPage />} />
+            <Route path="/categoria/LEVMEL" element={<MobileLevmelPage />} />
+            <Route path="/categoria/CHIP" element={<MobileChipPage />} />
+            <Route path="/metas" element={<MetasPage />} />
+            <Route path="/dinamicas" element={<MobileDinamicasPage />} />
+            <Route path="/bio" element={<MobileBioPage />} />
+            <Route path="/conquistas" element={<ConquistasPage />} />
+            <Route path="/admin" element={<AdminLandingPage />} />
+            <Route path="/admin/colaboradores" element={<ColaboradoresPage />} />
+            <Route path="/admin/produtos" element={<ProdutosPage />} />
+            <Route path="/admin/importar" element={<ImportarPage />} />
+            <Route path="/admin/auditoria" element={<AuditoriaPage />} />
+            <Route path="/admin/vendas" element={<ListaVendasPage />} />
+            <Route path="/admin/vendas-arquivadas" element={<VendasArquivadasPage />} />
+            <Route path="/admin/backup" element={<BackupPage />} />
+            <Route path="/admin/minha-loja" element={<MinhaLojaPage />} />
+            <Route path="/admin/configuracoes" element={<ConfiguracoesPage />} />
+            <Route path="/admin/icones" element={<IconesPage />} />
+            <Route path="/admin/card-conquista" element={<CardConquistaPage />} />
+            <Route path="/admin/categorias" element={<CategoriasPage />} />
+          </Routes>
+        </Suspense>
       </main>
     </div>
   );

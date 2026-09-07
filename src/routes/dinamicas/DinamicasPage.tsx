@@ -9,6 +9,7 @@ import {
 } from '../../lib/business/dynamics';
 import { useReauthGuard } from '../../hooks/useReauthGuard';
 import type { Collaborator, Dynamic, Sale } from '../../lib/business/types';
+import { VISITANTE_SETOR } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { todayISO } from '../../lib/dateRange';
 import { useCreateDynamic, useDeleteDynamic, useUpdateDynamic } from '../../lib/mutations';
@@ -45,6 +46,13 @@ export function DinamicasPage() {
   if (!dynamics || !sales || !collaborators) {
     return <PageLoading />;
   }
+
+  // Visitante collaborators are view-only — they never sell, so they never
+  // belong in a picker used to assign them as dynamic participants (they'd
+  // just sit at 0 forever). Only affects the participant checklist; the
+  // ranking display below still gets the full `collaborators` list, same as
+  // any other read-only view.
+  const participantCollaborators = collaborators.filter((c) => c.setor !== VISITANTE_SETOR);
 
   const today = todayISO();
   const list = dynamics.slice().sort((a, b) => (b.dataInicio || '').localeCompare(a.dataInicio || ''));
@@ -116,7 +124,7 @@ export function DinamicasPage() {
       ) : (
         <>
           <NewDynamicForm
-            collaborators={collaborators}
+            collaborators={participantCollaborators}
             productNames={productNames}
             onCreate={(input) => createDynamic.mutate(input)}
             creating={createDynamic.isPending}
@@ -147,7 +155,7 @@ export function DinamicasPage() {
       {editing && (
         <EditDynamicModal
           dynamic={editing}
-          collaborators={collaborators}
+          collaborators={participantCollaborators}
           productNames={productNames}
           saving={updateDynamic.isPending}
           onClose={() => setEditing(null)}
