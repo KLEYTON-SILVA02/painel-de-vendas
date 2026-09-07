@@ -2,6 +2,7 @@ import { useId, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { CategoriasProdutosEditor } from '../../components/dinamicas/CategoriasProdutosEditor';
+import { ParticipantesPicker } from '../../components/dinamicas/ParticipantesPicker';
 import { DinamicaProgressList } from '../../components/ranking/DinamicaProgressList';
 import {
   computeDinamicaCategoriaTotais,
@@ -270,7 +271,7 @@ function NewDynamicForm({
   onCreate,
   creating,
 }: {
-  collaborators: { id: string; matricula: string; nome: string; apelido: string | null }[];
+  collaborators: { id: string; matricula: string; nome: string; apelido: string | null; foto?: string | null }[];
   productNames: string[];
   onCreate: (input: {
     titulo: string;
@@ -477,28 +478,14 @@ function NewDynamicForm({
           Colaboradores participantes (opcional — nenhum marcado = todos)
           {metaModo === 'individual' && ' — marque e defina a meta de cada um'}
         </label>
-        <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
-          {collaborators.map((c) => {
-            const checked = participantes.includes(c.matricula);
-            return (
-              <div key={c.id} className="flex items-center gap-1.5 text-xs bg-slate-800 rounded-full px-2.5 py-1">
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" checked={checked} onChange={() => toggleParticipante(c.matricula)} />
-                  {c.apelido || c.nome}
-                </label>
-                {metaModo === 'individual' && checked && (
-                  <input
-                    type="number"
-                    value={metasIndividuais[c.matricula] ?? 0}
-                    onChange={(e) => setMetaIndividual(c.matricula, Number(e.target.value))}
-                    placeholder="meta"
-                    className="w-16 rounded bg-slate-900 border border-slate-700 px-1.5 py-0.5 text-[11px]"
-                  />
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <ParticipantesPicker
+          collaborators={collaborators}
+          participantes={participantes}
+          onToggle={toggleParticipante}
+          metaModo={metaModo}
+          metasIndividuais={metasIndividuais}
+          onMetaChange={setMetaIndividual}
+        />
       </div>
 
       <button
@@ -532,7 +519,7 @@ export function EditDynamicModal({
   onSave,
 }: {
   dynamic: Dynamic;
-  collaborators: { id: string; matricula: string; nome: string; apelido: string | null }[];
+  collaborators: { id: string; matricula: string; nome: string; apelido: string | null; foto?: string | null }[];
   productNames: string[];
   saving: boolean;
   onClose: () => void;
@@ -706,28 +693,14 @@ export function EditDynamicModal({
             Colaboradores participantes (opcional — nenhum marcado = todos)
             {metaModo === 'individual' && ' — marque e defina a meta de cada um'}
           </label>
-          <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
-            {collaborators.map((c) => {
-              const checked = participantes.includes(c.matricula);
-              return (
-                <div key={c.id} className="flex items-center gap-1.5 text-xs bg-slate-800 rounded-full px-2.5 py-1">
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input type="checkbox" checked={checked} onChange={() => toggleParticipante(c.matricula)} />
-                    {c.apelido || c.nome}
-                  </label>
-                  {metaModo === 'individual' && checked && (
-                    <input
-                      type="number"
-                      value={metasIndividuais[c.matricula] ?? 0}
-                      onChange={(e) => setMetaIndividual(c.matricula, Number(e.target.value))}
-                      placeholder="meta"
-                      className="w-16 rounded bg-slate-900 border border-slate-700 px-1.5 py-0.5 text-[11px]"
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          <ParticipantesPicker
+            collaborators={collaborators}
+            participantes={participantes}
+            onToggle={toggleParticipante}
+            metaModo={metaModo}
+            metasIndividuais={metasIndividuais}
+            onMetaChange={setMetaIndividual}
+          />
         </div>
 
         <div className="flex gap-2 mt-2">

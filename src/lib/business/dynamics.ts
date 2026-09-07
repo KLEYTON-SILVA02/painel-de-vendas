@@ -129,6 +129,34 @@ export function computeDinamicaColaboradorProdutos(din: Dynamic, sales: Sale[], 
   return Array.from(map.values()).sort((a, b) => b.valor - a.valor);
 }
 
+export interface DinamicaColaboradorVendaLinha {
+  dataISO: string;
+  produto: string;
+  qtd: number;
+  valor: number;
+}
+
+/** Same as computeDinamicaColaboradorProdutos, but keeps each sale date as
+ * its own row (grouped by dataISO + produto, not just produto) — used by
+ * the mobile "ver produtos vendidos" popup, which shows the date (DD/MM) of
+ * each sale alongside its product. Most recent day first. */
+export function computeDinamicaColaboradorVendas(din: Dynamic, sales: Sale[], matricula: string): DinamicaColaboradorVendaLinha[] {
+  const key = normalizeMatricula(matricula);
+  const map = new Map<string, DinamicaColaboradorVendaLinha>();
+  sales.forEach((s) => {
+    if (normalizeMatricula(s.matricula) !== key) return;
+    if (!s.dataISO || s.dataISO < din.dataInicio || s.dataISO > din.dataFim) return;
+    if (!dinamicaProdutoParticipa(din, s.produto)) return;
+    const nome = s.produto || '(sem nome)';
+    const mapKey = `${s.dataISO}|${nome}`;
+    const linha = map.get(mapKey) ?? { dataISO: s.dataISO, produto: nome, qtd: 0, valor: 0 };
+    linha.qtd += Number(s.qtd) || 0;
+    linha.valor += Number(s.valor) || 0;
+    map.set(mapKey, linha);
+  });
+  return Array.from(map.values()).sort((a, b) => b.dataISO.localeCompare(a.dataISO) || a.produto.localeCompare(b.produto));
+}
+
 /** Whether a collaborator's sector matches the dynamic's target sector —
  * 'ambos' (the default, and every dynamic created before this field
  * existed) never restricts. Determines who can participate, be counted
