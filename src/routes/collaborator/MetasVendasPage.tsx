@@ -3,7 +3,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
 import { diasRestantesNoMes, effectiveMetaGeral, getSuperMeta, goalProration } from '../../lib/business/goals';
 import { catTotals, computeSummary } from '../../lib/business/summary';
-import { monthFirstISO } from '../../lib/dateRange';
+import { monthFirstISO, todayISO } from '../../lib/dateRange';
 import { fmtMoney } from '../../lib/format';
 import { useIndividualGoals } from '../../lib/mutations';
 import { useCollaborators, useGoals, useSales, useStoreSettings } from '../../lib/queries';
@@ -105,7 +105,7 @@ export function MetasVendasPage() {
   // convenção já usada acima para a coluna "Vendido".
   const now = new Date();
   const monthFirstStr = monthFirstISO(now.getFullYear(), now.getMonth());
-  const todayISOStr = now.toISOString().slice(0, 10);
+  const todayISOStr = todayISO();
 
   return (
     <div>

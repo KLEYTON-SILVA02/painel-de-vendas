@@ -2,10 +2,9 @@ import { useAuth } from '../../auth/AuthContext';
 import { computeDinamicaProgresso, dynamicAllowsCollaborator, dynamicStatus } from '../../lib/business/dynamics';
 import { normalize } from '../../lib/business/normalize';
 import type { Collaborator, Dynamic } from '../../lib/business/types';
+import { todayISO } from '../../lib/dateRange';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { useCollaborators, useDynamics, useSales } from '../../lib/queries';
-
-const todayISO = () => new Date().toISOString().slice(0, 10);
 
 // Collaborators see only their own standing within each dynamic — never the
 // full participant ranking — so this never reuses PodiumStaircase/admin's
