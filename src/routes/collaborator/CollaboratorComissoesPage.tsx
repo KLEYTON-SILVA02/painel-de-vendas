@@ -3,7 +3,7 @@ import { useAuth } from '../../auth/AuthContext';
 import type { CategoryKey } from '../../lib/business/classification';
 import { catTotals } from '../../lib/business/summary';
 import type { Sale } from '../../lib/business/types';
-import { fmtDateBR, fmtMoney } from '../../lib/format';
+import { fmtDateShortBR, fmtMoney } from '../../lib/format';
 import { useCollaborators, useCommissionRates, useSales } from '../../lib/queries';
 import { MobileDateFilter } from '../admin-mobile/MobileDateFilter';
 import { MobileSalesListLockedNotice } from '../admin-mobile/MobileSellerDetail';
@@ -138,7 +138,7 @@ function CategorySalesTable({ sales }: { sales: Sale[] }) {
         <tbody>
           {sales.map((s) => (
             <tr key={s.id}>
-              <td>{fmtDateBR(s.dataISO)}</td>
+              <td>{fmtDateShortBR(s.dataISO)}</td>
               <td>{s.produto}</td>
               <td>{s.qtd}</td>
               <td className="mv2-valor">{fmtMoney(s.valor)}</td>

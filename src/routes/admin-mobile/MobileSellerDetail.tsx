@@ -3,7 +3,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { ReclassifyBar } from '../../components/admin/ReclassifyBar';
 import type { CategoryKey } from '../../lib/business/classification';
 import type { Collaborator, Sale } from '../../lib/business/types';
-import { fmtDateBR, fmtMoney } from '../../lib/format';
+import { fmtDateShortBR, fmtMoney } from '../../lib/format';
 import { useReclassifyProdutos } from '../../lib/mutations';
 import { useCatalog, useSales } from '../../lib/queries';
 
@@ -210,7 +210,7 @@ export function MobileSalesTable({
                       <input type="checkbox" checked={selectedProdutos.has(s.produto)} onChange={() => toggleProduto(s.produto)} />
                     </td>
                   )}
-                  <td>{fmtDateBR(s.dataISO)}</td>
+                  <td>{fmtDateShortBR(s.dataISO)}</td>
                   <td>{resolveVendorName(s, byMatricula)}</td>
                   <td>{s.produto}</td>
                   <td>{s.qtd}</td>

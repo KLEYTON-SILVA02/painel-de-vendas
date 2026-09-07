@@ -7,7 +7,7 @@ import { classifyBio, normalizeGrupoImport, type BioGroupKey } from '../../lib/b
 import { diasRestantesNoMes } from '../../lib/business/goals';
 import type { BioGroupGoal, BioGroupsProducts, BioWeights, Collaborator } from '../../lib/business/types';
 import { copyText, formatRankingText } from '../../lib/clipboard';
-import { fmtDateBR } from '../../lib/format';
+import { fmtDateBR, fmtDateShortBR } from '../../lib/format';
 import { useAddBioProduct, useBulkInsertBioProducts, useDeleteBioProduct, useUpdateBioGroupGoal, useUpdateBioWeights } from '../../lib/mutations';
 import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
 import { useBioGroupGoals, useBioGroups, useCategoryTypes, useCollaborators, useSales, useStoreSettings } from '../../lib/queries';
@@ -318,7 +318,7 @@ export function MobileBioPage() {
                   const outsideBalcao = !balcaoMatriculas.has(s.matricula);
                   return (
                     <tr key={s.id}>
-                      <td>{fmtDateBR(s.dataISO)}</td>
+                      <td>{fmtDateShortBR(s.dataISO)}</td>
                       <td>
                         {resolveVendorName(s, byMatricula)}
                         {outsideBalcao && (

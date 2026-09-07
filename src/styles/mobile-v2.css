@@ -998,14 +998,18 @@
 .mv2-data-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 8px;
+  /* A data (coluna mais estreita) foi encurtada de DD/MM/AAAA para DD/MM
+     — o filtro de datas acima já fixa o período num mês/dia específico, o
+     ano fica implícito — o espaço horizontal ganho com isso permitiu subir
+     um pouco a fonte da tabela inteira sem perder nenhuma coluna. */
+  font-size: 9px;
   margin: 0 0 12px;
 }
 .mv2-data-table thead th {
   text-align: left;
   text-transform: uppercase;
   color: var(--mv2-texto-2);
-  font-size: 6.5px;
+  font-size: 7px;
   border-bottom: 1px solid var(--mv2-ciano-claro);
   padding: 4px 6px;
 }
