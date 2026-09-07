@@ -36,20 +36,89 @@ const GRID_LEFT = 20;
 const HEADER_H = 168;
 const WEEKDAY_ROW_H = 32;
 
-function starsRow(ctx: CanvasRenderingContext2D, count: number, cx: number, cy: number, size: number) {
+/** 'dark' is the on-screen/JPG/WhatsApp look (unchanged). 'print' is used
+ * only for the PDF export: a black-and-white office printer renders any
+ * dark fill as a heavy, ink-hungry block, so this swaps the near-black
+ * background and borders for white/light-gray, keeping color (the amber
+ * accent) only on the day cells that actually have an achievement — per
+ * the explicit ask that non-date chrome (background, header, weekday row)
+ * stay plain while only the dated cells carry any color. */
+type CalendarTheme = 'dark' | 'print';
+
+const PALETTES: Record<
+  CalendarTheme,
+  {
+    bgFrom: string;
+    bgTo: string;
+    headerName: string;
+    headerSub: string;
+    divider: string;
+    weekdayLabel: string;
+    avatarFallbackBg: string;
+    cellFillAchieved: string;
+    cellFillEmpty: string;
+    cellBorderAchieved: string;
+    cellBorderEmpty: string;
+    dayNumberAchieved: string;
+    dayNumberEmpty: string;
+    starEmpty: string;
+    catLine: string;
+    footer: string;
+  }
+> = {
+  dark: {
+    bgFrom: '#0d1428',
+    bgTo: '#070814',
+    headerName: '#ffffff',
+    headerSub: '#8b90bf',
+    divider: 'rgba(255,183,0,.3)',
+    weekdayLabel: '#8b90bf',
+    avatarFallbackBg: '#212948',
+    cellFillAchieved: 'rgba(255,183,0,.08)',
+    cellFillEmpty: '#0b0e1d',
+    cellBorderAchieved: '#ffb700',
+    cellBorderEmpty: '#212948',
+    dayNumberAchieved: '#ffb700',
+    dayNumberEmpty: '#4a5178',
+    starEmpty: '#2b3350',
+    catLine: '#c9d3e6',
+    footer: '#8b90bf',
+  },
+  print: {
+    bgFrom: '#ffffff',
+    bgTo: '#ffffff',
+    headerName: '#1a1a1a',
+    headerSub: '#555555',
+    divider: '#cccccc',
+    weekdayLabel: '#555555',
+    avatarFallbackBg: '#eef0f5',
+    cellFillAchieved: 'rgba(255,183,0,.18)',
+    cellFillEmpty: '#ffffff',
+    cellBorderAchieved: '#d99a00',
+    cellBorderEmpty: '#c7c7c7',
+    dayNumberAchieved: '#8a5c00',
+    dayNumberEmpty: '#777777',
+    starEmpty: '#d5d5d5',
+    catLine: '#444444',
+    footer: '#777777',
+  },
+};
+
+function starsRow(ctx: CanvasRenderingContext2D, count: number, cx: number, cy: number, size: number, palette: (typeof PALETTES)['dark']) {
   const gap = size * 0.15;
   const totalW = 5 * size + 4 * gap;
   let sx = cx - totalW / 2 + size / 2;
   ctx.textAlign = 'center';
   ctx.font = `${size}px Arial`;
   for (let i = 0; i < 5; i++) {
-    ctx.fillStyle = i < count ? '#ffb700' : '#2b3350';
+    ctx.fillStyle = i < count ? '#ffb700' : palette.starEmpty;
     ctx.fillText('★', sx, cy);
     sx += size + gap;
   }
 }
 
-export async function renderConquistaCalendar(data: ConquistaCalendarData): Promise<HTMLCanvasElement> {
+export async function renderConquistaCalendar(data: ConquistaCalendarData, theme: CalendarTheme = 'dark'): Promise<HTMLCanvasElement> {
+  const palette = PALETTES[theme];
   const firstWeekday = new Date(data.ano, data.mes, 1).getDay();
   const diasNoMes = new Date(data.ano, data.mes + 1, 0).getDate();
   const totalCells = firstWeekday + diasNoMes;
@@ -65,8 +134,8 @@ export async function renderConquistaCalendar(data: ConquistaCalendarData): Prom
   if (!ctx) return canvas;
 
   const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0, '#0d1428');
-  bg.addColorStop(1, '#070814');
+  bg.addColorStop(0, palette.bgFrom);
+  bg.addColorStop(1, palette.bgTo);
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
 
@@ -79,7 +148,7 @@ export async function renderConquistaCalendar(data: ConquistaCalendarData): Prom
   ctx.beginPath();
   ctx.arc(avatarCx, avatarCy, avatarR, 0, Math.PI * 2);
   ctx.closePath();
-  ctx.fillStyle = '#212948';
+  ctx.fillStyle = palette.avatarFallbackBg;
   ctx.fill();
   ctx.strokeStyle = '#ffb700';
   ctx.lineWidth = 3;
@@ -98,10 +167,10 @@ export async function renderConquistaCalendar(data: ConquistaCalendarData): Prom
   ctx.restore();
 
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = palette.headerName;
   ctx.font = '700 24px Arial';
   ctx.fillText(data.nome, avatarCx + avatarR + 20, 56);
-  ctx.fillStyle = '#8b90bf';
+  ctx.fillStyle = palette.headerSub;
   ctx.font = '600 13px Arial';
   ctx.fillText(`Mat. ${data.matricula}${data.storeName ? ' · ' + data.storeName : ''}`, avatarCx + avatarR + 20, 78);
 
@@ -109,14 +178,14 @@ export async function renderConquistaCalendar(data: ConquistaCalendarData): Prom
   ctx.fillStyle = '#ffb700';
   ctx.font = '700 22px Arial';
   ctx.fillText(`${data.mesLabel} / ${data.ano}`, W - 20, 44);
-  ctx.fillStyle = '#14ff00';
+  ctx.fillStyle = theme === 'print' ? '#3a7d00' : '#14ff00';
   ctx.font = '700 15px Arial';
   ctx.fillText(`⭐ ${data.totalEstrelas} estrela(s) no mês`, W - 20, 68);
-  ctx.fillStyle = '#8b90bf';
+  ctx.fillStyle = palette.headerSub;
   ctx.font = '600 13px Arial';
   ctx.fillText(`${data.percentual.toFixed(0)}% de atingimento`, W - 20, 88);
 
-  ctx.strokeStyle = 'rgba(255,183,0,.3)';
+  ctx.strokeStyle = palette.divider;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(20, HEADER_H - 12);
@@ -125,7 +194,7 @@ export async function renderConquistaCalendar(data: ConquistaCalendarData): Prom
 
   // Weekday header row
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#8b90bf';
+  ctx.fillStyle = palette.weekdayLabel;
   ctx.font = '700 12px Arial';
   WEEKDAY_LABELS.forEach((label, i) => {
     ctx.fillText(label, GRID_LEFT + i * CELL_W + CELL_W / 2, HEADER_H + WEEKDAY_ROW_H - 10);
@@ -143,16 +212,16 @@ export async function renderConquistaCalendar(data: ConquistaCalendarData): Prom
     const dia = `${data.ano}-${String(data.mes + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const achievement = byDay.get(dia);
 
-    ctx.fillStyle = achievement ? 'rgba(255,183,0,.08)' : '#0b0e1d';
+    ctx.fillStyle = achievement ? palette.cellFillAchieved : palette.cellFillEmpty;
     roundRect(ctx, x + 4, y + 4, CELL_W - 8, CELL_H - 8, 10);
     ctx.fill();
-    ctx.strokeStyle = achievement ? '#ffb700' : '#212948';
+    ctx.strokeStyle = achievement ? palette.cellBorderAchieved : palette.cellBorderEmpty;
     ctx.lineWidth = achievement ? 2 : 1;
     roundRect(ctx, x + 4, y + 4, CELL_W - 8, CELL_H - 8, 10);
     ctx.stroke();
 
     ctx.textAlign = 'left';
-    ctx.fillStyle = achievement ? '#ffb700' : '#4a5178';
+    ctx.fillStyle = achievement ? palette.dayNumberAchieved : palette.dayNumberEmpty;
     ctx.font = '700 13px Arial';
     ctx.fillText(String(day), x + 12, y + 22);
 
@@ -164,7 +233,7 @@ export async function renderConquistaCalendar(data: ConquistaCalendarData): Prom
       ctx.beginPath();
       ctx.arc(miniCx, miniCy, miniR, 0, Math.PI * 2);
       ctx.closePath();
-      ctx.fillStyle = '#212948';
+      ctx.fillStyle = palette.avatarFallbackBg;
       ctx.fill();
       ctx.strokeStyle = '#ffb700';
       ctx.lineWidth = 1.5;
@@ -173,10 +242,10 @@ export async function renderConquistaCalendar(data: ConquistaCalendarData): Prom
       if (img) ctx.drawImage(img, miniCx - miniR, miniCy - miniR, miniR * 2, miniR * 2);
       ctx.restore();
 
-      starsRow(ctx, achievement.categorias.length, x + CELL_W / 2, y + CELL_H / 2 + 8, 15);
+      starsRow(ctx, achievement.categorias.length, x + CELL_W / 2, y + CELL_H / 2 + 8, 15, palette);
 
       ctx.textAlign = 'center';
-      ctx.fillStyle = '#c9d3e6';
+      ctx.fillStyle = palette.catLine;
       ctx.font = '600 9px Arial';
       const catLine = achievement.categorias.map((c) => CAT_SHORT_LABEL[c]).join(' · ');
       ctx.fillText(catLine, x + CELL_W / 2, y + CELL_H - 14, CELL_W - 12);
@@ -184,7 +253,7 @@ export async function renderConquistaCalendar(data: ConquistaCalendarData): Prom
   }
 
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#8b90bf';
+  ctx.fillStyle = palette.footer;
   ctx.font = '500 11px Arial';
   ctx.fillText('Gerado pelo Gestão de Vendas' + (data.storeName ? ' — ' + data.storeName : ''), W / 2, H - 14);
 
