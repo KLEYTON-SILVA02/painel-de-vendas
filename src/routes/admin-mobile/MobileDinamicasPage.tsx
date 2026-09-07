@@ -1,11 +1,20 @@
 import { useId, useMemo, useState, type FormEvent } from 'react';
 import { useAuth } from '../../auth/AuthContext';
+import { CategoriasProdutosEditor } from '../../components/dinamicas/CategoriasProdutosEditor';
 import { DinamicaProgressList } from '../../components/ranking/DinamicaProgressList';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { useReauthGuard } from '../../hooks/useReauthGuard';
-import { computeDinamicaProgresso, computeDinamicaRanking, dinamicaMetaTotal, dynamicStatus, metaFor, type DynamicStatus } from '../../lib/business/dynamics';
+import {
+  computeDinamicaCategoriaTotais,
+  computeDinamicaProgresso,
+  computeDinamicaRanking,
+  dinamicaMetaTotal,
+  dynamicStatus,
+  metaFor,
+  type DynamicStatus,
+} from '../../lib/business/dynamics';
 import { normalize } from '../../lib/business/normalize';
-import type { Collaborator, Dynamic, Sale } from '../../lib/business/types';
+import type { Collaborator, Dynamic, DynamicProductCategory, Sale } from '../../lib/business/types';
 import { VISITANTE_SETOR } from '../../lib/business/types';
 import { todayISO } from '../../lib/dateRange';
 import { generateDinamicaCardBlob } from '../../lib/dinamicaImage';
@@ -13,6 +22,7 @@ import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { useCreateDynamic, useDeleteDynamic, useUpdateDynamic } from '../../lib/mutations';
 import { tryCopyImage } from '../../lib/rankingImage';
 import { useCollaborators, useDynamics, useSales, useStore } from '../../lib/queries';
+import type { Json } from '../../types/database';
 import { EditDynamicModal } from '../dinamicas/DinamicasPage';
 import { MobileDateFilter } from './MobileDateFilter';
 
@@ -195,6 +205,9 @@ function MobileNewDynamicForm({
     setor_alvo: Dynamic['setorAlvo'];
     meta_modo: Dynamic['metaModo'];
     metas_individuais: Record<string, number>;
+    categorias_produtos: Json;
+    multiplicador_ativo: boolean;
+    multiplicador_valor: number;
   }) => void;
   creating: boolean;
 }) {
@@ -210,6 +223,8 @@ function MobileNewDynamicForm({
   const [produtoInput, setProdutoInput] = useState('');
   const [produtos, setProdutos] = useState<string[]>([]);
   const [participantes, setParticipantes] = useState<string[]>([]);
+  const [categoriasProdutos, setCategoriasProdutos] = useState<DynamicProductCategory[]>([]);
+  const [multiplicador, setMultiplicador] = useState({ ativo: false, valor: 0 });
   const [expanded, setExpanded] = useState(false);
   const produtosListId = useId();
 
@@ -243,6 +258,9 @@ function MobileNewDynamicForm({
       setor_alvo: setorAlvo,
       meta_modo: metaModo,
       metas_individuais: metasIndividuais,
+      categorias_produtos: categoriasProdutos as unknown as Json,
+      multiplicador_ativo: multiplicador.ativo,
+      multiplicador_valor: multiplicador.valor,
     });
     setTitulo('');
     setSetorAlvo('ambos');
@@ -251,6 +269,8 @@ function MobileNewDynamicForm({
     setMetasIndividuais({});
     setProdutos([]);
     setParticipantes([]);
+    setCategoriasProdutos([]);
+    setMultiplicador({ ativo: false, valor: 0 });
     setExpanded(false);
   }
 
@@ -305,43 +325,53 @@ function MobileNewDynamicForm({
         <input type="number" placeholder="Meta" value={metaValor} onChange={(e) => setMetaValor(Number(e.target.value))} />
       )}
 
-      <div>
-        <div className="mv2-row" style={{ gap: 6 }}>
-          <input
-            style={{ flex: 1 }}
-            list={produtosListId}
-            placeholder="Buscar produto ou digitar nome/palavra-chave"
-            value={produtoInput}
-            onChange={(e) => setProdutoInput(e.target.value)}
-          />
-          <datalist id={produtosListId}>
-            {productNames.map((nome) => (
-              <option key={nome} value={nome} />
-            ))}
-          </datalist>
-          <button type="button" className="mv2-btn-outline" style={{ flex: 'none', padding: '0 14px' }} onClick={addProduto}>
-            Adicionar
-          </button>
+      <CategoriasProdutosEditor
+        categorias={categoriasProdutos}
+        onChange={setCategoriasProdutos}
+        productNames={productNames}
+        multiplicador={multiplicador}
+        onMultiplicadorChange={setMultiplicador}
+      />
+
+      {categoriasProdutos.length === 0 && (
+        <div>
+          <div className="mv2-row" style={{ gap: 6 }}>
+            <input
+              style={{ flex: 1 }}
+              list={produtosListId}
+              placeholder="Buscar produto ou digitar nome/palavra-chave"
+              value={produtoInput}
+              onChange={(e) => setProdutoInput(e.target.value)}
+            />
+            <datalist id={produtosListId}>
+              {productNames.map((nome) => (
+                <option key={nome} value={nome} />
+              ))}
+            </datalist>
+            <button type="button" className="mv2-btn-outline" style={{ flex: 'none', padding: '0 14px' }} onClick={addProduto}>
+              Adicionar
+            </button>
+          </div>
+          <div className="mv2-tag-list">
+            {produtos.length === 0 ? (
+              <span style={{ fontSize: 7, color: 'var(--mv2-texto-2)' }}>Nenhum produto — vale para todos.</span>
+            ) : (
+              produtos.map((p, i) => (
+                <span key={i} className="mv2-tag" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  {p}
+                  <button
+                    type="button"
+                    onClick={() => setProdutos((prev) => prev.filter((_, idx) => idx !== i))}
+                    style={{ background: 'none', border: 'none', color: 'var(--mv2-texto-2)', cursor: 'pointer', fontSize: 8 }}
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))
+            )}
+          </div>
         </div>
-        <div className="mv2-tag-list">
-          {produtos.length === 0 ? (
-            <span style={{ fontSize: 7, color: 'var(--mv2-texto-2)' }}>Nenhum produto — vale para todos.</span>
-          ) : (
-            produtos.map((p, i) => (
-              <span key={i} className="mv2-tag" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                {p}
-                <button
-                  type="button"
-                  onClick={() => setProdutos((prev) => prev.filter((_, idx) => idx !== i))}
-                  style={{ background: 'none', border: 'none', color: 'var(--mv2-texto-2)', cursor: 'pointer', fontSize: 8 }}
-                >
-                  ✕
-                </button>
-              </span>
-            ))
-          )}
-        </div>
-      </div>
+      )}
 
       <div style={{ margin: '8px 0 4px', fontSize: 8, color: 'var(--mv2-texto-2)', textTransform: 'uppercase' }}>
         Participantes{metaModo === 'individual' && ' — defina a meta de cada um'}
@@ -410,6 +440,7 @@ function MobileDinamicaAccordionItem({
   const metaTotal = dinamicaMetaTotal(d, collaborators);
   const pct = metaTotal > 0 ? Math.min(999, (realizado / metaTotal) * 100) : 0;
   const ranking = computeDinamicaRanking(d, sales, collaborators);
+  const categoriaTotais = computeDinamicaCategoriaTotais(d, sales, collaborators);
 
   return (
     <div>
@@ -474,6 +505,19 @@ function MobileDinamicaAccordionItem({
               </tbody>
             </table>
           </div>
+
+          {categoriaTotais.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fit, minmax(120px, 1fr))`, gap: 6, marginTop: 8 }}>
+              {categoriaTotais.map((cat) => (
+                <div key={cat.id} className="mv2-metric-card" style={{ ['--mv2-card-color' as string]: '#00b6da' }}>
+                  <div className="mv2-label">{cat.nome}</div>
+                  <div className="mv2-value">
+                    {cat.pontuacao !== null ? `${cat.pontuacao.toFixed(0)} pts` : isUnidade ? `${cat.itens} un.` : fmtMoney(cat.valor)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div style={{ fontSize: 9, fontWeight: 700, margin: '10px 0 4px' }}>Ranking dos Participantes</div>
           <DinamicaProgressList

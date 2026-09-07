@@ -10,6 +10,7 @@ import { HamburgerIcon, MedalIcon } from '../components/icons/NavIcons';
 import { NotificationBell } from '../components/NotificationBell';
 import { PageLoading } from '../components/PageLoading';
 import { Sidebar } from '../components/Sidebar';
+import { VersionFooter } from '../components/VersionFooter';
 import type { Horario } from '../lib/business/horario';
 import { supabase } from '../lib/supabase';
 import { useIsMobileV2 } from '../lib/useIsMobileV2';
@@ -240,6 +241,7 @@ export function AppShell() {
           </main>
         </div>
       </div>
+      <VersionFooter />
     </DateRangeProvider>
   );
 }

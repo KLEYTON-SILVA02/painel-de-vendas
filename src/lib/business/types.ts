@@ -85,6 +85,25 @@ export interface Dynamic {
   metaModo: 'geral' | 'individual';
   /** matricula -> individual target, only meaningful when metaModo === 'individual'. */
   metasIndividuais: Record<string, number>;
+  /** Splits the dynamic's participating products into named columns (e.g.
+   * "Categoria 1" / "Categoria 2") shown side by side — empty = legacy flat
+   * `produtos` behavior (no split). */
+  categoriasProdutos: DynamicProductCategory[];
+  /** When ativo, each categoria's own item count (not R$) is multiplied by
+   * valor to produce a per-categoria score, shown alongside its total. */
+  multiplicador: { ativo: boolean; valor: number };
+}
+
+export interface DynamicProductCategory {
+  id: string;
+  nome: string;
+  /** Exact product names (matched via normalize()), same mechanism as the
+   * dynamic's own flat `produtos` list. */
+  produtos: string[];
+  /** Optional substring match against the normalized product name — lets a
+   * category catch every product sharing a naming pattern (e.g. a brand)
+   * without enumerating each one by hand. */
+  palavraChave: string;
 }
 
 export type BioGroupsProducts = Record<BioGroupKey, { nome: string; palavras: string[] }[]>;

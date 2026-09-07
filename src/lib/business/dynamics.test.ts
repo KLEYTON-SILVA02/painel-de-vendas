@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  computeDinamicaCategoriaTotais,
   computeDinamicaProgresso,
   computeDinamicaRanking,
   dynamicAllowsCollaborator,
   dynamicStatus,
   intersectDynamicPeriod,
   isDynamicActive,
+  productMatchesCategoria,
 } from './dynamics';
 import type { Collaborator, Dynamic, Sale } from './types';
 
@@ -24,7 +26,7 @@ const sales: Sale[] = [
 const din: Dynamic = {
   id: 'd1', titulo: 'Semana X', descricao: '', dataInicio: '2026-08-01', dataFim: '2026-08-10',
   metaValor: 500, metrica: 'valor', produtos: ['Produto X'], participantes: [], setorAlvo: 'ambos',
-  metaModo: 'geral', metasIndividuais: {},
+  metaModo: 'geral', metasIndividuais: {}, categoriasProdutos: [], multiplicador: { ativo: false, valor: 0 },
 };
 
 describe('computeDinamicaProgresso', () => {
@@ -97,6 +99,66 @@ describe('dynamicStatus', () => {
   });
   it('is "encerrada" after its end date', () => {
     expect(dynamicStatus(din, '2026-08-11')).toBe('encerrada');
+  });
+});
+
+describe('productMatchesCategoria', () => {
+  it('matches an exact product name (normalized)', () => {
+    expect(productMatchesCategoria('Produto X', { id: 'c1', nome: 'Cat 1', produtos: ['produto x'], palavraChave: '' })).toBe(true);
+    expect(productMatchesCategoria('Produto Z', { id: 'c1', nome: 'Cat 1', produtos: ['produto x'], palavraChave: '' })).toBe(false);
+  });
+
+  it('matches by palavraChave substring when set', () => {
+    const cat = { id: 'c1', nome: 'Marca Y', produtos: [], palavraChave: 'marca y' };
+    expect(productMatchesCategoria('Sabonete Marca Y 200ml', cat)).toBe(true);
+    expect(productMatchesCategoria('Sabonete Outra Coisa', cat)).toBe(false);
+  });
+
+  it('ignores an empty palavraChave rather than matching everything', () => {
+    expect(productMatchesCategoria('Qualquer Produto', { id: 'c1', nome: 'Cat 1', produtos: [], palavraChave: '' })).toBe(false);
+  });
+});
+
+describe('computeDinamicaCategoriaTotais', () => {
+  const dinComCategorias: Dynamic = {
+    ...din,
+    produtos: [],
+    categoriasProdutos: [
+      { id: 'c1', nome: 'Categoria 1', produtos: ['Produto X'], palavraChave: '' },
+      { id: 'c2', nome: 'Categoria 2', produtos: [], palavraChave: 'not in list' },
+    ],
+  };
+
+  it('sums valor/itens per categoria, independently', () => {
+    const totais = computeDinamicaCategoriaTotais(dinComCategorias, sales, collaborators);
+    const cat1 = totais.find((c) => c.id === 'c1')!;
+    const cat2 = totais.find((c) => c.id === 'c2')!;
+    expect(cat1.valor).toBe(300); // s1 + s2
+    expect(cat1.itens).toBe(3);
+    expect(cat2.valor).toBe(500); // s3 ("Produto Y (not in list)")
+    expect(cat2.itens).toBe(5);
+  });
+
+  it('leaves pontuacao null when multiplicador is not ativo', () => {
+    const totais = computeDinamicaCategoriaTotais(dinComCategorias, sales, collaborators);
+    expect(totais.every((c) => c.pontuacao === null)).toBe(true);
+  });
+
+  it('multiplies itens by multiplicador.valor when ativo', () => {
+    const din2 = { ...dinComCategorias, multiplicador: { ativo: true, valor: 10 } };
+    const totais = computeDinamicaCategoriaTotais(din2, sales, collaborators);
+    const cat1 = totais.find((c) => c.id === 'c1')!;
+    expect(cat1.pontuacao).toBe(30); // 3 itens * 10
+  });
+
+  it('restricts overall progress to products matching some categoria when categorias are set', () => {
+    // Without categorias, produtos=[] means "count everything" (800). With
+    // categorias in play, only products matching cat1 or cat2 count — here
+    // that's every sale in the fixture, so the total is unchanged (800),
+    // but a sale matching neither would now be excluded.
+    expect(computeDinamicaProgresso(dinComCategorias, sales, collaborators)).toBe(800);
+    const dinNarrow = { ...dinComCategorias, categoriasProdutos: [dinComCategorias.categoriasProdutos[0]] };
+    expect(computeDinamicaProgresso(dinNarrow, sales, collaborators)).toBe(300); // only cat1's "Produto X"
   });
 });
 
