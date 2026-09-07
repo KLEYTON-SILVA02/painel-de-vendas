@@ -48,6 +48,7 @@ const MinhaLojaPage = lazy(() => import('../admin/MinhaLojaPage').then((m) => ({
 const ProdutosPage = lazy(() => import('../admin/ProdutosPage').then((m) => ({ default: m.ProdutosPage })));
 const VendasArquivadasPage = lazy(() => import('../admin/VendasArquivadasPage').then((m) => ({ default: m.VendasArquivadasPage })));
 const ConquistasPage = lazy(() => import('../conquistas/ConquistasPage').then((m) => ({ default: m.ConquistasPage })));
+const GaleriaFigurinhasPage = lazy(() => import('../conquistas/GaleriaFigurinhasPage').then((m) => ({ default: m.GaleriaFigurinhasPage })));
 const MetasPage = lazy(() => import('../metas/MetasPage').then((m) => ({ default: m.MetasPage })));
 const MobileBioPage = lazy(() => import('./MobileBioPage').then((m) => ({ default: m.MobileBioPage })));
 const MobileDinamicasPage = lazy(() => import('./MobileDinamicasPage').then((m) => ({ default: m.MobileDinamicasPage })));
@@ -230,6 +231,7 @@ export function MobileAdminShell() {
             <Route path="/dinamicas" element={<MobileDinamicasPage />} />
             <Route path="/bio" element={<MobileBioPage />} />
             <Route path="/conquistas" element={<ConquistasPage />} />
+            <Route path="/conquistas/figurinhas" element={<GaleriaFigurinhasPage />} />
             <Route path="/admin" element={<AdminLandingPage />} />
             <Route path="/admin/colaboradores" element={<ColaboradoresPage />} />
             <Route path="/admin/produtos" element={<ProdutosPage />} />

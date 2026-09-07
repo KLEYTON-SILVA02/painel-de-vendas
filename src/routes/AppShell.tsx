@@ -35,6 +35,7 @@ const AdminLandingPage = lazy(() => import('./admin/AdminLandingPage').then((m) 
 const BioPage = lazy(() => import('./bio/BioPage').then((m) => ({ default: m.BioPage })));
 const CategoryPage = lazy(() => import('./category/CategoryPage').then((m) => ({ default: m.CategoryPage })));
 const ConquistasPage = lazy(() => import('./conquistas/ConquistasPage').then((m) => ({ default: m.ConquistasPage })));
+const GaleriaFigurinhasPage = lazy(() => import('./conquistas/GaleriaFigurinhasPage').then((m) => ({ default: m.GaleriaFigurinhasPage })));
 const DashboardPage = lazy(() => import('./dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })));
 const DinamicasPage = lazy(() => import('./dinamicas/DinamicasPage').then((m) => ({ default: m.DinamicasPage })));
 const MetasPage = lazy(() => import('./metas/MetasPage').then((m) => ({ default: m.MetasPage })));
@@ -202,6 +203,7 @@ export function AppShell() {
             <Route path="/dinamicas" element={<DinamicasPage />} />
             <Route path="/bio" element={<BioPage />} />
             <Route path="/conquistas" element={<ConquistasPage />} />
+            <Route path="/conquistas/figurinhas" element={<GaleriaFigurinhasPage />} />
             <Route path="/notificacoes" element={<CollaboratorNotificacoesPage />} />
             <Route
               path="/categoria-parceria/:chave"

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { computeConquistas, computeConquistasDayGallery, conquistaTierLabel, conquistaTierParts } from './conquistas';
+import {
+  computeCollaboratorDayAchievements,
+  computeConquistas,
+  computeConquistasDayGallery,
+  conquistaCalendarTotals,
+  conquistaTierLabel,
+  conquistaTierParts,
+} from './conquistas';
 import type { Collaborator, Sale } from './types';
 
 const collaborators: Collaborator[] = [
@@ -90,6 +97,40 @@ describe('computeConquistasDayGallery', () => {
     expect(gallery.map((d) => d.dia)).toEqual(['2026-08-03', '2026-08-02', '2026-08-01']);
     expect(gallery.find((d) => d.dia === '2026-08-02')!.count).toBe(1); // Bruno's 6000
     expect(gallery.find((d) => d.dia === '2026-08-03')!.count).toBe(0); // Carla's 300 alone hits nothing
+  });
+});
+
+describe('computeCollaboratorDayAchievements', () => {
+  it('only lists days where this collaborator personally reached a tier, with the categories reached', () => {
+    const achievements = computeCollaboratorDayAchievements(sales, collaborators, 'M1', '2026-08-01', '2026-08-31');
+    expect(achievements).toEqual([{ dia: '2026-08-01', categorias: ['DERM'] }]); // M1's 3500 hits DERM tier 3000
+  });
+
+  it('lists every category reached that same day, in fixed order', () => {
+    const multiCatSales: Sale[] = [
+      { id: 'a', dataISO: '2026-08-05', matricula: 'M1', vendedor: 'Ana', produto: 'X', qtd: 1, valor: 3000, grupo: 'DERM' },
+      { id: 'b', dataISO: '2026-08-05', matricula: 'M1', vendedor: 'Ana', produto: 'Y', qtd: 1, valor: 1000, grupo: 'GEN' },
+    ];
+    const achievements = computeCollaboratorDayAchievements(multiCatSales, collaborators, 'M1', '2026-08-01', '2026-08-31');
+    expect(achievements).toEqual([{ dia: '2026-08-05', categorias: ['DERM', 'GEN'] }]);
+  });
+
+  it('returns nothing for a collaborator who never reached any tier', () => {
+    expect(computeCollaboratorDayAchievements(sales, collaborators, 'M3', '2026-08-01', '2026-08-31')).toEqual([]);
+  });
+});
+
+describe('conquistaCalendarTotals', () => {
+  it('sums stars across days and computes attainment against 5-per-day max', () => {
+    const totals = conquistaCalendarTotals(
+      [
+        { dia: '2026-08-01', categorias: ['DERM', 'GEN'] },
+        { dia: '2026-08-02', categorias: ['MP'] },
+      ],
+      31,
+    );
+    expect(totals.totalEstrelas).toBe(3);
+    expect(totals.percentual).toBeCloseTo((3 / (5 * 31)) * 100);
   });
 });
 

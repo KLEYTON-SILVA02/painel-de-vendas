@@ -93,9 +93,29 @@ export function ConquistasPage() {
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-4">
       <div className="flex flex-col gap-3 min-w-0">
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-          <h3 className="text-lg font-semibold mb-3" style={{ color: '#ffb700' }}>
-            🏆 Galeria de Conquistas — {info.label}
-          </h3>
+          <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+            <h3 className="text-lg font-semibold" style={{ color: '#ffb700' }}>
+              🏆 Galeria de Conquistas — {info.label}
+            </h3>
+            {/* Ajustar Metas / Galeria de Figurinhas / Modelos de Card — no
+                canto superior direito, empurrando os filtros de categoria e
+                tier abaixo para baixo. */}
+            <div className="flex flex-wrap gap-2">
+              <Link to="/metas" className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800">
+                ⚙️ Ajustar Metas
+              </Link>
+              <Link
+                to="/conquistas/figurinhas"
+                className="rounded-lg border px-3 py-1.5 text-sm font-semibold"
+                style={{ borderColor: '#ffb700', color: '#ffb700' }}
+              >
+                🖼️ Galeria de Figurinhas
+              </Link>
+              <Link to="/admin/card-conquista" className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800">
+                🎨 Modelos de Card
+              </Link>
+            </div>
+          </div>
 
           <div className="flex flex-wrap gap-2 mb-3">
             {CONQUISTA_CATS.map((c) => (
@@ -149,7 +169,7 @@ export function ConquistasPage() {
           {filtered.length === 0 ? (
             <div className="text-sm text-slate-500 py-6 text-center">Sem conquistas para este período.</div>
           ) : (
-            <div className="grid grid-cols-1 min-[520px]:grid-cols-2 min-[760px]:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 min-[520px]:grid-cols-4 min-[760px]:grid-cols-6 gap-2">
               {filtered.map((r) => (
                 <ConquistaCard
                   key={r.matricula}
@@ -172,18 +192,6 @@ export function ConquistasPage() {
             >
               {generating ? 'Gerando...' : '🖼️ Copiar galeria (imagem)'}
             </button>
-            <Link
-              to="/metas"
-              className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800"
-            >
-              ⚙️ Ajustar Metas
-            </Link>
-            <Link
-              to="/admin/card-conquista"
-              className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800"
-            >
-              🎨 Modelos de Card
-            </Link>
           </div>
         </div>
       </div>
@@ -258,8 +266,20 @@ function ConquistaCard({
   template: ConquistaCardTemplate;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [copyState, setCopyState] = useState<'idle' | 'copying' | 'copied' | 'failed'>('idle');
   const tierText = conquistaTierLabel(categoria, row.tier);
   const { valor: valorText, categoria: categoriaText } = conquistaTierParts(categoria, row.tier);
+
+  async function handleCopyCard() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    setCopyState('copying');
+    canvas.toBlob(async (blob) => {
+      const ok = blob ? await tryCopyImage(blob) : false;
+      setCopyState(ok ? 'copied' : 'failed');
+      setTimeout(() => setCopyState('idle'), 2000);
+    }, 'image/png');
+  }
 
   useEffect(() => {
     let active = true;
@@ -279,10 +299,18 @@ function ConquistaCard({
   return (
     <div className="rounded-2xl overflow-hidden flex flex-col items-center text-center" style={{ boxShadow: `0 0 24px -6px ${color}80` }}>
       <canvas ref={canvasRef} className="w-full h-auto block" />
-      <div className="mt-2 text-base font-bold truncate max-w-full px-3">{row.apelido || row.nome}</div>
-      <div className="text-sm font-mono" style={{ color: '#14ff00' }}>
+      <div className="mt-1 text-xs font-bold truncate max-w-full px-2">{row.apelido || row.nome}</div>
+      <div className="text-xs font-mono" style={{ color: '#14ff00' }}>
         {isUnit ? `${row.itens} un.` : fmtMoney(row.valor)}
       </div>
+      <button
+        onClick={handleCopyCard}
+        disabled={copyState === 'copying'}
+        className="mt-1 mb-1 rounded-md border px-2 py-0.5 text-[10px] font-semibold disabled:opacity-50"
+        style={{ borderColor: '#ffb700', color: '#ffb700' }}
+      >
+        {copyState === 'copied' ? '✓ Copiado' : copyState === 'copying' ? 'Copiando…' : copyState === 'failed' ? 'Falhou' : '📋 Copiar imagem'}
+      </button>
     </div>
   );
 }
