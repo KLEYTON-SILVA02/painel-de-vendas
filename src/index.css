@@ -4,8 +4,16 @@
   color-scheme: dark;
 }
 
+html,
 body {
   margin: 0;
+  /* Stops Android's elastic overscroll ("rubber-band"/bounce) from
+     stretching the whole page when a fling scroll hits the top/bottom
+     edge — on the mobile v2 shells (MobileAdminShell/CollaboratorShell)
+     that bounce visually drags the position:fixed top bar and bottom nav
+     along with the rest of the page for a frame or two, which reads as
+     the bar "freezing" out of place mid-scroll before snapping back. */
+  overscroll-behavior-y: contain;
 }
 
 @layer components {
