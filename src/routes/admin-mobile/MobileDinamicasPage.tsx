@@ -509,6 +509,11 @@ function MobileDinamicaAccordionItem({
                   <div className="mv2-value">
                     {cat.pontuacao !== null ? fmtMoney(cat.pontuacao) : isUnidade ? `${cat.itens} ${unidadeLabel}` : fmtMoney(cat.valor)}
                   </div>
+                  {cat.pontuacao !== null && (
+                    <div style={{ fontSize: 9, color: 'var(--mv2-texto-2)', marginTop: 2 }}>
+                      {cat.itens} {unidadeLabel} vendido{cat.itens === 1 ? '' : 's'}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
