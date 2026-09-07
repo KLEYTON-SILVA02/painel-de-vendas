@@ -2,7 +2,7 @@
 // computeDinamicaRanking / resolveRankFilterParams' dynamic-intersection branch).
 import { firstName, normalize } from './normalize';
 import { normalizeMatricula } from './parsing';
-import type { Collaborator, Dynamic, Sale } from './types';
+import type { Collaborator, Dynamic, DynamicProductCategory, Sale } from './types';
 
 export interface DinamicaRankingRow {
   matricula: string;
@@ -25,6 +25,75 @@ export function metaFor(din: Dynamic, matricula: string): number {
   return din.metaValor;
 }
 
+/** Whether a sale's product matches one product category — an exact
+ * (normalized) hit against the category's own `produtos` list, or a
+ * substring hit against its `palavraChave` (e.g. a brand name), so a
+ * category can catch every SKU sharing a naming pattern without enumerating
+ * each one by hand. */
+export function productMatchesCategoria(produtoNome: string, categoria: DynamicProductCategory): boolean {
+  const nome = normalize(produtoNome);
+  if (categoria.produtos.some((p) => normalize(p) === nome)) return true;
+  const palavra = normalize(categoria.palavraChave.trim());
+  return palavra.length > 0 && nome.includes(palavra);
+}
+
+/** The effective product filter for a dynamic's overall progress/ranking:
+ * when categoriasProdutos are in use, only products matching at least one
+ * category count (the categories partition what "participates"); with no
+ * categories (the "none" / legacy state) falls back to the flat `produtos`
+ * list, unchanged from before this feature existed. */
+function dinamicaProdutoParticipa(din: Dynamic, produtoNome: string): boolean {
+  if (din.categoriasProdutos.length > 0) {
+    return din.categoriasProdutos.some((cat) => productMatchesCategoria(produtoNome, cat));
+  }
+  if (din.produtos.length === 0) return true;
+  return din.produtos.some((p) => normalize(p) === normalize(produtoNome));
+}
+
+export interface DinamicaCategoriaTotal {
+  id: string;
+  nome: string;
+  valor: number;
+  itens: number;
+  /** itens * multiplicador.valor when the dynamic's multiplicador is ativo, else null. */
+  pontuacao: number | null;
+}
+
+/** Per-categoria totals for the "cards abaixo dos cards de métricas" view —
+ * one entry per registered categoria, each with its own valor/itens summed
+ * from sales matching that categoria (within the dynamic's period and
+ * setorAlvo), plus its multiplier score when the dynamic has one active. */
+export function computeDinamicaCategoriaTotais(
+  din: Dynamic,
+  sales: Sale[],
+  collaborators: Collaborator[],
+): DinamicaCategoriaTotal[] {
+  const collaboratorByMatricula = new Map(collaborators.map((c) => [normalizeMatricula(c.matricula), c]));
+  const participantesSet = din.participantes.length ? new Set(din.participantes.map(normalizeMatricula)) : null;
+
+  return din.categoriasProdutos.map((categoria) => {
+    let valor = 0;
+    let itens = 0;
+    sales.forEach((s) => {
+      if (!s.dataISO || s.dataISO < din.dataInicio || s.dataISO > din.dataFim) return;
+      if (!productMatchesCategoria(s.produto, categoria)) return;
+      const key = normalizeMatricula(s.matricula);
+      if (participantesSet && !participantesSet.has(key)) return;
+      const c = collaboratorByMatricula.get(key);
+      if (!c || !dynamicAllowsCollaborator(din, c)) return;
+      valor += Number(s.valor) || 0;
+      itens += Number(s.qtd) || 0;
+    });
+    return {
+      id: categoria.id,
+      nome: categoria.nome,
+      valor,
+      itens,
+      pontuacao: din.multiplicador.ativo ? itens * din.multiplicador.valor : null,
+    };
+  });
+}
+
 /** Whether a collaborator's sector matches the dynamic's target sector —
  * 'ambos' (the default, and every dynamic created before this field
  * existed) never restricts. Determines who can participate, be counted
@@ -40,14 +109,13 @@ export function dynamicAllowsCollaborator(din: Dynamic, collaborator: Pick<Colla
  * (a sale by a collaborator outside the target sector doesn't count),
  * using the dynamic's own metric (R$ or units). */
 export function computeDinamicaProgresso(din: Dynamic, sales: Sale[], collaborators: Collaborator[]): number {
-  const produtosSet = din.produtos.length ? new Set(din.produtos.map((p) => normalize(p))) : null;
   const participantesSet = din.participantes.length ? new Set(din.participantes.map(normalizeMatricula)) : null;
   const collaboratorByMatricula = new Map(collaborators.map((c) => [normalizeMatricula(c.matricula), c]));
   let valor = 0;
   let itens = 0;
   sales.forEach((s) => {
     if (!s.dataISO || s.dataISO < din.dataInicio || s.dataISO > din.dataFim) return;
-    if (produtosSet && !produtosSet.has(normalize(s.produto))) return;
+    if (!dinamicaProdutoParticipa(din, s.produto)) return;
     if (participantesSet && !participantesSet.has(normalizeMatricula(s.matricula))) return;
     const c = collaboratorByMatricula.get(normalizeMatricula(s.matricula));
     if (din.setorAlvo !== 'ambos' && (!c || !dynamicAllowsCollaborator(din, c))) return;
@@ -63,7 +131,6 @@ export function computeDinamicaRanking(
   sales: Sale[],
   collaborators: Collaborator[],
 ): DinamicaRankingRow[] {
-  const produtosSet = din.produtos.length ? new Set(din.produtos.map((p) => normalize(p))) : null;
   const participantesSet = din.participantes.length ? new Set(din.participantes.map(normalizeMatricula)) : null;
   // Keyed by normalized matricula — see the comment on the same pattern in
   // summary.ts's computeSummary.
@@ -86,7 +153,7 @@ export function computeDinamicaRanking(
 
   sales.forEach((s) => {
     if (!s.dataISO || s.dataISO < din.dataInicio || s.dataISO > din.dataFim) return;
-    if (produtosSet && !produtosSet.has(normalize(s.produto))) return;
+    if (!dinamicaProdutoParticipa(din, s.produto)) return;
     const key = normalizeMatricula(s.matricula);
     if (!map[key]) {
       if (participantesSet) return;

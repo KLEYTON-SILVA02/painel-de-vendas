@@ -18,6 +18,7 @@ import {
 } from '../../components/icons/NavIcons';
 import { NotificationBell } from '../../components/NotificationBell';
 import { PageLoading } from '../../components/PageLoading';
+import { VersionFooter } from '../../components/VersionFooter';
 import { BALCAO_SETOR } from '../../lib/business/bio';
 import { VISITANTE_SETOR } from '../../lib/business/types';
 import { useNativePushRegistration } from '../../lib/useNativePushRegistration';
@@ -113,6 +114,7 @@ export function CollaboratorShell() {
       ];
 
   return (
+    <>
     <div className="mv2 mv2-collab-shell">
       <header className="mv2-collab-header">
         <div className="mv2-collab-menu-wrap">
@@ -188,5 +190,7 @@ export function CollaboratorShell() {
         </main>
       </div>
     </div>
+    <VersionFooter />
+    </>
   );
 }

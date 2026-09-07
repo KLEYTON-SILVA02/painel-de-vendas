@@ -1,21 +1,23 @@
 import { useId, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
+import { CategoriasProdutosEditor } from '../../components/dinamicas/CategoriasProdutosEditor';
 import { DinamicaProgressList } from '../../components/ranking/DinamicaProgressList';
 import {
+  computeDinamicaCategoriaTotais,
   computeDinamicaProgresso,
   computeDinamicaRanking,
   dinamicaMetaTotal,
   dynamicStatus,
 } from '../../lib/business/dynamics';
 import { useReauthGuard } from '../../hooks/useReauthGuard';
-import type { Collaborator, Dynamic, Sale } from '../../lib/business/types';
+import type { Collaborator, Dynamic, DynamicProductCategory, Sale } from '../../lib/business/types';
 import { VISITANTE_SETOR } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { todayISO } from '../../lib/dateRange';
 import { useCreateDynamic, useDeleteDynamic, useUpdateDynamic } from '../../lib/mutations';
 import { useCollaborators, useDynamics, useSales } from '../../lib/queries';
-import type { TablesUpdate } from '../../types/database';
+import type { Json, TablesUpdate } from '../../types/database';
 
 export function DinamicasPage() {
   const { profile } = useAuth();
@@ -210,6 +212,7 @@ function DinamicaCard({
   // Every eligible participant, not just the ones already ahead — this is
   // the campaign's roster, so someone at 0% still belongs on it.
   const ranking = computeDinamicaRanking(d, sales, collaborators);
+  const categoriaTotais = computeDinamicaCategoriaTotais(d, sales, collaborators);
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
@@ -234,6 +237,24 @@ function DinamicaCard({
         <StatCard label="Meta total" value={metaTotal > 0 ? (isUnidade ? `${metaTotal} un.` : fmtMoney(metaTotal)) : '—'} color="#a82bff" />
         <StatCard label="Participantes" value={String(ranking.length)} color="#ff3df0" />
       </div>
+      {categoriaTotais.length > 0 && (
+        <div className="grid gap-2 mt-2" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(160px, 1fr))` }}>
+          {categoriaTotais.map((cat) => (
+            <StatCard
+              key={cat.id}
+              label={cat.nome}
+              value={
+                cat.pontuacao !== null
+                  ? `${cat.pontuacao.toFixed(0)} pts`
+                  : isUnidade
+                    ? `${cat.itens} un.`
+                    : fmtMoney(cat.valor)
+              }
+              color="#00b6da"
+            />
+          ))}
+        </div>
+      )}
       <div className="mt-3">
         <DinamicaProgressList ranking={ranking} isUnidade={isUnidade} />
       </div>
@@ -261,6 +282,9 @@ function NewDynamicForm({
     setor_alvo: Dynamic['setorAlvo'];
     meta_modo: Dynamic['metaModo'];
     metas_individuais: Record<string, number>;
+    categorias_produtos: Json;
+    multiplicador_ativo: boolean;
+    multiplicador_valor: number;
   }) => void;
   creating: boolean;
 }) {
@@ -277,6 +301,8 @@ function NewDynamicForm({
   const [produtoInput, setProdutoInput] = useState('');
   const [produtos, setProdutos] = useState<string[]>([]);
   const [participantes, setParticipantes] = useState<string[]>([]);
+  const [categoriasProdutos, setCategoriasProdutos] = useState<DynamicProductCategory[]>([]);
+  const [multiplicador, setMultiplicador] = useState({ ativo: false, valor: 0 });
   const [expanded, setExpanded] = useState(false);
   const produtosListId = useId();
 
@@ -310,6 +336,9 @@ function NewDynamicForm({
       setor_alvo: setorAlvo,
       meta_modo: metaModo,
       metas_individuais: metasIndividuais,
+      categorias_produtos: categoriasProdutos as unknown as Json,
+      multiplicador_ativo: multiplicador.ativo,
+      multiplicador_valor: multiplicador.valor,
     });
     setTitulo('');
     setDescricao('');
@@ -319,6 +348,8 @@ function NewDynamicForm({
     setMetasIndividuais({});
     setProdutos([]);
     setParticipantes([]);
+    setCategoriasProdutos([]);
+    setMultiplicador({ ativo: false, valor: 0 });
     setExpanded(false);
   }
 
@@ -380,40 +411,50 @@ function NewDynamicForm({
         />
       </Field>
 
-      <div>
-        <label className="block text-xs text-slate-400 mb-1">Produtos participantes (opcional — vazio = todos os produtos)</label>
-        <div className="flex gap-2">
-          <input
-            list={produtosListId}
-            value={produtoInput}
-            onChange={(e) => setProdutoInput(e.target.value)}
-            placeholder="buscar produto já vendido, ou digitar nome exato / palavra-chave"
-            className="input flex-1"
-          />
-          <datalist id={produtosListId}>
-            {productNames.map((nome) => (
-              <option key={nome} value={nome} />
-            ))}
-          </datalist>
-          <button type="button" onClick={addProduto} className="rounded-md bg-amber-500 text-slate-950 px-3 py-1.5 text-xs font-medium">
-            + Add
-          </button>
+      <CategoriasProdutosEditor
+        categorias={categoriasProdutos}
+        onChange={setCategoriasProdutos}
+        productNames={productNames}
+        multiplicador={multiplicador}
+        onMultiplicadorChange={setMultiplicador}
+      />
+
+      {categoriasProdutos.length === 0 && (
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">Produtos participantes (opcional — vazio = todos os produtos)</label>
+          <div className="flex gap-2">
+            <input
+              list={produtosListId}
+              value={produtoInput}
+              onChange={(e) => setProdutoInput(e.target.value)}
+              placeholder="buscar produto já vendido, ou digitar nome exato / palavra-chave"
+              className="input flex-1"
+            />
+            <datalist id={produtosListId}>
+              {productNames.map((nome) => (
+                <option key={nome} value={nome} />
+              ))}
+            </datalist>
+            <button type="button" onClick={addProduto} className="rounded-md bg-amber-500 text-slate-950 px-3 py-1.5 text-xs font-medium">
+              + Add
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {produtos.length === 0 ? (
+              <span className="text-xs text-slate-500">Nenhum produto adicionado — vale para todos.</span>
+            ) : (
+              produtos.map((p, i) => (
+                <span key={i} className="text-xs bg-slate-800 rounded-full px-2 py-1 flex items-center gap-1.5">
+                  {p}
+                  <button type="button" onClick={() => setProdutos((prev) => prev.filter((_, idx) => idx !== i))} className="text-slate-500 hover:text-rose-400">
+                    ✕
+                  </button>
+                </span>
+              ))
+            )}
+          </div>
         </div>
-        <div className="flex flex-wrap gap-1.5 mt-2">
-          {produtos.length === 0 ? (
-            <span className="text-xs text-slate-500">Nenhum produto adicionado — vale para todos.</span>
-          ) : (
-            produtos.map((p, i) => (
-              <span key={i} className="text-xs bg-slate-800 rounded-full px-2 py-1 flex items-center gap-1.5">
-                {p}
-                <button type="button" onClick={() => setProdutos((prev) => prev.filter((_, idx) => idx !== i))} className="text-slate-500 hover:text-rose-400">
-                  ✕
-                </button>
-              </span>
-            ))
-          )}
-        </div>
-      </div>
+      )}
 
       <div>
         <label className="block text-xs text-slate-400 mb-1">
@@ -493,6 +534,8 @@ export function EditDynamicModal({
   const [produtoInput, setProdutoInput] = useState('');
   const [produtos, setProdutos] = useState<string[]>(dynamic.produtos);
   const [participantes, setParticipantes] = useState<string[]>(dynamic.participantes);
+  const [categoriasProdutos, setCategoriasProdutos] = useState<DynamicProductCategory[]>(dynamic.categoriasProdutos);
+  const [multiplicador, setMultiplicador] = useState(dynamic.multiplicador);
   const produtosListId = useId();
 
   function addProduto() {
@@ -525,6 +568,9 @@ export function EditDynamicModal({
       setor_alvo: setorAlvo,
       meta_modo: metaModo,
       metas_individuais: metasIndividuais,
+      categorias_produtos: categoriasProdutos as unknown as Json,
+      multiplicador_ativo: multiplicador.ativo,
+      multiplicador_valor: multiplicador.valor,
     });
   }
 
@@ -532,7 +578,7 @@ export function EditDynamicModal({
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50" onClick={onClose}>
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-5 max-h-[90vh] overflow-y-auto flex flex-col gap-3"
+        className="w-full max-w-3xl rounded-2xl border border-slate-800 bg-slate-900 p-5 max-h-[90vh] overflow-y-auto flex flex-col gap-3"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="font-semibold">Editar dinâmica</h3>
@@ -582,40 +628,50 @@ export function EditDynamicModal({
           />
         </Field>
 
-        <div>
-          <label className="block text-xs text-slate-400 mb-1">Produtos participantes (opcional — vazio = todos os produtos)</label>
-          <div className="flex gap-2">
-            <input
-              list={produtosListId}
-              value={produtoInput}
-              onChange={(e) => setProdutoInput(e.target.value)}
-              placeholder="buscar produto já vendido, ou digitar nome exato / palavra-chave"
-              className="input flex-1"
-            />
-            <datalist id={produtosListId}>
-              {productNames.map((nome) => (
-                <option key={nome} value={nome} />
-              ))}
-            </datalist>
-            <button type="button" onClick={addProduto} className="rounded-md bg-amber-500 text-slate-950 px-3 py-1.5 text-xs font-medium">
-              + Add
-            </button>
+        <CategoriasProdutosEditor
+          categorias={categoriasProdutos}
+          onChange={setCategoriasProdutos}
+          productNames={productNames}
+          multiplicador={multiplicador}
+          onMultiplicadorChange={setMultiplicador}
+        />
+
+        {categoriasProdutos.length === 0 && (
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Produtos participantes (opcional — vazio = todos os produtos)</label>
+            <div className="flex gap-2">
+              <input
+                list={produtosListId}
+                value={produtoInput}
+                onChange={(e) => setProdutoInput(e.target.value)}
+                placeholder="buscar produto já vendido, ou digitar nome exato / palavra-chave"
+                className="input flex-1"
+              />
+              <datalist id={produtosListId}>
+                {productNames.map((nome) => (
+                  <option key={nome} value={nome} />
+                ))}
+              </datalist>
+              <button type="button" onClick={addProduto} className="rounded-md bg-amber-500 text-slate-950 px-3 py-1.5 text-xs font-medium">
+                + Add
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {produtos.length === 0 ? (
+                <span className="text-xs text-slate-500">Nenhum produto adicionado — vale para todos.</span>
+              ) : (
+                produtos.map((p, i) => (
+                  <span key={i} className="text-xs bg-slate-800 rounded-full px-2 py-1 flex items-center gap-1.5">
+                    {p}
+                    <button type="button" onClick={() => setProdutos((prev) => prev.filter((_, idx) => idx !== i))} className="text-slate-500 hover:text-rose-400">
+                      ✕
+                    </button>
+                  </span>
+                ))
+              )}
+            </div>
           </div>
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {produtos.length === 0 ? (
-              <span className="text-xs text-slate-500">Nenhum produto adicionado — vale para todos.</span>
-            ) : (
-              produtos.map((p, i) => (
-                <span key={i} className="text-xs bg-slate-800 rounded-full px-2 py-1 flex items-center gap-1.5">
-                  {p}
-                  <button type="button" onClick={() => setProdutos((prev) => prev.filter((_, idx) => idx !== i))} className="text-slate-500 hover:text-rose-400">
-                    ✕
-                  </button>
-                </span>
-              ))
-            )}
-          </div>
-        </div>
+        )}
 
         <div>
           <label className="block text-xs text-slate-400 mb-1">

@@ -6,6 +6,7 @@ import { ConquistaCelebrationHost } from '../../components/ConquistaCelebration'
 import { FunctionIcon } from '../../components/icons/FunctionIcon';
 import { PageLoading } from '../../components/PageLoading';
 import { Sidebar } from '../../components/Sidebar';
+import { VersionFooter } from '../../components/VersionFooter';
 import {
   BagIcon,
   CpuIcon,
@@ -116,6 +117,7 @@ export function MobileAdminShell() {
   }
 
   return (
+    <>
     <div className={`mv2 app-shell ${drawerOpen ? 'is-mobile-open' : ''}`} style={{ minHeight: '100vh' }}>
       <ConquistaCelebrationHost />
       {/* Same slide-out drawer the desktop Sidebar already uses below 640px
@@ -249,5 +251,7 @@ export function MobileAdminShell() {
         </Suspense>
       </main>
     </div>
+    <VersionFooter />
+    </>
   );
 }

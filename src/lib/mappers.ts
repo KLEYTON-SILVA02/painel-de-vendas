@@ -91,6 +91,11 @@ export function mapDynamic(row: Tables<'dynamics'>): Dynamic {
     setorAlvo: row.setor_alvo as Dynamic['setorAlvo'],
     metaModo: (row.meta_modo as Dynamic['metaModo']) || 'geral',
     metasIndividuais: (row.metas_individuais as Record<string, number> | null) ?? {},
+    categoriasProdutos: (row.categorias_produtos as unknown as Dynamic['categoriasProdutos'] | null) ?? [],
+    multiplicador: {
+      ativo: row.multiplicador_ativo ?? false,
+      valor: Number(row.multiplicador_valor) || 0,
+    },
   };
 }
 

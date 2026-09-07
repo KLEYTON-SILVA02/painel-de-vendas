@@ -411,6 +411,7 @@ export type Database = {
       }
       dynamics: {
         Row: {
+          categorias_produtos: Json
           created_at: string
           data_fim: string
           data_inicio: string
@@ -420,6 +421,8 @@ export type Database = {
           meta_valor: number
           metas_individuais: Json
           metrica: string
+          multiplicador_ativo: boolean
+          multiplicador_valor: number
           participantes: string[]
           produtos: string[]
           setor_alvo: string
@@ -427,6 +430,7 @@ export type Database = {
           titulo: string
         }
         Insert: {
+          categorias_produtos?: Json
           created_at?: string
           data_fim: string
           data_inicio: string
@@ -436,6 +440,8 @@ export type Database = {
           meta_valor?: number
           metas_individuais?: Json
           metrica?: string
+          multiplicador_ativo?: boolean
+          multiplicador_valor?: number
           participantes?: string[]
           produtos?: string[]
           setor_alvo?: string
@@ -443,6 +449,7 @@ export type Database = {
           titulo: string
         }
         Update: {
+          categorias_produtos?: Json
           created_at?: string
           data_fim?: string
           data_inicio?: string
@@ -452,6 +459,8 @@ export type Database = {
           meta_valor?: number
           metas_individuais?: Json
           metrica?: string
+          multiplicador_ativo?: boolean
+          multiplicador_valor?: number
           participantes?: string[]
           produtos?: string[]
           setor_alvo?: string
