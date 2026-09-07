@@ -6,6 +6,7 @@
 // password lives entirely in Supabase Auth, keyed by the profile already
 // linked to this collaborator_id.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { corsHeaders } from '../_shared/cors.ts';
 
 interface ResetLoginBody {
   collaborator_id: string;
@@ -15,11 +16,12 @@ interface ResetLoginBody {
 function jsonResponse(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...corsHeaders },
   });
 }
 
 Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
 
   const authHeader = req.headers.get('Authorization');

@@ -4,6 +4,7 @@
 // opt-in action for provisioning access, kept separate from
 // create-collaborator so plain roster management never requires a password.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { corsHeaders } from '../_shared/cors.ts';
 
 interface GrantLoginBody {
   collaborator_id: string;
@@ -13,11 +14,12 @@ interface GrantLoginBody {
 function jsonResponse(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...corsHeaders },
   });
 }
 
 Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
 
   const authHeader = req.headers.get('Authorization');
