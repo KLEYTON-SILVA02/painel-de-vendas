@@ -25,6 +25,14 @@ export function metaFor(din: Dynamic, matricula: string): number {
   return din.metaValor;
 }
 
+/** The unit label shown next to realized/meta values when metrica is
+ * 'unidade' — the admin's own custom name (e.g. "caixas", "pares") when set,
+ * or the generic "un." otherwise. Not used for metrica 'valor' (always R$)
+ * nor for a multiplicador score (always shown as currency, see the UI). */
+export function dinamicaUnidadeLabel(din: Dynamic): string {
+  return din.medidaLabel.trim() || 'un.';
+}
+
 /** Whether a sale's product matches one product category — an exact
  * (normalized) hit against the category's own `produtos` list, or a
  * substring hit against its `palavraChave` (e.g. a brand name), so a
@@ -92,6 +100,33 @@ export function computeDinamicaCategoriaTotais(
       pontuacao: din.multiplicador.ativo ? itens * din.multiplicador.valor : null,
     };
   });
+}
+
+export interface DinamicaColaboradorProdutoLinha {
+  produto: string;
+  qtd: number;
+  valor: number;
+}
+
+/** Products a given participant sold within this dynamic — matricula match,
+ * honoring the same period + product filter (flat `produtos` or the
+ * categorias union) as the rest of this module — for the "ver produtos
+ * vendidos" popup opened by clicking a participant's row. One line per
+ * distinct product name, sorted by valor desc. */
+export function computeDinamicaColaboradorProdutos(din: Dynamic, sales: Sale[], matricula: string): DinamicaColaboradorProdutoLinha[] {
+  const key = normalizeMatricula(matricula);
+  const map = new Map<string, DinamicaColaboradorProdutoLinha>();
+  sales.forEach((s) => {
+    if (normalizeMatricula(s.matricula) !== key) return;
+    if (!s.dataISO || s.dataISO < din.dataInicio || s.dataISO > din.dataFim) return;
+    if (!dinamicaProdutoParticipa(din, s.produto)) return;
+    const nome = s.produto || '(sem nome)';
+    const linha = map.get(nome) ?? { produto: nome, qtd: 0, valor: 0 };
+    linha.qtd += Number(s.qtd) || 0;
+    linha.valor += Number(s.valor) || 0;
+    map.set(nome, linha);
+  });
+  return Array.from(map.values()).sort((a, b) => b.valor - a.valor);
 }
 
 /** Whether a collaborator's sector matches the dynamic's target sector —

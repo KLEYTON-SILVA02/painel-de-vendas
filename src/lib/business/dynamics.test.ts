@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   computeDinamicaCategoriaTotais,
+  computeDinamicaColaboradorProdutos,
   computeDinamicaProgresso,
   computeDinamicaRanking,
+  dinamicaUnidadeLabel,
   dynamicAllowsCollaborator,
   dynamicStatus,
   intersectDynamicPeriod,
@@ -27,6 +29,7 @@ const din: Dynamic = {
   id: 'd1', titulo: 'Semana X', descricao: '', dataInicio: '2026-08-01', dataFim: '2026-08-10',
   metaValor: 500, metrica: 'valor', produtos: ['Produto X'], participantes: [], setorAlvo: 'ambos',
   metaModo: 'geral', metasIndividuais: {}, categoriasProdutos: [], multiplicador: { ativo: false, valor: 0 },
+  medidaLabel: '',
 };
 
 describe('computeDinamicaProgresso', () => {
@@ -159,6 +162,37 @@ describe('computeDinamicaCategoriaTotais', () => {
     expect(computeDinamicaProgresso(dinComCategorias, sales, collaborators)).toBe(800);
     const dinNarrow = { ...dinComCategorias, categoriasProdutos: [dinComCategorias.categoriasProdutos[0]] };
     expect(computeDinamicaProgresso(dinNarrow, sales, collaborators)).toBe(300); // only cat1's "Produto X"
+  });
+});
+
+describe('dinamicaUnidadeLabel', () => {
+  it('falls back to "un." when medidaLabel is empty', () => {
+    expect(dinamicaUnidadeLabel(din)).toBe('un.');
+    expect(dinamicaUnidadeLabel({ ...din, medidaLabel: '   ' })).toBe('un.');
+  });
+
+  it('uses the custom label when set', () => {
+    expect(dinamicaUnidadeLabel({ ...din, medidaLabel: 'caixas' })).toBe('caixas');
+  });
+});
+
+describe('computeDinamicaColaboradorProdutos', () => {
+  it('sums qtd/valor per distinct product, for that matricula only, within the period', () => {
+    const linhas = computeDinamicaColaboradorProdutos({ ...din, produtos: [] }, sales, 'M2');
+    expect(linhas).toHaveLength(2);
+    const produtoX = linhas.find((l) => l.produto === 'Produto X')!;
+    const produtoY = linhas.find((l) => l.produto === 'Produto Y (not in list)')!;
+    expect(produtoX).toEqual({ produto: 'Produto X', qtd: 1, valor: 100 });
+    expect(produtoY).toEqual({ produto: 'Produto Y (not in list)', qtd: 5, valor: 500 });
+  });
+
+  it('respects the dynamic product filter', () => {
+    const linhas = computeDinamicaColaboradorProdutos(din, sales, 'M2'); // din.produtos = ['Produto X']
+    expect(linhas).toEqual([{ produto: 'Produto X', qtd: 1, valor: 100 }]);
+  });
+
+  it('returns an empty list for a matricula with no matching sales', () => {
+    expect(computeDinamicaColaboradorProdutos(din, sales, 'M99')).toEqual([]);
   });
 });
 

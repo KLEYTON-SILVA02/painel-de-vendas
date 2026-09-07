@@ -9,6 +9,7 @@ import {
   computeDinamicaProgresso,
   computeDinamicaRanking,
   dinamicaMetaTotal,
+  dinamicaUnidadeLabel,
   dynamicStatus,
   metaFor,
   type DynamicStatus,
@@ -208,6 +209,7 @@ function MobileNewDynamicForm({
     categorias_produtos: Json;
     multiplicador_ativo: boolean;
     multiplicador_valor: number;
+    medida_label: string;
   }) => void;
   creating: boolean;
 }) {
@@ -217,6 +219,7 @@ function MobileNewDynamicForm({
   const [dataFim, setDataFim] = useState(today);
   const [setorAlvo, setSetorAlvo] = useState<Dynamic['setorAlvo']>('ambos');
   const [metrica, setMetrica] = useState<'valor' | 'unidade'>('valor');
+  const [medidaLabel, setMedidaLabel] = useState('');
   const [metaModo, setMetaModo] = useState<Dynamic['metaModo']>('geral');
   const [metaValor, setMetaValor] = useState(0);
   const [metasIndividuais, setMetasIndividuais] = useState<Record<string, number>>({});
@@ -261,6 +264,7 @@ function MobileNewDynamicForm({
       categorias_produtos: categoriasProdutos as unknown as Json,
       multiplicador_ativo: multiplicador.ativo,
       multiplicador_valor: multiplicador.valor,
+      medida_label: medidaLabel.trim(),
     });
     setTitulo('');
     setSetorAlvo('ambos');
@@ -271,6 +275,7 @@ function MobileNewDynamicForm({
     setParticipantes([]);
     setCategoriasProdutos([]);
     setMultiplicador({ ativo: false, valor: 0 });
+    setMedidaLabel('');
     setExpanded(false);
   }
 
@@ -314,13 +319,20 @@ function MobileNewDynamicForm({
       <div className="mv2-row" style={{ gap: 8 }}>
         <select style={{ flex: 1 }} value={metrica} onChange={(e) => setMetrica(e.target.value as 'valor' | 'unidade')}>
           <option value="valor">Meta em R$</option>
-          <option value="unidade">Meta em un.</option>
+          <option value="unidade">Meta em unidade</option>
         </select>
         <select style={{ flex: 1 }} value={metaModo} onChange={(e) => setMetaModo(e.target.value as Dynamic['metaModo'])}>
           <option value="geral">Meta geral</option>
           <option value="individual">Meta individual</option>
         </select>
       </div>
+      {metrica === 'unidade' && (
+        <input
+          value={medidaLabel}
+          onChange={(e) => setMedidaLabel(e.target.value)}
+          placeholder="Tipo de medida (opcional) — ex: caixas, pares"
+        />
+      )}
       {metaModo === 'geral' && (
         <input type="number" placeholder="Meta" value={metaValor} onChange={(e) => setMetaValor(Number(e.target.value))} />
       )}
@@ -441,6 +453,7 @@ function MobileDinamicaAccordionItem({
   const pct = metaTotal > 0 ? Math.min(999, (realizado / metaTotal) * 100) : 0;
   const ranking = computeDinamicaRanking(d, sales, collaborators);
   const categoriaTotais = computeDinamicaCategoriaTotais(d, sales, collaborators);
+  const unidadeLabel = dinamicaUnidadeLabel(d);
 
   return (
     <div>
@@ -498,8 +511,8 @@ function MobileDinamicaAccordionItem({
                   <td>
                     {fmtDateBR(d.dataInicio)}–{fmtDateBR(d.dataFim)}
                   </td>
-                  <td>{metaTotal > 0 ? (isUnidade ? `${metaTotal} un.` : fmtMoney(metaTotal)) : '—'}</td>
-                  <td>{isUnidade ? `${realizado} un.` : fmtMoney(realizado)}</td>
+                  <td>{metaTotal > 0 ? (isUnidade ? `${metaTotal} ${unidadeLabel}` : fmtMoney(metaTotal)) : '—'}</td>
+                  <td>{isUnidade ? `${realizado} ${unidadeLabel}` : fmtMoney(realizado)}</td>
                   <td className={pct >= 100 ? 'mv2-ok' : pct < 50 ? 'mv2-low' : undefined}>{pct.toFixed(0)}%</td>
                 </tr>
               </tbody>
@@ -512,7 +525,7 @@ function MobileDinamicaAccordionItem({
                 <div key={cat.id} className="mv2-metric-card" style={{ ['--mv2-card-color' as string]: '#00b6da' }}>
                   <div className="mv2-label">{cat.nome}</div>
                   <div className="mv2-value">
-                    {cat.pontuacao !== null ? `${cat.pontuacao.toFixed(0)} pts` : isUnidade ? `${cat.itens} un.` : fmtMoney(cat.valor)}
+                    {cat.pontuacao !== null ? fmtMoney(cat.pontuacao) : isUnidade ? `${cat.itens} ${unidadeLabel}` : fmtMoney(cat.valor)}
                   </div>
                 </div>
               ))}
@@ -523,6 +536,8 @@ function MobileDinamicaAccordionItem({
           <DinamicaProgressList
             ranking={ranking}
             isUnidade={isUnidade}
+            din={d}
+            sales={sales}
             renderAction={(r) => (
               <button
                 onClick={() => setCardMatricula(r.matricula)}
@@ -590,7 +605,7 @@ function MobileDinamicaExportCardModal({
     const myMeta = metaFor(d, matricula);
     const pct = myMeta > 0 ? Math.min(999, (myTotal / myMeta) * 100) : 0;
     const dias = Object.keys(porDia).sort();
-    return { din: d, isUnidade, myValor, myItens, myMeta, porDia, pct, dias };
+    return { din: d, isUnidade, unidadeLabel: dinamicaUnidadeLabel(d), myValor, myItens, myMeta, porDia, pct, dias };
   });
 
   async function handleGenerateImage() {
@@ -603,13 +618,13 @@ function MobileDinamicaExportCardModal({
         lojaNome: nomeLoja,
         dinamicas: entries.map((e) => ({
           titulo: e.din.titulo,
-          metaLabel: e.myMeta > 0 ? (e.isUnidade ? `${e.myMeta} un.` : fmtMoney(e.myMeta)) : '—',
-          realizadoLabel: e.isUnidade ? `${e.myItens} un.` : fmtMoney(e.myValor),
+          metaLabel: e.myMeta > 0 ? (e.isUnidade ? `${e.myMeta} ${e.unidadeLabel}` : fmtMoney(e.myMeta)) : '—',
+          realizadoLabel: e.isUnidade ? `${e.myItens} ${e.unidadeLabel}` : fmtMoney(e.myValor),
           pct: e.pct,
           dias: e.dias.map((dia) => ({
             label: fmtDateBR(dia),
             valorLabel:
-              (e.isUnidade ? `${e.porDia[dia].itens} un.` : fmtMoney(e.porDia[dia].valor)) +
+              (e.isUnidade ? `${e.porDia[dia].itens} ${e.unidadeLabel}` : fmtMoney(e.porDia[dia].valor)) +
               (e.myMeta > 0 ? ` · ${(((e.isUnidade ? e.porDia[dia].itens : e.porDia[dia].valor) / e.myMeta) * 100).toFixed(0)}%` : ''),
           })),
         })),
@@ -642,18 +657,18 @@ function MobileDinamicaExportCardModal({
           </div>
         </div>
 
-        {entries.map(({ din: d, isUnidade, myValor, myItens, myMeta, porDia, pct, dias }) => (
+        {entries.map(({ din: d, isUnidade, unidadeLabel, myValor, myItens, myMeta, porDia, pct, dias }) => (
           <div key={d.id} style={{ marginBottom: 10, borderTop: '1px solid rgba(255,255,255,.08)', paddingTop: 8 }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: '#fff' }}>{d.titulo}</div>
             <div className="mv2-stat-row" style={{ marginTop: 6 }}>
               <div className="mv2-stat">
                 <div style={{ fontSize: 6.5, color: 'var(--mv2-texto-2)' }}>META</div>
-                <div style={{ fontSize: 10, fontWeight: 700 }}>{myMeta > 0 ? (isUnidade ? `${myMeta} un.` : fmtMoney(myMeta)) : '—'}</div>
+                <div style={{ fontSize: 10, fontWeight: 700 }}>{myMeta > 0 ? (isUnidade ? `${myMeta} ${unidadeLabel}` : fmtMoney(myMeta)) : '—'}</div>
               </div>
               <div className="mv2-stat">
                 <div style={{ fontSize: 6.5, color: 'var(--mv2-texto-2)' }}>REALIZADO</div>
                 <div style={{ fontSize: 10, fontWeight: 700, color: pct >= 100 ? 'var(--mv2-verde)' : '#fff' }}>
-                  {isUnidade ? `${myItens} un.` : fmtMoney(myValor)} ({pct.toFixed(0)}%)
+                  {isUnidade ? `${myItens} ${unidadeLabel}` : fmtMoney(myValor)} ({pct.toFixed(0)}%)
                 </div>
               </div>
             </div>
@@ -666,7 +681,7 @@ function MobileDinamicaExportCardModal({
                   <div key={dia} className="mv2-day-row">
                     <span>{fmtDateBR(dia)}</span>
                     <span>
-                      {isUnidade ? `${porDia[dia].itens} un.` : fmtMoney(porDia[dia].valor)}
+                      {isUnidade ? `${porDia[dia].itens} ${unidadeLabel}` : fmtMoney(porDia[dia].valor)}
                       {myMeta > 0 && ` · ${((isUnidade ? porDia[dia].itens : porDia[dia].valor) / myMeta * 100).toFixed(0)}%`}
                     </span>
                   </div>

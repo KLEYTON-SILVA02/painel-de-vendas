@@ -96,6 +96,7 @@ export function mapDynamic(row: Tables<'dynamics'>): Dynamic {
       ativo: row.multiplicador_ativo ?? false,
       valor: Number(row.multiplicador_valor) || 0,
     },
+    medidaLabel: row.medida_label ?? '',
   };
 }
 

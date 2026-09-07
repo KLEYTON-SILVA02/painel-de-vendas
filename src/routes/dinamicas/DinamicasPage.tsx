@@ -8,6 +8,7 @@ import {
   computeDinamicaProgresso,
   computeDinamicaRanking,
   dinamicaMetaTotal,
+  dinamicaUnidadeLabel,
   dynamicStatus,
 } from '../../lib/business/dynamics';
 import { useReauthGuard } from '../../hooks/useReauthGuard';
@@ -213,6 +214,7 @@ function DinamicaCard({
   // the campaign's roster, so someone at 0% still belongs on it.
   const ranking = computeDinamicaRanking(d, sales, collaborators);
   const categoriaTotais = computeDinamicaCategoriaTotais(d, sales, collaborators);
+  const unidadeLabel = dinamicaUnidadeLabel(d);
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
@@ -231,10 +233,10 @@ function DinamicaCard({
         </div>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-3">
-        <StatCard label="Realizado" value={isUnidade ? `${realizado} un.` : fmtMoney(realizado)} color="#14ff00" />
+        <StatCard label="Realizado" value={isUnidade ? `${realizado} ${unidadeLabel}` : fmtMoney(realizado)} color="#14ff00" />
         <StatCard label="% da meta" value={pct !== null ? `${pct.toFixed(0)}%` : '—'} color="#ffb700" />
         <StatCard label="Período" value={`${fmtDateBR(d.dataInicio)} → ${fmtDateBR(d.dataFim)}`} color="#00f0ff" />
-        <StatCard label="Meta total" value={metaTotal > 0 ? (isUnidade ? `${metaTotal} un.` : fmtMoney(metaTotal)) : '—'} color="#a82bff" />
+        <StatCard label="Meta total" value={metaTotal > 0 ? (isUnidade ? `${metaTotal} ${unidadeLabel}` : fmtMoney(metaTotal)) : '—'} color="#a82bff" />
         <StatCard label="Participantes" value={String(ranking.length)} color="#ff3df0" />
       </div>
       {categoriaTotais.length > 0 && (
@@ -245,9 +247,9 @@ function DinamicaCard({
               label={cat.nome}
               value={
                 cat.pontuacao !== null
-                  ? `${cat.pontuacao.toFixed(0)} pts`
+                  ? fmtMoney(cat.pontuacao)
                   : isUnidade
-                    ? `${cat.itens} un.`
+                    ? `${cat.itens} ${unidadeLabel}`
                     : fmtMoney(cat.valor)
               }
               color="#00b6da"
@@ -256,7 +258,7 @@ function DinamicaCard({
         </div>
       )}
       <div className="mt-3">
-        <DinamicaProgressList ranking={ranking} isUnidade={isUnidade} />
+        <DinamicaProgressList ranking={ranking} isUnidade={isUnidade} din={d} sales={sales} />
       </div>
     </div>
   );
@@ -285,6 +287,7 @@ function NewDynamicForm({
     categorias_produtos: Json;
     multiplicador_ativo: boolean;
     multiplicador_valor: number;
+    medida_label: string;
   }) => void;
   creating: boolean;
 }) {
@@ -294,6 +297,7 @@ function NewDynamicForm({
   const [dataFim, setDataFim] = useState(today);
   const [setorAlvo, setSetorAlvo] = useState<Dynamic['setorAlvo']>('ambos');
   const [metrica, setMetrica] = useState<'valor' | 'unidade'>('valor');
+  const [medidaLabel, setMedidaLabel] = useState('');
   const [metaModo, setMetaModo] = useState<Dynamic['metaModo']>('geral');
   const [metaValor, setMetaValor] = useState(0);
   const [metasIndividuais, setMetasIndividuais] = useState<Record<string, number>>({});
@@ -339,6 +343,7 @@ function NewDynamicForm({
       categorias_produtos: categoriasProdutos as unknown as Json,
       multiplicador_ativo: multiplicador.ativo,
       multiplicador_valor: multiplicador.valor,
+      medida_label: medidaLabel.trim(),
     });
     setTitulo('');
     setDescricao('');
@@ -350,6 +355,7 @@ function NewDynamicForm({
     setParticipantes([]);
     setCategoriasProdutos([]);
     setMultiplicador({ ativo: false, valor: 0 });
+    setMedidaLabel('');
     setExpanded(false);
   }
 
@@ -380,9 +386,19 @@ function NewDynamicForm({
         <Field label="Métrica da meta">
           <select value={metrica} onChange={(e) => setMetrica(e.target.value as 'valor' | 'unidade')} className="input">
             <option value="valor">Moeda (R$)</option>
-            <option value="unidade">Unidade (un.)</option>
+            <option value="unidade">Unidade</option>
           </select>
         </Field>
+        {metrica === 'unidade' && (
+          <Field label="Tipo de medida (opcional)">
+            <input
+              value={medidaLabel}
+              onChange={(e) => setMedidaLabel(e.target.value)}
+              placeholder="un. (padrão) — ex: caixas, pares, litros"
+              className="input"
+            />
+          </Field>
+        )}
         <Field label="Modo da meta">
           <select value={metaModo} onChange={(e) => setMetaModo(e.target.value as Dynamic['metaModo'])} className="input">
             <option value="geral">Meta geral (compartilhada)</option>
@@ -528,6 +544,7 @@ export function EditDynamicModal({
   const [dataFim, setDataFim] = useState(dynamic.dataFim);
   const [setorAlvo, setSetorAlvo] = useState<Dynamic['setorAlvo']>(dynamic.setorAlvo);
   const [metrica, setMetrica] = useState<'valor' | 'unidade'>(dynamic.metrica);
+  const [medidaLabel, setMedidaLabel] = useState(dynamic.medidaLabel);
   const [metaModo, setMetaModo] = useState<Dynamic['metaModo']>(dynamic.metaModo);
   const [metaValor, setMetaValor] = useState(dynamic.metaValor);
   const [metasIndividuais, setMetasIndividuais] = useState<Record<string, number>>(dynamic.metasIndividuais);
@@ -571,6 +588,7 @@ export function EditDynamicModal({
       categorias_produtos: categoriasProdutos as unknown as Json,
       multiplicador_ativo: multiplicador.ativo,
       multiplicador_valor: multiplicador.valor,
+      medida_label: medidaLabel.trim(),
     });
   }
 
@@ -597,9 +615,19 @@ export function EditDynamicModal({
           <Field label="Métrica da meta">
             <select value={metrica} onChange={(e) => setMetrica(e.target.value as 'valor' | 'unidade')} className="input">
               <option value="valor">Moeda (R$)</option>
-              <option value="unidade">Unidade (un.)</option>
+              <option value="unidade">Unidade</option>
             </select>
           </Field>
+          {metrica === 'unidade' && (
+            <Field label="Tipo de medida (opcional)">
+              <input
+                value={medidaLabel}
+                onChange={(e) => setMedidaLabel(e.target.value)}
+                placeholder="un. (padrão) — ex: caixas, pares, litros"
+                className="input"
+              />
+            </Field>
+          )}
           <Field label="Modo da meta">
             <select value={metaModo} onChange={(e) => setMetaModo(e.target.value as Dynamic['metaModo'])} className="input">
               <option value="geral">Meta geral (compartilhada)</option>
