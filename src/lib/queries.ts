@@ -8,6 +8,9 @@ import { monthFirstISO, monthLastISO } from './dateRange';
 import { mapBioGroupGoal, mapCollaborator, mapCommissionRate, mapDynamic, mapGoal, mapSale, mapSpecialListItem, SALE_COLUMNS, type SaleRow } from './mappers';
 import type { BulkDeletableTable } from './mutations';
 import { supabase } from './supabase';
+import type { Tables } from '../types/database';
+
+type ProductRow = Tables<'products'>;
 
 // Goes through list_store_collaborators() (a SECURITY DEFINER RPC) instead
 // of a plain `.from('collaborators').select('*')` — celular/data_nascimento
@@ -446,30 +449,41 @@ export function useCatalog() {
 // useSales had (see its comment above) but for the keyword-based product
 // classification list, which has grown past that cap too.
 const PRODUCTS_PAGE_SIZE = 1000;
+const PRODUCTS_MAX_PAGES = 500;
+
+/** Pages through `products` via keyset (cursor) pagination on `id`, same
+ * reasoning as fetchSalesPages above: this used to fetch every page's
+ * `.range()` (OFFSET) in parallel ordered by `nome`, so the deepest page
+ * cost Postgres a walk-and-discard proportional to its offset — fine while
+ * the catalog was small, but the cost grows with it, same trap sales was in
+ * before its own keyset migration. `id` is used as the cursor (not `nome`)
+ * because it's already uniquely indexed and needs no per-page collation
+ * work; the alphabetical order the "Classificados" screen depends on is
+ * applied client-side once, after every row is in, instead of asking
+ * Postgres to sort+paginate it. */
+async function fetchProductsPages() {
+  const pages: ProductRow[][] = [];
+  let cursor: string | null = null;
+  for (let iteration = 0; iteration < PRODUCTS_MAX_PAGES; iteration++) {
+    let query = supabase.from('products').select('*').order('id', { ascending: true }).limit(PRODUCTS_PAGE_SIZE);
+    if (cursor) query = query.gt('id', cursor);
+    // eslint-disable-next-line no-await-in-loop
+    const { data, error } = await query;
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    pages.push(data);
+    if (data.length < PRODUCTS_PAGE_SIZE) break;
+    cursor = data[data.length - 1].id;
+  }
+  return pages.flat();
+}
 
 export function useProducts() {
   return useQuery({
     queryKey: ['products'],
     queryFn: async () => {
-      const { count, error: countError } = await supabase.from('products').select('*', { count: 'exact', head: true });
-      if (countError) throw countError;
-      const total = count ?? 0;
-      const pageStarts: number[] = [];
-      for (let from = 0; from < total; from += PRODUCTS_PAGE_SIZE) pageStarts.push(from);
-      if (pageStarts.length === 0) return [];
-      const pages = await Promise.all(
-        pageStarts.map(async (from) => {
-          const { data, error } = await supabase
-            .from('products')
-            .select('*')
-            .order('nome')
-            .order('id', { ascending: true })
-            .range(from, from + PRODUCTS_PAGE_SIZE - 1);
-          if (error) throw error;
-          return data;
-        }),
-      );
-      const data = pages.flat();
+      const data = await fetchProductsPages();
+      data.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR') || a.id.localeCompare(b.id));
       return data;
     },
   });
