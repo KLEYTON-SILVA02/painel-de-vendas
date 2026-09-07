@@ -10,11 +10,11 @@ import {
 import { useReauthGuard } from '../../hooks/useReauthGuard';
 import type { Collaborator, Dynamic, Sale } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
+import { todayISO } from '../../lib/dateRange';
 import { useCreateDynamic, useDeleteDynamic, useUpdateDynamic } from '../../lib/mutations';
 import { useCollaborators, useDynamics, useSales } from '../../lib/queries';
 import type { TablesUpdate } from '../../types/database';
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
 const SETOR_ALVO_LABEL: Record<Dynamic['setorAlvo'], string> = { balcao: 'Balcão', caixa: 'Caixa', ambos: 'Balcão + Caixa' };
 
 export function DinamicasPage() {
