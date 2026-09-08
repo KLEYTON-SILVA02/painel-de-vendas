@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PageLoading } from '../../components/PageLoading';
 import { computeCollaboratorDayAchievements, conquistaCalendarTotals } from '../../lib/business/conquistas';
+import { VISITANTE_SETOR } from '../../lib/business/types';
 import { generateConquistaCalendarJpgBlob, generateConquistaCalendarPdfBlob } from '../../lib/conquistaCalendarExport';
 import { renderConquistaCalendar } from '../../lib/conquistaCalendarImage';
 import { monthFirstISO, monthLastISO } from '../../lib/dateRange';
@@ -36,7 +37,9 @@ export function GaleriaFigurinhasPage() {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const collaboratorsData = collaborators ?? [];
+  // Visitante é um setor só de leitura — não participa de nenhuma métrica
+  // (ver VISITANTE_SETOR em summary.ts), então nem aparece como opção aqui.
+  const collaboratorsData = useMemo(() => (collaborators ?? []).filter((c) => c.setor !== VISITANTE_SETOR), [collaborators]);
   const salesData = sales ?? [];
   const filteredCollaborators = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -182,18 +185,16 @@ export function GaleriaFigurinhasPage() {
           placeholder="Buscar colaborador pelo nome…"
           className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm mb-2"
         />
-        <div
-          className="grid gap-2 max-h-56 overflow-y-auto mb-3"
-          style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(84px, 1fr))' }}
-        >
+        <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1 mb-3">
           {filteredCollaborators.map((c) => {
             const isSelected = selectedId === c.id;
             return (
               <button
                 key={c.id}
                 onClick={() => setSelectedId(c.id)}
-                className="flex flex-col items-center gap-1 rounded-xl p-2"
+                className="flex flex-col items-center gap-1 rounded-xl p-2 shrink-0"
                 style={{
+                  width: 84,
                   background: isSelected ? '#ffb700' : '#0b0e1d',
                   border: '1px solid #ffb700',
                 }}

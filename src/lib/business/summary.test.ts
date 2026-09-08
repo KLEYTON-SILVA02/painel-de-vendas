@@ -51,6 +51,20 @@ describe('computeSummary', () => {
     const rows = computeSummary(sales, collaborators, null, null);
     expect(rows[0].valor).toBeGreaterThanOrEqual(rows[1]?.valor ?? 0);
   });
+
+  it('excludes Visitante collaborators entirely — no seeded row, and their sales are dropped instead of becoming a "Vend. N" row', () => {
+    const withVisitante: Collaborator[] = [
+      ...collaborators,
+      { id: '4', matricula: 'M4', nome: 'Vivi Visitante', apelido: 'Vivi', foto: null, setor: 'Visitante', metaIndividual: 0 },
+    ];
+    const salesWithVisitante: Sale[] = [
+      ...sales,
+      { id: 's6', dataISO: '2026-08-02', matricula: 'M4', vendedor: 'Vivi', produto: 'Produto A', qtd: 1, valor: 999, grupo: 'DERM' },
+    ];
+    const rows = computeSummary(salesWithVisitante, withVisitante, '2026-08-01', '2026-08-31');
+    expect(rows.find((r) => r.matricula === 'M4')).toBeUndefined();
+    expect(rows.some((r) => r.valor === 999)).toBe(false);
+  });
 });
 
 describe('catTotals', () => {
