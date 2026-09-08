@@ -77,7 +77,6 @@ const PALETTES: Record<
     cellBorderEmpty: string;
     dayNumberAchieved: string;
     dayNumberEmpty: string;
-    starEmpty: string;
     catLine: string;
     footer: string;
     detailTitle: string;
@@ -104,7 +103,6 @@ const PALETTES: Record<
     cellBorderEmpty: '#212948',
     dayNumberAchieved: '#ffb700',
     dayNumberEmpty: '#4a5178',
-    starEmpty: '#2b3350',
     catLine: '#c9d3e6',
     footer: '#8b90bf',
     detailTitle: '#ffb700',
@@ -130,7 +128,6 @@ const PALETTES: Record<
     cellBorderEmpty: '#000000',
     dayNumberAchieved: '#000000',
     dayNumberEmpty: '#1a1a1a',
-    starEmpty: '#9a9a9a',
     catLine: '#000000',
     footer: '#1a1a1a',
     detailTitle: '#000000',
@@ -149,18 +146,18 @@ const CAT_COLOR: Record<CalendarTheme, Record<ConquistaCategoria, string>> = {
   print: { DERM: '#8a1f76', GEN: '#1f7a12', MP: '#5b1a8a', LEVMEL: '#8a5c00', CHIP: '#00707a' },
 };
 
-function starsRow(ctx: CanvasRenderingContext2D, count: number, cx: number, cy: number, size: number, palette: (typeof PALETTES)['dark']) {
-  // Stars are filled left-to-right purely by count — never mapped to a
-  // specific category or its position in ALL_CONQUISTA_CATEGORIAS — so the
-  // filled run always starts at the leftmost star regardless of which
-  // categories were actually reached that day.
+function starsRow(ctx: CanvasRenderingContext2D, count: number, cx: number, cy: number, size: number) {
+  // Only the stars actually earned are drawn — no empty placeholders up to
+  // 5 — so the row is exactly `count` wide, always filled left-to-right
+  // regardless of which categories were reached that day.
+  if (count === 0) return;
   const gap = size * 0.15;
-  const totalW = 5 * size + 4 * gap;
+  const totalW = count * size + (count - 1) * gap;
   let sx = cx - totalW / 2 + size / 2;
   ctx.textAlign = 'center';
   ctx.font = `${size}px Arial`;
-  for (let i = 0; i < 5; i++) {
-    ctx.fillStyle = i < count ? '#ffb700' : palette.starEmpty;
+  ctx.fillStyle = '#ffb700';
+  for (let i = 0; i < count; i++) {
     ctx.fillText('★', sx, cy);
     sx += size + gap;
   }
@@ -343,7 +340,7 @@ export async function renderConquistaCalendar(data: ConquistaCalendarData, theme
       if (img) ctx.drawImage(img, miniCx - miniR, miniCy - miniR, miniR * 2, miniR * 2);
       ctx.restore();
 
-      starsRow(ctx, achievement.categorias.length, x + CELL_W / 2, y + CELL_H / 2 + 8, 15, palette);
+      starsRow(ctx, achievement.categorias.length, x + CELL_W / 2, y + CELL_H / 2 + 8, 15);
 
       ctx.textAlign = 'center';
       ctx.fillStyle = palette.catLine;
