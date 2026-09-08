@@ -58,7 +58,7 @@ export function GaleriaFigurinhasPage() {
     if (!selected) return;
     let active = true;
     renderConquistaCalendar({
-      nome: selected.apelido || selected.nome,
+      nome: selected.nome,
       matricula: selected.matricula,
       foto: selected.fotoConquista || selected.foto,
       ano,
@@ -89,7 +89,7 @@ export function GaleriaFigurinhasPage() {
   function calendarData() {
     if (!selected) return null;
     return {
-      nome: selected.apelido || selected.nome,
+      nome: selected.nome,
       matricula: selected.matricula,
       foto: selected.fotoConquista || selected.foto,
       ano,
