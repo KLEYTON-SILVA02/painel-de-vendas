@@ -35,8 +35,11 @@ export function MobileRankingPage() {
   // "Carregando…" guard comes after it, not before.
   const salesData = sales ?? [];
   const collaboratorsData = collaborators ?? [];
+  // Mercadoria Geral is the store's grand total, not its own exclusive
+  // bucket — every sale counts regardless of category, same as the desktop
+  // Ranking/CategoryPage and the collaborator-facing screens.
   const ranking = useMemo(
-    () => computeSummary(salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists),
+    () => computeSummary(salesData, collaboratorsData, dashFrom, dashTo, catKey === 'MER' ? 'ALL' : catKey, specialLists),
     [salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists],
   );
 
