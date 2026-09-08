@@ -2,7 +2,7 @@
 import { CAT_KEYS, type CategoryKey } from './classification';
 import { firstName, normalize } from './normalize';
 import { normalizeMatricula } from './parsing';
-import type { Collaborator, Sale, SummaryRow } from './types';
+import { VISITANTE_SETOR, type Collaborator, type Sale, type SummaryRow } from './types';
 
 export interface SpecialListItem {
   nome: string;
@@ -43,14 +43,23 @@ export function computeSummary(
   catFilter?: CategoryKey | 'ALL' | 'LEVMEL' | 'CHIP' | null,
   specialLists?: { levmel: SpecialListItem[]; chip: SpecialListItem[] },
 ): SummaryRow[] {
+  // "Visitante" is a view-only sector (see VISITANTE_SETOR) — never part of
+  // any metric, so it's excluded here at the shared aggregation root rather
+  // than in each individual screen: it neither seeds a zero-sale row nor
+  // picks up sales that happen to carry its matricula.
+  const visitanteMatriculas = new Set(
+    collaborators.filter((c) => c.setor === VISITANTE_SETOR).map((c) => normalizeMatricula(c.matricula)),
+  );
+  const metricCollaborators = collaborators.filter((c) => c.setor !== VISITANTE_SETOR);
+
   // Keyed by normalized matricula (leading zeros stripped) rather than the
   // raw stored value — collaborators and sales are both normalized before
   // insert (see mutations.ts / ImportarPage.tsx), but normalizing again
   // here too means a sale ↔ collaborator link never silently breaks over a
   // formatting difference in older rows written before that was in place.
   const map: Record<string, SummaryRow> = {};
-  const registeredMatriculas = new Set(collaborators.map((c) => normalizeMatricula(c.matricula)));
-  collaborators.forEach((c) => {
+  const registeredMatriculas = new Set(metricCollaborators.map((c) => normalizeMatricula(c.matricula)));
+  metricCollaborators.forEach((c) => {
     const key = normalizeMatricula(c.matricula);
     map[key] = {
       matricula: c.matricula,
@@ -75,6 +84,7 @@ export function computeSummary(
     }
 
     const key = normalizeMatricula(s.matricula);
+    if (visitanteMatriculas.has(key)) return;
     if (!map[key]) {
       // Placeholder — the sale's own vendedor text is often just an import
       // artifact ("VENDEDOR", blank, a store-code stand-in), not someone's
