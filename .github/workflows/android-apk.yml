@@ -53,10 +53,13 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug
 
+      - name: Rename debug APK
+        run: mv android/app/build/outputs/apk/debug/app-debug.apk android/app/build/outputs/apk/debug/gestao-de-vendas-debug.apk
+
       - uses: actions/upload-artifact@v7
         with:
-          name: app-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: gestao-de-vendas-debug
+          path: android/app/build/outputs/apk/debug/gestao-de-vendas-debug.apk
           retention-days: 30
 
       # Build de release assinado com uma keystore própria (em vez da chave de
@@ -83,9 +86,13 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: ./gradlew assembleRelease
 
+      - name: Rename release APK
+        if: ${{ steps.keystore.outputs.has_keystore == 'true' }}
+        run: mv android/app/build/outputs/apk/release/app-release.apk android/app/build/outputs/apk/release/gestao-de-vendas.apk
+
       - uses: actions/upload-artifact@v7
         if: ${{ steps.keystore.outputs.has_keystore == 'true' }}
         with:
-          name: app-release-apk
-          path: android/app/build/outputs/apk/release/app-release.apk
+          name: gestao-de-vendas
+          path: android/app/build/outputs/apk/release/gestao-de-vendas.apk
           retention-days: 30
