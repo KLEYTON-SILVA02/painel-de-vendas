@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useAuth } from '../../auth/AuthContext';
+import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
 import { diasRestantesNoMes, effectiveMetaGeral, getSuperMeta, goalProration } from '../../lib/business/goals';
 import { catTotals, computeSummary } from '../../lib/business/summary';
@@ -10,12 +11,6 @@ import { useCollaborators, useGoals, useSales, useStoreSettings } from '../../li
 import { MobileDateFilter } from '../admin-mobile/MobileDateFilter';
 import { useDateRange } from '../DateRangeContext';
 
-const CAT_LABEL: Record<CategoryKey, string> = {
-  DERM: 'Dermocosméticos',
-  GEN: 'Genérico',
-  MP: 'Marcas Exclusivas',
-  MER: 'Mercadoria Geral',
-};
 const CAT_COLOR: Record<CategoryKey, string> = {
   DERM: '#ff3df0',
   GEN: '#14ff00',
@@ -29,6 +24,7 @@ const CAT_COLOR: Record<CategoryKey, string> = {
 // about standing vs peers, not goal tracking).
 export function MetasVendasPage() {
   const { profile } = useAuth();
+  const categoryLabels = useCategoryLabelMap();
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
   const { data: goals } = useGoals();
@@ -178,7 +174,7 @@ export function MetasVendasPage() {
                   <td>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ width: 6, height: 6, borderRadius: '50%', background: CAT_COLOR[k] }} />
-                      {CAT_LABEL[k]}
+                      {categoryLabels[k]}
                     </span>
                   </td>
                   <td className="mv2-valor">{fmtMoney(t.valor)}</td>

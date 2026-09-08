@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
+import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
 import { computeChampionStars, type ChampionStar } from '../../lib/business/champion';
 import { effectiveMetaGeral, getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
@@ -16,10 +17,10 @@ import { GoalGauge } from './GoalGauge';
 import { MobileDailyEvolutionChart } from './MobileDailyEvolutionChart';
 import { MobileDateFilter } from './MobileDateFilter';
 
-const CAT_LABEL: Record<CategoryKey, string> = { DERM: 'Dermocosméticos', GEN: 'Genéricos', MP: 'Marcas Excl.', MER: 'Merc. Geral' };
 const CAT_COLOR: Record<CategoryKey, string> = { DERM: '#b84c9c', GEN: '#698b46', MP: '#813c97', MER: '#f26122' };
 
 export function MobileInicioPage() {
+  const CAT_LABEL = useCategoryLabelMap();
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
   const { data: goals } = useGoals();
@@ -182,6 +183,7 @@ function MobileChampionCard({
 }) {
   const [generating, setGenerating] = useState(false);
   const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
+  const categoryLabels = useCategoryLabelMap();
 
   async function handleGenerateImage() {
     setGenerating(true);
@@ -210,7 +212,7 @@ function MobileChampionCard({
         <div className="mv2-badge">👑 {campeaoLabel}</div>
         <div className="mv2-name">{campeao.apelido || campeao.nome}</div>
         {campeaoStars && (
-          <div className="mv2-stars" title={campeaoStars.map((s) => `${s.achieved ? '✓' : '✗'} ${s.label}`).join(' · ')}>
+          <div className="mv2-stars" title={campeaoStars.map((s) => `${s.achieved ? '✓' : '✗'} ${categoryLabels[s.key] ?? s.label}`).join(' · ')}>
             {campeaoStars.map((s) => (
               <span key={s.key} style={{ opacity: s.achieved ? 1 : 0.25 }}>
                 ★

@@ -22,6 +22,8 @@ import {
   TargetIcon,
   TrophyIcon,
 } from '../../components/icons/NavIcons';
+import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
+import type { GoalCategoryKey } from '../../lib/business/classification';
 import type { Horario } from '../../lib/business/horario';
 import { useResolvePasswordRequest } from '../../lib/mutations';
 import { useCategoryTypes, useCollaborators, usePendingPasswordRequests, useStore, useStoreSettings } from '../../lib/queries';
@@ -86,6 +88,18 @@ const CATEGORIES_BEFORE_BIO = [
 
 const BIO_CATEGORY = { to: '/bio', end: false, cls: 'mv2-cat-biosintetica', Icon: LeafIcon, label: 'Biosintética', slot: 'biosintetica' } as const;
 
+// Maps a nav item's icon slot to its store-overridable category label key,
+// for the 6 fixed-category items only — other slots (inicio, ranking,
+// dinamicas, adm, biosintetica) keep their fixed `label` above.
+const SLOT_TO_CATEGORY_LABEL_KEY: Partial<Record<string, GoalCategoryKey>> = {
+  dermo: 'DERM',
+  generico: 'GEN',
+  marcas_exclusivas: 'MP',
+  mercadoria_geral: 'MER',
+  levmel: 'LEVMEL',
+  chip: 'CHIP',
+};
+
 const CATEGORIES_AFTER_BIO = [
   { to: '/dinamicas', end: false, cls: 'mv2-cat-dinamicas', Icon: TargetIcon, label: 'Dinâmicas', slot: 'dinamicas' },
   { to: '/admin', end: false, cls: 'mv2-cat-adm', Icon: SettingsIcon, label: 'ADM', slot: 'adm' },
@@ -107,8 +121,14 @@ export function MobileAdminShell() {
   const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [pwMenuOpen, setPwMenuOpen] = useState(false);
+  const categoryLabels = useCategoryLabelMap();
   const hasBio = (categoryTypes ?? []).some((c) => c.chave === 'biosintetica');
-  const categories = hasBio ? [...CATEGORIES_BEFORE_BIO, BIO_CATEGORY, ...CATEGORIES_AFTER_BIO] : [...CATEGORIES_BEFORE_BIO, ...CATEGORIES_AFTER_BIO];
+  const categories = (hasBio ? [...CATEGORIES_BEFORE_BIO, BIO_CATEGORY, ...CATEGORIES_AFTER_BIO] : [...CATEGORIES_BEFORE_BIO, ...CATEGORIES_AFTER_BIO]).map(
+    (c) => {
+      const labelKey = SLOT_TO_CATEGORY_LABEL_KEY[c.slot];
+      return labelKey ? { ...c, label: categoryLabels[labelKey] } : c;
+    },
+  );
 
   function handleAttendRequest(requestId: string, collaboratorId: string) {
     resolvePasswordRequest.mutate(requestId);

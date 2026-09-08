@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useCategoryLabelMap } from '../lib/business/categoryLabels';
 import { celebrationKey, pickNewCelebration, type CelebrationCandidate } from '../lib/business/conquistaCelebration';
 import { computeConquistas, conquistaTierLabel, isUnitConquista, type ConquistaCategoria } from '../lib/business/conquistas';
 import { monthFirstISO, monthLastISO } from '../lib/dateRange';
@@ -6,13 +7,6 @@ import { fmtMoney } from '../lib/format';
 import { useCollaborators, useCurrentMonthSales, useSpecialLists } from '../lib/queries';
 
 const CONQUISTA_CATS: ConquistaCategoria[] = ['DERM', 'MP', 'GEN', 'LEVMEL', 'CHIP'];
-const CAT_LABEL: Record<ConquistaCategoria, string> = {
-  DERM: 'Dermocosméticos',
-  MP: 'Marcas Exclusivas',
-  GEN: 'Genérico',
-  LEVMEL: 'Levmel',
-  CHIP: 'Chip',
-};
 const SEEN_KEY = 'conquistas_celebration_seen_v1';
 const AUTO_CLOSE_MS = 30000;
 
@@ -83,6 +77,7 @@ export function ConquistaCelebrationHost() {
 
 function ConquistaCelebrationOverlay({ candidate, onClose }: { candidate: CelebrationCandidate; onClose: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const CAT_LABEL = useCategoryLabelMap();
 
   useEffect(() => {
     const timer = setTimeout(onClose, AUTO_CLOSE_MS);

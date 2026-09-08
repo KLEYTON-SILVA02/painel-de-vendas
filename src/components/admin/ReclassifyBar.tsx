@@ -1,11 +1,5 @@
+import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
-
-const CAT_LABEL: Record<CategoryKey, string> = {
-  DERM: 'Dermocosméticos',
-  GEN: 'Genérico',
-  MP: 'Marcas Exclusivas',
-  MER: 'Mercadoria Geral',
-};
 
 /** Toggle + toolbar shared by every "lista de vendas" screen that lets an
  * admin select one or more distinct products (by name, across the whole
@@ -43,6 +37,7 @@ export function ReclassifyBar({
   onDateFromChange?: (v: string) => void;
   onDateToChange?: (v: string) => void;
 }) {
+  const CAT_LABEL = useCategoryLabelMap();
   const hasDateRange = onDateFromChange !== undefined && onDateToChange !== undefined;
   return (
     <div className="flex items-center gap-2 flex-wrap">

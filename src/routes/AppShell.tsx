@@ -11,6 +11,8 @@ import { NotificationBell } from '../components/NotificationBell';
 import { PageLoading } from '../components/PageLoading';
 import { Sidebar } from '../components/Sidebar';
 import { VersionFooter } from '../components/VersionFooter';
+import { useCategoryLabelMap } from '../lib/business/categoryLabels';
+import type { GoalCategoryKey } from '../lib/business/classification';
 import type { Horario } from '../lib/business/horario';
 import { supabase } from '../lib/supabase';
 import { useIsMobileV2 } from '../lib/useIsMobileV2';
@@ -53,6 +55,7 @@ const ConfiguracoesPage = lazy(() => import('./admin/ConfiguracoesPage').then((m
 const IconesPage = lazy(() => import('./admin/IconesPage').then((m) => ({ default: m.IconesPage })));
 const CardConquistaPage = lazy(() => import('./admin/CardConquistaPage').then((m) => ({ default: m.CardConquistaPage })));
 const CategoriasPage = lazy(() => import('./admin/CategoriasPage').then((m) => ({ default: m.CategoriasPage })));
+const NomesCategoriasPage = lazy(() => import('./admin/NomesCategoriasPage').then((m) => ({ default: m.NomesCategoriasPage })));
 const CategoryTypePage = lazy(() => import('./category-type/CategoryTypePage').then((m) => ({ default: m.CategoryTypePage })));
 // Reused as-is from the collaborator shell — the notification list itself
 // (tabs, read-state handling) has nothing collaborator-specific in it, it
@@ -66,20 +69,28 @@ const CollaboratorNotificacoesPage = lazy(() =>
 // the vertical space they took inside that cell for the ranking/content
 // below. Keyed by exact pathname (desktop admin routes only; mobile-v2 and
 // collaborator shells never reach this header at all).
-const PAGE_TITLES: Record<string, { label: string; color: string }> = {
+const PAGE_TITLES: Record<string, { label: string; color: string; categoryKey?: GoalCategoryKey }> = {
   '/ranking': { label: '🏆 Ranking Geral', color: '#00f0ff' },
-  '/categoria/DERM': { label: '🩹 Dermocosméticos', color: '#ff3df0' },
-  '/categoria/GEN': { label: '💊 Genérico', color: '#14ff00' },
-  '/categoria/MP': { label: '🏷️ Marcas Exclusivas', color: '#a82bff' },
-  '/categoria/MER': { label: '📦 Mercadoria Geral', color: '#ff6a00' },
-  '/categoria/LEVMEL': { label: '🍯 Levmel', color: '#ffb700' },
-  '/categoria/CHIP': { label: '🔴 Chip', color: '#00e5ff' },
+  '/categoria/DERM': { label: '🩹 Dermocosméticos', color: '#ff3df0', categoryKey: 'DERM' },
+  '/categoria/GEN': { label: '💊 Genérico', color: '#14ff00', categoryKey: 'GEN' },
+  '/categoria/MP': { label: '🏷️ Marcas Exclusivas', color: '#a82bff', categoryKey: 'MP' },
+  '/categoria/MER': { label: '📦 Mercadoria Geral', color: '#ff6a00', categoryKey: 'MER' },
+  '/categoria/LEVMEL': { label: '🍯 Levmel', color: '#ffb700', categoryKey: 'LEVMEL' },
+  '/categoria/CHIP': { label: '🔴 Chip', color: '#00e5ff', categoryKey: 'CHIP' },
   '/bio': { label: '🧪 BIOSINTÉTICA — Ranking Balcão', color: '#14ff00' },
   '/dinamicas': { label: '🎯 Dinâmicas Comerciais', color: '#a82bff' },
 };
+// Emoji prefixes above stay fixed; only the name after the emoji is
+// store-overridable (see useCategoryLabelMap) for the 6 fixed-category rows.
+function pageTitleLabel(entry: { label: string; categoryKey?: GoalCategoryKey }, categoryLabels: Record<GoalCategoryKey, string>): string {
+  if (!entry.categoryKey) return entry.label;
+  const emoji = entry.label.split(' ')[0];
+  return `${emoji} ${categoryLabels[entry.categoryKey]}`;
+}
 
 export function AppShell() {
   const { profile } = useAuth();
+  const categoryLabels = useCategoryLabelMap();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
@@ -163,7 +174,7 @@ export function AppShell() {
               <div className="text-center min-w-0 px-2">
                 {PAGE_TITLES[location.pathname] && (
                   <h2 className="text-sm font-semibold truncate" style={{ color: PAGE_TITLES[location.pathname].color }}>
-                    {PAGE_TITLES[location.pathname].label}
+                    {pageTitleLabel(PAGE_TITLES[location.pathname], categoryLabels)}
                   </h2>
                 )}
               </div>
@@ -232,6 +243,7 @@ export function AppShell() {
                     <Route path="icones" element={<IconesPage />} />
                     <Route path="card-conquista" element={<CardConquistaPage />} />
                     <Route path="categorias" element={<CategoriasPage />} />
+                    <Route path="nomes-categorias" element={<NomesCategoriasPage />} />
                   </Routes>
                 </Suspense>
               }

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { MoneyInput } from '../../components/MoneyInput';
+import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { CAT_KEYS, GOAL_UNIT_KEYS, type CategoryKey, type GoalCategoryKey } from '../../lib/business/classification';
 import { computeMetaDiariaRedistribuida } from '../../lib/business/goals';
 import { distributeIndividualGoalsAuto } from '../../lib/business/individualGoals';
@@ -13,22 +14,16 @@ import { useCollaborators, useCommissionRates, useGoals, useSales } from '../../
 
 // One editor per commission slot — Mercadoria Geral/Dermo/Genéricos keep a
 // single slot (1), Marcas Exclusivas registers 3 independent commissions.
-const COMMISSION_SLOTS: { categoria: 'MER' | 'DERM' | 'GEN' | 'MP'; slot: number; label: string }[] = [
-  { categoria: 'MER', slot: 1, label: 'Mercadoria Geral' },
-  { categoria: 'DERM', slot: 1, label: 'Dermocosméticos' },
-  { categoria: 'GEN', slot: 1, label: 'Genérico' },
-  { categoria: 'MP', slot: 1, label: 'Marcas Exclusivas — Comissão 1' },
-  { categoria: 'MP', slot: 2, label: 'Marcas Exclusivas — Comissão 2' },
-  { categoria: 'MP', slot: 3, label: 'Marcas Exclusivas — Comissão 3' },
+// Slot number > 1 only ever happens for MP, so the label suffix is derived
+// at render time (via categoryLabels) rather than baked in here.
+const COMMISSION_SLOTS: { categoria: 'MER' | 'DERM' | 'GEN' | 'MP'; slot: number }[] = [
+  { categoria: 'MER', slot: 1 },
+  { categoria: 'DERM', slot: 1 },
+  { categoria: 'GEN', slot: 1 },
+  { categoria: 'MP', slot: 1 },
+  { categoria: 'MP', slot: 2 },
+  { categoria: 'MP', slot: 3 },
 ];
-
-const CAT_LABEL: Record<CategoryKey, string> = {
-  DERM: 'Dermocosméticos',
-  GEN: 'Genérico',
-  MP: 'Marcas Exclusivas',
-  MER: 'Mercadoria Geral',
-};
-const UNIT_LABEL: Record<(typeof GOAL_UNIT_KEYS)[number], string> = { LEVMEL: 'Levmel', CHIP: 'Chip' };
 
 type GoalEdit = Partial<Pick<Goal, 'metrica' | 'mensal' | 'autoRedistribuir' | 'superMeta' | 'superMetaAuto'>>;
 
@@ -89,6 +84,7 @@ export function MetasPage() {
 }
 
 function MetasPorCategoria() {
+  const categoryLabels = useCategoryLabelMap();
   const { profile } = useAuth();
   const { data: goals } = useGoals();
   const { data: sales } = useSales();
@@ -161,7 +157,7 @@ function MetasPorCategoria() {
                 const goalForCalc = { ...goalsSafe[k], metrica, mensal: fieldValue(k, 'mensal'), superMeta: fieldValue(k, 'superMeta') };
                 return (
                   <tr key={k} className="border-b border-slate-900">
-                    <td className="py-2 pr-3 whitespace-nowrap">{CAT_LABEL[k]}</td>
+                    <td className="py-2 pr-3 whitespace-nowrap">{categoryLabels[k]}</td>
                     <td className="py-2 pr-3">
                       <select
                         value={metrica}
@@ -260,6 +256,7 @@ function MetasPorCategoria() {
 // Diária in unidades, no super meta / redistribuição automática. Reuses the
 // same `goals` table/mutation as the categories above (see useUpdateGoal).
 function MetasUnidade() {
+  const categoryLabels = useCategoryLabelMap();
   const { profile } = useAuth();
   const { data: goals } = useGoals();
   const updateGoal = useUpdateGoal(profile?.store_id);
@@ -302,7 +299,7 @@ function MetasUnidade() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {GOAL_UNIT_KEYS.map((k) => (
             <div key={k} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-              <div className="font-semibold text-sm mb-2">{UNIT_LABEL[k]}</div>
+              <div className="font-semibold text-sm mb-2">{categoryLabels[k]}</div>
               <label className="block text-xs text-slate-400 mb-1">Meta Mensal (un.)</label>
               <input
                 type="number"
@@ -333,6 +330,7 @@ function MetasUnidade() {
 }
 
 function MetasIndividuais() {
+  const categoryLabels = useCategoryLabelMap();
   const { profile } = useAuth();
   const { data: goals } = useGoals();
   const { data: sales } = useSales();
@@ -423,7 +421,7 @@ function MetasIndividuais() {
           >
             {CAT_KEYS.map((k) => (
               <option key={k} value={k}>
-                {CAT_LABEL[k]}
+                {categoryLabels[k]}
               </option>
             ))}
           </select>
@@ -572,6 +570,7 @@ function MetasIndividuais() {
 // requested. Own table (commission_rates), separate from goals: a
 // percentage applied to sales, not a sales target.
 function MetasComissoes() {
+  const categoryLabels = useCategoryLabelMap();
   const { profile } = useAuth();
   const { data: rates } = useCommissionRates();
   const updateRate = useUpdateCommissionRate(profile?.store_id);
@@ -619,16 +618,20 @@ function MetasComissoes() {
   return (
     <div className="flex flex-col gap-3">
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <h3 className="font-semibold mb-1">Comissões — Mercadoria Geral / Dermo / Genéricos / Marcas Exclusivas</h3>
+        <h3 className="font-semibold mb-1">
+          Comissões — {categoryLabels.MER} / {categoryLabels.DERM} / {categoryLabels.GEN} / {categoryLabels.MP}
+        </h3>
         <p className="text-xs text-slate-500 mb-4">
           Percentual de comissão por categoria, aplicado sobre o valor de cada venda. Marcas Exclusivas aceita até 3
           comissões independentes. "Exibir comissão" liga o botão liga/desliga correspondente na tela de detalhamento
           da categoria — desligado, só o valor normal da venda aparece.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {COMMISSION_SLOTS.map(({ categoria, slot, label }) => (
+          {COMMISSION_SLOTS.map(({ categoria, slot }) => (
             <div key={slotKey(categoria, slot)} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-              <div className="font-semibold text-sm mb-2">{label}</div>
+              <div className="font-semibold text-sm mb-2">
+                {categoria === 'MP' ? `${categoryLabels.MP} — Comissão ${slot}` : categoryLabels[categoria]}
+              </div>
               <label className="block text-xs text-slate-400 mb-1">Percentual (%)</label>
               <input
                 type="number"

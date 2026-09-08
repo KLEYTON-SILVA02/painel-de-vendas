@@ -255,6 +255,43 @@ export function useFunctionIcons() {
   });
 }
 
+/** Store-chosen display-name overrides for the 6 fixed categories (DERM/
+ * GEN/MP/MER/LEVMEL/CHIP), by category key — missing keys mean "use the
+ * built-in default label" (see src/lib/business/categoryLabels.ts). */
+export function useCategoryLabels() {
+  return useQuery({
+    queryKey: ['category_labels'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('category_labels').select('*');
+      if (error) throw error;
+      const byKey: Record<string, string> = {};
+      data.forEach((row) => {
+        byKey[row.category_key] = row.label;
+      });
+      return byKey;
+    },
+  });
+}
+
+/** Store-chosen extra header names recognized per import field (data/
+ * matricula/vendedor/codigo/produto/qtd/valor), on top of the built-in
+ * defaults — missing fields mean "use only the built-in defaults" (see
+ * src/lib/business/importMapping.ts). */
+export function useImportFieldOverrides() {
+  return useQuery({
+    queryKey: ['import_field_overrides'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('import_field_overrides').select('*');
+      if (error) throw error;
+      const byField: Record<string, string[]> = {};
+      data.forEach((row) => {
+        byField[row.field] = row.terms;
+      });
+      return byField;
+    },
+  });
+}
+
 /** All commission rates by category, as an array per category (sorted by
  * slot) — Marcas Exclusivas can hold up to 3 independent rates, Dermo/
  * Genéricos hold at most 1 (slot 1). A category with nothing configured

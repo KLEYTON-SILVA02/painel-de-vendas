@@ -49,11 +49,14 @@ export type ColumnMap = Record<ImportField, number>;
  * for any name match would resolve "vendedor" (a valid but low-priority
  * candidate) at the first "Vendedor" column before ever reaching "Vendedor
  * Nome", silently mapping the name field to the code column instead. */
-export function autoMapColumns(headers: unknown[]): ColumnMap {
+export function autoMapColumns(headers: unknown[], overrides?: Partial<Record<ImportField, string[]>>): ColumnMap {
   const norm = headers.map((h) => normalize(h as string));
   const map = {} as ColumnMap;
   (Object.keys(FIELD_NAMES) as ImportField[]).forEach((field) => {
-    const names = FIELD_NAMES[field];
+    // Store-chosen header names (import_field_overrides) are tried first —
+    // an ADM configuring their own spreadsheet layout takes priority over
+    // the built-in defaults, without replacing them.
+    const names = [...(overrides?.[field] ?? []), ...FIELD_NAMES[field]];
     let idx = -1;
     for (const n of names) {
       idx = norm.findIndex((h) => h === normalize(n));

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
+import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { diasRestantesNoMes } from '../../lib/business/goals';
 import { computeSummary, matchesSpecialList } from '../../lib/business/summary';
 import type { Collaborator } from '../../lib/business/types';
@@ -20,7 +21,7 @@ import { MobileSalesListLockedNotice, MobileSalesTable, MobileSellerAccordion } 
 
 export function MobileUnitCategoryScreen({
   catKey,
-  title,
+  title: defaultTitle,
   titleClass,
   accent,
 }: {
@@ -29,6 +30,8 @@ export function MobileUnitCategoryScreen({
   titleClass: string;
   accent: string;
 }) {
+  const categoryLabels = useCategoryLabelMap();
+  const title = categoryLabels[catKey] ?? defaultTitle;
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
   const { data: specialLists } = useSpecialLists();

@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { PageLoading } from '../../components/PageLoading';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../auth/AuthContext';
@@ -10,7 +11,16 @@ import { dateFromCell, idFromCell, normalizeMatricula, parseNumeroBR } from '../
 import { buildClassificationInputs } from '../../lib/mappers';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { yieldToMain } from '../../lib/scheduler';
-import { useBrandKeywords, useCatalog, useCollaborators, useExclusiveBrands, useProducts, useSales, useSalesImports } from '../../lib/queries';
+import {
+  useBrandKeywords,
+  useCatalog,
+  useCollaborators,
+  useExclusiveBrands,
+  useImportFieldOverrides,
+  useProducts,
+  useSales,
+  useSalesImports,
+} from '../../lib/queries';
 import {
   aggregateByDate,
   compareDateAggregate,
@@ -90,6 +100,7 @@ export function ImportarPage() {
   const { data: existingSales, refetch: refetchSales } = useSales();
   const { data: pastImports } = useSalesImports();
   const { data: collaborators } = useCollaborators();
+  const { data: importFieldOverrides } = useImportFieldOverrides();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>('pick');
@@ -193,7 +204,7 @@ export function ImportarPage() {
             dataRows.push(r);
             dataRowsRaw.push(bodyRaw[i] ?? []);
           });
-          return { name, headers, rows: dataRows, rawRows: dataRowsRaw, map: autoMapColumns(headers) };
+          return { name, headers, rows: dataRows, rawRows: dataRowsRaw, map: autoMapColumns(headers, importFieldOverrides) };
         }).filter((s): s is ParsedSheet => s !== null);
         setSheets(parsed);
         setProgress(null);
@@ -482,7 +493,16 @@ export function ImportarPage() {
       <div className="flex flex-col gap-3 flex-1 min-w-0 w-full">
       {step === 'pick' && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-          <h3 className="font-semibold mb-1 text-sm">Importar planilha de vendas</h3>
+          <div className="flex items-start justify-between gap-3 mb-1">
+            <h3 className="font-semibold text-sm">Importar planilha de vendas</h3>
+            <Link
+              to="/admin/configuracoes"
+              className="shrink-0 rounded-lg border border-slate-700 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-slate-800"
+              title="Editar quais nomes de coluna o sistema reconhece na planilha"
+            >
+              ⚙️ Configurar colunas
+            </Link>
+          </div>
           <p className="text-xs text-slate-500 mb-3">
             Formatos aceitos: .xlsx, .xls, .xlsm, .csv, .ods — até 50MB. O sistema varre as 15 primeiras linhas de
             cada aba procurando o cabeçalho (data, matrícula, vendedor, produto, qtd, valor) e mapeia as colunas

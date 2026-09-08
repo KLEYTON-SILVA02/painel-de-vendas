@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import type { CategoryKey } from '../../lib/business/classification';
 import { getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
 import { computeSummary } from '../../lib/business/summary';
@@ -15,7 +16,7 @@ import { MobileSalesListLockedNotice, MobileSalesTable, MobileSellerAccordion } 
 // (commission_rates table) — same source as the desktop CategoryPage.
 export function MobileCategoryScreen({
   catKey,
-  title,
+  title: defaultTitle,
   titleClass,
   accent,
 }: {
@@ -24,6 +25,8 @@ export function MobileCategoryScreen({
   titleClass: string;
   accent: string;
 }) {
+  const categoryLabels = useCategoryLabelMap();
+  const title = categoryLabels[catKey] ?? defaultTitle;
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
   const { data: goals } = useGoals();

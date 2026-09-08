@@ -1,15 +1,13 @@
 import { useMemo, useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
+import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { fmtMoney } from '../../lib/format';
 import { useSalesArchiveCategories, useSalesArchiveCollaborators } from '../../lib/queries';
 
-const CATEGORIA_LABEL: Record<string, string> = {
-  DERM: 'Dermocosméticos',
-  GEN: 'Genéricos/Similares',
-  MP: 'Marcas Exclusivas',
-  MER: 'Mercadoria Geral',
-  LEVMEL: 'Levmel',
-  CHIP: 'Chip',
+// The 6 fixed sales categories come from useCategoryLabelMap (store-
+// overridable); the 4 Biosintética groups aren't part of that map (they're
+// keyed by BioGroupKey, not CategoryKey) so they stay a fixed lookup here.
+const BIO_GROUP_LABEL: Record<string, string> = {
   G1: 'Biosintética — Grupo 1',
   G2: 'Biosintética — Grupo 2',
   G3: 'Biosintética — Grupo 3',
@@ -24,6 +22,7 @@ function monthLabel(yearMonth: string): string {
 }
 
 export function VendasArquivadasPage() {
+  const categoryLabels = useCategoryLabelMap();
   const { data: categorias } = useSalesArchiveCategories();
   const { data: colaboradores } = useSalesArchiveCollaborators();
   const months = useMemo(() => {
@@ -98,7 +97,7 @@ export function VendasArquivadasPage() {
                 <tbody>
                   {catRows.map((c) => (
                     <tr key={c.id} className="border-b border-slate-900">
-                      <td className="py-1.5 pr-3">{CATEGORIA_LABEL[c.categoria] ?? c.categoria}</td>
+                      <td className="py-1.5 pr-3">{categoryLabels[c.categoria as keyof typeof categoryLabels] ?? BIO_GROUP_LABEL[c.categoria] ?? c.categoria}</td>
                       <td className="py-1.5 pr-3 text-right">{c.vendas_total}</td>
                       <td className="py-1.5 pr-3 text-right">{c.itens_total}</td>
                       <td className="py-1.5 pr-3 text-right whitespace-nowrap">{fmtMoney(c.valor_total)}</td>

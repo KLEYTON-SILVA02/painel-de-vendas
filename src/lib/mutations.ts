@@ -125,6 +125,34 @@ export function useSetFunctionIcon(storeId: string | undefined) {
   });
 }
 
+export function useSetCategoryLabel(storeId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ categoryKey, label }: { categoryKey: string; label: string }) => {
+      if (!storeId) throw new Error('store not loaded');
+      const { error } = await supabase
+        .from('category_labels')
+        .upsert({ category_key: categoryKey, label, store_id: storeId }, { onConflict: 'store_id,category_key' });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['category_labels'] }),
+  });
+}
+
+export function useSetImportFieldOverride(storeId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ field, terms }: { field: string; terms: string[] }) => {
+      if (!storeId) throw new Error('store not loaded');
+      const { error } = await supabase
+        .from('import_field_overrides')
+        .upsert({ field, terms, store_id: storeId }, { onConflict: 'store_id,field' });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['import_field_overrides'] }),
+  });
+}
+
 /** Creates or updates a Galeria de Conquistas card template. Passing `id`
  * updates that row (used by the manual card editor's "salvar" on an
  * existing template); omitting it inserts a new one. */

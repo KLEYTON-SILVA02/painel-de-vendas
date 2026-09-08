@@ -176,6 +176,35 @@ export type Database = {
           },
         ]
       }
+      category_labels: {
+        Row: {
+          category_key: string
+          id: string
+          label: string
+          store_id: string
+        }
+        Insert: {
+          category_key: string
+          id?: string
+          label: string
+          store_id: string
+        }
+        Update: {
+          category_key?: string
+          id?: string
+          label?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "category_labels_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       category_types: {
         Row: {
           ativo: boolean
@@ -575,6 +604,35 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "goals_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      import_field_overrides: {
+        Row: {
+          field: string
+          id: string
+          store_id: string
+          terms: string[]
+        }
+        Insert: {
+          field: string
+          id?: string
+          store_id: string
+          terms?: string[]
+        }
+        Update: {
+          field?: string
+          id?: string
+          store_id?: string
+          terms?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_field_overrides_store_id_fkey"
             columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "stores"

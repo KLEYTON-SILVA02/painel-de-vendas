@@ -3,6 +3,7 @@ import { PageLoading } from '../../components/PageLoading';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
 import { MultiRankingImageModal } from '../../components/ranking/MultiRankingImageModal';
 import { RankingColumnCard } from '../../components/ranking/RankingColumnCard';
+import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { diasRestantesNoMes, effectiveMetaGeral, getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
 import { computeColumnRanking } from '../../lib/business/ranking';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
@@ -28,6 +29,7 @@ export function RankingPage() {
   const { data: specialLists } = useSpecialLists();
   const { data: store } = useStore();
   const { dashFrom, dashTo, refYear, refMonth, modoGeral } = useDateRange();
+  const categoryLabels = useCategoryLabelMap();
   const [generatingAll, setGeneratingAll] = useState(false);
   const [generatingProgress, setGeneratingProgress] = useState({ done: 0, total: 0 });
   const [multiImages, setMultiImages] = useState<MultiImageResult[] | null>(null);
@@ -74,9 +76,9 @@ export function RankingPage() {
       // fixed to "Meta Diária" per column (MER's own goal already represents
       // the whole store, matching its now-total column above).
       const metaDiaria = getGoal(goals[c.key], 'dia', salesData, collaboratorsData);
-      return { ...c, ranking, isUnit, metaDiaria };
+      return { ...c, titulo: categoryLabels[c.key] ?? c.titulo, ranking, isUnit, metaDiaria };
     });
-  }, [salesData, collaboratorsData, goals, dashFrom, dashTo, mode, refYear, refMonth, specialLists]);
+  }, [salesData, collaboratorsData, goals, dashFrom, dashTo, mode, refYear, refMonth, specialLists, categoryLabels]);
 
   if (!collaborators || !sales || !goals || !storeSettings || !specialLists) {
     return <PageLoading />;

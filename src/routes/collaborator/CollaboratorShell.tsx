@@ -19,6 +19,7 @@ import {
 import { NotificationBell } from '../../components/NotificationBell';
 import { PageLoading } from '../../components/PageLoading';
 import { VersionFooter } from '../../components/VersionFooter';
+import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { BALCAO_SETOR } from '../../lib/business/bio';
 import { VISITANTE_SETOR } from '../../lib/business/types';
 import { useNativePushRegistration } from '../../lib/useNativePushRegistration';
@@ -81,6 +82,7 @@ const VISITOR_SCREENS: Record<string, { label: string; icon: typeof HomeIcon; el
 // the admin spec uses for its own off-canvas-to-fixed sidebar.
 export function CollaboratorShell() {
   const { profile, signOut } = useAuth();
+  const categoryLabels = useCategoryLabelMap();
   const { data: collaborators } = useCollaborators();
   const { data: categoryTypes } = useCategoryTypes();
   useNativePushRegistration(profile?.collaborator_id ?? undefined);
@@ -102,7 +104,7 @@ export function CollaboratorShell() {
     ? visitorCategoryKeys.map((key, i) => ({
         to: i === 0 ? '/' : `/visitante/${key}`,
         end: i === 0,
-        label: VISITOR_SCREENS[key].label,
+        label: categoryLabels[key as keyof typeof categoryLabels] ?? VISITOR_SCREENS[key].label,
         icon: VISITOR_SCREENS[key].icon,
       }))
     : [

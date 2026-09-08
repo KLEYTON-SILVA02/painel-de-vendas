@@ -7,6 +7,7 @@ import { PhotoCropModal } from '../../components/PhotoCropModal';
 import { useReauthGuard } from '../../hooks/useReauthGuard';
 import { grantCollaboratorLogin, resetCollaboratorLogin } from '../../lib/collaborators';
 import { daysSince } from '../../lib/business/summary';
+import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { normalizeMatricula } from '../../lib/business/parsing';
 import type { Collaborator } from '../../lib/business/types';
 import { VISITANTE_SETOR } from '../../lib/business/types';
@@ -28,6 +29,7 @@ function VisitorCategoryChecklist({
   selected: string[];
   onToggle: (key: string) => void;
 }) {
+  const categoryLabels = useCategoryLabelMap();
   const options = VISITOR_CATEGORY_OPTIONS.filter((o) => o.key !== 'biosintetica' || hasBio);
   return (
     <div>
@@ -36,7 +38,7 @@ function VisitorCategoryChecklist({
         {options.map((o) => (
           <label key={o.key} className="flex items-center gap-1.5 text-xs text-slate-300">
             <input type="checkbox" checked={selected.includes(o.key)} onChange={() => onToggle(o.key)} />
-            {o.label}
+            {categoryLabels[o.key as keyof typeof categoryLabels] ?? o.label}
           </label>
         ))}
       </div>

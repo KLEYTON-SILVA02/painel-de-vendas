@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { TrophyIcon } from '../icons/NavIcons';
+import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { computeChampionStars, type ChampionStar } from '../../lib/business/champion';
 import type { CategoryKey } from '../../lib/business/classification';
 import { computeSummary } from '../../lib/business/summary';
@@ -12,15 +13,6 @@ import { useCollaborators, useSales, useSpecialLists, useStore } from '../../lib
 import { useDateRange } from '../../routes/DateRangeContext';
 import { RankingImageModal } from '../ranking/RankingImageModal';
 
-const CHAMPION_CAT_LABEL: Record<CategoryKey | 'LEVMEL' | 'CHIP', string> = {
-  DERM: 'Dermo',
-  GEN: 'Gen/Sim',
-  MP: 'Marcas Excl.',
-  MER: 'Merc. Geral',
-  LEVMEL: 'Levmel',
-  CHIP: 'Chip',
-};
-
 // Same "campeão do dia" pick DashboardPage's ranking already drove (follows
 // its rankFilter, from the shared DateRangeContext) — lives here now so
 // ChampionHeaderButton can render it from AppShell's top bar, on every admin
@@ -31,6 +23,7 @@ function useChampionOfDay() {
   const { data: specialLists } = useSpecialLists();
   const { data: store } = useStore();
   const { dashFrom, dashTo, refYear, refMonth, rankFilter } = useDateRange();
+  const categoryLabels = useCategoryLabelMap();
 
   const salesData = sales ?? [];
   const collaboratorsData = collaborators ?? [];
@@ -62,7 +55,7 @@ function useChampionOfDay() {
   );
 
   const campeaoBase = modoDia ? `Campeão do dia — ${dashFrom.split('-').reverse().join('/')}` : `Campeão — ${monthName(refMonth)}/${refYear}`;
-  const campeaoLabel = championCatFilter ? `${campeaoBase} · ${CHAMPION_CAT_LABEL[championCatFilter]}` : campeaoBase;
+  const campeaoLabel = championCatFilter ? `${campeaoBase} · ${categoryLabels[championCatFilter]}` : campeaoBase;
 
   return { campeao, campeaoLabel, campeaoStars, storeName: store?.nome_loja };
 }
@@ -132,6 +125,7 @@ function ChampionCelebrationModal({
   onClose: () => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const categoryLabels = useCategoryLabelMap();
   const [generating, setGenerating] = useState(false);
   const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
 
@@ -236,7 +230,7 @@ function ChampionCelebrationModal({
           {fmtMoney(campeao.valor)} · {campeao.itens} it.
         </div>
         {campeaoStars && (
-          <div title={campeaoStars.map((s) => `${s.achieved ? '✓' : '✗'} ${s.label}`).join(' · ')}>
+          <div title={campeaoStars.map((s) => `${s.achieved ? '✓' : '✗'} ${categoryLabels[s.key] ?? s.label}`).join(' · ')}>
             {campeaoStars.map((s) => (
               <span key={s.key} style={{ fontSize: 22, color: s.achieved ? '#ffb700' : '#2b3350' }}>
                 ★

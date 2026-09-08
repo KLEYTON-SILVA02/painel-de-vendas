@@ -2,6 +2,7 @@ import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { DailyEvolutionChart } from '../../components/dashboard/DailyEvolutionChart';
+import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { SemicircleGauge } from '../../components/SemicircleGauge';
 import { SidebarCalendarCard } from '../../components/SidebarCalendarCard';
 import { GenerateImageScopeModal } from '../../components/ranking/GenerateImageScopeModal';
@@ -32,12 +33,6 @@ const RANKING_CATEGORIES: { key: CategoryKey | 'LEVMEL' | 'CHIP'; titulo: string
   { key: 'CHIP', titulo: 'Chip' },
 ];
 
-const CAT_LABEL: Record<CategoryKey, string> = {
-  DERM: 'Dermocosméticos',
-  GEN: 'Genérico',
-  MP: 'Marcas Exclusivas',
-  MER: 'Mercadoria Geral',
-};
 const CAT_COLOR: Record<CategoryKey, string> = {
   DERM: '#ff3df0',
   GEN: '#14ff00',
@@ -55,7 +50,13 @@ const RANK_FILTERS: { k: RankFilter; l: string }[] = [
 ];
 
 // Ported 1:1 from legacy/index-original.html (resolveRankFilterParams()).
-function resolveRankFilterParams(rankFilter: RankFilter, dashFrom: string, dashTo: string, dynamics: Dynamic[]) {
+function resolveRankFilterParams(
+  rankFilter: RankFilter,
+  dashFrom: string,
+  dashTo: string,
+  dynamics: Dynamic[],
+  categoryLabels: Record<CategoryKey | 'LEVMEL' | 'CHIP', string>,
+) {
   if (rankFilter.startsWith('DIN:')) {
     const din = dynamics.find((d) => d.id === rankFilter.slice(4));
     if (din) {
@@ -64,17 +65,19 @@ function resolveRankFilterParams(rankFilter: RankFilter, dashFrom: string, dashT
     }
     return { from: dashFrom, to: dashTo, catFilter: 'ALL' as const, label: 'Todas', dinamica: null };
   }
-  if (rankFilter === 'LEVMEL') return { from: dashFrom, to: dashTo, catFilter: 'LEVMEL' as const, label: 'Levmel', dinamica: null };
-  if (rankFilter === 'CHIP') return { from: dashFrom, to: dashTo, catFilter: 'CHIP' as const, label: 'Chip', dinamica: null };
+  if (rankFilter === 'LEVMEL') return { from: dashFrom, to: dashTo, catFilter: 'LEVMEL' as const, label: categoryLabels.LEVMEL, dinamica: null };
+  if (rankFilter === 'CHIP') return { from: dashFrom, to: dashTo, catFilter: 'CHIP' as const, label: categoryLabels.CHIP, dinamica: null };
   const found = RANK_FILTERS.find((x) => x.k === rankFilter);
   // rankFilter here is one of RANK_FILTERS' keys ('ALL'|'DERM'|'GEN'|'MP'|'MER') —
   // the DIN:/LEVMEL/CHIP cases were already returned above, but .startsWith()
   // isn't a type guard so TS can't narrow the template-literal member out.
-  return { from: dashFrom, to: dashTo, catFilter: rankFilter as CategoryKey | 'ALL', label: found?.l || 'Todas', dinamica: null };
+  const label = rankFilter === 'ALL' ? found?.l || 'Todas' : categoryLabels[rankFilter as CategoryKey] ?? found?.l ?? 'Todas';
+  return { from: dashFrom, to: dashTo, catFilter: rankFilter as CategoryKey | 'ALL', label, dinamica: null };
 }
 
 function RankFilterBar({ dynamics, singleLine }: { dynamics: Dynamic[]; singleLine?: boolean }) {
   const { rankFilter, setRankFilter } = useDateRange();
+  const categoryLabels = useCategoryLabelMap();
   const today = todayISO();
   const activeDynamics = dynamics.filter((d) => d.dataFim >= today);
 
@@ -83,7 +86,7 @@ function RankFilterBar({ dynamics, singleLine }: { dynamics: Dynamic[]; singleLi
       <div style={{ display: 'flex', gap: 'clamp(3px, 0.5vw, 6px)', marginBottom: 6, flexWrap: singleLine ? 'nowrap' : 'wrap' }}>
         {[...RANK_FILTERS, { k: 'LEVMEL' as RankFilter, l: 'Levmel' }, { k: 'CHIP' as RankFilter, l: 'Chip' }].map((x) => (
           <SubtabButton key={x.k} active={rankFilter === x.k} onClick={() => setRankFilter(x.k)} shrink={singleLine}>
-            {x.l}
+            {categoryLabels[x.k as keyof typeof categoryLabels] ?? x.l}
           </SubtabButton>
         ))}
       </div>
@@ -209,6 +212,7 @@ function StatCard({ label, value, color, badge }: { label: string; value: string
 
 export function DashboardPage() {
   const { profile } = useAuth();
+  const categoryLabels = useCategoryLabelMap();
   const [rankingCopied, setRankingCopied] = useState(false);
   const [imageScopeOpen, setImageScopeOpen] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
@@ -240,7 +244,7 @@ export function DashboardPage() {
   const proration = useMemo(() => goalProration(dashFrom, dashTo, modoGeral), [dashFrom, dashTo, modoGeral]);
   const monthFirst = monthFirstISO(refYear, refMonth);
   const monthLast = monthLastISO(refYear, refMonth);
-  const rankFilterParams = resolveRankFilterParams(rankFilter, dashFrom, dashTo, dynamics ?? []);
+  const rankFilterParams = resolveRankFilterParams(rankFilter, dashFrom, dashTo, dynamics ?? [], categoryLabels);
 
   // Each of these walks the full `sales` array (up to 3 months of history
   // per REGRA 2's retention window) — in "Modo Geral" (whole month) that's
@@ -316,13 +320,13 @@ export function DashboardPage() {
       const rowsRaw = computeSummary(salesData, collaboratorsData, dashFrom, dashTo, c.key, specialLists);
       return {
         key: c.key,
-        titulo: c.titulo,
+        titulo: categoryLabels[c.key] ?? c.titulo,
         rows: isUnit ? rowsRaw.map((r) => ({ ...r, valor: r.itens })) : rowsRaw,
         isUnit,
         metaDiaria: getGoal(goals[c.key], 'dia', salesData, collaboratorsData),
       };
     });
-  }, [salesData, collaboratorsData, goals, dashFrom, dashTo, specialLists]);
+  }, [salesData, collaboratorsData, goals, dashFrom, dashTo, specialLists, categoryLabels]);
 
   if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !dynamics) {
     return <PageLoading />;
@@ -564,7 +568,7 @@ export function DashboardPage() {
           <h3 className="text-cyan-400 font-semibold text-sm mb-3">Vendas por Categoria</h3>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-1.5">
             {gaugeData.map((g) => (
-              <CategoryGauge key={g.key} label={CAT_LABEL[g.key]} valor={g.valor} goal={g.goal} color={CAT_COLOR[g.key]} />
+              <CategoryGauge key={g.key} label={categoryLabels[g.key]} valor={g.valor} goal={g.goal} color={CAT_COLOR[g.key]} />
             ))}
           </div>
         </div>

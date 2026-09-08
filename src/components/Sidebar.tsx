@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { useCategoryLabelMap } from '../lib/business/categoryLabels';
 import { useCategoryTypes } from '../lib/queries';
 import './Sidebar.css';
 import { FunctionIcon } from './icons/FunctionIcon';
@@ -86,6 +87,7 @@ export function Sidebar({
   // /categoria-parceria/:chave screen instead of Biosintética's dedicated
   // /bio route.
   const { data: categoryTypes } = useCategoryTypes();
+  const categoryLabels = useCategoryLabelMap();
   const { signOut } = useAuth();
   const bioCategory = (categoryTypes ?? []).find((c) => c.chave === 'biosintetica');
   const extraCategories = (categoryTypes ?? []).filter((c) => c.chave !== 'biosintetica');
@@ -120,7 +122,7 @@ export function Sidebar({
                 className={({ isActive }) => (isActive ? 'active' : '')}
               >
                 <FunctionIcon slot={c.slot} fallback={c.icon} size={18} />
-                <span className="sb-label">{c.label}</span>
+                <span className="sb-label">{categoryLabels[c.key as keyof typeof categoryLabels] ?? c.label}</span>
               </NavLink>
             ))}
             {g === 'Programas' && bioCategory && (
