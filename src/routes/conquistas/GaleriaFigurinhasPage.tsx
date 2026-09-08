@@ -182,30 +182,45 @@ export function GaleriaFigurinhasPage() {
           placeholder="Buscar colaborador pelo nome…"
           className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm mb-2"
         />
-        <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto mb-3">
-          {filteredCollaborators.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => setSelectedId(c.id)}
-              className="text-xs rounded-full px-2.5 py-1"
-              style={{
-                background: selectedId === c.id ? '#ffb700' : '#0b0e1d',
-                border: '1px solid #ffb700',
-                color: selectedId === c.id ? '#231a02' : '#ffb700',
-              }}
-            >
-              {c.apelido || c.nome}
-            </button>
-          ))}
+        <div
+          className="grid gap-2 max-h-56 overflow-y-auto mb-3"
+          style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(84px, 1fr))' }}
+        >
+          {filteredCollaborators.map((c) => {
+            const isSelected = selectedId === c.id;
+            return (
+              <button
+                key={c.id}
+                onClick={() => setSelectedId(c.id)}
+                className="flex flex-col items-center gap-1 rounded-xl p-2"
+                style={{
+                  background: isSelected ? '#ffb700' : '#0b0e1d',
+                  border: '1px solid #ffb700',
+                }}
+              >
+                {c.foto ? (
+                  <img src={c.foto} alt="" className="w-12 h-12 rounded-full object-cover" />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-slate-700" />
+                )}
+                <span
+                  className="text-[11px] font-medium text-center leading-tight line-clamp-2 w-full"
+                  style={{ color: isSelected ? '#231a02' : '#ffb700' }}
+                >
+                  {c.apelido || c.nome}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         <label className="block text-xs text-slate-400 mb-1">Mês</label>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-12 gap-2">
           {MONTH_NAMES_FULL.map((label, i) => (
             <button
               key={label}
               onClick={() => setMes(i)}
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg"
+              className="text-xs font-semibold px-2 py-1.5 rounded-lg text-center"
               style={{
                 background: mes === i ? '#00f0ff' : 'transparent',
                 border: '1px solid #00f0ff',
