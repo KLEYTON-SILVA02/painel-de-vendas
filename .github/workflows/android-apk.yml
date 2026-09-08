@@ -76,6 +76,24 @@ jobs:
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > release.keystore
           echo "has_keystore=true" >> "$GITHUB_OUTPUT"
 
+      # Diagnóstico temporário (não expõe nenhum valor de secret, só
+      # tamanho/hash/sucesso-falha) — para achar se o problema é o secret
+      # ANDROID_KEYSTORE_BASE64 (arquivo corrompido/truncado) ou o secret
+      # ANDROID_KEYSTORE_PASSWORD (valor errado). Remover depois de resolvido.
+      - name: Debug keystore secrets (sem expor valores)
+        if: ${{ steps.keystore.outputs.has_keystore == 'true' }}
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          echo "Tamanho do arquivo release.keystore (esperado: 2772 bytes):"
+          wc -c < android/app/release.keystore
+          echo "SHA-256 do release.keystore (esperado: e493e983ab4e98ba425ca705124895aa56b902b228cf9215bff1da2562945504):"
+          sha256sum android/app/release.keystore
+          echo "Tamanho do secret ANDROID_KEYSTORE_PASSWORD (esperado: 32 caracteres):"
+          printf '%s' "$ANDROID_KEYSTORE_PASSWORD" | wc -c
+          echo "Tentando abrir a keystore com o secret ANDROID_KEYSTORE_PASSWORD:"
+          keytool -list -keystore android/app/release.keystore -storepass "$ANDROID_KEYSTORE_PASSWORD" || echo "FALHOU AO ABRIR COM ESSA SENHA"
+
       - name: Build signed release APK
         if: ${{ steps.keystore.outputs.has_keystore == 'true' }}
         working-directory: android
