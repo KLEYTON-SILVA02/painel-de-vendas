@@ -46,6 +46,11 @@ const DETAIL_COL_PAD = 10;
 const DETAIL_HEADER_H = 26;
 const DETAIL_LINE_H = 18;
 const FOOTER_H = 30;
+const EVOLUTION_GAP = 26;
+const EVOLUTION_TITLE_H = 30;
+const EVOLUTION_PLOT_H = 120;
+const EVOLUTION_TOP_PAD = 18; // room for the endpoint value label above the highest point
+const EVOLUTION_BOTTOM_PAD = 22; // room for the x-axis day labels below the baseline
 
 /** 'dark' is the on-screen/JPG/WhatsApp look (unchanged). 'print' is used
  * only for the PDF export: a black-and-white office printer renders any
@@ -222,7 +227,11 @@ export async function renderConquistaCalendar(data: ConquistaCalendarData, theme
 
   const gridTop = HEADER_CARD_TOP + HEADER_CARD_H + HEADER_GAP + WEEKDAY_ROW_H;
   const gridBottom = gridTop + rows * CELL_H;
-  const detailTop = gridBottom + DETAIL_GAP;
+  const evolutionTop = gridBottom + EVOLUTION_GAP;
+  const evolutionPlotTop = evolutionTop + EVOLUTION_TITLE_H + EVOLUTION_TOP_PAD;
+  const evolutionPlotBottom = evolutionPlotTop + EVOLUTION_PLOT_H;
+  const evolutionBottom = evolutionPlotBottom + EVOLUTION_BOTTOM_PAD;
+  const detailTop = evolutionBottom + DETAIL_GAP;
   const H = detailTop + DETAIL_TITLE_H + detailColH + FOOTER_H;
 
   canvas.width = W;
@@ -348,6 +357,100 @@ export async function renderConquistaCalendar(data: ConquistaCalendarData, theme
       const catLine = achievement.categorias.map((c) => CAT_SHORT_LABEL[c]).join(' · ');
       ctx.fillText(catLine, x + CELL_W / 2, y + CELL_H - 14, CELL_W - 12);
     }
+  }
+
+  // Evolução diária: cumulative conquistas trend, plotted only across the
+  // days that actually had a tier reached — days with nothing to show
+  // aren't fabricated as flat/zero points, per the explicit ask that only
+  // detected days appear on this chart's day axis. Point x-position still
+  // reflects the true day-of-month, so gaps between achievement days read
+  // as gaps on the chart, not compressed away.
+  ctx.textAlign = 'left';
+  ctx.fillStyle = palette.detailTitle;
+  ctx.font = '700 14px Arial';
+  ctx.fillText('EVOLUÇÃO DIÁRIA', GRID_LEFT, evolutionTop + EVOLUTION_TITLE_H - 10);
+
+  const evoColor = theme === 'print' ? '#8a5c00' : '#ffb700';
+  const evoFillTop = theme === 'print' ? 'rgba(138,92,0,.15)' : 'rgba(255,183,0,.22)';
+  const evoFillBottom = theme === 'print' ? 'rgba(138,92,0,0)' : 'rgba(255,183,0,0)';
+  const plotX = GRID_LEFT;
+  const plotW = W - GRID_LEFT * 2;
+  const plotBottom = evolutionPlotBottom;
+
+  const sortedAchievements = [...data.achievements].sort((a, b) => a.dia.localeCompare(b.dia));
+  let running = 0;
+  const points = sortedAchievements.map((a) => {
+    running += a.categorias.length;
+    return { day: Number(a.dia.slice(-2)), cumulative: running };
+  });
+
+  // Recessive baseline + midline + top gridlines, drawn regardless of
+  // whether there's data — gives the empty state a chart frame too.
+  ctx.strokeStyle = palette.divider;
+  ctx.lineWidth = 1;
+  [0, 0.5, 1].forEach((f) => {
+    const y = plotBottom - f * EVOLUTION_PLOT_H;
+    ctx.beginPath();
+    ctx.moveTo(plotX, y);
+    ctx.lineTo(plotX + plotW, y);
+    ctx.stroke();
+  });
+
+  if (points.length === 0) {
+    ctx.textAlign = 'center';
+    ctx.fillStyle = palette.detailEmptyText;
+    ctx.font = '600 13px Arial';
+    ctx.fillText('Nenhuma meta batida no mês.', plotX + plotW / 2, evolutionPlotTop + EVOLUTION_PLOT_H / 2 + 4);
+  } else {
+    const maxCum = Math.max(1, running);
+    const xForDay = (day: number) => plotX + ((day - 1) / Math.max(1, diasNoMes - 1)) * plotW;
+    const yForValue = (v: number) => plotBottom - (v / maxCum) * EVOLUTION_PLOT_H;
+
+    if (points.length >= 2) {
+      const fillGrad = ctx.createLinearGradient(0, evolutionPlotTop, 0, plotBottom);
+      fillGrad.addColorStop(0, evoFillTop);
+      fillGrad.addColorStop(1, evoFillBottom);
+      ctx.beginPath();
+      ctx.moveTo(xForDay(points[0].day), plotBottom);
+      points.forEach((p) => ctx.lineTo(xForDay(p.day), yForValue(p.cumulative)));
+      ctx.lineTo(xForDay(points[points.length - 1].day), plotBottom);
+      ctx.closePath();
+      ctx.fillStyle = fillGrad;
+      ctx.fill();
+
+      ctx.beginPath();
+      points.forEach((p, i) => {
+        const x = xForDay(p.day);
+        const y = yForValue(p.cumulative);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.strokeStyle = evoColor;
+      ctx.lineWidth = 2;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.stroke();
+    }
+
+    ctx.textAlign = 'center';
+    points.forEach((p) => {
+      const x = xForDay(p.day);
+      const y = yForValue(p.cumulative);
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = evoColor;
+      ctx.fill();
+      ctx.fillStyle = palette.headerSub;
+      ctx.font = '600 10px Arial';
+      ctx.fillText(String(p.day), x, plotBottom + 16);
+    });
+
+    // Direct label on the endpoint only — not a number on every point.
+    const last = points[points.length - 1];
+    ctx.textAlign = points.length >= 2 ? 'right' : 'center';
+    ctx.fillStyle = evoColor;
+    ctx.font = '700 13px Arial';
+    ctx.fillText(String(last.cumulative), xForDay(last.day) - (points.length >= 2 ? 6 : 0), yForValue(last.cumulative) - 8);
   }
 
   // Detalhamento por categoria: below the date cells, one column per
