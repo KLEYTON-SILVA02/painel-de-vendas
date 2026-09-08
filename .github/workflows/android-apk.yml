@@ -53,10 +53,13 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug
 
+      - name: Rename debug APK
+        run: mv android/app/build/outputs/apk/debug/app-debug.apk android/app/build/outputs/apk/debug/gestao-de-vendas-debug.apk
+
       - uses: actions/upload-artifact@v7
         with:
-          name: app-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: gestao-de-vendas-debug
+          path: android/app/build/outputs/apk/debug/gestao-de-vendas-debug.apk
           retention-days: 30
 
       # Build de release assinado com uma keystore própria (em vez da chave de
@@ -73,19 +76,45 @@ jobs:
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > release.keystore
           echo "has_keystore=true" >> "$GITHUB_OUTPUT"
 
+      # Diagnóstico temporário (não expõe nenhum valor de secret, só
+      # tamanho/hash/sucesso-falha) — para achar se o problema é o secret
+      # ANDROID_KEYSTORE_BASE64 (arquivo corrompido/truncado) ou o secret
+      # ANDROID_KEYSTORE_PASSWORD (valor errado). Remover depois de resolvido.
+      - name: Debug keystore secrets (sem expor valores)
+        if: ${{ steps.keystore.outputs.has_keystore == 'true' }}
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          echo "Tamanho do arquivo release.keystore (esperado: 2772 bytes):"
+          wc -c < android/app/release.keystore
+          echo "SHA-256 do release.keystore (esperado: e493e983ab4e98ba425ca705124895aa56b902b228cf9215bff1da2562945504):"
+          sha256sum android/app/release.keystore
+          echo "Tamanho do secret ANDROID_KEYSTORE_PASSWORD (esperado: 32 caracteres):"
+          printf '%s' "$ANDROID_KEYSTORE_PASSWORD" | wc -c
+          echo "Tentando abrir a keystore com o secret ANDROID_KEYSTORE_PASSWORD:"
+          keytool -list -keystore android/app/release.keystore -storepass "$ANDROID_KEYSTORE_PASSWORD" || echo "FALHOU AO ABRIR COM ESSA SENHA"
+
       - name: Build signed release APK
         if: ${{ steps.keystore.outputs.has_keystore == 'true' }}
         working-directory: android
         env:
-          ANDROID_KEYSTORE_PATH: app/release.keystore
+          # Caminho absoluto: o `file()` do Gradle, dentro de android/app/build.gradle,
+          # resolve caminho relativo a partir do diretório do subprojeto `app`
+          # (android/app/) e não do working-directory deste step (android/) — um
+          # relativo aqui vira android/app/app/release.keystore, que não existe.
+          ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/android/app/release.keystore
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: ./gradlew assembleRelease
 
+      - name: Rename release APK
+        if: ${{ steps.keystore.outputs.has_keystore == 'true' }}
+        run: mv android/app/build/outputs/apk/release/app-release.apk android/app/build/outputs/apk/release/gestao-de-vendas.apk
+
       - uses: actions/upload-artifact@v7
         if: ${{ steps.keystore.outputs.has_keystore == 'true' }}
         with:
-          name: app-release-apk
-          path: android/app/build/outputs/apk/release/app-release.apk
+          name: gestao-de-vendas
+          path: android/app/build/outputs/apk/release/gestao-de-vendas.apk
           retention-days: 30
