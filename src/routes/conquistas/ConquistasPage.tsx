@@ -3,6 +3,7 @@ import { PageLoading } from '../../components/PageLoading';
 import { Link } from 'react-router-dom';
 import { SidebarCalendarCard } from '../../components/SidebarCalendarCard';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
+import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import {
   CONQUISTA_TIERS_BY_CAT,
   computeConquistas,
@@ -49,6 +50,11 @@ export function ConquistasPage() {
   const { data: store } = useStore();
   const { data: cardTemplates } = useConquistaCardTemplates();
   const { dashFrom, dashTo, setDay } = useDateRange();
+  const categoryLabels = useCategoryLabelMap();
+  const categories = useMemo(
+    () => CONQUISTA_CATS.map((c) => ({ ...c, label: categoryLabels[c.key] ?? c.label })),
+    [categoryLabels],
+  );
   const [catKey, setCatKey] = useState<ConquistaCategoria>('DERM');
   const [tierFilter, setTierFilter] = useState<TierFilter>('ALL');
   const [generating, setGenerating] = useState(false);
@@ -72,7 +78,7 @@ export function ConquistasPage() {
     return <PageLoading />;
   }
 
-  const info = CONQUISTA_CATS.find((c) => c.key === catKey)!;
+  const info = categories.find((c) => c.key === catKey)!;
   const isUnit = isUnitConquista(catKey);
   const activeTemplate: ConquistaCardTemplate = cardTemplates?.find((t) => t.isDefault) ?? BUILT_IN_TEMPLATE;
   const filtered = rows.filter((r) => matchesFilter(r, tierFilter));
@@ -100,7 +106,7 @@ export function ConquistasPage() {
           </div>
 
           <div className="flex flex-wrap gap-2 mb-3">
-            {CONQUISTA_CATS.map((c) => (
+            {categories.map((c) => (
               <button
                 key={c.key}
                 onClick={() => {

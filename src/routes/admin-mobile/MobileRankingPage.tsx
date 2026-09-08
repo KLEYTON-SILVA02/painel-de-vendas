@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
+import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { getGoal } from '../../lib/business/goals';
 import { computeSummary } from '../../lib/business/summary';
 import { copyText, formatRankingText } from '../../lib/clipboard';
@@ -25,6 +26,11 @@ export function MobileRankingPage() {
   const { data: specialLists } = useSpecialLists();
   const { data: store } = useStore();
   const { dashFrom, dashTo } = useDateRange();
+  const categoryLabels = useCategoryLabelMap();
+  const RANKING_COLS_LABELED = useMemo(
+    () => RANKING_COLS.map((c) => ({ ...c, titulo: categoryLabels[c.key] ?? c.titulo })),
+    [categoryLabels],
+  );
   const [catKey, setCatKey] = useState<(typeof RANKING_COLS)[number]['key']>('DERM');
   const [generating, setGenerating] = useState(false);
   const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
@@ -47,7 +53,7 @@ export function MobileRankingPage() {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
-  const info = RANKING_COLS.find((c) => c.key === catKey)!;
+  const info = RANKING_COLS_LABELED.find((c) => c.key === catKey)!;
   const isUnit = catKey === 'LEVMEL' || catKey === 'CHIP';
   const rankingList = ranking.filter((r) => (isUnit ? r.itens > 0 : r.valor > 0));
   const totalValor = ranking.reduce((a, r) => a + r.valor, 0);
@@ -81,7 +87,7 @@ export function MobileRankingPage() {
       <MobileDateFilter />
 
       <div className="mv2-chip-row">
-        {RANKING_COLS.map((c) => (
+        {RANKING_COLS_LABELED.map((c) => (
           <button
             key={c.key}
             onClick={() => setCatKey(c.key)}

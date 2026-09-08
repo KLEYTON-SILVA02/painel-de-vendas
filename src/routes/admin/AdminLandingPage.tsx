@@ -4,6 +4,7 @@ import { FunctionIcon } from '../../components/icons/FunctionIcon';
 import {
   ArchiveIcon,
   AwardIcon,
+  BagIcon,
   DownloadIcon,
   HomeIcon,
   ImageIcon,
@@ -41,6 +42,7 @@ const ADMIN_CARDS = [
   { to: '/admin/icones', label: 'Ícones', icon: ImageIcon, slot: null },
   { to: '/admin/card-conquista', label: 'Modelos de Card', icon: AwardIcon, slot: null },
   { to: '/admin/categorias', label: 'Categorias', icon: TagIcon, slot: null },
+  { to: '/admin/nomes-categorias', label: 'Nomes das Categorias', icon: BagIcon, slot: null },
 ];
 
 /** Count of distinct products seen in sales that never matched a specific

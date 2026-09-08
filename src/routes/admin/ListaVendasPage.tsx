@@ -2,19 +2,13 @@ import { useMemo, useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { ReclassifyBar } from '../../components/admin/ReclassifyBar';
+import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import type { CategoryKey } from '../../lib/business/classification';
 import type { Collaborator, Sale } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney, monthName } from '../../lib/format';
 import { useReclassifyProdutos } from '../../lib/mutations';
 import { useCatalog, useCollaborators, useSalesDetailList, useSalesMonthTotals } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
-
-const TIPO_LABEL: Record<string, string> = {
-  DERM: 'Dermocosméticos',
-  GEN: 'Genérico',
-  MP: 'Marcas Exclusivas',
-  MER: 'Mercadoria Geral',
-};
 
 const PAGE_SIZE = 500;
 
@@ -70,6 +64,7 @@ function groupByMonthAndDay(sales: Sale[]): MonthGroup[] {
 }
 
 export function ListaVendasPage() {
+  const TIPO_LABEL = useCategoryLabelMap();
   const { profile } = useAuth();
   const { salesListEnabled, toggleSalesListEnabled } = useDateRange();
   const { data: sales, loadedCount } = useSalesDetailList(salesListEnabled);

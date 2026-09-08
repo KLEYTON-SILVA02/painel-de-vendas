@@ -8,6 +8,7 @@ import { PodiumSplit, type PodiumSpots } from '../../components/ranking/PodiumSp
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { RankingModeToggle } from '../../components/ranking/RankingModeToggle';
+import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import type { CategoryKey } from '../../lib/business/classification';
 import { copyText, formatRankingText } from '../../lib/clipboard';
 import { diasRestantesNoMes, getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
@@ -22,20 +23,13 @@ import { useDateRange } from '../DateRangeContext';
 
 export type PageCategoryKey = CategoryKey | 'LEVMEL' | 'CHIP';
 
-// Ported 1:1 from legacy/index-original.html (CATEGORIA_META / CATS / catLabel / catCls / .pill.*).
-const CATEGORY_META: Record<PageCategoryKey, { titulo: string; cor: string }> = {
-  DERM: { titulo: '🩹 Dermocosméticos', cor: '#ff3df0' },
-  GEN: { titulo: '💊 Genérico', cor: '#14ff00' },
-  MP: { titulo: '🏷️ Marcas Exclusivas', cor: '#a82bff' },
-  MER: { titulo: '📦 Mercadoria Geral', cor: '#ff6a00' },
-  LEVMEL: { titulo: '🍯 Levmel', cor: '#ffb700' },
-  CHIP: { titulo: '🔴 Chip', cor: '#00e5ff' },
+// Ported 1:1 from legacy/index-original.html (CATEGORIA_META / CATS / catLabel / catCls / .pill.*),
+// split into emoji/color (fixed) + label (store-overridable via useCategoryLabelMap).
+const CATEGORY_EMOJI: Record<PageCategoryKey, string> = {
+  DERM: '🩹', GEN: '💊', MP: '🏷️', MER: '📦', LEVMEL: '🍯', CHIP: '🔴',
 };
-const CAT_PLAIN_LABEL: Record<CategoryKey, string> = {
-  DERM: 'Dermocosméticos',
-  GEN: 'Genérico',
-  MP: 'Marcas Exclusivas',
-  MER: 'Mercadoria Geral',
+const CATEGORY_COLOR: Record<PageCategoryKey, string> = {
+  DERM: '#ff3df0', GEN: '#14ff00', MP: '#a82bff', MER: '#ff6a00', LEVMEL: '#ffb700', CHIP: '#00e5ff',
 };
 const CAT_PILL: Record<CategoryKey, { bg: string; color: string }> = {
   DERM: { bg: '#ff3df033', color: '#ff3df0' },
@@ -46,6 +40,7 @@ const CAT_PILL: Record<CategoryKey, { bg: string; color: string }> = {
 
 export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   const { profile } = useAuth();
+  const categoryLabels = useCategoryLabelMap();
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
   const { data: goals } = useGoals();
@@ -121,7 +116,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
     return <PageLoading />;
   }
 
-  const info = CATEGORY_META[catKey];
+  const info = { titulo: `${CATEGORY_EMOJI[catKey]} ${categoryLabels[catKey]}`, cor: CATEGORY_COLOR[catKey] };
   const modoDia = dashFrom === dashTo;
   const mode = modoDia ? 'dia' : 'mes';
   const proration = goalProration(dashFrom, dashTo, modoGeral);
@@ -426,7 +421,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
                             className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide"
                             style={{ background: CAT_PILL[s.grupo].bg, color: CAT_PILL[s.grupo].color }}
                           >
-                            {CAT_PLAIN_LABEL[s.grupo]}
+                            {categoryLabels[s.grupo]}
                           </span>
                         ) : (
                           <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-slate-700 text-slate-300">

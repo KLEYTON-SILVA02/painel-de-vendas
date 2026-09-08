@@ -1,18 +1,12 @@
 import { useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { ReclassifyBar } from '../../components/admin/ReclassifyBar';
+import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import type { CategoryKey } from '../../lib/business/classification';
 import type { Collaborator, Sale } from '../../lib/business/types';
 import { fmtDateShortBR, fmtMoney } from '../../lib/format';
 import { useReclassifyProdutos } from '../../lib/mutations';
 import { useCatalog, useSales } from '../../lib/queries';
-
-export const TIPO_LABEL: Record<CategoryKey, string> = {
-  DERM: 'Dermocosméticos',
-  GEN: 'Genérico',
-  MP: 'Marcas Exclusivas',
-  MER: 'Mercadoria Geral',
-};
 
 /** Same resolution the ADM > Lista de Vendas screen uses: the sale's own
  * `vendedor` field can be garbage (a matrícula-derived string, depending on
@@ -124,6 +118,7 @@ export function MobileSalesTable({
    * only passing 'valor'/'quantidade' in that case). */
   subtotalMode: 'valor' | 'quantidade' | 'none';
 }) {
+  const TIPO_LABEL = useCategoryLabelMap();
   const { profile } = useAuth();
   const { data: catalog } = useCatalog();
   const { data: allSales } = useSales();

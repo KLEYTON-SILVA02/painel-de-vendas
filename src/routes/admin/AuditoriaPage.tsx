@@ -1,23 +1,17 @@
 import { useMemo, useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
+import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { CAT_KEYS, classifyProductTier, type CategoryKey } from '../../lib/business/classification';
 import { buildClassificationInputs } from '../../lib/mappers';
 import { fmtMoney } from '../../lib/format';
 import { useDeleteRow, useReclassifyProdutos } from '../../lib/mutations';
 import { useBrandKeywords, useCatalog, useCollaborators, useExclusiveBrands, useProducts, useSales } from '../../lib/queries';
 
-const CAT_LABEL: Record<CategoryKey, string> = {
-  DERM: 'Dermocosméticos',
-  GEN: 'Genérico',
-  MP: 'Marcas Exclusivas',
-  MER: 'Mercadoria Geral',
-};
-const CAT_SHORT: Record<CategoryKey, string> = { DERM: 'Dermo', GEN: 'Gen/Sim', MP: 'Marcas Excl.', MER: 'Merc. Geral' };
-
 type Tab = 'pendentes' | CategoryKey | 'recentes';
 
 export function AuditoriaPage() {
+  const categoryLabels = useCategoryLabelMap();
   const { profile } = useAuth();
   const { data: sales } = useSales();
   const { data: collaborators } = useCollaborators();
@@ -115,7 +109,7 @@ export function AuditoriaPage() {
               onClick={() => setTab(k)}
               className={`rounded-lg px-3 py-1.5 text-xs ${tab === k ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
             >
-              {CAT_SHORT[k]}
+              {categoryLabels[k]}
             </button>
           ))}
           <button
@@ -191,6 +185,7 @@ function PendentesTab({
   setBulkCat: (k: CategoryKey) => void;
   reclassify: (produtos: string[], categoria: CategoryKey) => void;
 }) {
+  const categoryLabels = useCategoryLabelMap();
   // classifyProductTier() runs once per sale here — a full re-classification
   // pass over the store's entire history. Memoized so it only reruns when
   // the underlying data or the De/Até/Colaborador filters actually change,
@@ -238,7 +233,7 @@ function PendentesTab({
           <select value={bulkCat} onChange={(e) => setBulkCat(e.target.value as CategoryKey)} className="input">
             {CAT_KEYS.map((k) => (
               <option key={k} value={k}>
-                {CAT_LABEL[k]}
+                {categoryLabels[k]}
               </option>
             ))}
           </select>
@@ -287,7 +282,7 @@ function PendentesTab({
                     <option value="">—</option>
                     {CAT_KEYS.map((k) => (
                       <option key={k} value={k}>
-                        {CAT_SHORT[k]}
+                        {categoryLabels[k]}
                       </option>
                     ))}
                   </select>
@@ -302,6 +297,7 @@ function PendentesTab({
 }
 
 function RecentesTab({ catalog }: { catalog: { id: string; nome: string; categoria: string; created_at: string }[] }) {
+  const categoryLabels = useCategoryLabelMap();
   const recentes = catalog
     .slice()
     .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
@@ -325,7 +321,7 @@ function RecentesTab({ catalog }: { catalog: { id: string; nome: string; categor
               <tr key={c.id} className="border-b border-slate-900">
                 <td className="py-1.5 pr-3">{c.nome}</td>
                 <td className="py-1.5 pr-3">
-                  <span className="bg-slate-800 rounded-full px-2 py-0.5">{CAT_LABEL[c.categoria as CategoryKey]}</span>
+                  <span className="bg-slate-800 rounded-full px-2 py-0.5">{categoryLabels[c.categoria as CategoryKey]}</span>
                 </td>
                 <td className="py-1.5 pr-3 text-slate-500">{new Date(c.created_at).toLocaleString('pt-BR')}</td>
               </tr>
@@ -346,11 +342,12 @@ function CategoriaClassificadaTab({
   catalog: { id: string; nome: string; categoria: string; created_at: string }[];
   onRemove: (id: string) => void;
 }) {
+  const categoryLabels = useCategoryLabelMap();
   const classificados = catalog.filter((c) => c.categoria === catKey).sort((a, b) => a.nome.localeCompare(b.nome));
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
       <h3 className="font-semibold mb-3 text-sm">
-        Produtos classificados manualmente em {CAT_LABEL[catKey]} ({classificados.length})
+        Produtos classificados manualmente em {categoryLabels[catKey]} ({classificados.length})
       </h3>
       {classificados.length === 0 ? (
         <div className="text-sm text-slate-500 py-4 text-center">Nenhum produto classificado manualmente nesta categoria ainda.</div>

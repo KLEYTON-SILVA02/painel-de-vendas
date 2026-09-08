@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import type { CategoryKey, GoalCategoryKey } from '../../lib/business/classification';
 import { getGoal, getSuperMeta } from '../../lib/business/goals';
 import { matchesSpecialList, type SpecialListItem } from '../../lib/business/summary';
@@ -113,7 +114,12 @@ interface DailyEvolutionChartProps {
 // old observed-max heuristic so the chart still reads sensibly.
 export function useDailyEvolutionChart({ salesData, collaboratorsData, goals, specialLists, monthFirst, monthLast }: DailyEvolutionChartProps) {
   const [catKey, setCatKey] = useState<ChartCategoryKey>('MER');
-  const active = CHART_CATEGORIES.find((c) => c.key === catKey)!;
+  const categoryLabels = useCategoryLabelMap();
+  const categories = useMemo(
+    () => CHART_CATEGORIES.map((c) => ({ ...c, titulo: categoryLabels[c.key] ?? c.titulo })),
+    [categoryLabels],
+  );
+  const active = categories.find((c) => c.key === catKey)!;
   const isUnit = isUnitChartCategory(catKey);
 
   const metaDiaria = useMemo(
@@ -139,11 +145,11 @@ export function useDailyEvolutionChart({ salesData, collaboratorsData, goals, sp
     return { axisTop: fallback, axisMid: fallback / 2 };
   }, [metaDiaria, superMetaDiaria, points]);
 
-  return { catKey, setCatKey, active, isUnit, points, axisTop, axisMid };
+  return { catKey, setCatKey, active, isUnit, points, axisTop, axisMid, categories };
 }
 
 export function DailyEvolutionChart(props: DailyEvolutionChartProps) {
-  const { catKey, setCatKey, active, isUnit, points, axisTop, axisMid } = useDailyEvolutionChart(props);
+  const { catKey, setCatKey, active, isUnit, points, axisTop, axisMid, categories } = useDailyEvolutionChart(props);
   const CHART_H = 170;
 
   return (
@@ -153,7 +159,7 @@ export function DailyEvolutionChart(props: DailyEvolutionChartProps) {
           EVOLUÇÃO DIÁRIA
         </h3>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {CHART_CATEGORIES.map((c) => (
+          {categories.map((c) => (
             <button
               key={c.key}
               onClick={() => setCatKey(c.key)}

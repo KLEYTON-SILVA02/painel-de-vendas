@@ -13,12 +13,14 @@ import {
   useCreateNotificationSchedule,
   useDeleteNotificationSchedule,
   useDeleteSpecialListProduct,
+  useSetImportFieldOverride,
   useUpdateBioWeights,
   useUpdateNotificationSchedule,
   useUpdateStoreSettings,
   type BulkDeletableTable,
 } from '../../lib/mutations';
-import { countRowsInRange, useNotificationSchedules, useSpecialListRows, useStoreSettings } from '../../lib/queries';
+import { FIELD_NAMES, type ImportField } from '../../lib/business/importMapping';
+import { countRowsInRange, useImportFieldOverrides, useNotificationSchedules, useSpecialListRows, useStoreSettings } from '../../lib/queries';
 import { uploadRankingPodiumBackground } from '../../lib/storage';
 import podiumPremiumBg from '../../assets/ranking/podium-premium-bg.jpg';
 import {
@@ -181,6 +183,8 @@ export function ConfiguracoesPage() {
 
       <ImportNotificationToggleCard />
 
+      <ImportColumnsCard />
+
       <DangerZoneCard />
     </div>
   );
@@ -312,6 +316,89 @@ function ImportNotificationToggleCard() {
       >
         {enabled ? 'Ativado' : 'Desativado'}
       </button>
+    </div>
+  );
+}
+
+const IMPORT_FIELD_LABELS: Record<ImportField, string> = {
+  data: 'Data',
+  matricula: 'Matrícula',
+  vendedor: 'Vendedor',
+  codigo: 'Código do Produto',
+  produto: 'Descrição do Produto',
+  qtd: 'Quantidade Vendida',
+  valor: 'Valor do Produto',
+};
+const IMPORT_FIELDS = Object.keys(IMPORT_FIELD_LABELS) as ImportField[];
+
+/** Lets an ADM add extra spreadsheet header names the sales-import flow
+ * recognizes for each field, on top of the built-in defaults shown below
+ * each input as reference — an override never removes a default, it's tried
+ * first (see autoMapColumns in importMapping.ts). Reachable both from here
+ * and via the "Configurar colunas" shortcut on Importar Vendas. */
+function ImportColumnsCard() {
+  const { profile } = useAuth();
+  const { data: overrides } = useImportFieldOverrides();
+  const setOverride = useSetImportFieldOverride(profile?.store_id);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [savingField, setSavingField] = useState<ImportField | null>(null);
+
+  useEffect(() => {
+    if (!overrides) return;
+    setDrafts((prev) => {
+      const next = { ...prev };
+      IMPORT_FIELDS.forEach((field) => {
+        if (next[field] === undefined) next[field] = (overrides[field] ?? []).join(', ');
+      });
+      return next;
+    });
+  }, [overrides]);
+
+  if (!overrides) return <PageLoading />;
+
+  async function handleSave(field: ImportField) {
+    const terms = (drafts[field] || '')
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+    setSavingField(field);
+    try {
+      await setOverride.mutateAsync({ field, terms });
+    } finally {
+      setSavingField(null);
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+      <h3 className="text-cyan-400 font-semibold mb-1">📋 Colunas reconhecidas na importação de vendas</h3>
+      <p className="text-xs text-slate-500 mb-3">
+        Além dos nomes de coluna já reconhecidos por padrão, adicione outros nomes que a planilha da sua loja usa —
+        separados por vírgula. O sistema tenta esses nomes antes dos padrões.
+      </p>
+      <div className="flex flex-col gap-3">
+        {IMPORT_FIELDS.map((field) => (
+          <div key={field} className="flex flex-col gap-1">
+            <label className="text-xs text-slate-300 font-medium">{IMPORT_FIELD_LABELS[field]}</label>
+            <div className="text-[10px] text-slate-500">Padrão: {FIELD_NAMES[field].join(', ')}</div>
+            <div className="flex items-center gap-2">
+              <input
+                value={drafts[field] ?? ''}
+                onChange={(e) => setDrafts((prev) => ({ ...prev, [field]: e.target.value }))}
+                placeholder="nomes adicionais separados por vírgula"
+                className="flex-1 rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-1.5 text-sm text-slate-100"
+              />
+              <button
+                onClick={() => handleSave(field)}
+                disabled={savingField === field}
+                className="rounded-lg border border-slate-700 px-3 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800 disabled:opacity-40"
+              >
+                {savingField === field ? 'Salvando…' : 'Salvar'}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

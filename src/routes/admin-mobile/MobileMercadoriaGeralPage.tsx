@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { diasRestantesNoMes, getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
 import { computeSummary } from '../../lib/business/summary';
 import type { Collaborator } from '../../lib/business/types';
@@ -23,6 +24,8 @@ const ACCENT = '#f26122'; // laranja — mesma cor de mv2-cat-mercgeral
 // per-vendedor bar on this specific screen — that's covered by the
 // collaborator-facing "Comissões" mobile screen instead.
 export function MobileMercadoriaGeralPage() {
+  const categoryLabels = useCategoryLabelMap();
+  const title = categoryLabels.MER;
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
   const { data: goals } = useGoals();
@@ -94,7 +97,7 @@ export function MobileMercadoriaGeralPage() {
 
   return (
     <div>
-      <div className="mv2-screen-title mv2-mercgeral">MERCADORIA GERAL</div>
+      <div className="mv2-screen-title mv2-mercgeral">{title.toUpperCase()}</div>
 
       <MobileDateFilter />
 
@@ -142,7 +145,7 @@ export function MobileMercadoriaGeralPage() {
       </div>
 
       <div className="mv2-ranking-list-card">
-        <div style={{ fontSize: 10, fontWeight: 700, color: ACCENT, marginBottom: 4 }}>RANKING — MERCADORIA GERAL</div>
+        <div style={{ fontSize: 10, fontWeight: 700, color: ACCENT, marginBottom: 4 }}>RANKING — {title.toUpperCase()}</div>
         {rankingList.length === 0 ? (
           <div style={{ fontSize: 10, color: 'var(--mv2-texto-2)', padding: '8px 0', textAlign: 'center' }}>Sem vendas no período.</div>
         ) : (
@@ -173,7 +176,7 @@ export function MobileMercadoriaGeralPage() {
           />
 
           <MobileSalesTable
-            title="Lista de vendas — Mercadoria Geral"
+            title={`Lista de vendas — ${title}`}
             sales={categorySales}
             byMatricula={byMatricula}
             showValor

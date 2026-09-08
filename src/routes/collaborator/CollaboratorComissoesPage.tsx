@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
+import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import type { CategoryKey } from '../../lib/business/classification';
 import { catTotals } from '../../lib/business/summary';
 import type { Sale } from '../../lib/business/types';
@@ -9,11 +10,11 @@ import { MobileDateFilter } from '../admin-mobile/MobileDateFilter';
 import { MobileSalesListLockedNotice } from '../admin-mobile/MobileSellerDetail';
 import { useDateRange } from '../DateRangeContext';
 
-const CATEGORIES: { key: CategoryKey; label: string; color: string }[] = [
-  { key: 'MER', label: 'Mercadoria Geral', color: '#ff6a00' },
-  { key: 'DERM', label: 'Dermocosméticos', color: '#ff3df0' },
-  { key: 'GEN', label: 'Genéricos', color: '#14ff00' },
-  { key: 'MP', label: 'Marcas Exclusivas', color: '#a82bff' },
+const CATEGORIES: { key: CategoryKey; color: string }[] = [
+  { key: 'MER', color: '#ff6a00' },
+  { key: 'DERM', color: '#ff3df0' },
+  { key: 'GEN', color: '#14ff00' },
+  { key: 'MP', color: '#a82bff' },
 ];
 
 // Mobile-only screen for the collaborator: per-category (Mercadoria Geral/
@@ -23,6 +24,7 @@ const CATEGORIES: { key: CategoryKey; label: string; color: string }[] = [
 // the "Minhas vendas" table that used to live on the Metas/Vendas screen.
 // Same salesListEnabled lock as every other sales-detail screen in the app.
 export function CollaboratorComissoesPage() {
+  const categoryLabels = useCategoryLabelMap();
   const { profile } = useAuth();
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
@@ -51,7 +53,8 @@ export function CollaboratorComissoesPage() {
 
       <MobileDateFilter />
 
-      {CATEGORIES.map(({ key, label, color }) => {
+      {CATEGORIES.map(({ key, color }) => {
+        const label = categoryLabels[key];
         // Mercadoria Geral is my grand total (every sale), not its own
         // exclusive grupo — same convention as everywhere else it appears.
         const t =

@@ -1,4 +1,4 @@
-import { CHART_CATEGORIES, formatChartValue, useDailyEvolutionChart } from '../../components/dashboard/DailyEvolutionChart';
+import { formatChartValue, useDailyEvolutionChart } from '../../components/dashboard/DailyEvolutionChart';
 import type { GoalCategoryKey } from '../../lib/business/classification';
 import type { SpecialListItem } from '../../lib/business/summary';
 import type { Collaborator, Goal, Sale } from '../../lib/business/types';
@@ -23,7 +23,7 @@ export function MobileDailyEvolutionChart({
   monthFirst: string;
   monthLast: string;
 }) {
-  const { catKey, setCatKey, active, isUnit, points, axisTop, axisMid } = useDailyEvolutionChart({
+  const { catKey, setCatKey, active, isUnit, points, axisTop, axisMid, categories } = useDailyEvolutionChart({
     salesData,
     collaboratorsData,
     goals,
@@ -47,7 +47,7 @@ export function MobileDailyEvolutionChart({
       </div>
 
       <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 8, marginBottom: 8 }}>
-        {CHART_CATEGORIES.map((c) => (
+        {categories.map((c) => (
           <button
             key={c.key}
             onClick={() => setCatKey(c.key)}

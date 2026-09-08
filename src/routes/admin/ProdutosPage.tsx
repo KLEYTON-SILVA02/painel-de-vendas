@@ -2,18 +2,12 @@ import { useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
+import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { CAT_KEYS, classifyProductTier, normalizeCategoriaImport, type CategoryKey } from '../../lib/business/classification';
 import { buildClassificationInputs } from '../../lib/mappers';
 import { fmtMoney } from '../../lib/format';
 import { useBulkInsertProducts, useDeleteRow, useInsertRow, useUpdateRow } from '../../lib/mutations';
 import { useBrandKeywords, useCatalog, useExclusiveBrands, useProducts, useSales } from '../../lib/queries';
-
-const CAT_LABEL: Record<CategoryKey, string> = {
-  DERM: 'Dermocosméticos',
-  GEN: 'Genérico',
-  MP: 'Marcas Exclusivas',
-  MER: 'Mercadoria Geral',
-};
 
 type Tab = 'produtos' | 'catalogo' | 'classificados' | 'palavras' | 'exclusivas';
 const TABS: { id: Tab; label: string }[] = [
@@ -64,6 +58,7 @@ function MutationError({ error }: { error: unknown }) {
 }
 
 function CategoryTabs({ group, setGroup }: { group: CategoryKey; setGroup: (k: CategoryKey) => void }) {
+  const CAT_LABEL = useCategoryLabelMap();
   return (
     <div className="flex gap-1 mb-1">
       {CAT_KEYS.map((k) => (
@@ -80,6 +75,7 @@ function CategoryTabs({ group, setGroup }: { group: CategoryKey; setGroup: (k: C
 }
 
 function ProdutosTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: CategoryKey) => void }) {
+  const CAT_LABEL = useCategoryLabelMap();
   const { profile } = useAuth();
   const { data: products } = useProducts();
   const insertProduct = useInsertRow('products', profile?.store_id, 'products');
@@ -213,6 +209,7 @@ function ProdutosTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
 }
 
 function CatalogoTab() {
+  const CAT_LABEL = useCategoryLabelMap();
   const { profile } = useAuth();
   const { data: catalog } = useCatalog();
   const insertCatalog = useInsertRow('catalog', profile?.store_id, 'catalog');
@@ -344,6 +341,7 @@ function CatalogoTab() {
 }
 
 function ClassificadosTab() {
+  const CAT_LABEL = useCategoryLabelMap();
   const { data: sales } = useSales();
   const { data: catalog } = useCatalog();
   const { data: products } = useProducts();
@@ -558,6 +556,7 @@ function ClassificadosTab() {
 }
 
 function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: CategoryKey) => void }) {
+  const CAT_LABEL = useCategoryLabelMap();
   const { profile } = useAuth();
   const { data: brandKeywords } = useBrandKeywords();
   const insertKw = useInsertRow('brand_keywords', profile?.store_id, 'brand_keywords');
