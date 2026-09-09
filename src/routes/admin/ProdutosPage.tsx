@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
@@ -357,31 +357,44 @@ function ClassificadosTab() {
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 500;
 
-  if (!sales || !catalog || !products || !brandKeywords || !exclusiveBrands) {
+  // classifyProductTier() runs once per distinct product across the
+  // *entire* sales history here (thousands of products × the full
+  // keyword-matching pass) — without this memo it re-ran from scratch on
+  // every render of this tab (ticking a checkbox, changing the sort order,
+  // turning a page), measured at 12-20s of main-thread blocking on a real
+  // store's history. Same fix already applied to Colaboradores/Auditoria/
+  // AdminLandingPage (see commit c992cbf) — this tab was the one screen
+  // that hadn't received it yet.
+  const classifiedProducts = useMemo(() => {
+    if (!sales || !catalog || !products || !brandKeywords || !exclusiveBrands) return null;
+    const inputs = buildClassificationInputs(catalog, products, brandKeywords, exclusiveBrands);
+    const map = new Map<string, { produto: string; qtd: number; valor: number; ocorrencias: number; categoria: CategoryKey }>();
+    sales.forEach((s) => {
+      if (!s.produto) return;
+      const existing = map.get(s.produto);
+      if (existing) {
+        existing.qtd += s.qtd;
+        existing.valor += s.valor;
+        existing.ocorrencias += 1;
+      } else {
+        map.set(s.produto, {
+          produto: s.produto,
+          qtd: s.qtd,
+          valor: s.valor,
+          ocorrencias: 1,
+          // useFallback defaults to true, so categoria is guaranteed non-null.
+          categoria: classifyProductTier(s.produto, s.codigo, inputs).categoria!,
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [sales, catalog, products, brandKeywords, exclusiveBrands]);
+
+  if (!sales || !catalog || !products || !brandKeywords || !exclusiveBrands || !classifiedProducts) {
     return <PageLoading />;
   }
 
-  const inputs = buildClassificationInputs(catalog, products, brandKeywords, exclusiveBrands);
-  const map = new Map<string, { produto: string; qtd: number; valor: number; ocorrencias: number; categoria: CategoryKey }>();
-  sales.forEach((s) => {
-    if (!s.produto) return;
-    const existing = map.get(s.produto);
-    if (existing) {
-      existing.qtd += s.qtd;
-      existing.valor += s.valor;
-      existing.ocorrencias += 1;
-    } else {
-      map.set(s.produto, {
-        produto: s.produto,
-        qtd: s.qtd,
-        valor: s.valor,
-        ocorrencias: 1,
-        // useFallback defaults to true, so categoria is guaranteed non-null.
-        categoria: classifyProductTier(s.produto, s.codigo, inputs).categoria!,
-      });
-    }
-  });
-  let list = Array.from(map.values()).sort((a, b) =>
+  let list = classifiedProducts.slice().sort((a, b) =>
     ordem === 'alfabetica' ? a.produto.localeCompare(b.produto, 'pt-BR') : b.ocorrencias - a.ocorrencias,
   );
   if (filtro !== 'ALL') list = list.filter((p) => p.categoria === filtro);
