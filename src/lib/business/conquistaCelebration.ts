@@ -1,9 +1,11 @@
-import type { ConquistaCategoria, ConquistaRow } from './conquistas';
+import type { ConquistaCategoria, ConquistaRow, GenericConquistaConfig } from './conquistas';
 
 export interface CelebrationCandidate {
   key: string;
   categoria: ConquistaCategoria;
   row: ConquistaRow;
+  /** Present only when `categoria` is an ADM-created generic category. */
+  generic?: GenericConquistaConfig;
 }
 
 /** Stable identity for one achievement, scoped to the current month so a

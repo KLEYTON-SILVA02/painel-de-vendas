@@ -4,7 +4,7 @@ import { celebrationKey, pickNewCelebration, type CelebrationCandidate } from '.
 import { computeConquistas, conquistaTierLabel, isUnitConquista, type ConquistaCategoria } from '../lib/business/conquistas';
 import { monthFirstISO, monthLastISO } from '../lib/dateRange';
 import { fmtMoney } from '../lib/format';
-import { useCollaborators, useCurrentMonthSales, useSpecialLists } from '../lib/queries';
+import { useCollaborators, useCurrentMonthSales, useGenericConquistaConfigs, useSpecialLists } from '../lib/queries';
 
 const CONQUISTA_CATS: ConquistaCategoria[] = ['DERM', 'MP', 'GEN', 'LEVMEL', 'CHIP'];
 const SEEN_KEY = 'conquistas_celebration_seen_v1';
@@ -38,11 +38,12 @@ function useConquistaCelebration() {
   const { data: sales } = useCurrentMonthSales();
   const { data: collaborators } = useCollaborators();
   const { data: specialLists } = useSpecialLists();
+  const { data: genericConquistas } = useGenericConquistaConfigs();
   const [candidate, setCandidate] = useState<CelebrationCandidate | null>(null);
   const checkedRef = useRef(false);
 
   useEffect(() => {
-    if (!sales || !collaborators || !specialLists) return;
+    if (!sales || !collaborators || !specialLists || !genericConquistas) return;
     const now = new Date();
     const from = monthFirstISO(now.getFullYear(), now.getMonth());
     const to = monthLastISO(now.getFullYear(), now.getMonth());
@@ -52,6 +53,14 @@ function useConquistaCelebration() {
     CONQUISTA_CATS.forEach((cat) => {
       computeConquistas(sales, collaborators, from, to, cat, specialLists).forEach((row) => {
         candidates.push({ key: celebrationKey(cat, row, monthKey), categoria: cat, row });
+      });
+    });
+    // ADM-created generic categories that opted into Conquistas — never
+    // Biosintética (excluded by useGenericConquistaConfigs), which has its
+    // own isolated meta1/2/3 achievement system.
+    genericConquistas.forEach((g) => {
+      computeConquistas(sales, collaborators, from, to, g.chave, specialLists, g).forEach((row) => {
+        candidates.push({ key: celebrationKey(g.chave, row, monthKey), categoria: g.chave, row, generic: g });
       });
     });
 
@@ -64,7 +73,7 @@ function useConquistaCelebration() {
     // Re-checks whenever sales change (e.g. after a header refresh or a new import) —
     // that's the only signal available without a backend push channel.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sales, collaborators, specialLists]);
+  }, [sales, collaborators, specialLists, genericConquistas]);
 
   return { candidate, dismiss: () => setCandidate(null) };
 }
@@ -137,8 +146,8 @@ function ConquistaCelebrationOverlay({ candidate, onClose }: { candidate: Celebr
     };
   }, []);
 
-  const { row, categoria } = candidate;
-  const tierText = `🏆 ${conquistaTierLabel(categoria, row.tier)}`;
+  const { row, categoria, generic } = candidate;
+  const tierText = `🏆 ${conquistaTierLabel(categoria, row.tier, generic)}`;
   const isUnit = isUnitConquista(categoria);
 
   return (
@@ -166,7 +175,7 @@ function ConquistaCelebrationOverlay({ candidate, onClose }: { candidate: Celebr
           <div className="w-20 h-20 rounded-full bg-slate-700 border-2" style={{ borderColor: '#ffb700' }} />
         )}
         <div className="text-lg font-bold">{row.apelido || row.nome}</div>
-        <div className="text-xs text-slate-400">{CAT_LABEL[categoria]}</div>
+        <div className="text-xs text-slate-400">{generic?.nome ?? CAT_LABEL[categoria as keyof typeof CAT_LABEL] ?? categoria}</div>
         <div className="text-sm font-bold" style={{ color: '#ffb700' }}>
           {tierText}
         </div>

@@ -634,6 +634,23 @@ export function useDeleteCategoryType() {
   });
 }
 
+/** Sets (or clears) a generic category's Conquistas/Champion-star tier
+ * ladder — the opt-in that lets an ADM-created category (Gerenciar
+ * Categorias) participate in the same achievements system the 5 fixed
+ * categories use. `tiers: null` opts the category back out. Never used for
+ * Biosintética (sistema = true): it's an isolated category with its own
+ * meta1/2/3 system, kept out of Conquistas entirely. */
+export function useUpdateConquistaTiers() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, tiers }: { id: string; tiers: number[] | null }) => {
+      const { error } = await supabase.from('category_types').update({ conquista_tiers: tiers }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['category_types'] }),
+  });
+}
+
 export function useDeleteDynamic() {
   const qc = useQueryClient();
   return useMutation({

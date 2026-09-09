@@ -3,7 +3,7 @@ import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
-import { computeChampionStars, type ChampionStar } from '../../lib/business/champion';
+import { computeChampionStars, type ChampionStar, type ChampionStarCategory } from '../../lib/business/champion';
 import { effectiveMetaGeral, getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
 import { catTotals, computeSummary } from '../../lib/business/summary';
 import type { SummaryRow } from '../../lib/business/types';
@@ -11,7 +11,7 @@ import { generateChampionCardBlob } from '../../lib/championImage';
 import { monthFirstISO, monthLastISO } from '../../lib/dateRange';
 import { fmtMoney, monthName } from '../../lib/format';
 import { tryCopyImage } from '../../lib/rankingImage';
-import { useCollaborators, useDynamics, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
+import { useCollaborators, useDynamics, useGenericConquistaConfigs, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { GoalGauge } from './GoalGauge';
 import { MobileDailyEvolutionChart } from './MobileDailyEvolutionChart';
@@ -28,7 +28,12 @@ export function MobileInicioPage() {
   const { data: specialLists } = useSpecialLists();
   const { data: dynamics } = useDynamics();
   const { data: store } = useStore();
+  const { data: genericConquistas } = useGenericConquistaConfigs();
   const { dashFrom, dashTo, refYear, refMonth, rankFilter, modoGeral } = useDateRange();
+  const extraStarCategories: ChampionStarCategory[] = useMemo(
+    () => (genericConquistas ?? []).map((g) => ({ key: g.chave, label: g.nome, generic: g })),
+    [genericConquistas],
+  );
 
   // Safe stand-ins so the useMemo calls below always run in the same order
   // (Rules of Hooks) whether or not every query has resolved yet — the
@@ -78,9 +83,9 @@ export function MobileInicioPage() {
   const campeaoStars = useMemo(
     () =>
       campeaoMatricula
-        ? computeChampionStars(campeaoMatricula, salesData, collaboratorsData, specialLists, campeaoFrom, campeaoTo)
+        ? computeChampionStars(campeaoMatricula, salesData, collaboratorsData, specialLists, campeaoFrom, campeaoTo, extraStarCategories)
         : null,
-    [campeaoMatricula, salesData, collaboratorsData, specialLists, campeaoFrom, campeaoTo],
+    [campeaoMatricula, salesData, collaboratorsData, specialLists, campeaoFrom, campeaoTo, extraStarCategories],
   );
 
   if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !dynamics) {
@@ -212,7 +217,7 @@ function MobileChampionCard({
         <div className="mv2-badge">👑 {campeaoLabel}</div>
         <div className="mv2-name">{campeao.apelido || campeao.nome}</div>
         {campeaoStars && (
-          <div className="mv2-stars" title={campeaoStars.map((s) => `${s.achieved ? '✓' : '✗'} ${categoryLabels[s.key] ?? s.label}`).join(' · ')}>
+          <div className="mv2-stars" title={campeaoStars.map((s) => `${s.achieved ? '✓' : '✗'} ${categoryLabels[s.key as keyof typeof categoryLabels] ?? s.label}`).join(' · ')}>
             {campeaoStars.map((s) => (
               <span key={s.key} style={{ opacity: s.achieved ? 1 : 0.25 }}>
                 ★

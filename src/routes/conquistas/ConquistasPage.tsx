@@ -5,19 +5,20 @@ import { SidebarCalendarCard } from '../../components/SidebarCalendarCard';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import {
-  CONQUISTA_TIERS_BY_CAT,
   computeConquistas,
   computeConquistasDayGallery,
   conquistaTierLabel,
   conquistaTierParts,
   isUnitConquista,
+  tiersFor,
   type ConquistaCategoria,
   type ConquistaRow,
+  type GenericConquistaConfig,
 } from '../../lib/business/conquistas';
 import { BUILT_IN_TEMPLATE, renderConquistaCard, type ConquistaCardTemplate } from '../../lib/conquistaCardRender';
 import { generateConquistaImageBlob } from '../../lib/conquistaImage';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
-import { useCollaborators, useConquistaCardTemplates, useSales, useSpecialLists, useStore } from '../../lib/queries';
+import { useCollaborators, useConquistaCardTemplates, useGenericConquistaConfigs, useSales, useSpecialLists, useStore } from '../../lib/queries';
 import { tryCopyImage } from '../../lib/rankingImage';
 import { useDateRange } from '../DateRangeContext';
 
@@ -28,14 +29,24 @@ import { useDateRange } from '../DateRangeContext';
 // (formerly a "Super Meta Individual" duplicated here) now lives only in
 // ADM > Metas > Metas Individuais — the "Ajustar" button below links there
 // instead of opening its own panel.
+//
+// ADM-created generic categories (Gerenciar Categorias) that configured
+// their own conquista_tiers ladder show up here too, alongside the 5 fixed
+// ones — Biosintética never does: it's an isolated category with its own
+// meta1/2/3 achievement system, kept out of Conquistas entirely (see
+// useGenericConquistaConfigs).
 
-const CONQUISTA_CATS: { key: ConquistaCategoria; label: string; color: string }[] = [
+type FixedConquistaCat = 'DERM' | 'MP' | 'GEN' | 'LEVMEL' | 'CHIP';
+
+const CONQUISTA_CATS: { key: FixedConquistaCat; label: string; color: string }[] = [
   { key: 'DERM', label: 'Dermocosméticos', color: '#ff3df0' },
   { key: 'MP', label: 'Marcas Exclusivas', color: '#a82bff' },
   { key: 'GEN', label: 'Genérico', color: '#14ff00' },
   { key: 'LEVMEL', label: 'Levmel', color: '#ffb700' },
   { key: 'CHIP', label: 'Chip', color: '#00e5ff' },
 ];
+
+const GENERIC_CAT_COLORS = ['#00c2ff', '#ff8a00', '#7bffb0', '#ff5c8a', '#c9a0ff'];
 
 type TierFilter = 'ALL' | number;
 
@@ -49,16 +60,26 @@ export function ConquistasPage() {
   const { data: specialLists } = useSpecialLists();
   const { data: store } = useStore();
   const { data: cardTemplates } = useConquistaCardTemplates();
+  const { data: genericConquistas } = useGenericConquistaConfigs();
   const { dashFrom, dashTo, setDay } = useDateRange();
   const categoryLabels = useCategoryLabelMap();
-  const categories = useMemo(
-    () => CONQUISTA_CATS.map((c) => ({ ...c, label: categoryLabels[c.key] ?? c.label })),
-    [categoryLabels],
-  );
+  const categories = useMemo(() => {
+    const fixed = CONQUISTA_CATS.map((c) => ({ ...c, label: categoryLabels[c.key] ?? c.label, generic: undefined as GenericConquistaConfig | undefined }));
+    const generic = (genericConquistas ?? []).map((g, i) => ({
+      key: g.chave as ConquistaCategoria,
+      label: g.nome,
+      color: GENERIC_CAT_COLORS[i % GENERIC_CAT_COLORS.length],
+      generic: g as GenericConquistaConfig | undefined,
+    }));
+    return [...fixed, ...generic];
+  }, [categoryLabels, genericConquistas]);
   const [catKey, setCatKey] = useState<ConquistaCategoria>('DERM');
   const [tierFilter, setTierFilter] = useState<TierFilter>('ALL');
   const [generating, setGenerating] = useState(false);
   const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
+
+  const info = categories.find((c) => c.key === catKey) ?? categories[0];
+  const generic = info.generic;
 
   // Safe stand-ins so the useMemo calls below always run in the same order
   // (Rules of Hooks) whether or not every query has resolved yet — the
@@ -66,19 +87,18 @@ export function ConquistasPage() {
   const salesData = sales ?? [];
   const collaboratorsData = collaborators ?? [];
   const rows = useMemo(
-    () => computeConquistas(salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists),
-    [salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists],
+    () => computeConquistas(salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists, generic),
+    [salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists, generic],
   );
   const dayGallery = useMemo(
-    () => computeConquistasDayGallery(salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists),
-    [salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists],
+    () => computeConquistasDayGallery(salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists, generic),
+    [salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists, generic],
   );
 
   if (!collaborators || !sales || !specialLists) {
     return <PageLoading />;
   }
 
-  const info = categories.find((c) => c.key === catKey)!;
   const isUnit = isUnitConquista(catKey);
   const activeTemplate: ConquistaCardTemplate = cardTemplates?.find((t) => t.isDefault) ?? BUILT_IN_TEMPLATE;
   const filtered = rows.filter((r) => matchesFilter(r, tierFilter));
@@ -86,7 +106,7 @@ export function ConquistasPage() {
   async function handleCopyImage() {
     setGenerating(true);
     try {
-      const blob = await generateConquistaImageBlob(filtered, catKey, info.label, dashFrom, dashTo, store?.nome_loja, activeTemplate, store?.logo_url, info.color);
+      const blob = await generateConquistaImageBlob(filtered, catKey, info.label, dashFrom, dashTo, store?.nome_loja, activeTemplate, store?.logo_url, info.color, generic);
       if (!blob) return;
       const copiedToClipboard = await tryCopyImage(blob);
       setImageModal({ url: URL.createObjectURL(blob), copied: copiedToClipboard });
@@ -132,7 +152,7 @@ export function ConquistasPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {(['ALL', ...CONQUISTA_TIERS_BY_CAT[catKey]] as TierFilter[]).map((f) => (
+            {(['ALL', ...tiersFor(catKey, generic)] as TierFilter[]).map((f) => (
               <button
                 key={String(f)}
                 onClick={() => setTierFilter(f)}
@@ -147,7 +167,7 @@ export function ConquistasPage() {
                   fontWeight: 700,
                 }}
               >
-                {f === 'ALL' ? 'Todos' : `🏆 ${conquistaTierLabel(catKey, f)}`}
+                {f === 'ALL' ? 'Todos' : `🏆 ${conquistaTierLabel(catKey, f, generic)}`}
               </button>
             ))}
           </div>
@@ -163,6 +183,7 @@ export function ConquistasPage() {
                   key={r.matricula}
                   row={r}
                   categoria={catKey}
+                  generic={generic}
                   color={info.color}
                   isUnit={isUnit}
                   logoUrl={store?.logo_url}
@@ -265,6 +286,7 @@ export function ConquistasPage() {
 function ConquistaCard({
   row,
   categoria,
+  generic,
   color,
   isUnit,
   logoUrl,
@@ -272,6 +294,7 @@ function ConquistaCard({
 }: {
   row: ConquistaRow;
   categoria: ConquistaCategoria;
+  generic?: GenericConquistaConfig;
   color: string;
   isUnit: boolean;
   logoUrl?: string | null;
@@ -279,8 +302,8 @@ function ConquistaCard({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [copyState, setCopyState] = useState<'idle' | 'copying' | 'copied' | 'failed'>('idle');
-  const tierText = conquistaTierLabel(categoria, row.tier);
-  const { valor: valorText, categoria: categoriaText } = conquistaTierParts(categoria, row.tier);
+  const tierText = conquistaTierLabel(categoria, row.tier, generic);
+  const { valor: valorText, categoria: categoriaText } = conquistaTierParts(categoria, row.tier, generic);
 
   async function handleCopyCard() {
     const canvas = canvasRef.current;
