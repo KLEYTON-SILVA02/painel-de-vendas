@@ -485,7 +485,7 @@ export function DashboardPage() {
               which without a matching overflow here let that content spill
               out over the action buttons sitting right next to it instead
               of clipping/scrolling. */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(4px, 1vw, 12px)', paddingBottom: 2 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'clamp(4px, 1vw, 12px)', paddingBottom: 2 }}>
             <div style={{ flex: '1 1 auto', minWidth: 0, overflowX: 'auto' }}>
               <RankFilterBar dynamics={dynamics} singleLine />
             </div>
