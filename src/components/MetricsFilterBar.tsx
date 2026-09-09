@@ -129,7 +129,7 @@ function StatCard({ c, compact, hasStack }: { c: MfbStat; compact: boolean; hasS
  * "Gerenciar Grupos"/"Gerenciar Pontos") instead of a read-only stat. */
 function ActionStack({ actions }: { actions: MfbAction[] }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: '1 1 120px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 3, flex: '1 1 120px' }}>
       {actions.map((a, i) => (
         <button
           key={i}
@@ -162,7 +162,7 @@ function ActionStack({ actions }: { actions: MfbAction[] }) {
 
 function StatStack({ stack }: { stack: MfbStat[] }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: '1 1 120px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 3, flex: '1 1 120px' }}>
       {stack.map((s, i) => (
         <div
           key={i}
@@ -209,7 +209,7 @@ export function MetricsFilterBar({ statCards }: { statCards: MfbStatCard[] }) {
         gap: 6,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: compact ? 6 : 12, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'stretch', justifyContent: 'space-between', gap: compact ? 6 : 12, flexWrap: 'wrap' }}>
         {statCards.map((c, i) =>
           'stack' in c ? (
             <StatStack key={i} stack={c.stack} />
