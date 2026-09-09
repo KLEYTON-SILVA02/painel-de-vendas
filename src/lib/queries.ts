@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import type { BioGroupKey, GoalCategoryKey } from './business/classification';
 import type { BioGroupGoal, CommissionRate, Goal } from './business/types';
+import type { GenericConquistaConfig } from './business/conquistas';
 import type { SpecialListItem } from './business/summary';
 import type { CardTextLayer, CardZone, ConquistaCardTemplate } from './conquistaCardRender';
 import { monthFirstISO, monthLastISO } from './dateRange';
@@ -559,6 +560,36 @@ export function useCategoryTypes() {
       if (error) throw error;
       return data;
     },
+  });
+}
+
+/** ADM-created generic categories (Gerenciar Categorias) that opted into
+ * Conquistas/Card do Campeão estrelinhas by configuring a `conquista_tiers`
+ * ladder — each one paired with the union of its own bio_groups keyword
+ * lists (the same table Biosintética uses to classify sales), so a sale
+ * counts toward it exactly like LEVMEL/CHIP special lists (see
+ * matchesSpecialList in summary.ts). Biosintética itself (sistema = true)
+ * is always excluded here — it's an isolated category with its own
+ * meta1/2/3 achievement system (Gerenciar Pontos), never part of
+ * Conquistas/Champion stars. */
+export function useGenericConquistaConfigs() {
+  const { data: categoryTypes } = useCategoryTypes();
+  const eligible = (categoryTypes ?? []).filter((c) => !c.sistema && c.ativo && c.conquista_tiers && c.conquista_tiers.length > 0);
+  const ids = eligible.map((c) => c.id).sort();
+  return useQuery({
+    queryKey: ['generic_conquista_configs', ids.join(',')],
+    queryFn: async (): Promise<GenericConquistaConfig[]> => {
+      if (ids.length === 0) return [];
+      const { data, error } = await supabase.from('bio_groups').select('*').in('category_type_id', ids);
+      if (error) throw error;
+      return eligible.map((c) => ({
+        chave: c.chave,
+        nome: c.nome,
+        tiers: c.conquista_tiers as number[],
+        keywords: data.filter((g) => g.category_type_id === c.id).map((g) => ({ nome: g.nome, palavras: g.palavras })),
+      }));
+    },
+    enabled: !!categoryTypes,
   });
 }
 

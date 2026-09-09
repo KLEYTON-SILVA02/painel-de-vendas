@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { TrophyIcon } from '../icons/NavIcons';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
-import { computeChampionStars, type ChampionStar } from '../../lib/business/champion';
+import { computeChampionStars, type ChampionStar, type ChampionStarCategory } from '../../lib/business/champion';
 import type { CategoryKey } from '../../lib/business/classification';
 import { computeSummary } from '../../lib/business/summary';
 import type { SummaryRow } from '../../lib/business/types';
@@ -9,7 +9,7 @@ import { generateChampionCardBlob } from '../../lib/championImage';
 import { monthFirstISO, monthLastISO } from '../../lib/dateRange';
 import { fmtMoney, monthName } from '../../lib/format';
 import { tryCopyImage } from '../../lib/rankingImage';
-import { useCollaborators, useSales, useSpecialLists, useStore } from '../../lib/queries';
+import { useCollaborators, useGenericConquistaConfigs, useSales, useSpecialLists, useStore } from '../../lib/queries';
 import { useDateRange } from '../../routes/DateRangeContext';
 import { RankingImageModal } from '../ranking/RankingImageModal';
 
@@ -22,8 +22,13 @@ function useChampionOfDay() {
   const { data: collaborators } = useCollaborators();
   const { data: specialLists } = useSpecialLists();
   const { data: store } = useStore();
+  const { data: genericConquistas } = useGenericConquistaConfigs();
   const { dashFrom, dashTo, refYear, refMonth, rankFilter } = useDateRange();
   const categoryLabels = useCategoryLabelMap();
+  const extraStarCategories: ChampionStarCategory[] = useMemo(
+    () => (genericConquistas ?? []).map((g) => ({ key: g.chave, label: g.nome, generic: g })),
+    [genericConquistas],
+  );
 
   const salesData = sales ?? [];
   const collaboratorsData = collaborators ?? [];
@@ -49,9 +54,9 @@ function useChampionOfDay() {
   const campeaoStars = useMemo(
     () =>
       campeaoMatricula
-        ? computeChampionStars(campeaoMatricula, salesData, collaboratorsData, specialLists, campeaoFrom, campeaoTo)
+        ? computeChampionStars(campeaoMatricula, salesData, collaboratorsData, specialLists, campeaoFrom, campeaoTo, extraStarCategories)
         : null,
-    [campeaoMatricula, salesData, collaboratorsData, specialLists, campeaoFrom, campeaoTo],
+    [campeaoMatricula, salesData, collaboratorsData, specialLists, campeaoFrom, campeaoTo, extraStarCategories],
   );
 
   const campeaoBase = modoDia ? `Campeão do dia — ${dashFrom.split('-').reverse().join('/')}` : `Campeão — ${monthName(refMonth)}/${refYear}`;
@@ -230,7 +235,7 @@ function ChampionCelebrationModal({
           {fmtMoney(campeao.valor)} · {campeao.itens} it.
         </div>
         {campeaoStars && (
-          <div title={campeaoStars.map((s) => `${s.achieved ? '✓' : '✗'} ${categoryLabels[s.key] ?? s.label}`).join(' · ')}>
+          <div title={campeaoStars.map((s) => `${s.achieved ? '✓' : '✗'} ${categoryLabels[s.key as keyof typeof categoryLabels] ?? s.label}`).join(' · ')}>
             {campeaoStars.map((s) => (
               <span key={s.key} style={{ fontSize: 22, color: s.achieved ? '#ffb700' : '#2b3350' }}>
                 ★

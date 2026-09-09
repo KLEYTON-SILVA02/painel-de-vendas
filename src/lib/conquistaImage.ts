@@ -1,4 +1,4 @@
-import { conquistaTierLabel, conquistaTierParts, type ConquistaCategoria, type ConquistaRow } from './business/conquistas';
+import { conquistaTierLabel, conquistaTierParts, type ConquistaCategoria, type ConquistaRow, type GenericConquistaConfig } from './business/conquistas';
 import { CANVAS_H, CANVAS_W, renderConquistaCard, type ConquistaCardTemplate } from './conquistaCardRender';
 import { fmtDateBR } from './format';
 
@@ -21,17 +21,18 @@ export async function generateConquistaImageBlob(
   template: ConquistaCardTemplate,
   logoUrl: string | null | undefined,
   color: string,
+  generic?: GenericConquistaConfig,
 ): Promise<Blob | null> {
   const achievers = rows.slice(0, 10);
   if (achievers.length === 0) return null;
 
   const cards = await Promise.all(
     achievers.map((r) => {
-      const { valor: valorText, categoria: categoriaText } = conquistaTierParts(categoria, r.tier);
+      const { valor: valorText, categoria: categoriaText } = conquistaTierParts(categoria, r.tier, generic);
       return renderConquistaCard(template, {
         photoUrl: r.foto,
         logoUrl: logoUrl ?? null,
-        tierText: conquistaTierLabel(categoria, r.tier),
+        tierText: conquistaTierLabel(categoria, r.tier, generic),
         valorText,
         categoriaText,
         color,

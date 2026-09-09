@@ -9,11 +9,20 @@ import { normalizeMatricula } from './parsing';
 import { computeSummary, type SpecialListItem } from './summary';
 import type { Collaborator, Sale, SummaryRow } from './types';
 
-export type ConquistaCategoria = 'DERM' | 'GEN' | 'MP' | 'LEVMEL' | 'CHIP';
+// A plain string rather than a fixed literal union on purpose: an
+// ADM-created generic category (category_types.chave) needs to flow
+// through every function below exactly like a fixed one. FIXED_CONQUISTA_CATEGORIAS
+// below is the exhaustive list the app ships with; anything else reaching
+// these functions is a generic category and must come with its own
+// `GenericConquistaConfig` (tiers + keyword list + display name).
+export type ConquistaCategoria = string;
+
+export const FIXED_CONQUISTA_CATEGORIAS = ['DERM', 'GEN', 'MP', 'LEVMEL', 'CHIP'] as const;
+type FixedConquistaCategoria = (typeof FIXED_CONQUISTA_CATEGORIAS)[number];
 
 /** Fixed achievement thresholds per category — R$ for DERM/GEN/MP, unidades
  * vendidas for LEVMEL/CHIP. */
-export const CONQUISTA_TIERS_BY_CAT: Record<ConquistaCategoria, readonly number[]> = {
+export const CONQUISTA_TIERS_BY_CAT: Record<FixedConquistaCategoria, readonly number[]> = {
   DERM: [3000, 5000, 10000],
   GEN: [1000, 2000, 3000],
   MP: [1000, 2000, 3000],
@@ -21,11 +30,42 @@ export const CONQUISTA_TIERS_BY_CAT: Record<ConquistaCategoria, readonly number[
   CHIP: [10, 20, 50],
 };
 
+/** An ADM-created generic category (Gerenciar Categorias) participating in
+ * Conquistas — only categories with tiers configured (category_types.
+ * conquista_tiers) are eligible; a category with none simply isn't passed
+ * here and behaves as if Conquistas didn't know about it, same as today. */
+export interface GenericConquistaConfig {
+  /** category_types.chave — used as the ConquistaCategoria key everywhere. */
+  chave: string;
+  /** category_types.nome — display name, used where fixed categories use
+   * CONQUISTA_TIER_SUFFIX. */
+  nome: string;
+  /** Ascending R$ thresholds, same shape as CONQUISTA_TIERS_BY_CAT's fixed
+   * entries. Generic categories are always R$-based (no unit variant like
+   * LEVMEL/CHIP). */
+  tiers: readonly number[];
+  /** Union of every keyword across this category's own groups (bio_groups)
+   * — a sale counts toward this category if its produto matches ANY of
+   * them, regardless of which specific group. */
+  keywords: SpecialListItem[];
+}
+
+/** The tier ladder for a category — its own `generic.tiers` when passed
+ * (an ADM-created category), otherwise the fixed CONQUISTA_TIERS_BY_CAT
+ * entry (or `[]` for an unrecognized key, so a stale/removed category
+ * degrades to "never achieves" instead of throwing). Exported so screens
+ * that render the tier-filter buttons (Galeria de Conquistas) don't need
+ * their own copy of this fixed-vs-generic branch. */
+export function tiersFor(categoria: ConquistaCategoria, generic?: GenericConquistaConfig): readonly number[] {
+  if (generic) return generic.tiers;
+  return CONQUISTA_TIERS_BY_CAT[categoria as FixedConquistaCategoria] ?? [];
+}
+
 export function isUnitConquista(categoria: ConquistaCategoria): boolean {
   return categoria === 'LEVMEL' || categoria === 'CHIP';
 }
 
-const CONQUISTA_TIER_SUFFIX: Record<ConquistaCategoria, string> = {
+const CONQUISTA_TIER_SUFFIX: Record<FixedConquistaCategoria, string> = {
   DERM: 'DERMOCOSMÉTICOS',
   GEN: 'GENÉRICOS',
   MP: 'MARCA PRÓPRIA',
@@ -37,13 +77,14 @@ const CONQUISTA_TIER_SUFFIX: Record<ConquistaCategoria, string> = {
  * the category name ("DERMOCOSMÉTICOS") — for the card editor's separate
  * "1º texto" (tier) / "2º texto" (categoria) layers, which each need just
  * one half rather than the combined string. */
-export function conquistaTierParts(categoria: ConquistaCategoria, tier: number): { valor: string; categoria: string } {
-  return { valor: isUnitConquista(categoria) ? `${tier}un` : `${tier / 1000}K`, categoria: CONQUISTA_TIER_SUFFIX[categoria] };
+export function conquistaTierParts(categoria: ConquistaCategoria, tier: number, generic?: GenericConquistaConfig): { valor: string; categoria: string } {
+  const nome = generic ? generic.nome.toUpperCase() : (CONQUISTA_TIER_SUFFIX[categoria as FixedConquistaCategoria] ?? categoria);
+  return { valor: isUnitConquista(categoria) ? `${tier}un` : `${tier / 1000}K`, categoria: nome };
 }
 
 /** "3K DERMOCOSMÉTICOS" / "1K MARCA PRÓPRIA" / "5un LEVMEL" / "10un CHIP" */
-export function conquistaTierLabel(categoria: ConquistaCategoria, tier: number): string {
-  const { valor, categoria: cat } = conquistaTierParts(categoria, tier);
+export function conquistaTierLabel(categoria: ConquistaCategoria, tier: number, generic?: GenericConquistaConfig): string {
+  const { valor, categoria: cat } = conquistaTierParts(categoria, tier, generic);
   return `${valor} ${cat}`;
 }
 
@@ -105,16 +146,18 @@ export function computeConquistas(
   toDate: string | null,
   catKey: ConquistaCategoria,
   specialLists?: { levmel: SpecialListItem[]; chip: SpecialListItem[] },
+  generic?: GenericConquistaConfig,
 ): ConquistaRow[] {
   const collaboratorsByMatricula = new Map(collaborators.map((c) => [c.matricula, c]));
-  const tiers = CONQUISTA_TIERS_BY_CAT[catKey];
+  const tiers = tiersFor(catKey, generic);
+  const genericKeywordLists = generic ? { [catKey]: generic.keywords } : undefined;
 
   // No bounded range to iterate day-by-day — score the whole (unbounded)
   // selection at once. No real caller hits this (dashFrom/dashTo are
   // always concrete dates); kept only so the `string | null` signature
   // stays honored.
   if (!fromDate || !toDate) {
-    const rows = computeSummary(sales, collaborators, fromDate, toDate, catKey, specialLists);
+    const rows = computeSummary(sales, collaborators, fromDate, toDate, catKey, specialLists, genericKeywordLists);
     return rows
       .map((r) => {
         const tier = tierForMetric(tiers, conquistaMetric(catKey, r));
@@ -132,7 +175,7 @@ export function computeConquistas(
     const day = d.toISOString().slice(0, 10);
     const daySales = salesByDay.get(day);
     if (!daySales) continue;
-    computeSummary(daySales, collaborators, day, day, catKey, specialLists).forEach((r) => {
+    computeSummary(daySales, collaborators, day, day, catKey, specialLists, genericKeywordLists).forEach((r) => {
       const metric = conquistaMetric(catKey, r);
       const tier = tierForMetric(tiers, metric);
       if (tier === 0) return;
@@ -166,8 +209,10 @@ export function computeConquistasDayGallery(
   toDate: string,
   catKey: ConquistaCategoria,
   specialLists?: { levmel: SpecialListItem[]; chip: SpecialListItem[] },
+  generic?: GenericConquistaConfig,
 ): { dia: string; count: number }[] {
-  const tiers = CONQUISTA_TIERS_BY_CAT[catKey];
+  const tiers = tiersFor(catKey, generic);
+  const genericKeywordLists = generic ? { [catKey]: generic.keywords } : undefined;
   const salesByDay = bucketSalesByDay(sales, fromDate, toDate);
 
   const days: string[] = [];
@@ -177,7 +222,7 @@ export function computeConquistasDayGallery(
   return days.reverse().map((dia) => {
     const daySales = salesByDay.get(dia);
     if (!daySales) return { dia, count: 0 };
-    const count = computeSummary(daySales, collaborators, dia, dia, catKey, specialLists).filter(
+    const count = computeSummary(daySales, collaborators, dia, dia, catKey, specialLists, genericKeywordLists).filter(
       (r) => tierForMetric(tiers, conquistaMetric(catKey, r)) > 0,
     ).length;
     return { dia, count };
@@ -222,7 +267,7 @@ export function computeCollaboratorDayAchievements(
     if (!daySales) continue;
     const categorias: ConquistaCategoria[] = [];
     for (const cat of ALL_CONQUISTA_CATEGORIAS) {
-      const tiers = CONQUISTA_TIERS_BY_CAT[cat];
+      const tiers = tiersFor(cat);
       const rows = computeSummary(daySales, collaborators, dia, dia, cat, specialLists);
       const row = rows.find((r) => normalizeMatricula(r.matricula) === targetKey);
       if (!row) continue;

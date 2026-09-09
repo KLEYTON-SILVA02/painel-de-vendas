@@ -44,6 +44,7 @@ const ListaVendasPage = lazy(() => import('../admin/ListaVendasPage').then((m) =
 const BackupPage = lazy(() => import('../admin/BackupPage').then((m) => ({ default: m.BackupPage })));
 const CardConquistaPage = lazy(() => import('../admin/CardConquistaPage').then((m) => ({ default: m.CardConquistaPage })));
 const CategoriasPage = lazy(() => import('../admin/CategoriasPage').then((m) => ({ default: m.CategoriasPage })));
+const CategoryTypePage = lazy(() => import('../category-type/CategoryTypePage').then((m) => ({ default: m.CategoryTypePage })));
 const ColaboradoresPage = lazy(() => import('../admin/ColaboradoresPage').then((m) => ({ default: m.ColaboradoresPage })));
 const ConfiguracoesPage = lazy(() => import('../admin/ConfiguracoesPage').then((m) => ({ default: m.ConfiguracoesPage })));
 const IconesPage = lazy(() => import('../admin/IconesPage').then((m) => ({ default: m.IconesPage })));
@@ -123,12 +124,31 @@ export function MobileAdminShell() {
   const [pwMenuOpen, setPwMenuOpen] = useState(false);
   const categoryLabels = useCategoryLabelMap();
   const hasBio = (categoryTypes ?? []).some((c) => c.chave === 'biosintetica');
-  const categories = (hasBio ? [...CATEGORIES_BEFORE_BIO, BIO_CATEGORY, ...CATEGORIES_AFTER_BIO] : [...CATEGORIES_BEFORE_BIO, ...CATEGORIES_AFTER_BIO]).map(
-    (c) => {
-      const labelKey = SLOT_TO_CATEGORY_LABEL_KEY[c.slot];
-      return labelKey ? { ...c, label: categoryLabels[labelKey] } : c;
-    },
-  );
+  // ADM-created generic categories beyond Biosintética (Gerenciar Categorias)
+  // — same /categoria-parceria/:chave route the desktop Sidebar already
+  // links to. They don't go through the function_icons slot system (no
+  // slot exists per arbitrary category), so they carry their own
+  // `iconeUrl` straight from category_types.icone_url instead, rendered
+  // below in place of <FunctionIcon> when present.
+  const extraCategories = (categoryTypes ?? []).filter((c) => c.chave !== 'biosintetica');
+  const extraCategoryItems = extraCategories.map((c) => ({
+    to: `/categoria-parceria/${c.chave}`,
+    end: false,
+    cls: 'mv2-cat-biosintetica',
+    Icon: TagIcon,
+    label: c.nome,
+    slot: '',
+    iconeUrl: c.icone_url as string | null | undefined,
+  }));
+  const categories = [
+    ...CATEGORIES_BEFORE_BIO,
+    ...(hasBio ? [BIO_CATEGORY] : []),
+    ...extraCategoryItems,
+    ...CATEGORIES_AFTER_BIO,
+  ].map((c) => {
+    const labelKey = SLOT_TO_CATEGORY_LABEL_KEY[c.slot as keyof typeof SLOT_TO_CATEGORY_LABEL_KEY];
+    return { ...c, label: labelKey ? categoryLabels[labelKey] : c.label, iconeUrl: 'iconeUrl' in c ? c.iconeUrl : undefined };
+  });
 
   function handleAttendRequest(requestId: string, collaboratorId: string) {
     resolvePasswordRequest.mutate(requestId);
@@ -233,7 +253,11 @@ export function MobileAdminShell() {
       <nav className="mv2-category-menu">
         {categories.map((c) => (
           <NavLink key={c.to} to={c.to} end={c.end} title={c.label} className={({ isActive }) => `mv2-cat-icon ${c.cls} ${isActive ? 'active' : ''}`}>
-            <FunctionIcon slot={c.slot} fallback={c.Icon} size={26} />
+            {c.iconeUrl ? (
+              <img src={c.iconeUrl} alt="" width={26} height={26} style={{ objectFit: 'contain' }} />
+            ) : (
+              <FunctionIcon slot={c.slot} fallback={c.Icon} size={26} />
+            )}
           </NavLink>
         ))}
       </nav>
@@ -254,6 +278,7 @@ export function MobileAdminShell() {
             <Route path="/bio" element={<MobileBioPage />} />
             <Route path="/conquistas" element={<ConquistasPage />} />
             <Route path="/conquistas/figurinhas" element={<GaleriaFigurinhasPage />} />
+            <Route path="/categoria-parceria/:chave" element={<CategoryTypePage />} />
             <Route path="/admin" element={<AdminLandingPage />} />
             <Route path="/admin/colaboradores" element={<ColaboradoresPage />} />
             <Route path="/admin/produtos" element={<ProdutosPage />} />

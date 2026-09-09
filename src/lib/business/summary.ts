@@ -40,8 +40,14 @@ export function computeSummary(
   collaborators: Collaborator[],
   fromDate: string | null,
   toDate: string | null,
-  catFilter?: CategoryKey | 'ALL' | 'LEVMEL' | 'CHIP' | null,
+  catFilter?: CategoryKey | 'ALL' | 'LEVMEL' | 'CHIP' | string | null,
   specialLists?: { levmel: SpecialListItem[]; chip: SpecialListItem[] },
+  /** ADM-created generic categories (Gerenciar Categorias), keyed by their
+   * `category_types.chave` — matched the same way LEVMEL/CHIP are (product
+   * name vs. keyword list), since a generic category has no `sale.grupo`
+   * value of its own. Optional and additive: omitting it leaves every
+   * existing caller (the 6 fixed categories) completely unaffected. */
+  genericKeywordLists?: Record<string, SpecialListItem[]>,
 ): SummaryRow[] {
   // "Visitante" is a view-only sector (see VISITANTE_SETOR) — never part of
   // any metric, so it's excluded here at the shared aggregation root rather
@@ -79,6 +85,8 @@ export function computeSummary(
     if (catFilter === 'LEVMEL' || catFilter === 'CHIP') {
       const list = catFilter === 'LEVMEL' ? specialLists?.levmel : specialLists?.chip;
       if (!matchesSpecialList(s.produto, list)) return;
+    } else if (genericKeywordLists && catFilter && genericKeywordLists[catFilter]) {
+      if (!matchesSpecialList(s.produto, genericKeywordLists[catFilter])) return;
     } else if (catFilter && catFilter !== 'ALL' && s.grupo !== catFilter) {
       return;
     }

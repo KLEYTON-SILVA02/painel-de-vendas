@@ -209,6 +209,7 @@ export type Database = {
         Row: {
           ativo: boolean
           chave: string
+          conquista_tiers: number[] | null
           created_at: string
           icone_url: string | null
           id: string
@@ -220,6 +221,7 @@ export type Database = {
         Insert: {
           ativo?: boolean
           chave: string
+          conquista_tiers?: number[] | null
           created_at?: string
           icone_url?: string | null
           id?: string
@@ -231,6 +233,7 @@ export type Database = {
         Update: {
           ativo?: boolean
           chave?: string
+          conquista_tiers?: number[] | null
           created_at?: string
           icone_url?: string | null
           id?: string

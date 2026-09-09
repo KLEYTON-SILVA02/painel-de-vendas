@@ -14,7 +14,7 @@ import { classifyBio } from '../../lib/business/classification';
 import { diasRestantesNoMes } from '../../lib/business/goals';
 import type { BioGroupGoal, BioWeights } from '../../lib/business/types';
 import { fmtDateBR } from '../../lib/format';
-import { useAddBioProduct, useBulkInsertBioProducts, useDeleteBioProduct, useUpdateBioGroupGoal, useUpdateStoreSettings } from '../../lib/mutations';
+import { useAddBioProduct, useBulkInsertBioProducts, useDeleteBioProduct, useUpdateBioGroupGoal, useUpdateConquistaTiers, useUpdateStoreSettings } from '../../lib/mutations';
 import { useBioGroupGoals, useBioGroups, useCategoryTypes, useCollaborators, useSales, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 
@@ -40,7 +40,7 @@ export function CategoryTypePage() {
   const { data: bioGroupRows } = useBioGroups(categoryType?.id);
   const { data: groupGoals } = useBioGroupGoals(categoryType?.id);
   const { dashFrom, dashTo, salesListEnabled, toggleSalesListEnabled } = useDateRange();
-  const [view, setView] = useState<'ranking' | 'grupos' | 'pontos'>('ranking');
+  const [view, setView] = useState<'ranking' | 'grupos' | 'pontos' | 'conquistas'>('ranking');
   const [groupFilter, setGroupFilter] = useState<string>('ALL');
   const [foraOpen, setForaOpen] = useState(false);
 
@@ -94,6 +94,16 @@ export function CategoryTypePage() {
       />
     );
   }
+  if (view === 'conquistas') {
+    return (
+      <ConquistasConfigView
+        categoryId={categoryType.id}
+        categoryNome={categoryType.nome}
+        currentTiers={categoryType.conquista_tiers}
+        onBack={() => setView('ranking')}
+      />
+    );
+  }
 
   const ranking = computeBioSummary(sales, collaborators, bioGroups, weights, dashFrom, dashTo, groupFilter, setoresElegiveis);
   const foraDoSetor = auditBioOutsideBalcao(
@@ -128,6 +138,7 @@ export function CategoryTypePage() {
       actions: [
         { label: 'Gerenciar Grupos', color: '#00c2ff', onClick: () => setView('grupos') },
         { label: 'Gerenciar Pontos', color: '#ff8a00', onClick: () => setView('pontos') },
+        { label: 'Configurar Conquistas', color: '#ffb700', onClick: () => setView('conquistas') },
       ],
     },
   ];
@@ -593,6 +604,106 @@ function PontosView({
             </table>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** Opt-in flat R$ tier ladder for this category to participate in
+ * Conquistas / Card do Campeão estrelinhas — a completely separate concept
+ * from "Gerenciar Pontos" (bio_group_goals' per-group weighted meta1/2/3),
+ * which keeps working exactly as before. Empty/zeroed tiers means the
+ * category doesn't participate — the fixed categories' own 3-tier R$
+ * ladders (see CONQUISTA_TIERS_BY_CAT) are the shape this mirrors. */
+function ConquistasConfigView({
+  categoryId,
+  categoryNome,
+  currentTiers,
+  onBack,
+}: {
+  categoryId: string;
+  categoryNome: string;
+  currentTiers: number[] | null;
+  onBack: () => void;
+}) {
+  const [tiers, setTiers] = useState<[number, number, number]>([
+    currentTiers?.[0] ?? 0,
+    currentTiers?.[1] ?? 0,
+    currentTiers?.[2] ?? 0,
+  ]);
+  const updateTiers = useUpdateConquistaTiers();
+  const isActive = !!currentTiers && currentTiers.length > 0;
+
+  function setTier(idx: 0 | 1 | 2, value: number) {
+    setTiers((prev) => {
+      const next: [number, number, number] = [...prev] as [number, number, number];
+      next[idx] = value;
+      return next;
+    });
+  }
+
+  async function handleSave() {
+    const ascending = tiers[0] > 0 && tiers[1] > tiers[0] && tiers[2] > tiers[1];
+    if (!ascending) return;
+    await updateTiers.mutateAsync({ id: categoryId, tiers });
+  }
+
+  async function handleDisable() {
+    await updateTiers.mutateAsync({ id: categoryId, tiers: null });
+    setTiers([0, 0, 0]);
+  }
+
+  const ascending = tiers[0] > 0 && tiers[1] > tiers[0] && tiers[2] > tiers[1];
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="text-cyan-400 font-semibold">{categoryNome} — Configurar Conquistas</h3>
+          <button onClick={onBack} className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800">
+            ← Voltar ao Ranking
+          </button>
+        </div>
+        <p className="text-xs text-slate-500 mb-4">
+          Defina 3 patamares de valor (R$) em ordem crescente para esta categoria participar da Galeria de Conquistas e
+          das estrelinhas do Card de Campeão — igual às categorias fixas do sistema. Deixe zerado para não participar.
+          {isActive && <span className="text-emerald-400"> Está ativo nas Conquistas.</span>}
+        </p>
+        <div className="grid grid-cols-3 gap-3 max-w-md">
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Patamar 1 (R$)</label>
+            <input type="number" value={tiers[0]} onChange={(e) => setTier(0, Number(e.target.value))} className="input" />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Patamar 2 (R$)</label>
+            <input type="number" value={tiers[1]} onChange={(e) => setTier(1, Number(e.target.value))} className="input" />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Patamar 3 (R$)</label>
+            <input type="number" value={tiers[2]} onChange={(e) => setTier(2, Number(e.target.value))} className="input" />
+          </div>
+        </div>
+        {!ascending && (tiers[0] > 0 || tiers[1] > 0 || tiers[2] > 0) && (
+          <p className="text-xs text-rose-400 mt-2">Os patamares devem ser crescentes e maiores que zero.</p>
+        )}
+        <div className="flex gap-2 mt-4">
+          <button
+            onClick={handleSave}
+            disabled={updateTiers.isPending || !ascending}
+            className="rounded-lg bg-amber-500 text-slate-950 font-medium px-4 py-2 text-sm disabled:opacity-50"
+          >
+            {updateTiers.isPending ? 'Salvando…' : 'Salvar'}
+          </button>
+          {isActive && (
+            <button
+              onClick={handleDisable}
+              disabled={updateTiers.isPending}
+              className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+            >
+              Desativar Conquistas
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
