@@ -193,10 +193,10 @@ export function AppShell() {
                   <MedalIcon width={15} height={15} />
                   Galeria de Conquistas
                 </Link>
-                <NotificationBell />
                 {storeSettings && (
                   <ClosingClock horario={storeSettings.horario as unknown as Horario} feriadosDatas={storeSettings.feriados_datas} />
                 )}
+                <NotificationBell />
               </div>
             </div>
           </header>
