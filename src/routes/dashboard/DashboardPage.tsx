@@ -86,7 +86,10 @@ function RankFilterBar({ dynamics, singleLine }: { dynamics: Dynamic[]; singleLi
       <div style={{ display: 'flex', gap: 'clamp(3px, 0.5vw, 6px)', marginBottom: 6, flexWrap: singleLine ? 'nowrap' : 'wrap' }}>
         {[...RANK_FILTERS, { k: 'LEVMEL' as RankFilter, l: 'Levmel' }, { k: 'CHIP' as RankFilter, l: 'Chip' }].map((x) => (
           <SubtabButton key={x.k} active={rankFilter === x.k} onClick={() => setRankFilter(x.k)} shrink={singleLine}>
-            {categoryLabels[x.k as keyof typeof categoryLabels] ?? x.l}
+            {/* Abreviação só para este filtro da tela Início — o rótulo completo
+                (customizável em ADM > Nomes das Categorias) continua em todo o
+                resto do sistema. */}
+            {x.k === 'DERM' ? 'DERMO' : (categoryLabels[x.k as keyof typeof categoryLabels] ?? x.l)}
           </SubtabButton>
         ))}
       </div>
@@ -94,7 +97,7 @@ function RankFilterBar({ dynamics, singleLine }: { dynamics: Dynamic[]; singleLi
         <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
           {activeDynamics.map((d) => (
             <SubtabButton key={d.id} active={rankFilter === `DIN:${d.id}`} onClick={() => setRankFilter(`DIN:${d.id}`)}>
-              🎯 {d.titulo}
+              🎯 DINÂMICA
             </SubtabButton>
           ))}
         </div>
