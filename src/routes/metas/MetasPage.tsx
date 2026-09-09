@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { MoneyInput } from '../../components/MoneyInput';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { CAT_KEYS, GOAL_UNIT_KEYS, type CategoryKey, type GoalCategoryKey } from '../../lib/business/classification';
-import { computeMetaDiariaRedistribuida } from '../../lib/business/goals';
+import { diasRestantesNoMes } from '../../lib/business/goals';
 import { distributeIndividualGoalsAuto } from '../../lib/business/individualGoals';
+import { computeSummary } from '../../lib/business/summary';
 import type { Goal } from '../../lib/business/types';
 import { VISITANTE_SETOR } from '../../lib/business/types';
 import { fmtMoney } from '../../lib/format';
@@ -93,8 +94,38 @@ function MetasPorCategoria() {
   const [edits, setEdits] = useState<Partial<Record<CategoryKey, GoalEdit>>>({});
   const [saving, setSaving] = useState(false);
 
+  // computeMetaDiariaRedistribuida's own O(sales) computeSummary() pass —
+  // one full scan of the store's entire sales history — used to run
+  // straight in the render body below, up to 2× per category (Meta Geral +
+  // Super Meta), so up to 8 full scans on *every keystroke* typed into any
+  // field on this screen (any edit re-renders all 4 category rows). The
+  // only part that actually depends on the live-edited target value is a
+  // cheap subtraction; "realizado this month" only depends on
+  // sales/collaborators/metrica, so it's computed here once instead.
+  const salesData = sales ?? [];
+  const collaboratorsData = collaborators ?? [];
+  const realizadoPorCategoria = useMemo(() => {
+    const now = new Date();
+    const monthFirst = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+    const hojeISO = now.toISOString().slice(0, 10);
+    const result = {} as Record<CategoryKey, { valor: number; itens: number }>;
+    CAT_KEYS.forEach((k) => {
+      const rows = computeSummary(salesData, collaboratorsData, monthFirst, hojeISO, k);
+      result[k] = { valor: rows.reduce((a, r) => a + r.valor, 0), itens: rows.reduce((a, r) => a + r.itens, 0) };
+    });
+    return result;
+  }, [salesData, collaboratorsData]);
+
   if (!goals || !sales || !collaborators) return <PageLoading />;
   const goalsSafe = withGoalDefaults(goals);
+
+  function metaDiariaPreview(k: CategoryKey, goal: Goal, campo: 'mensal' | 'superMeta'): number {
+    const metaAlvo = Number(goal[campo]) || 0;
+    if (metaAlvo <= 0) return 0;
+    const realizado = goal.metrica === 'unidade' ? realizadoPorCategoria[k].itens : realizadoPorCategoria[k].valor;
+    const restante = Math.max(0, metaAlvo - realizado);
+    return restante / Math.max(1, diasRestantesNoMes());
+  }
 
   function fieldValue<K extends keyof GoalEdit>(k: CategoryKey, field: K): Goal[K] {
     const edit = edits[k]?.[field];
@@ -195,8 +226,8 @@ function MetasPorCategoria() {
                         {autoRedistribuir &&
                           ` · hoje: ${
                             metrica === 'unidade'
-                              ? `${Math.round(computeMetaDiariaRedistribuida(goalForCalc, sales, collaborators, 'mensal'))} un.`
-                              : fmtMoney(computeMetaDiariaRedistribuida(goalForCalc, sales, collaborators, 'mensal'))
+                              ? `${Math.round(metaDiariaPreview(k, goalForCalc, 'mensal'))} un.`
+                              : fmtMoney(metaDiariaPreview(k, goalForCalc, 'mensal'))
                           }`}
                       </label>
                     </td>
@@ -227,8 +258,8 @@ function MetasPorCategoria() {
                         {superMetaAuto &&
                           ` · hoje: ${
                             metrica === 'unidade'
-                              ? `${Math.round(computeMetaDiariaRedistribuida(goalForCalc, sales, collaborators, 'superMeta'))} un.`
-                              : fmtMoney(computeMetaDiariaRedistribuida(goalForCalc, sales, collaborators, 'superMeta'))
+                              ? `${Math.round(metaDiariaPreview(k, goalForCalc, 'superMeta'))} un.`
+                              : fmtMoney(metaDiariaPreview(k, goalForCalc, 'superMeta'))
                           }`}
                       </label>
                     </td>

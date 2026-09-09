@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
@@ -44,6 +44,68 @@ export function CategoryTypePage() {
   const [groupFilter, setGroupFilter] = useState<string>('ALL');
   const [foraOpen, setForaOpen] = useState(false);
 
+  // Safe stand-ins so the useMemo calls below always run in the same order
+  // (Rules of Hooks) whether or not every query has resolved yet — the
+  // "not found"/loading guards come after them, not before. Same pattern
+  // as BioPage.tsx/MobileBioPage.tsx.
+  const salesData = sales ?? [];
+  const collaboratorsData = collaborators ?? [];
+  const bioGroupRowsData = bioGroupRows ?? [];
+  const groupGoalsData = groupGoals ?? {};
+  const setoresElegiveisData = categoryType?.setores_elegiveis ?? [];
+
+  const bioGroups = useMemo(() => groupBioRows(bioGroupRowsData), [bioGroupRowsData]);
+  const groupNames = useMemo(
+    () => Array.from(new Set([...Object.keys(bioGroups), ...Object.keys(groupGoalsData)])).sort(),
+    [bioGroups, groupGoalsData],
+  );
+  const weights: BioWeights = useMemo(() => {
+    const w: BioWeights = {};
+    groupNames.forEach((g) => {
+      w[g] = groupGoalsData[g]?.peso ?? 0;
+    });
+    return w;
+  }, [groupNames, groupGoalsData]);
+
+  // computeBioSummary/auditBioOutsideBalcao/classifyBio each scan the
+  // *entire* sales history (classifyBio itself is a keyword-matching loop
+  // per sale) — without memoization here this reran from scratch on every
+  // render of this screen (any click, any state change), the same class of
+  // freeze already fixed elsewhere (see commit c992cbf and ProdutosPage's
+  // ClassificadosTab). This generic-category screen — used by every
+  // ADM-created partnership category besides Biosintética, which already
+  // goes through the memoized BioPage.tsx/MobileBioPage.tsx — had never
+  // received the same fix.
+  const demonstrativo = useMemo(
+    () => computeBioSummary(salesData, collaboratorsData, bioGroups, weights, dashFrom, dashTo, 'ALL', setoresElegiveisData),
+    [salesData, collaboratorsData, bioGroups, weights, dashFrom, dashTo, setoresElegiveisData],
+  );
+  const ranking = useMemo(
+    () => computeBioSummary(salesData, collaboratorsData, bioGroups, weights, dashFrom, dashTo, groupFilter, setoresElegiveisData),
+    [salesData, collaboratorsData, bioGroups, weights, dashFrom, dashTo, groupFilter, setoresElegiveisData],
+  );
+  const foraDoSetor = useMemo(
+    () =>
+      auditBioOutsideBalcao(
+        salesData.filter((s) => !s.dataISO || (s.dataISO >= dashFrom && s.dataISO <= dashTo)),
+        collaboratorsData,
+        bioGroups,
+        setoresElegiveisData,
+      ),
+    [salesData, collaboratorsData, bioGroups, setoresElegiveisData, dashFrom, dashTo],
+  );
+  const salesForTable = useMemo(() => {
+    if (!salesListEnabled) return [];
+    return salesData
+      .filter((s) => {
+        if (s.dataISO && s.dataISO < dashFrom) return false;
+        if (s.dataISO && s.dataISO > dashTo) return false;
+        return !!classifyBio(s.produto, bioGroups);
+      })
+      .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
+      .slice(0, 150);
+  }, [salesData, salesListEnabled, dashFrom, dashTo, bioGroups]);
+
   if (categoryTypes && !categoryType) {
     return (
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 text-center">
@@ -59,12 +121,6 @@ export function CategoryTypePage() {
     return <PageLoading />;
   }
 
-  const bioGroups = groupBioRows(bioGroupRows);
-  const groupNames = Array.from(new Set([...Object.keys(bioGroups), ...Object.keys(groupGoals)])).sort();
-  const weights: BioWeights = {};
-  groupNames.forEach((g) => {
-    weights[g] = groupGoals[g]?.peso ?? 0;
-  });
   const setoresElegiveis = categoryType.setores_elegiveis;
 
   if (view === 'grupos') {
@@ -81,7 +137,6 @@ export function CategoryTypePage() {
     );
   }
   if (view === 'pontos') {
-    const demonstrativo = computeBioSummary(sales, collaborators, bioGroups, weights, dashFrom, dashTo, 'ALL', setoresElegiveis);
     return (
       <PontosView
         storeId={profile?.store_id}
@@ -105,26 +160,9 @@ export function CategoryTypePage() {
     );
   }
 
-  const ranking = computeBioSummary(sales, collaborators, bioGroups, weights, dashFrom, dashTo, groupFilter, setoresElegiveis);
-  const foraDoSetor = auditBioOutsideBalcao(
-    sales.filter((s) => !s.dataISO || (s.dataISO >= dashFrom && s.dataISO <= dashTo)),
-    collaborators,
-    bioGroups,
-    setoresElegiveis,
-  );
   const elegiveisMatriculas = new Set(
     collaborators.filter((c) => c.setor !== null && setoresElegiveis.includes(c.setor)).map((c) => c.matricula),
   );
-  const salesForTable = salesListEnabled
-    ? sales
-        .filter((s) => {
-          if (s.dataISO && s.dataISO < dashFrom) return false;
-          if (s.dataISO && s.dataISO > dashTo) return false;
-          return !!classifyBio(s.produto, bioGroups);
-        })
-        .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
-        .slice(0, 150)
-    : [];
 
   const totalItens = ranking.reduce((a, r) => a + r.itens, 0);
   const vendedoresAtivos = ranking.filter((r) => r.itens > 0).length;
