@@ -14,7 +14,6 @@ import { tryCopyImage } from '../../lib/rankingImage';
 import { useCollaborators, useDynamics, useGenericConquistaConfigs, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { GoalGauge } from './GoalGauge';
-import { MobileDailyEvolutionChart } from './MobileDailyEvolutionChart';
 import { MobileDateFilter } from './MobileDateFilter';
 
 const CAT_COLOR: Record<CategoryKey, string> = { DERM: '#b84c9c', GEN: '#698b46', MP: '#813c97', MER: '#f26122' };
@@ -149,15 +148,6 @@ export function MobileInicioPage() {
       <div style={{ margin: '0 18px 16px' }}>
         <PodiumStaircase ranking={rankingList} getValue={(r) => r.valor} formatValue={fmtMoney} variant={storeSettings.modelo_ranking as 'escadinha' | 'lista'} />
       </div>
-
-      <MobileDailyEvolutionChart
-        salesData={salesData}
-        collaboratorsData={collaboratorsData}
-        goals={goals}
-        specialLists={specialLists}
-        monthFirst={monthFirst}
-        monthLast={monthLast}
-      />
 
       <div className="mv2-goals-grid">
         {gaugeData.map((g) => {
