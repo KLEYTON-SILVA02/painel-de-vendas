@@ -20,6 +20,14 @@ import { uploadPhoto } from '../../lib/storage';
 
 const SETORES = ['Balcão', 'Caixa', 'Dermoconsultora', 'Farmacêutico', 'Gerência', VISITANTE_SETOR];
 
+// Display order for the collaborator gallery's collapsible sections — a
+// fixed, curated order (not alphabetical) matching how the store actually
+// thinks about roles. Anything with a setor outside this list (blank, or a
+// value that predates/bypasses the SETORES dropdown) falls into "Outros" at
+// the end instead of silently disappearing from the gallery.
+const SETOR_GROUP_ORDER = ['Gerência', 'Farmacêutico', 'Balcão', 'Dermoconsultora', 'Caixa', VISITANTE_SETOR];
+const OUTROS_SETOR = 'Outros';
+
 function VisitorCategoryChecklist({
   hasBio,
   selected,
@@ -101,6 +109,21 @@ export function ColaboradoresPage() {
     });
     return map;
   }, [sales]);
+
+  // Grouped by setor, in SETOR_GROUP_ORDER — each group is its own
+  // collapsible section (see the .map() below) instead of one flat grid, so
+  // a store with many collaborators across roles can scan/collapse by
+  // sector. Empty groups are skipped entirely rather than rendered as a
+  // header with nothing under it.
+  const groupedCollaborators = useMemo(() => {
+    const map = new Map<string, Collaborator[]>();
+    for (const c of collaborators ?? []) {
+      const key = SETOR_GROUP_ORDER.includes(c.setor ?? '') ? (c.setor as string) : OUTROS_SETOR;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(c);
+    }
+    return [...SETOR_GROUP_ORDER, OUTROS_SETOR].filter((s) => map.has(s)).map((s) => ({ setor: s, list: map.get(s)! }));
+  }, [collaborators]);
 
   if (!collaborators || !sales || !withLogin) return <PageLoading />;
 
@@ -242,80 +265,90 @@ export function ColaboradoresPage() {
         {collaborators.length === 0 ? (
           <div className="text-sm text-slate-500 py-4 text-center">Nenhum colaborador cadastrado.</div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {collaborators.map((c) => {
-              const last = lastSaleByMatricula.get(normalizeMatricula(c.matricula)) ?? null;
-              const days = daysSince(last);
-              const inativo = days !== null && days >= 60;
-              const semVenda = last === null;
-              const hasLogin = withLogin.has(c.id);
-              return (
-                <div
-                  key={c.id}
-                  className="relative rounded-xl bg-slate-950/60 border border-slate-800 p-3 flex flex-col items-center text-center gap-2 cursor-pointer hover:border-cyan-500"
-                  onClick={() => setEditing(c)}
-                >
-                  {selectMode && (
-                    <input
-                      type="checkbox"
-                      checked={selected.has(c.id)}
-                      onChange={() => toggleSelected(c.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute top-2 left-2"
-                    />
-                  )}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      guard(
-                        `Excluir "${c.apelido || c.nome}"? Essa ação não pode ser desfeita. Confirme sua senha para continuar.`,
-                        () => deleteCollaborators.mutate([c.id]),
-                      );
-                    }}
-                    className="absolute top-2 right-2 text-slate-500 hover:text-rose-400"
-                  >
-                    ✕
-                  </button>
-                  {c.foto ? (
-                    <img src={c.foto} alt="" className="w-16 h-16 rounded-full object-cover" />
-                  ) : (
-                    <div className="w-16 h-16 rounded-full bg-slate-700" />
-                  )}
-                  <div className="min-w-0 w-full">
-                    <div className="text-sm font-medium truncate">{c.apelido || c.nome}</div>
-                    <div className="text-[11px] text-slate-500 font-mono truncate">#{c.matricula}</div>
-                    <div className="text-[11px] text-slate-500 truncate">{c.setor || '-'}</div>
-                    {c.metaIndividual > 0 && <div className="text-[11px] text-slate-500 truncate">meta {fmtMoney(c.metaIndividual)}</div>}
-                  </div>
-                  <span
-                    className={`text-[10px] px-2 py-0.5 rounded-full ${inativo ? 'bg-pink-500/20 text-pink-400' : 'bg-green-500/20 text-green-400'}`}
-                  >
-                    {inativo ? `Inativo${semVenda ? '' : ` · ${days}d`}` : 'Ativo'}
-                  </span>
-                  {!hasLogin ? (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setGrantingFor(c);
-                      }}
-                      className="text-[11px] rounded-lg border border-slate-700 px-2 py-1 text-slate-300 hover:bg-slate-800 w-full"
-                    >
-                      🔑 Criar acesso
-                    </button>
-                  ) : (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setResettingFor(c);
-                      }}
-                      className="text-[11px] rounded-lg border border-slate-700 px-2 py-1 text-slate-300 hover:bg-slate-800 w-full"
-                    >
-                      🔑 Gerar nova senha
-                    </button>
-                  )}
+          <div className="flex flex-col gap-2">
+            {groupedCollaborators.map(({ setor: groupSetor, list }) => (
+              <details key={groupSetor} className="group" open>
+                <summary className="flex items-center gap-2 cursor-pointer select-none py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400 hover:text-slate-200 [&::-webkit-details-marker]:hidden">
+                  <span className="inline-block transition-transform group-open:rotate-90">▶</span>
+                  {groupSetor} <span className="text-slate-600 font-normal normal-case">({list.length})</span>
+                </summary>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 pt-1 pb-2">
+                  {list.map((c) => {
+                    const last = lastSaleByMatricula.get(normalizeMatricula(c.matricula)) ?? null;
+                    const days = daysSince(last);
+                    const inativo = days !== null && days >= 60;
+                    const semVenda = last === null;
+                    const hasLogin = withLogin.has(c.id);
+                    return (
+                      <div
+                        key={c.id}
+                        className="relative rounded-xl bg-slate-950/60 border border-slate-800 p-3 flex flex-col items-center text-center gap-2 cursor-pointer hover:border-cyan-500"
+                        onClick={() => setEditing(c)}
+                      >
+                        {selectMode && (
+                          <input
+                            type="checkbox"
+                            checked={selected.has(c.id)}
+                            onChange={() => toggleSelected(c.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="absolute top-2 left-2"
+                          />
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            guard(
+                              `Excluir "${c.apelido || c.nome}"? Essa ação não pode ser desfeita. Confirme sua senha para continuar.`,
+                              () => deleteCollaborators.mutate([c.id]),
+                            );
+                          }}
+                          className="absolute top-2 right-2 text-slate-500 hover:text-rose-400"
+                        >
+                          ✕
+                        </button>
+                        {c.foto ? (
+                          <img src={c.foto} alt="" className="w-16 h-16 rounded-full object-cover" />
+                        ) : (
+                          <div className="w-16 h-16 rounded-full bg-slate-700" />
+                        )}
+                        <div className="min-w-0 w-full">
+                          <div className="text-sm font-medium truncate">{c.apelido || c.nome}</div>
+                          <div className="text-[11px] text-slate-500 font-mono truncate">#{c.matricula}</div>
+                          <div className="text-[11px] text-slate-500 truncate">{c.setor || '-'}</div>
+                          {c.metaIndividual > 0 && <div className="text-[11px] text-slate-500 truncate">meta {fmtMoney(c.metaIndividual)}</div>}
+                        </div>
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full ${inativo ? 'bg-pink-500/20 text-pink-400' : 'bg-green-500/20 text-green-400'}`}
+                        >
+                          {inativo ? `Inativo${semVenda ? '' : ` · ${days}d`}` : 'Ativo'}
+                        </span>
+                        {!hasLogin ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setGrantingFor(c);
+                            }}
+                            className="text-[11px] rounded-lg border border-slate-700 px-2 py-1 text-slate-300 hover:bg-slate-800 w-full"
+                          >
+                            🔑 Criar acesso
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setResettingFor(c);
+                            }}
+                            className="text-[11px] rounded-lg border border-slate-700 px-2 py-1 text-slate-300 hover:bg-slate-800 w-full"
+                          >
+                            🔑 Gerar nova senha
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
+              </details>
+            ))}
           </div>
         )}
       </div>
