@@ -65,6 +65,15 @@ export function isUnitConquista(categoria: ConquistaCategoria): boolean {
   return categoria === 'LEVMEL' || categoria === 'CHIP';
 }
 
+/** LEVMEL/CHIP don't score against a fixed tier ladder like the R$
+ * categories — every unit sold that day is itself the achievement (1un.,
+ * 2un., 3un., ...), so any sale at all counts. CHIP additionally caps at
+ * 100un. (LEVMEL has no cap) — a store-wide ceiling on the displayed/
+ * scored value, not on the underlying sale itself. */
+const UNIT_CONQUISTA_CAP: Partial<Record<FixedConquistaCategoria, number>> = {
+  CHIP: 100,
+};
+
 const CONQUISTA_TIER_SUFFIX: Record<FixedConquistaCategoria, string> = {
   DERM: 'DERMOCOSMÉTICOS',
   GEN: 'GENÉRICOS',
@@ -73,7 +82,7 @@ const CONQUISTA_TIER_SUFFIX: Record<FixedConquistaCategoria, string> = {
   CHIP: 'CHIP',
 };
 
-/** Splits the tier label into its two halves — the value ("3K"/"5un") and
+/** Splits the tier label into its two halves — the value ("3K"/"5un.") and
  * the category name ("DERMOCOSMÉTICOS") — for the card editor's separate
  * "1º texto" (tier) / "2º texto" (categoria) layers, which each need just
  * one half rather than the combined string. */
@@ -82,14 +91,16 @@ export function conquistaTierParts(categoria: ConquistaCategoria, tier: number, 
   return { valor: isUnitConquista(categoria) ? `${tier}un.` : `${tier / 1000}K`, categoria: nome };
 }
 
-/** "3K DERMOCOSMÉTICOS" / "1K MARCA PRÓPRIA" / "5un LEVMEL" / "10un CHIP" */
+/** "3K DERMOCOSMÉTICOS" / "1K MARCA PRÓPRIA" / "5un. LEVMEL" / "10un. CHIP" */
 export function conquistaTierLabel(categoria: ConquistaCategoria, tier: number, generic?: GenericConquistaConfig): string {
   const { valor, categoria: cat } = conquistaTierParts(categoria, tier, generic);
   return `${valor} ${cat}`;
 }
 
 export interface ConquistaRow extends SummaryRow {
-  /** The highest fixed tier reached this period (R$ or un., per category), or 0 if none. */
+  /** The achievement level reached this period, or 0 if none — the highest
+   * fixed tier reached for R$/generic categories, or (LEVMEL/CHIP) the
+   * exact quantity sold that day, capped per UNIT_CONQUISTA_CAP. */
   tier: number;
 }
 
@@ -105,6 +116,17 @@ function tierForMetric(tiers: readonly number[], metric: number): number {
     if (metric >= t) tier = t;
   });
   return tier;
+}
+
+/** Achievement level for a category on a given day: the fixed-ladder tier
+ * reached for R$/generic categories, or (for LEVMEL/CHIP) the exact
+ * quantity sold — capped per UNIT_CONQUISTA_CAP — since those two no
+ * longer use a fixed ladder at all. */
+function computeTier(categoria: ConquistaCategoria, tiers: readonly number[], metric: number): number {
+  if (!isUnitConquista(categoria)) return tierForMetric(tiers, metric);
+  if (metric <= 0) return 0;
+  const cap = UNIT_CONQUISTA_CAP[categoria as FixedConquistaCategoria];
+  return cap ? Math.min(metric, cap) : metric;
 }
 
 /** Buckets `sales` by `dataISO` in a single O(sales) pass, restricted to
@@ -135,9 +157,11 @@ function bucketSalesByDay(sales: Sale[], fromDate: string, toDate: string): Map<
  * entry is their single best day within the range (tier first, then the
  * day's own metric as a tie-breaker between equal tiers), sorted by that
  * best-day metric desc. A collaborator with no sales, or whose best single
- * day never reaches the first tier, never appears. `specialLists` is only
- * needed for LEVMEL/CHIP (matched by product name, not by `sale.grupo`) —
- * see computeSummary.
+ * day never reaches the first tier, never appears. LEVMEL/CHIP have no
+ * fixed ladder at all (see computeTier) — any day with at least one unit
+ * sold is an achievement, scored by the exact quantity. `specialLists` is
+ * only needed for LEVMEL/CHIP (matched by product name, not by
+ * `sale.grupo`) — see computeSummary.
  */
 export function computeConquistas(
   sales: Sale[],
@@ -160,7 +184,7 @@ export function computeConquistas(
     const rows = computeSummary(sales, collaborators, fromDate, toDate, catKey, specialLists, genericKeywordLists);
     return rows
       .map((r) => {
-        const tier = tierForMetric(tiers, conquistaMetric(catKey, r));
+        const tier = computeTier(catKey, tiers, conquistaMetric(catKey, r));
         const foto = collaboratorsByMatricula.get(r.matricula)?.fotoConquista || r.foto;
         return { ...r, foto, tier };
       })
@@ -177,7 +201,7 @@ export function computeConquistas(
     if (!daySales) continue;
     computeSummary(daySales, collaborators, day, day, catKey, specialLists, genericKeywordLists).forEach((r) => {
       const metric = conquistaMetric(catKey, r);
-      const tier = tierForMetric(tiers, metric);
+      const tier = computeTier(catKey, tiers, metric);
       if (tier === 0) return;
       const current = bestByMatricula.get(r.matricula);
       const currentMetric = current ? conquistaMetric(catKey, current) : -1;
@@ -223,7 +247,7 @@ export function computeConquistasDayGallery(
     const daySales = salesByDay.get(dia);
     if (!daySales) return { dia, count: 0 };
     const count = computeSummary(daySales, collaborators, dia, dia, catKey, specialLists, genericKeywordLists).filter(
-      (r) => tierForMetric(tiers, conquistaMetric(catKey, r)) > 0,
+      (r) => computeTier(catKey, tiers, conquistaMetric(catKey, r)) > 0,
     ).length;
     return { dia, count };
   });
@@ -271,7 +295,7 @@ export function computeCollaboratorDayAchievements(
       const rows = computeSummary(daySales, collaborators, dia, dia, cat, specialLists);
       const row = rows.find((r) => normalizeMatricula(r.matricula) === targetKey);
       if (!row) continue;
-      if (tierForMetric(tiers, conquistaMetric(cat, row)) > 0) categorias.push(cat);
+      if (computeTier(cat, tiers, conquistaMetric(cat, row)) > 0) categorias.push(cat);
     }
     if (categorias.length > 0) results.push({ dia, categorias });
   }

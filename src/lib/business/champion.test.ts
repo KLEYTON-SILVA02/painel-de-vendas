@@ -7,8 +7,8 @@ const collaborators: Collaborator[] = [
   { id: '2', matricula: 'M2', nome: 'Bruno', apelido: 'Bruno', foto: null, setor: 'Balcão', metaIndividual: 0 },
 ];
 
-// DERM tier-1 is 3000, GEN tier-1 is 1000, LEVMEL tier-1 is 5 un — see
-// CONQUISTA_TIERS_BY_CAT in conquistas.ts.
+// DERM tier-1 is 3000, GEN tier-1 is 1000 — see CONQUISTA_TIERS_BY_CAT in
+// conquistas.ts. LEVMEL/CHIP have no fixed ladder — any unit sold counts.
 const sales: Sale[] = [
   { id: 's1', dataISO: '2026-08-05', matricula: 'M1', vendedor: 'Ana', produto: 'Cerave', qtd: 1, valor: 3500, grupo: 'DERM' },
   { id: 's2', dataISO: '2026-08-06', matricula: 'M1', vendedor: 'Ana', produto: 'Levmel Xarope', qtd: 10, valor: 150, grupo: null },

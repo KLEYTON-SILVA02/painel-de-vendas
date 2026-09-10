@@ -22,10 +22,13 @@ import { useCollaborators, useConquistaCardTemplates, useGenericConquistaConfigs
 import { tryCopyImage } from '../../lib/rankingImage';
 import { useDateRange } from '../DateRangeContext';
 
-// Galeria de Conquistas — detects achievers of any of a category's fixed
-// tiers (R$ for Dermo/Marcas Exclusivas/Genérico, unidades vendidas for
-// Levmel/Chip), mirroring the Início screen's two-column dash-grid layout
-// (main content + sidebar date filter). Individual-goal configuration
+// Galeria de Conquistas — detects achievers of any of a category's fixed R$
+// tiers (Dermo/Marcas Exclusivas/Genérico) — Levmel/Chip have no fixed
+// ladder at all, every unit sold that day is itself the achievement (see
+// computeTier in conquistas.ts), so their tier-filter row doesn't render
+// and the gallery just shows whatever was sold — mirroring the Início
+// screen's two-column dash-grid layout (main content + sidebar date
+// filter). Individual-goal configuration
 // (formerly a "Super Meta Individual" duplicated here) now lives only in
 // ADM > Metas > Metas Individuais — the "Ajustar" button below links there
 // instead of opening its own panel.
@@ -151,26 +154,32 @@ export function ConquistasPage() {
             ))}
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            {(['ALL', ...tiersFor(catKey, generic)] as TierFilter[]).map((f) => (
-              <button
-                key={String(f)}
-                onClick={() => setTierFilter(f)}
-                style={{
-                  background: tierFilter === f ? '#ffb700' : '#0b0e1d',
-                  border: '1px solid #ffb700',
-                  color: tierFilter === f ? '#231a02' : '#ffb700',
-                  padding: '5px 11px',
-                  borderRadius: 999,
-                  cursor: 'pointer',
-                  fontSize: 11,
-                  fontWeight: 700,
-                }}
-              >
-                {f === 'ALL' ? 'Todos' : `🏆 ${conquistaTierLabel(catKey, f, generic)}`}
-              </button>
-            ))}
-          </div>
+          {/* Levmel/Chip não têm mais uma escada fixa de níveis — qualquer
+              unidade vendida no dia já é a conquista, então não há "nível"
+              pra filtrar por aqui: a galeria sempre mostra automaticamente
+              tudo que foi vendido no dia selecionado. */}
+          {!isUnit && (
+            <div className="flex flex-wrap gap-2">
+              {(['ALL', ...tiersFor(catKey, generic)] as TierFilter[]).map((f) => (
+                <button
+                  key={String(f)}
+                  onClick={() => setTierFilter(f)}
+                  style={{
+                    background: tierFilter === f ? '#ffb700' : '#0b0e1d',
+                    border: '1px solid #ffb700',
+                    color: tierFilter === f ? '#231a02' : '#ffb700',
+                    padding: '5px 11px',
+                    borderRadius: 999,
+                    cursor: 'pointer',
+                    fontSize: 11,
+                    fontWeight: 700,
+                  }}
+                >
+                  {f === 'ALL' ? 'Todos' : `🏆 ${conquistaTierLabel(catKey, f, generic)}`}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
