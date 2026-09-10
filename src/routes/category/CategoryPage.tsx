@@ -16,6 +16,7 @@ import { todayISO } from '../../lib/dateRange';
 import { computeSummary, computeVendorExtract } from '../../lib/business/summary';
 import type { CommissionRate, SummaryRow } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
+import { buildCategoryExtractHtml, openPrintPreview } from '../../lib/printExtract';
 import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
 import { useReclassifyProdutos, useUpdateStoreSettings } from '../../lib/mutations';
 import { useCatalog, useCollaborators, useCommissionRates, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
@@ -248,6 +249,20 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   const showVendasCommission = !!vendasSeller && !!vendasActiveRate;
   const vendasTotalComissao = vendasActiveRate ? (categorySales.reduce((a, s) => a + s.valor, 0) * vendasActiveRate.percentual) / 100 : 0;
 
+  function handlePrintCategoryExtract() {
+    const seller = vendasSeller ? collaborators!.find((c) => c.matricula === vendasSeller) : null;
+    const html = buildCategoryExtractHtml({
+      categoryLabel: info.titulo,
+      periodLabel: `${fmtDateBR(dashFrom)} — ${fmtDateBR(dashTo)}`,
+      sellerName: vendasSeller ? seller?.apelido || seller?.nome || vendasSeller : null,
+      sales: categorySalesAll,
+      categoryLabels,
+      commissionPercent: vendasActiveRate ? vendasActiveRate.percentual : null,
+      storeName: store?.nome_loja,
+    });
+    openPrintPreview(`Extrato — ${info.titulo}`, html);
+  }
+
   function toggleProduto(produto: string) {
     setSelectedProdutos((prev) => {
       const next = new Set(prev);
@@ -337,6 +352,15 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
                     </option>
                   ))}
                 </select>
+                {(vendasSeller || vendasCommissionSlot !== null) && (
+                  <button
+                    onClick={handlePrintCategoryExtract}
+                    className="rounded-lg border px-3 py-1.5 text-sm font-semibold"
+                    style={{ borderColor: '#00f0ff', color: '#00f0ff' }}
+                  >
+                    🖨️ Imprimir extrato
+                  </button>
+                )}
                 <ReclassifyBar
                   active={reclassifyMode}
                   onToggle={() => {
