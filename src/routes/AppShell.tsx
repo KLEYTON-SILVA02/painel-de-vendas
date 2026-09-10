@@ -91,7 +91,7 @@ function pageTitleLabel(entry: { label: string; categoryKey?: GoalCategoryKey },
 export function AppShell() {
   const { profile } = useAuth();
   const categoryLabels = useCategoryLabelMap();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const { data: storeSettings } = useStoreSettings();
