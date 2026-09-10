@@ -319,8 +319,12 @@ async function drawZone(
  * filled with `plateColor` — skipped entirely when `zone.shape.kind` is
  * 'none', same "shape-optional" convention every other zone already uses)
  * followed by the layer's own text, filled with either a solid color or a
- * left-to-right 2-color gradient across the zone's own rect. */
-async function drawTextLayer(ctx: CanvasRenderingContext2D, layer: CardTextLayer, w: number, h: number, text: string, plateColor: string) {
+ * left-to-right 2-color gradient across the zone's own rect. `uppercase`
+ * is skipped for the "1º texto" (tier/valor) layer — R$ tiers ("3K") are
+ * already all-caps digits so it never mattered there, but forcing it broke
+ * Levmel/Chip's "un." unit suffix (came out "UN."); every other layer
+ * (categoria, custom) keeps the existing all-caps card style. */
+async function drawTextLayer(ctx: CanvasRenderingContext2D, layer: CardTextLayer, w: number, h: number, text: string, plateColor: string, uppercase: boolean) {
   if (layer.zone.shape.kind !== 'none') {
     await drawZone(ctx, layer.zone, w, h, (octx, rect) => {
       octx.fillStyle = plateColor;
@@ -341,7 +345,7 @@ async function drawTextLayer(ctx: CanvasRenderingContext2D, layer: CardTextLayer
   } else {
     ctx.fillStyle = layer.color;
   }
-  ctx.fillText(text.toUpperCase(), rect.x + rect.w / 2, rect.y + rect.h / 2);
+  ctx.fillText(uppercase ? text.toUpperCase() : text, rect.x + rect.w / 2, rect.y + rect.h / 2);
 }
 
 /** Renders a full card (background + photo + logo + text layers, all
@@ -381,7 +385,7 @@ export async function renderConquistaCard(template: ConquistaCardTemplate, conte
     for (const layer of template.textLayers) {
       const text = layer.kind === 'tier' ? content.valorText : layer.kind === 'categoria' ? content.categoriaText : layer.text;
       // eslint-disable-next-line no-await-in-loop
-      await drawTextLayer(ctx, layer, CANVAS_W, CANVAS_H, text, content.color);
+      await drawTextLayer(ctx, layer, CANVAS_W, CANVAS_H, text, content.color, layer.kind !== 'tier');
     }
   } else if (template.texto) {
     // Legacy single hardcoded tier banner, for templates saved before the
@@ -397,7 +401,11 @@ export async function renderConquistaCard(template: ConquistaCardTemplate, conte
     ctx.font = `800 ${Math.round(CANVAS_H * 0.024)}px ${fontStack(template.textFontFamily ?? 'Arial')}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(content.tierText.toUpperCase(), tRect.x + tRect.w / 2, tRect.y + tRect.h / 2);
+    // Not forced uppercase — content.tierText's categoria half is already
+    // all-caps at the source (CONQUISTA_TIER_SUFFIX / generic.nome
+    // .toUpperCase()), so this only changes the unit suffix ("un." stays
+    // lowercase instead of becoming "UN.").
+    ctx.fillText(content.tierText, tRect.x + tRect.w / 2, tRect.y + tRect.h / 2);
   }
 
   return canvas;

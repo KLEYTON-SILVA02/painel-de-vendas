@@ -35,13 +35,31 @@ describe('computeConquistas', () => {
     expect(rows.find((r) => r.matricula === 'M1')!.tier).toBe(1000);
   });
 
-  it('measures Levmel/Chip achievements in units sold, not R$', () => {
+  it('measures Levmel/Chip achievements in units sold, not R$ — the exact quantity is the tier, no fixed ladder', () => {
     const specialLists = { levmel: [{ nome: 'Levmel Especial', palavras: ['levmel especial'] }], chip: [] };
     const levmelSales: Sale[] = [
       { id: 'l1', dataISO: '2026-08-01', matricula: 'M1', vendedor: 'Ana', produto: 'Levmel Especial', qtd: 12, valor: 0, grupo: null },
     ];
     const rows = computeConquistas(levmelSales, collaborators, '2026-08-01', '2026-08-31', 'LEVMEL', specialLists);
-    expect(rows.find((r) => r.matricula === 'M1')!.tier).toBe(10); // 12 un. >= 10, < 15
+    expect(rows.find((r) => r.matricula === 'M1')!.tier).toBe(12); // exact quantity, not rounded down to a fixed step
+  });
+
+  it('counts even a single Levmel/Chip unit as an achievement', () => {
+    const specialLists = { levmel: [{ nome: 'Levmel Especial', palavras: ['levmel especial'] }], chip: [] };
+    const oneUnitSale: Sale[] = [
+      { id: 'l2', dataISO: '2026-08-01', matricula: 'M1', vendedor: 'Ana', produto: 'Levmel Especial', qtd: 1, valor: 0, grupo: null },
+    ];
+    const rows = computeConquistas(oneUnitSale, collaborators, '2026-08-01', '2026-08-31', 'LEVMEL', specialLists);
+    expect(rows.find((r) => r.matricula === 'M1')!.tier).toBe(1);
+  });
+
+  it('caps the Chip tier at 100un. even when more were sold that day', () => {
+    const specialLists = { levmel: [], chip: [{ nome: 'Chip Especial', palavras: ['chip especial'] }] };
+    const chipSales: Sale[] = [
+      { id: 'c1', dataISO: '2026-08-01', matricula: 'M1', vendedor: 'Ana', produto: 'Chip Especial', qtd: 150, valor: 0, grupo: null },
+    ];
+    const rows = computeConquistas(chipSales, collaborators, '2026-08-01', '2026-08-31', 'CHIP', specialLists);
+    expect(rows.find((r) => r.matricula === 'M1')!.tier).toBe(100);
   });
 
   it('never accumulates across days — a tier must be reached within a single day', () => {
@@ -142,15 +160,15 @@ describe('conquistaTierLabel', () => {
     expect(conquistaTierLabel('GEN', 2000)).toBe('2K GENÉRICOS');
   });
 
-  it('formats unit categories as "<N>un <categoria>"', () => {
-    expect(conquistaTierLabel('LEVMEL', 5)).toBe('5un LEVMEL');
-    expect(conquistaTierLabel('CHIP', 50)).toBe('50un CHIP');
+  it('formats unit categories as "<N>un. <categoria>"', () => {
+    expect(conquistaTierLabel('LEVMEL', 5)).toBe('5un. LEVMEL');
+    expect(conquistaTierLabel('CHIP', 50)).toBe('50un. CHIP');
   });
 });
 
 describe('conquistaTierParts', () => {
   it('splits into the same value/categoria halves conquistaTierLabel combines', () => {
     expect(conquistaTierParts('DERM', 3000)).toEqual({ valor: '3K', categoria: 'DERMOCOSMÉTICOS' });
-    expect(conquistaTierParts('LEVMEL', 5)).toEqual({ valor: '5un', categoria: 'LEVMEL' });
+    expect(conquistaTierParts('LEVMEL', 5)).toEqual({ valor: '5un.', categoria: 'LEVMEL' });
   });
 });
