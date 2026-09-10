@@ -256,7 +256,6 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
       periodLabel: `${fmtDateBR(dashFrom)} — ${fmtDateBR(dashTo)}`,
       sellerName: vendasSeller ? seller?.apelido || seller?.nome || vendasSeller : null,
       sales: categorySalesAll,
-      categoryLabels,
       commissionPercent: vendasActiveRate ? vendasActiveRate.percentual : null,
       storeName: store?.nome_loja,
     });
