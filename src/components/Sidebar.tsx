@@ -13,6 +13,7 @@ import {
   HomeIcon,
   LeafIcon,
   LogoutIcon,
+  MedalIcon,
   PillIcon,
   SettingsIcon,
   TagIcon,
@@ -56,6 +57,7 @@ const CAT_NAV: {
   { key: 'LEVMEL', label: 'Levmel', color: '#ffb700', icon: HexagonIcon, slot: 'levmel', grupo: 'Categorias', to: '/categoria/LEVMEL', end: false },
   { key: 'CHIP', label: 'Chip', color: '#00f0ff', icon: CpuIcon, slot: 'chip', grupo: 'Categorias', to: '/categoria/CHIP', end: false },
   { key: 'DINAMICA', label: 'Dinâmicas', color: '#a82bff', icon: TargetIcon, slot: 'dinamicas', grupo: 'Programas', to: '/dinamicas', end: false },
+  { key: 'CONQUISTAS', label: 'Conquistas', color: '#ffb700', icon: MedalIcon, slot: 'conquistas', grupo: 'Programas', to: '/conquistas', end: false },
   { key: 'ADM', label: 'ADM', color: '#00f0ff', icon: SettingsIcon, slot: 'adm', grupo: 'Sistema', to: '/admin', end: false },
 ];
 
