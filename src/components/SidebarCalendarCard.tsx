@@ -1,5 +1,8 @@
-import type { CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
+import { useCategoryLabelMap } from '../lib/business/categoryLabels';
 import { todayISO } from '../lib/dateRange';
+import { buildMonthExtract, buildMonthExtractHtml, openPrintPreview } from '../lib/printExtract';
+import { useSales, useSpecialLists, useStore } from '../lib/queries';
 import { useDateRange } from '../routes/DateRangeContext';
 
 // Ported 1:1 from legacy/index-original.html — renderCalendarCard(). Distinct
@@ -28,6 +31,28 @@ export function SidebarCalendarCard() {
     salesListEnabled,
     toggleSalesListEnabled,
   } = useDateRange();
+  const categoryLabels = useCategoryLabelMap();
+  const { data: store } = useStore();
+  const { data: specialLists } = useSpecialLists();
+  // Fetching starts only when the ADM clicks "Imprimir extrato do mês" —
+  // shares the `['sales']` cache key with Dashboard/Ranking/Category (see
+  // useSales), so when one of those is already mounted (as on the Tela
+  // Inicial, where this card normally lives) the data is already there and
+  // the print opens instantly; elsewhere (e.g. Galeria de Conquistas, which
+  // also renders this card) it triggers a one-off fetch instead of always
+  // pulling the whole sales history just for having this card on screen.
+  const [printRequested, setPrintRequested] = useState(false);
+  const { data: sales, isFetching: salesFetching } = useSales(printRequested);
+
+  useEffect(() => {
+    if (!printRequested || !sales || !specialLists) return;
+    const monthLabel = `${MESES_ABREV[refMonth]}/${refYear}`;
+    const categories = buildMonthExtract(sales, refYear, refMonth + 1, specialLists, categoryLabels);
+    const html = buildMonthExtractHtml(categories, monthLabel, store?.nome_loja);
+    openPrintPreview(`Extrato do Mês — ${monthLabel}`, html);
+    setPrintRequested(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [printRequested, sales, specialLists]);
 
   const firstDow = new Date(refYear, refMonth, 1).getDay();
   const daysInMonth = new Date(refYear, refMonth + 1, 0).getDate();
@@ -189,6 +214,32 @@ export function SidebarCalendarCard() {
         }}
       >
         {salesListEnabled ? '🔓' : '🔒'} Lista de vendas detalhada: {salesListEnabled ? 'ligada' : 'desligada'}
+      </button>
+
+      <button
+        onClick={() => setPrintRequested(true)}
+        disabled={printRequested && salesFetching}
+        title="Abre uma aba com o extrato de vendas do mês pronto para impressão"
+        style={{
+          width: '100%',
+          marginTop: 6,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 6,
+          background: '#0b0e1d',
+          color: NEON_CYAN,
+          border: `1px solid ${NEON_CYAN}`,
+          borderRadius: 999,
+          padding: 6,
+          fontSize: 9.5,
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          cursor: 'pointer',
+          opacity: printRequested && salesFetching ? 0.6 : 1,
+        }}
+      >
+        🖨️ {printRequested && salesFetching ? 'Gerando...' : 'Imprimir extrato do mês'}
       </button>
     </div>
   );
