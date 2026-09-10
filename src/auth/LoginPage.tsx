@@ -7,6 +7,7 @@ import '../styles/login-retro-future.css';
 import gvLogo from '../assets/brand/gv-logo.png';
 import whatsappQr from '../assets/brand/whatsapp-qr.jpg';
 import instagramQr from '../assets/brand/instagram-qr.jpg';
+import emailQr from '../assets/brand/email-qr.jpg';
 
 type Tab = 'admin' | 'colaborador';
 type SocialModal = 'whatsapp' | 'instagram' | 'email' | null;
@@ -88,8 +89,7 @@ function SocialQrModal({ kind, onClose }: { kind: 'whatsapp' | 'instagram' | 'em
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
-  // TODO: swap in the e-mail QR card image once it's available.
-  const qrImage = kind === 'whatsapp' ? whatsappQr : kind === 'instagram' ? instagramQr : null;
+  const qrImage = kind === 'whatsapp' ? whatsappQr : kind === 'instagram' ? instagramQr : emailQr;
   const url = kind === 'whatsapp' ? buildWhatsAppLink(WHATSAPP_NUMBER) : kind === 'instagram' ? INSTAGRAM_URL : `mailto:${EMAIL_ADDRESS}`;
   const label = kind === 'whatsapp' ? 'WhatsApp' : kind === 'instagram' ? 'Instagram' : 'E-mail';
 
