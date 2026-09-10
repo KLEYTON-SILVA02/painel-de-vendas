@@ -61,7 +61,13 @@ const CAT_NAV: {
   { key: 'ADM', label: 'ADM', color: '#00f0ff', icon: SettingsIcon, slot: 'adm', grupo: 'Sistema', to: '/admin', end: false },
 ];
 
-const GROUPS = ['Principal', 'Categorias', 'Programas', 'Sistema'] as const;
+// 'Sistema' (the ADM/settings link) is deliberately excluded from this list
+// — it's no longer rendered inline with the other nav groups. Instead it's
+// pulled out of CAT_NAV below and rendered in its own section right above
+// the footer (Sair), so it stays anchored near the bottom of the sidebar
+// instead of opening expanded by default among the other links.
+const GROUPS = ['Principal', 'Categorias', 'Programas'] as const;
+const ADM_NAV_ITEM = CAT_NAV.find((c) => c.key === 'ADM')!;
 
 export function Sidebar({
   collapsed,
@@ -159,6 +165,23 @@ export function Sidebar({
               ))}
           </div>
         ))}
+      </nav>
+
+      {/* ADM/settings link, pulled out of the scrolling nav above so it
+          anchors near the bottom of the sidebar instead of sitting inline
+          with the category/program links — spaced apart via margin, not a
+          divider line (see ADM_NAV_ITEM). */}
+      <nav className="sb-nav sb-settings-nav">
+        <NavLink
+          to={ADM_NAV_ITEM.to}
+          end={ADM_NAV_ITEM.end}
+          onClick={onNavigate}
+          style={{ '--sbc': ADM_NAV_ITEM.color } as React.CSSProperties}
+          className={({ isActive }) => (isActive ? 'active' : '')}
+        >
+          <FunctionIcon slot={ADM_NAV_ITEM.slot} fallback={ADM_NAV_ITEM.icon} size={18} />
+          <span className="sb-label">{categoryLabels[ADM_NAV_ITEM.key as keyof typeof categoryLabels] ?? ADM_NAV_ITEM.label}</span>
+        </NavLink>
       </nav>
 
       <div className="sb-footer">

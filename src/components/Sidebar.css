@@ -94,6 +94,18 @@
   flex-direction: column;
   gap: 2px;
 }
+/* ADM/settings link's own compact nav block, sitting between the scrolling
+   .sb-nav above and .sb-footer below — flex: 0 0 auto (not 1) so it doesn't
+   compete with .sb-nav for the sidebar's leftover vertical space and stays
+   pinned just above Sair; margin-top is the only separation from the
+   category links above it, deliberately no border (per design request: set
+   apart by spacing, not a divider line). */
+.sidebar nav.sb-settings-nav {
+  flex: 0 0 auto;
+  overflow: visible;
+  margin-top: 8px;
+}
+
 .sb-group-label {
   font-size: 9px;
   color: #8b90bf;
