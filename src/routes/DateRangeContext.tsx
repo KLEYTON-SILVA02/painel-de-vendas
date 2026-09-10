@@ -1,7 +1,11 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { monthFirstISO, monthLastISO } from '../lib/dateRange';
 
-export type RankFilter = 'ALL' | 'DERM' | 'GEN' | 'MP' | 'MER' | 'LEVMEL' | 'CHIP' | `DIN:${string}`;
+// 'MER' is deliberately absent — the Tela Inicial filter bar has only one
+// "Mercadoria Geral" button (ALL, which sums every sale) instead of the two
+// that used to disagree (ALL vs. a literal MER-tagged subset); see
+// DashboardPage's RANK_FILTERS.
+export type RankFilter = 'ALL' | 'DERM' | 'GEN' | 'MP' | 'LEVMEL' | 'CHIP' | `DIN:${string}`;
 
 interface DateRangeState {
   refYear: number;

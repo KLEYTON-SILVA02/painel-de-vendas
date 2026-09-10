@@ -40,13 +40,22 @@ const CAT_COLOR: Record<CategoryKey, string> = {
   MER: '#ff6a00',
 };
 
-// Ported 1:1 from legacy/index-original.html (RANK_FILTERS).
+// "Todas" and "Mercadoria Geral" used to be two separate buttons here (ALL
+// and MER) that silently disagreed: MER filtered sales down to
+// `sale.grupo === 'MER'` (the classification's own leftover-fallback
+// bucket), while ALL summed every sale in the period — so "Mercadoria
+// Geral" always showed a smaller total than "Todas", even though they're
+// meant to be the exact same grand total (the same convention
+// CategoryPage/RankingPage already use for their own MER screens/columns:
+// `catFilter === 'MER' ? 'ALL' : catKey`). Fixed at the root instead of
+// patched: the redundant MER button is gone, and 'ALL' is now simply
+// labeled with the store's own "Mercadoria Geral" name (see the `l: ...`
+// override below and resolveRankFilterParams' label for 'ALL').
 const RANK_FILTERS: { k: RankFilter; l: string }[] = [
-  { k: 'ALL', l: 'Todas' },
+  { k: 'ALL', l: 'Mercadoria Geral' },
   { k: 'DERM', l: 'Dermo' },
   { k: 'GEN', l: 'Gen/Sim' },
   { k: 'MP', l: 'Marcas Excl.' },
-  { k: 'MER', l: 'Merc. Geral' },
 ];
 
 // Ported 1:1 from legacy/index-original.html (resolveRankFilterParams()).
@@ -68,10 +77,12 @@ function resolveRankFilterParams(
   if (rankFilter === 'LEVMEL') return { from: dashFrom, to: dashTo, catFilter: 'LEVMEL' as const, label: categoryLabels.LEVMEL, dinamica: null };
   if (rankFilter === 'CHIP') return { from: dashFrom, to: dashTo, catFilter: 'CHIP' as const, label: categoryLabels.CHIP, dinamica: null };
   const found = RANK_FILTERS.find((x) => x.k === rankFilter);
-  // rankFilter here is one of RANK_FILTERS' keys ('ALL'|'DERM'|'GEN'|'MP'|'MER') —
+  // rankFilter here is one of RANK_FILTERS' keys ('ALL'|'DERM'|'GEN'|'MP') —
   // the DIN:/LEVMEL/CHIP cases were already returned above, but .startsWith()
   // isn't a type guard so TS can't narrow the template-literal member out.
-  const label = rankFilter === 'ALL' ? found?.l || 'Todas' : categoryLabels[rankFilter as CategoryKey] ?? found?.l ?? 'Todas';
+  // 'ALL' always shows the store's own (customizable) "Mercadoria Geral"
+  // label, same as the button itself — see RANK_FILTERS above.
+  const label = rankFilter === 'ALL' ? categoryLabels.MER : categoryLabels[rankFilter as CategoryKey] ?? found?.l ?? 'Todas';
   return { from: dashFrom, to: dashTo, catFilter: rankFilter as CategoryKey | 'ALL', label, dinamica: null };
 }
 
@@ -88,8 +99,9 @@ function RankFilterBar({ dynamics, singleLine }: { dynamics: Dynamic[]; singleLi
           <SubtabButton key={x.k} active={rankFilter === x.k} onClick={() => setRankFilter(x.k)} shrink={singleLine}>
             {/* Abreviação só para este filtro da tela Início — o rótulo completo
                 (customizável em ADM > Nomes das Categorias) continua em todo o
-                resto do sistema. */}
-            {x.k === 'DERM' ? 'DERMO' : (categoryLabels[x.k as keyof typeof categoryLabels] ?? x.l)}
+                resto do sistema. 'ALL' shows categoryLabels.MER directly since
+                categoryLabels has no 'ALL' entry of its own (see RANK_FILTERS). */}
+            {x.k === 'DERM' ? 'DERMO' : x.k === 'ALL' ? categoryLabels.MER : (categoryLabels[x.k as keyof typeof categoryLabels] ?? x.l)}
           </SubtabButton>
         ))}
       </div>
