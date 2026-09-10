@@ -1423,6 +1423,7 @@ export type Database = {
         }[]
       }
       normalize_text: { Args: { input: string }; Returns: string }
+      notify_admin_birthdays: { Args: never; Returns: undefined }
       remove_inactive_collaborators: { Args: never; Returns: undefined }
       resolve_collaborator_email: {
         Args: { p_matricula: string }
