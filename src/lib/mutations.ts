@@ -7,7 +7,7 @@ import { uploadCategoryIcon } from './storage';
 import { supabase } from './supabase';
 import type { TablesInsert, TablesUpdate } from '../types/database';
 
-type SimpleTable = 'catalog' | 'products' | 'brand_keywords' | 'exclusive_brands';
+type SimpleTable = 'catalog' | 'products' | 'brand_keywords' | 'exclusive_brands' | 'generic_substances';
 
 /** Generic "insert a row scoped to the current store" mutation, for the
  * several admin lists (catalog, products, brand keywords, exclusive brands)
@@ -42,6 +42,21 @@ export function useBulkInsertProducts(storeId: string | undefined) {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['products'] }),
+  });
+}
+
+/** Bulk import of Genéricos substance names (one column, "nome"), from
+ * either the paste-a-list box or the spreadsheet import — both feed this
+ * same mutation since it's the identical single-column insert either way. */
+export function useBulkInsertGenericSubstances(storeId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (nomes: string[]) => {
+      if (!storeId) throw new Error('store not loaded');
+      const { error } = await supabase.from('generic_substances').insert(nomes.map((nome) => ({ nome, store_id: storeId })));
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['generic_substances'] }),
   });
 }
 
@@ -743,6 +758,7 @@ export function useReclassifyProdutos(storeId: string | undefined) {
       catalog,
       sales,
       dateRange,
+      origem = 'manual',
     }: {
       produtos: string[];
       categoria: CategoryKey;
@@ -753,6 +769,14 @@ export function useReclassifyProdutos(storeId: string | undefined) {
        * history (the `catalog` upsert above still always applies store-
        * wide, so future imports keep classifying correctly regardless). */
       dateRange?: { from?: string; to?: string };
+      /** Tags a newly-inserted catalog row's origin — 'manual' (default,
+       * every existing caller) for a human-picked reclassification,
+       * 'substancia' for the Genéricos "Substâncias" scan (ProdutosPage),
+       * so its isolated tab can list those rows separately. Only applies to
+       * the insert branch below — a product that already has a catalog row
+       * keeps that row's original origem untouched, so a manually-curated
+       * entry is never silently relabeled by a later substance match. */
+      origem?: 'manual' | 'substancia';
     }) => {
       if (!storeId) throw new Error('store not loaded');
       for (const nome of produtos) {
@@ -761,7 +785,7 @@ export function useReclassifyProdutos(storeId: string | undefined) {
           const { error } = await supabase.from('catalog').update({ categoria }).eq('id', existing.id);
           if (error) throw error;
         } else {
-          const { error } = await supabase.from('catalog').insert({ store_id: storeId, nome, codigo: null, categoria });
+          const { error } = await supabase.from('catalog').insert({ store_id: storeId, nome, codigo: null, categoria, origem });
           if (error) throw error;
         }
       }

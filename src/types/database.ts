@@ -148,6 +148,7 @@ export type Database = {
           created_at: string
           id: string
           nome: string
+          origem: string
           store_id: string
         }
         Insert: {
@@ -156,6 +157,7 @@ export type Database = {
           created_at?: string
           id?: string
           nome: string
+          origem?: string
           store_id: string
         }
         Update: {
@@ -164,6 +166,7 @@ export type Database = {
           created_at?: string
           id?: string
           nome?: string
+          origem?: string
           store_id?: string
         }
         Relationships: [
@@ -608,6 +611,35 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "function_icons_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      generic_substances: {
+        Row: {
+          created_at: string
+          id: string
+          nome: string
+          store_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          nome: string
+          store_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          nome?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generic_substances_store_id_fkey"
             columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "stores"

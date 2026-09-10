@@ -260,3 +260,20 @@ export function classifyBio(
   matches.sort((a, b) => b.len - a.len);
   return matches[0].g;
 }
+
+/** Whether `nome` contains one of `substances`' own names as a substring
+ * (normalized) — same >=3-char threshold as classifyProductTier's own
+ * keyword tiers, so a very short substance name can't accidentally match
+ * anything containing it. Used by the Genéricos "Substâncias" scan
+ * (ProdutosPage) to find products not yet classified as GEN whose name
+ * names a known active substance — unlike Tier 3's brand keywords, this
+ * check needs no "generic marker" gate (a substance name is itself
+ * definitive proof the product is a drug). */
+export function matchesGenericSubstance(nome: string, substances: { nome: string }[]): boolean {
+  const n = normalize(nome);
+  if (!n || !substances.length) return false;
+  return substances.some((s) => {
+    const pad = normalize(s.nome);
+    return pad.length >= 3 && n.includes(pad);
+  });
+}

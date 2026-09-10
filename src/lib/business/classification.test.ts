@@ -4,6 +4,7 @@ import {
   classifyProduct,
   classifyProductTier,
   EXCLUSIVE_BRANDS_DEFAULT,
+  matchesGenericSubstance,
   normalizeGrupoImport,
   type ClassificationInputs,
 } from './classification';
@@ -157,6 +158,27 @@ describe('classifyBio', () => {
     expect(classifyBio('SERINGA SOL CARE LUER 3ML C/ AG30X7', groups)).toBeNull();
     expect(classifyBio('FOSF SOD PREDNISOLONA3MG120MLGN-BIO', groups)).toBeNull();
     expect(classifyBio('AQUARELA 10MG CPD/30', groups)).toBe('G1');
+  });
+});
+
+describe('matchesGenericSubstance', () => {
+  const substances = [{ nome: 'Dipirona' }, { nome: 'Paracetamol' }, { nome: 'GN' }];
+
+  it('matches when the product name contains a substance name, no generic marker required', () => {
+    expect(matchesGenericSubstance('Dipirona Sodica 500mg EMS 10cpr', substances)).toBe(true);
+    expect(matchesGenericSubstance('Paracetamol Gotas Infantil', substances)).toBe(true);
+  });
+
+  it('does not match when no substance name appears', () => {
+    expect(matchesGenericSubstance('Sabonete Dove 90g', substances)).toBe(false);
+  });
+
+  it('ignores substance names shorter than 3 chars, same threshold as the other keyword tiers', () => {
+    expect(matchesGenericSubstance('Genysin 30cpr', substances)).toBe(false);
+  });
+
+  it('returns false with no substances registered', () => {
+    expect(matchesGenericSubstance('Dipirona 500mg', [])).toBe(false);
   });
 });
 
