@@ -3,19 +3,27 @@ import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
-import { CAT_KEYS, classifyProductTier, normalizeCategoriaImport, type CategoryKey } from '../../lib/business/classification';
+import {
+  CAT_KEYS,
+  classifyProductTier,
+  matchesGenericSubstance,
+  normalizeCategoriaImport,
+  type CategoryKey,
+} from '../../lib/business/classification';
+import { normalize } from '../../lib/business/normalize';
 import { buildClassificationInputs } from '../../lib/mappers';
 import { fmtMoney } from '../../lib/format';
-import { useBulkInsertProducts, useDeleteRow, useInsertRow, useUpdateRow } from '../../lib/mutations';
-import { useBrandKeywords, useCatalog, useExclusiveBrands, useProducts, useSales } from '../../lib/queries';
+import { useBulkInsertGenericSubstances, useBulkInsertProducts, useDeleteRow, useInsertRow, useReclassifyProdutos, useUpdateRow } from '../../lib/mutations';
+import { useBrandKeywords, useCatalog, useExclusiveBrands, useGenericSubstances, useProducts, useSales } from '../../lib/queries';
 
-type Tab = 'produtos' | 'catalogo' | 'classificados' | 'palavras' | 'exclusivas';
+type Tab = 'produtos' | 'catalogo' | 'classificados' | 'palavras' | 'exclusivas' | 'substancias';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'produtos', label: 'Produtos' },
   { id: 'catalogo', label: 'Catálogo' },
   { id: 'classificados', label: 'Classificados' },
   { id: 'palavras', label: 'Palavras-chave' },
   { id: 'exclusivas', label: 'Marcas Excl.' },
+  { id: 'substancias', label: 'Substâncias' },
 ];
 
 export function ProdutosPage() {
@@ -43,6 +51,7 @@ export function ProdutosPage() {
       {tab === 'classificados' && <ClassificadosTab />}
       {tab === 'palavras' && <PalavrasTab group={group} setGroup={setGroup} />}
       {tab === 'exclusivas' && <ExclusivasTab />}
+      {tab === 'substancias' && <SubstanciasTab />}
     </div>
   );
 }
@@ -219,8 +228,16 @@ function CatalogoTab() {
   const [categoria, setCategoria] = useState<CategoryKey>('DERM');
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Cadastrados (manual) e Via Substância (inseridos pela varredura da aba
+  // Substâncias, ver SubstanciasTab) ficam na mesma tabela `catalog` e
+  // valem igualmente como Tier 1 — só a listagem é separada, para que os
+  // dois grupos não se misturem visualmente ("ficará isolado", como pedido).
+  const [origemTab, setOrigemTab] = useState<'manual' | 'substancia'>('manual');
 
   if (!catalog) return <PageLoading />;
+  const manualCount = catalog.filter((c) => c.origem !== 'substancia').length;
+  const substanciaCount = catalog.length - manualCount;
+  const list = catalog.filter((c) => (origemTab === 'substancia' ? c.origem === 'substancia' : c.origem !== 'substancia'));
 
   function handleAdd() {
     if (!nome.trim()) return;
@@ -271,9 +288,31 @@ function CatalogoTab() {
         <MutationError error={insertCatalog.error} />
       </div>
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-sm">Itens no catálogo ({catalog.length})</h3>
-          {catalog.length > 0 && (
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <div className="flex gap-1">
+            <button
+              onClick={() => {
+                setOrigemTab('manual');
+                setSelected(new Set());
+                setSelectMode(false);
+              }}
+              className={`rounded-lg px-3 py-1.5 text-xs ${origemTab === 'manual' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+            >
+              Cadastrados ({manualCount})
+            </button>
+            <button
+              onClick={() => {
+                setOrigemTab('substancia');
+                setSelected(new Set());
+                setSelectMode(false);
+              }}
+              className={`rounded-lg px-3 py-1.5 text-xs ${origemTab === 'substancia' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+              title="Produtos inseridos automaticamente pela varredura da aba Substâncias"
+            >
+              Via Substância ({substanciaCount})
+            </button>
+          </div>
+          {list.length > 0 && (
             <button
               onClick={() => {
                 setSelectMode(!selectMode);
@@ -297,8 +336,10 @@ function CatalogoTab() {
             Excluir selecionados ({selected.size})
           </button>
         )}
-        {catalog.length === 0 ? (
-          <div className="text-sm text-slate-500 py-4 text-center">Nenhum item cadastrado.</div>
+        {list.length === 0 ? (
+          <div className="text-sm text-slate-500 py-4 text-center">
+            {origemTab === 'substancia' ? 'Nenhum item identificado via substância ainda.' : 'Nenhum item cadastrado.'}
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -312,7 +353,7 @@ function CatalogoTab() {
                 </tr>
               </thead>
               <tbody>
-                {catalog.map((c) => (
+                {list.map((c) => (
                   <tr key={c.id} className="border-b border-slate-900">
                     {selectMode && (
                       <td className="py-1.5 pr-3">
@@ -662,5 +703,191 @@ function ExclusivasTab() {
         ))}
       </div>
     </div>
+  );
+}
+
+/** "Substâncias" — função exclusiva de Genéricos: uma lista, em coluna
+ * única, de nomes de substâncias (ex.: Dipirona, Paracetamol) mantida pelo
+ * ADM. Ela não entra no motor de classificação sozinha — o botão "Aplicar /
+ * Escanear" varre os produtos já vendidos (mesma fonte da aba Classificados)
+ * procurando os que ainda não são Genéricos mas cujo nome contém alguma
+ * substância cadastrada, e reclassifica cada um encontrado com
+ * useReclassifyProdutos (mesmo mecanismo do ReclassifyBar): upsert no
+ * Catálogo — marcado origem='substancia', para a aba isolada "Via
+ * Substância" em Catálogo — e atualização retroativa de sales.grupo, para
+ * que o resultado já apareça nos rankings/filtros imediatamente. */
+function SubstanciasTab() {
+  const { profile } = useAuth();
+  const { data: substances } = useGenericSubstances();
+  const { data: sales } = useSales();
+  const { data: catalog } = useCatalog();
+  const { data: products } = useProducts();
+  const { data: brandKeywords } = useBrandKeywords();
+  const { data: exclusiveBrands } = useExclusiveBrands();
+  const insertSubstance = useInsertRow('generic_substances', profile?.store_id, 'generic_substances');
+  const bulkInsertSubstances = useBulkInsertGenericSubstances(profile?.store_id);
+  const deleteSubstance = useDeleteRow('generic_substances', 'generic_substances');
+  const reclassify = useReclassifyProdutos(profile?.store_id);
+  const [nome, setNome] = useState('');
+  const [bulkText, setBulkText] = useState('');
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<string[] | null>(null);
+
+  if (!substances || !sales || !catalog || !products || !brandKeywords || !exclusiveBrands) return <PageLoading />;
+
+  function handleAdd() {
+    if (!nome.trim()) return;
+    insertSubstance.mutate({ nome: nome.trim() } as never);
+    setNome('');
+  }
+
+  async function handleBulkAdd() {
+    const nomes = bulkText
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+    if (!nomes.length) return;
+    await bulkInsertSubstances.mutateAsync(nomes);
+    setBulkText('');
+  }
+
+  async function handleScan() {
+    setScanning(true);
+    setScanResult(null);
+    try {
+      const inputs = buildClassificationInputs(catalog!, products!, brandKeywords!, exclusiveBrands!);
+      const catalogNames = new Set(catalog!.map((c) => normalize(c.nome)));
+      const seen = new Set<string>();
+      const candidates: string[] = [];
+      for (const s of sales!) {
+        if (!s.produto) continue;
+        const key = normalize(s.produto);
+        if (seen.has(key) || catalogNames.has(key)) continue;
+        seen.add(key);
+        const categoria = classifyProductTier(s.produto, s.codigo, inputs).categoria;
+        if (categoria === 'GEN') continue;
+        if (matchesGenericSubstance(s.produto, substances!)) candidates.push(s.produto);
+      }
+      if (candidates.length > 0) {
+        await reclassify.mutateAsync({ produtos: candidates, categoria: 'GEN', catalog: catalog!, sales: sales!, origem: 'substancia' });
+      }
+      setScanResult(candidates);
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+        <h3 className="font-semibold mb-1 text-sm">Substâncias — Genéricos</h3>
+        <p className="text-xs text-slate-500">
+          Cadastre nomes de substâncias (ex.: Dipirona, Paracetamol, Losartana). Depois use "Aplicar / Escanear"
+          para identificar, entre os produtos já vendidos, quais contêm alguma dessas substâncias no nome e ainda
+          não estão classificados como Genéricos — eles são inseridos automaticamente no Catálogo, isolados na aba
+          "Via Substância" (dentro de Catálogo), e as vendas já importadas desses produtos são reclassificadas.
+        </p>
+      </div>
+
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+        <h3 className="font-semibold mb-3 text-sm">Adicionar substância</h3>
+        <div className="flex gap-2 mb-3 max-w-md">
+          <input
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            placeholder="ex: Dipirona"
+            className="input flex-1"
+            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+          />
+          <button onClick={handleAdd} className="rounded-md bg-amber-500 text-slate-950 px-4 py-1.5 text-sm font-medium">
+            + Adicionar
+          </button>
+        </div>
+        <MutationError error={insertSubstance.error} />
+        <label className="block text-xs text-slate-400 mb-1 mt-3">Colar lista (uma substância por linha)</label>
+        <textarea
+          value={bulkText}
+          onChange={(e) => setBulkText(e.target.value)}
+          rows={4}
+          placeholder={'Dipirona\nParacetamol\nLosartana'}
+          className="input w-full max-w-md"
+        />
+        <div className="mt-2">
+          <button
+            onClick={handleBulkAdd}
+            disabled={!bulkText.trim() || bulkInsertSubstances.isPending}
+            className="rounded-md border border-slate-700 px-3 py-1.5 text-xs text-slate-300 disabled:opacity-50"
+          >
+            {bulkInsertSubstances.isPending ? 'Adicionando…' : '+ Adicionar lista'}
+          </button>
+        </div>
+        <MutationError error={bulkInsertSubstances.error} />
+      </div>
+
+      <SimpleSheetImportPanel
+        title="Importar planilha de substâncias"
+        columns={['Nome da substância']}
+        onConfirm={async (rows) => {
+          const nomes = rows.map((r) => r[0]?.trim()).filter((n): n is string => !!n);
+          if (nomes.length === 0) return { count: 0, skipped: rows.length };
+          await bulkInsertSubstances.mutateAsync(nomes);
+          return { count: nomes.length, skipped: rows.length - nomes.length };
+        }}
+      />
+
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+        <h3 className="font-semibold mb-3 text-sm">Substâncias cadastradas ({substances.length})</h3>
+        {substances.length === 0 ? (
+          <span className="text-xs text-slate-500">Nenhuma substância cadastrada.</span>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {substances.map((s) => (
+              <span key={s.id} className="text-xs bg-slate-800 rounded-full px-2 py-1 flex items-center gap-1.5">
+                {s.nome}
+                <button onClick={() => deleteSubstance.mutate(s.id)} className="text-slate-500 hover:text-rose-400">
+                  ✕
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+        <h3 className="font-semibold mb-1 text-sm">Aplicar / Escanear</h3>
+        <p className="text-xs text-slate-500 mb-3">
+          Varre todo o histórico de vendas já importado em busca de produtos que ainda não são Genéricos, mas cujo
+          nome contém uma substância cadastrada acima.
+        </p>
+        <button
+          onClick={handleScan}
+          disabled={scanning || substances.length === 0}
+          className="rounded-md bg-cyan-500 text-slate-950 font-medium px-4 py-1.5 text-sm disabled:opacity-50"
+        >
+          {scanning ? 'Escaneando…' : '🔍 Aplicar / Escanear'}
+        </button>
+        <MutationError error={reclassify.error} />
+        {scanResult && (
+          <div className="mt-3">
+            {scanResult.length === 0 ? (
+              <p className="text-sm text-slate-500">Nenhum produto novo encontrado.</p>
+            ) : (
+              <>
+                <p className="text-sm text-green-400 mb-2">
+                  {scanResult.length} produto(s) identificados e movidos para Genéricos (ver Catálogo &gt; Via Substância):
+                </p>
+                <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+                  {scanResult.map((n) => (
+                    <span key={n} className="text-xs bg-slate-800 rounded-full px-2 py-1">
+                      {n}
+                    </span>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </>
   );
 }

@@ -584,6 +584,21 @@ export function useExclusiveBrands() {
   });
 }
 
+/** Genéricos-only "Substâncias" list (ProdutosPage) — single-column keyword
+ * source for the manual "Aplicar/Escanear" scan, kept separate from the
+ * general Tier 2/3 keyword tables since it never feeds the classification
+ * engine directly (see matchesGenericSubstance). */
+export function useGenericSubstances() {
+  return useQuery({
+    queryKey: ['generic_substances'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('generic_substances').select('*').order('nome');
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
 /** Partnership category types (BIOSINTÉTICA is the first/only one today) —
  * small table, always fetched whole for the store. Pages resolve the one
  * they need by `chave` (e.g. 'biosintetica'). */
