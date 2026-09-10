@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import type { CategoryKey } from '../../lib/business/classification';
-import { getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
-import { computeSummary } from '../../lib/business/summary';
+import { getGoalFromTotals, getSuperMetaFromTotals, goalProration } from '../../lib/business/goals';
+import { summaryFromCategoryTotals } from '../../lib/business/summary';
 import type { Collaborator } from '../../lib/business/types';
 import { fmtMoney } from '../../lib/format';
-import { useCollaborators, useCommissionRates, useGoals, useSales } from '../../lib/queries';
+import { monthFirstISO, todayISO } from '../../lib/dateRange';
+import { useCollaborators, useCommissionRates, useGoals, useMobileCategoryTotals, useSales } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { MobileDateFilter } from './MobileDateFilter';
 import { MobileSalesListLockedNotice, MobileSalesTable, MobileSellerAccordion } from './MobileSellerDetail';
@@ -28,13 +29,22 @@ export function MobileCategoryScreen({
   const categoryLabels = useCategoryLabelMap();
   const title = categoryLabels[catKey] ?? defaultTitle;
   const { data: collaborators } = useCollaborators();
-  const { data: sales } = useSales();
   const { data: goals } = useGoals();
   const { data: commissionRates } = useCommissionRates();
   const { dashFrom, dashTo, modoGeral, salesListEnabled, toggleSalesListEnabled } = useDateRange();
   const [selectedSeller, setSelectedSeller] = useState<string | null>(null);
   const [activeCommissionSlot, setActiveCommissionSlot] = useState<number | null>(null);
   const [vendasPage, setVendasPage] = useState(0);
+
+  // Item-level sales only ever fetched once the ADM unlocks "Lista de vendas
+  // detalhada" for this screen — the ranking/goal totals above come from
+  // mobile_category_totals() instead, so a locked screen never downloads a
+  // single raw sale.
+  const { data: sales } = useSales(salesListEnabled);
+  const { data: categoryTotals } = useMobileCategoryTotals(dashFrom, dashTo);
+  const needsMonthToDate = !!(goals?.[catKey]?.autoRedistribuir || goals?.[catKey]?.superMetaAuto);
+  const now = new Date();
+  const { data: monthToDateTotals } = useMobileCategoryTotals(monthFirstISO(now.getFullYear(), now.getMonth()), todayISO(), needsMonthToDate);
 
   const byMatricula = useMemo(() => {
     const map = new Map<string, Collaborator>();
@@ -49,8 +59,8 @@ export function MobileCategoryScreen({
   const collaboratorsData = collaborators ?? [];
 
   const ranking = useMemo(
-    () => computeSummary(salesData, collaboratorsData, dashFrom, dashTo, catKey),
-    [salesData, collaboratorsData, dashFrom, dashTo, catKey],
+    () => summaryFromCategoryTotals(categoryTotals ?? [], collaboratorsData, catKey),
+    [categoryTotals, collaboratorsData, catKey],
   );
 
   // A specific vendedor selected shows their full list — no cap, it's
@@ -73,7 +83,14 @@ export function MobileCategoryScreen({
     [salesListEnabled, salesData, catKey, dashFrom, dashTo, selectedSeller],
   );
 
-  if (!collaborators || !sales || !goals || !commissionRates) {
+  if (
+    !collaborators ||
+    !categoryTotals ||
+    !goals ||
+    !commissionRates ||
+    (salesListEnabled && !sales) ||
+    (needsMonthToDate && !monthToDateTotals)
+  ) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
@@ -83,8 +100,8 @@ export function MobileCategoryScreen({
   const totalValor = ranking.reduce((a, r) => a + r.valor, 0);
   const totalItens = ranking.reduce((a, r) => a + r.itens, 0);
 
-  const metaGeral = getGoal(goals[catKey], mode, sales, collaborators, proration);
-  const metaSuper = getSuperMeta(goals[catKey], mode, sales, collaborators, proration);
+  const metaGeral = getGoalFromTotals(goals[catKey], mode, monthToDateTotals ?? [], collaborators, proration);
+  const metaSuper = getSuperMetaFromTotals(goals[catKey], mode, monthToDateTotals ?? [], collaborators, proration);
   const faltaMeta = Math.max(0, metaGeral - totalValor);
   const faltaSuper = Math.max(0, metaSuper - totalValor);
   const pctMeta = metaGeral > 0 ? Math.min(999, (totalValor / metaGeral) * 100) : 0;

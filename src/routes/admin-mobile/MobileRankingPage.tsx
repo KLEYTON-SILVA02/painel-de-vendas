@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
-import { getGoal } from '../../lib/business/goals';
-import { computeSummary } from '../../lib/business/summary';
+import { getGoalFromTotals } from '../../lib/business/goals';
+import { summaryFromCategoryTotals } from '../../lib/business/summary';
 import { copyText, formatRankingText } from '../../lib/clipboard';
+import { monthFirstISO, todayISO } from '../../lib/dateRange';
 import { fmtMoney } from '../../lib/format';
 import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
-import { useCollaborators, useGoals, useSales, useSpecialLists, useStore } from '../../lib/queries';
+import { useCollaborators, useGoals, useMobileCategoryTotals, useStore } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { MobileDateFilter } from './MobileDateFilter';
 
@@ -21,9 +22,7 @@ const RANKING_COLS = [
 
 export function MobileRankingPage() {
   const { data: collaborators } = useCollaborators();
-  const { data: sales } = useSales();
   const { data: goals } = useGoals();
-  const { data: specialLists } = useSpecialLists();
   const { data: store } = useStore();
   const { dashFrom, dashTo } = useDateRange();
   const categoryLabels = useCategoryLabelMap();
@@ -36,20 +35,27 @@ export function MobileRankingPage() {
   const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
   const [copied, setCopied] = useState(false);
 
+  const { data: categoryTotals } = useMobileCategoryTotals(dashFrom, dashTo);
+  // Only fetched when the currently selected category's goal actually needs
+  // it (auto-redistribute) — handleGenerateImage's metaDiariaValor is the
+  // only consumer, and it's read lazily on click, not per render.
+  const needsMonthToDate = !!goals?.[catKey]?.autoRedistribuir;
+  const now = new Date();
+  const { data: monthToDateTotals } = useMobileCategoryTotals(monthFirstISO(now.getFullYear(), now.getMonth()), todayISO(), needsMonthToDate);
+
   // Safe stand-ins so the useMemo below always runs in the same order
   // (Rules of Hooks) whether or not every query has resolved yet — the
   // "Carregando…" guard comes after it, not before.
-  const salesData = sales ?? [];
   const collaboratorsData = collaborators ?? [];
   // Mercadoria Geral is the store's grand total, not its own exclusive
   // bucket — every sale counts regardless of category, same as the desktop
   // Ranking/CategoryPage and the collaborator-facing screens.
   const ranking = useMemo(
-    () => computeSummary(salesData, collaboratorsData, dashFrom, dashTo, catKey === 'MER' ? 'ALL' : catKey, specialLists),
-    [salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists],
+    () => summaryFromCategoryTotals(categoryTotals ?? [], collaboratorsData, catKey === 'MER' ? 'ALL' : catKey),
+    [categoryTotals, collaboratorsData, catKey],
   );
 
-  if (!collaborators || !sales || !goals || !specialLists) {
+  if (!collaborators || !categoryTotals || !goals || (needsMonthToDate && !monthToDateTotals)) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
@@ -70,7 +76,7 @@ export function MobileRankingPage() {
     setGenerating(true);
     try {
       const rows = rankingList.map((r) => ({ nome: r.nome, apelido: r.apelido, foto: r.foto, valor: isUnit ? r.itens : r.valor }));
-      const metaDiariaValor = getGoal(goals![catKey], 'dia', sales!, collaborators!);
+      const metaDiariaValor = getGoalFromTotals(goals![catKey], 'dia', monthToDateTotals ?? [], collaborators!);
       const blob = await generateRankingImageBlob(rows, info.titulo, dashFrom, dashTo, store?.nome_loja, isUnit, metaDiariaValor);
       if (!blob) return;
       const copied = await tryCopyImage(blob);

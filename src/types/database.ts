@@ -1294,6 +1294,10 @@ export type Database = {
         Args: { p_import_id: string }
         Returns: undefined
       }
+      mobile_category_totals: {
+        Args: { from_iso: string; to_iso: string }
+        Returns: { matricula: string; categoria: string; valor_total: number; itens_total: number }[]
+      }
       remove_inactive_collaborators: { Args: never; Returns: undefined }
       resolve_collaborator_email: {
         Args: { p_matricula: string }

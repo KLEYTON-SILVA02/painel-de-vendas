@@ -29,6 +29,17 @@ function emptyQtd(): Record<CategoryKey | 'SEM', number> {
   return qtd;
 }
 
+/** One (matricula, categoria) aggregate row from the `mobile_category_totals()`
+ * RPC (supabase/migrations/0060) — `categoria` is one of DERM/GEN/MP/MER/
+ * LEVMEL/CHIP/ALL, matching the overlapping-tag model computeSummary() itself
+ * uses for those same six values. */
+export interface CategoryTotalRow {
+  matricula: string;
+  categoria: string;
+  valorTotal: number;
+  itensTotal: number;
+}
+
 /**
  * Per-collaborator sales summary within a date range, optionally filtered by
  * category, or by a special list (LEVMEL/CHIP) matched against product names.
@@ -123,6 +134,73 @@ export function computeSummary(
   // N" (numbered by matricula, so the same unregistered seller always gets
   // the same label within one result set) instead of whatever free-text
   // name came through the sales import.
+  Object.keys(map)
+    .filter((matricula) => !registeredMatriculas.has(matricula))
+    .sort()
+    .forEach((matricula, i) => {
+      const label = `Vend. ${i + 1}`;
+      map[matricula].nome = label;
+      map[matricula].apelido = label;
+    });
+
+  return Object.values(map).sort((a, b) => b.valor - a.valor);
+}
+
+/**
+ * Mobile-performance counterpart to computeSummary(): builds the same
+ * collaborator-seeded rows (zero-sale collaborators included, unrecognized
+ * matriculas synthesized as "Vend. N") from pre-aggregated
+ * `mobile_category_totals()` rows instead of scanning every raw sale — the
+ * date-range filtering and the categoria match already happened server-side.
+ * Only `valor`/`itens` are populated (no mobile screen backed by this RPC
+ * reads the per-category `qtd` breakdown computeSummary() fills in).
+ */
+export function summaryFromCategoryTotals(
+  rows: CategoryTotalRow[],
+  collaborators: Collaborator[],
+  catFilter: CategoryKey | 'ALL' | 'LEVMEL' | 'CHIP',
+): SummaryRow[] {
+  const visitanteMatriculas = new Set(
+    collaborators.filter((c) => c.setor === VISITANTE_SETOR).map((c) => normalizeMatricula(c.matricula)),
+  );
+  const metricCollaborators = collaborators.filter((c) => c.setor !== VISITANTE_SETOR);
+
+  const map: Record<string, SummaryRow> = {};
+  const registeredMatriculas = new Set(metricCollaborators.map((c) => normalizeMatricula(c.matricula)));
+  metricCollaborators.forEach((c) => {
+    const key = normalizeMatricula(c.matricula);
+    map[key] = {
+      matricula: c.matricula,
+      nome: c.nome,
+      apelido: c.apelido || firstName(c.nome),
+      foto: c.foto,
+      metaIndividual: Number(c.metaIndividual) || 0,
+      qtd: emptyQtd(),
+      valor: 0,
+      itens: 0,
+    };
+  });
+
+  rows.forEach((r) => {
+    if (r.categoria !== catFilter) return;
+    const key = normalizeMatricula(r.matricula);
+    if (visitanteMatriculas.has(key)) return;
+    if (!map[key]) {
+      map[key] = {
+        matricula: r.matricula,
+        nome: r.matricula,
+        apelido: r.matricula,
+        foto: null,
+        metaIndividual: 0,
+        qtd: emptyQtd(),
+        valor: 0,
+        itens: 0,
+      };
+    }
+    map[key].valor += r.valorTotal;
+    map[key].itens += r.itensTotal;
+  });
+
   Object.keys(map)
     .filter((matricula) => !registeredMatriculas.has(matricula))
     .sort()

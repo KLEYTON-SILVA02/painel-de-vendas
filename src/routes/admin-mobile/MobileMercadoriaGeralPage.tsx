@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
-import { diasRestantesNoMes, getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
-import { computeSummary } from '../../lib/business/summary';
+import { diasRestantesNoMes, getGoalFromTotals, getSuperMetaFromTotals, goalProration } from '../../lib/business/goals';
+import { summaryFromCategoryTotals } from '../../lib/business/summary';
 import type { Collaborator } from '../../lib/business/types';
 import { fmtMoney } from '../../lib/format';
-import { useCollaborators, useGoals, useSales } from '../../lib/queries';
+import { monthFirstISO, todayISO } from '../../lib/dateRange';
+import { useCollaborators, useGoals, useMobileCategoryTotals, useSales } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { MobileDateFilter } from './MobileDateFilter';
 import { MobileSalesListLockedNotice, MobileSalesTable, MobileSellerAccordion } from './MobileSellerDetail';
@@ -27,11 +28,19 @@ export function MobileMercadoriaGeralPage() {
   const categoryLabels = useCategoryLabelMap();
   const title = categoryLabels.MER;
   const { data: collaborators } = useCollaborators();
-  const { data: sales } = useSales();
   const { data: goals } = useGoals();
   const { dashFrom, dashTo, modoGeral, salesListEnabled, toggleSalesListEnabled } = useDateRange();
   const [selectedSeller, setSelectedSeller] = useState<string | null>(null);
   const [vendasPage, setVendasPage] = useState(0);
+
+  // Item-level sales only fetched once "Lista de vendas detalhada" is
+  // unlocked — the ranking/goal totals below come from
+  // mobile_category_totals() instead.
+  const { data: sales } = useSales(salesListEnabled);
+  const { data: categoryTotals } = useMobileCategoryTotals(dashFrom, dashTo);
+  const needsMonthToDate = !!(goals?.MER?.autoRedistribuir || goals?.MER?.superMetaAuto);
+  const now = new Date();
+  const { data: monthToDateTotals } = useMobileCategoryTotals(monthFirstISO(now.getFullYear(), now.getMonth()), todayISO(), needsMonthToDate);
 
   const byMatricula = useMemo(() => {
     const map = new Map<string, Collaborator>();
@@ -50,8 +59,8 @@ export function MobileMercadoriaGeralPage() {
   // as the desktop CategoryPage and "Meta Geral" elsewhere in the app
   // (effectiveMetaGeral always pulls its target from goals.MER).
   const ranking = useMemo(
-    () => computeSummary(salesData, collaboratorsData, dashFrom, dashTo, 'ALL'),
-    [salesData, collaboratorsData, dashFrom, dashTo],
+    () => summaryFromCategoryTotals(categoryTotals ?? [], collaboratorsData, 'ALL'),
+    [categoryTotals, collaboratorsData],
   );
 
   // A specific vendedor selected shows their full list — no cap. With
@@ -71,7 +80,7 @@ export function MobileMercadoriaGeralPage() {
     [salesListEnabled, salesData, dashFrom, dashTo, selectedSeller],
   );
 
-  if (!collaborators || !sales || !goals) {
+  if (!collaborators || !categoryTotals || !goals || (salesListEnabled && !sales) || (needsMonthToDate && !monthToDateTotals)) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
@@ -82,8 +91,8 @@ export function MobileMercadoriaGeralPage() {
   const totalItens = ranking.reduce((a, r) => a + r.itens, 0);
   const dias = diasRestantesNoMes();
 
-  const metaGeral = getGoal(goals.MER, mode, sales, collaborators, proration);
-  const metaSuper = getSuperMeta(goals.MER, mode, sales, collaborators, proration);
+  const metaGeral = getGoalFromTotals(goals.MER, mode, monthToDateTotals ?? [], collaborators, proration);
+  const metaSuper = getSuperMetaFromTotals(goals.MER, mode, monthToDateTotals ?? [], collaborators, proration);
   const faltaMeta = Math.max(0, metaGeral - totalValor);
   const pctMeta = metaGeral > 0 ? Math.min(999, (totalValor / metaGeral) * 100) : 0;
   const pctSuper = metaSuper > 0 ? Math.min(999, (totalValor / metaSuper) * 100) : 0;
