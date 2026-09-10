@@ -44,10 +44,17 @@
   --mv2-radius-lg: 24px;
 
   /* Altura real da barra superior do ADM mobile (.mv2-topbar) — usada tanto
-     para fixar sua própria altura quanto para reservar, acima dela, um
-     espaço de mesmo tamanho (ver .mv2-topbar abaixo). Um único valor em vez
-     de repetir o número nos dois lugares. */
+     para fixar sua própria altura quanto para reservar, abaixo do respiro,
+     o espaço que ela ocupa (ver .mv2-topbar abaixo). Um único valor em vez
+     de repetir o número em vários lugares. */
   --mv2-topbar-h: 48px;
+  /* Respiro entre o topo real da tela e a barra, para a barra não ficar
+     colada nos ícones de notificação/status do Android. Pedido do cliente
+     originalmente como uma barra inteira de respiro (--mv2-topbar-h, 48px)
+     — reduzido depois para algo bem mais enxuto, a pedido dele: "não
+     precisa um recuo muito grande", só o suficiente para não sobrepor a
+     área de notificações do celular. */
+  --mv2-topbar-gap: 14px;
 
   background: var(--mv2-bg-principal);
   color: var(--mv2-texto);
@@ -260,13 +267,15 @@
    ============================================================ */
 
 /* ---------- 1. Barra fixa superior ---------- */
-/* position: fixed (não sticky) travada a --mv2-topbar-h do topo real da
-   tela — deixa, permanentemente, um espaço vazio acima da barra do mesmo
-   tamanho dela (pedido do cliente para dar "respiro" abaixo da barra de
-   status do celular/APK), em vez de sticky, que reverte a barra para
-   colada no topo assim que a rolagem passa do respiro inicial. O conteúdo
-   abaixo (.mv2-category-menu) recebe a margem equivalente para nunca ficar
-   escondido atrás dela — ver mais abaixo.
+/* position: fixed (não sticky) travada a --mv2-topbar-gap do topo real da
+   tela — deixa, permanentemente, um pequeno espaço vazio acima da barra
+   (pedido do cliente para dar "respiro" abaixo da barra de status do
+   celular/APK; reduzido depois a pedido dele mesmo para um recuo bem
+   menor — não precisava mais de uma barra inteira de folga), em vez de
+   sticky, que reverte a barra para colada no topo assim que a rolagem
+   passa do respiro inicial. O conteúdo abaixo (.mv2-category-menu) recebe
+   a margem equivalente para nunca ficar escondido atrás dela — ver mais
+   abaixo.
    env(safe-area-inset-top) é reforço, não a correção principal: no APK
    instalado, quem realmente evita a barra de status do Android sobrepor o
    conteúdo é o plugin nativo (useNativeStatusBarInset.ts, StatusBar.
@@ -276,26 +285,27 @@
 /* Both .mv2-topbar (fixed) and .mv2-category-menu (sticky, pinned right
    below it — see its own comment) are removed from or start at the very
    top of the normal document flow, so without this the flow never
-   reserves the ~96px (respiro + barra) they visually occupy: .mv2-topbar
+   reserves the (respiro + barra) space they visually occupy: .mv2-topbar
    is `position: fixed` and contributes zero height to the flow, and
    .mv2-category-menu's *static* flow position sits at y=0 (nothing above
-   it takes up flow space either) even though it renders pinned at
-   y=96 — its reserved flow slot is only its own ~54px, not the 96px+54px
-   it actually occupies on screen. The result: scrolling the page moves
+   it takes up flow space either) even though it renders pinned lower —
+   its reserved flow slot is only its own ~54px, not the full offset it
+   actually occupies on screen. The result: scrolling the page moves
    content up faster than the bars' real footprint accounts for, so
    content that should stay below the bars slides in and gets covered by
    them ("passa por baixo das barras"). Padding the shell itself pushes
-   the flow's start down to exactly y=96 — matching .mv2-category-menu's
-   own sticky `top` — so its reserved slot lines up with where it's
-   actually painted, and every element after it (the routed page content)
-   is reserved the correct amount of space, at rest and while scrolling. */
+   the flow's start down to exactly gap+barra — matching
+   .mv2-category-menu's own sticky `top` — so its reserved slot lines up
+   with where it's actually painted, and every element after it (the
+   routed page content) is reserved the correct amount of space, at rest
+   and while scrolling. */
 .mv2.app-shell {
-  padding-top: calc((var(--mv2-topbar-h) * 2) + env(safe-area-inset-top, 0px));
+  padding-top: calc(var(--mv2-topbar-gap) + var(--mv2-topbar-h) + env(safe-area-inset-top, 0px));
 }
 
 .mv2-topbar {
   position: fixed;
-  top: calc(var(--mv2-topbar-h) + env(safe-area-inset-top, 0px));
+  top: calc(var(--mv2-topbar-gap) + env(safe-area-inset-top, 0px));
   left: 0;
   right: 0;
   height: var(--mv2-topbar-h);
@@ -356,9 +366,10 @@
 
 /* ---------- 2. Barra fixa do menu (categorias) ---------- */
 .mv2-category-menu {
-  /* .mv2-topbar é position: fixed, ocupando de --mv2-topbar-h a
-     2×--mv2-topbar-h (mais a área de sistema, se houver) a partir do topo
-     real da tela. `position: sticky` (não fixed) aqui porque essa barra
+  /* .mv2-topbar é position: fixed, ocupando de --mv2-topbar-gap a
+     --mv2-topbar-gap + --mv2-topbar-h (mais a área de sistema, se houver)
+     a partir do topo real da tela. `position: sticky` (não fixed) aqui
+     porque essa barra
      não precisa de altura travada como .mv2-topbar precisou (nenhum
      "respiro" a preservar) — sticky já usa a altura natural do conteúdo
      (ícones + padding) tanto em repouso quanto colada, então não exige
@@ -369,7 +380,7 @@
      rolava e desaparecia por baixo da barra fixa acima, sumindo do
      alcance do usuário até ele rolar de volta ao topo. */
   position: sticky;
-  top: calc((var(--mv2-topbar-h) * 2) + env(safe-area-inset-top, 0px));
+  top: calc(var(--mv2-topbar-gap) + var(--mv2-topbar-h) + env(safe-area-inset-top, 0px));
   z-index: 20;
   display: flex;
   gap: 10px;
