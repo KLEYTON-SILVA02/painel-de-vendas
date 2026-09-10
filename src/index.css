@@ -8,12 +8,18 @@ html,
 body {
   margin: 0;
   /* Stops Android's elastic overscroll ("rubber-band"/bounce) from
-     stretching the whole page when a fling scroll hits the top/bottom
-     edge — on the mobile v2 shells (MobileAdminShell/CollaboratorShell)
-     that bounce visually drags the position:fixed top bar and bottom nav
-     along with the rest of the page for a frame or two, which reads as
-     the bar "freezing" out of place mid-scroll before snapping back. */
-  overscroll-behavior-y: contain;
+     stretching the whole page when a fling scroll — or a pull-down past
+     the top — hits the edge. `contain` alone still lets the local bounce
+     render, just stops it from chaining to a parent/triggering
+     pull-to-refresh; on the mobile v2 shells (MobileAdminShell/
+     CollaboratorShell) that local bounce visually drags the
+     position:fixed top bar and sticky category menu out of sync with the
+     rest of the page for a frame or two, which reads as the bars
+     "freezing"/content sliding under them mid-gesture. `none` suppresses
+     the bounce/glow effect itself rather than just its chaining, which is
+     what actually stops that visual glitch — there's no parent scroll
+     container here for `contain`'s chaining behavior to matter anyway. */
+  overscroll-behavior-y: none;
 }
 
 @layer components {
