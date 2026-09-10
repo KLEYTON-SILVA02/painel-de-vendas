@@ -218,6 +218,8 @@ export function BioPage() {
             formatValue={(v) => `${v.toFixed(1)} pts`}
             bgUrl={storeSettings.ranking_podium_bg_url}
             spots={storeSettings.ranking_podium_spots as unknown as PodiumSpots | null}
+            getSecondaryValue={(r) => r.itens}
+            formatSecondaryValue={(v) => `${v} un.`}
           />
         )}
       </div>

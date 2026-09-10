@@ -93,6 +93,8 @@ export function PodiumSplit<T extends StaircaseRow>({
   formatValue,
   bgUrl,
   spots,
+  getSecondaryValue,
+  formatSecondaryValue,
 }: {
   ranking: T[];
   getValue: (r: T) => number;
@@ -101,6 +103,13 @@ export function PodiumSplit<T extends StaircaseRow>({
   bgUrl?: string | null;
   /** Custom circle/text positions calibrated for `bgUrl`; falls back to the measured defaults when absent. */
   spots?: PodiumSpots | null;
+  /** Optional second metric shown in a smaller font right below the main
+   * value (e.g. Biosintética's "quantidade vendida" alongside its "pts")
+   * — omitted entirely when not passed, so every other PodiumSplit caller
+   * (the plain R$ rankings) keeps its current two-item (valor + nome)
+   * layout unchanged. */
+  getSecondaryValue?: (r: T) => number;
+  formatSecondaryValue?: (v: number) => string;
 }) {
   if (!ranking.length) {
     return <div className="text-sm text-slate-500 py-6 text-center">Sem vendas para este período.</div>;
@@ -142,14 +151,25 @@ export function PodiumSplit<T extends StaircaseRow>({
           <PodiumPhoto key={row.matricula} rank={rank as 0 | 1 | 2} row={row} spots={effectiveSpots} />
         ))}
         {top3.map((row, rank) => (
-          <PodiumText key={row.matricula} rank={rank as 0 | 1 | 2} row={row} getValue={getValue} formatValue={formatValue} spots={effectiveSpots} />
+          <PodiumText
+            key={row.matricula}
+            rank={rank as 0 | 1 | 2}
+            row={row}
+            getValue={getValue}
+            formatValue={formatValue}
+            spots={effectiveSpots}
+            getSecondaryValue={getSecondaryValue}
+            formatSecondaryValue={formatSecondaryValue}
+          />
         ))}
       </div>
 
       {rest.length > 0 && (
         <div style={{ flex: '2 1 380px', display: 'flex', gap: 16, minWidth: 0 }}>
-          <PillColumn slots={col1} getValue={getValue} formatValue={formatValue} />
-          {col2.length > 0 && <PillColumn slots={col2} getValue={getValue} formatValue={formatValue} />}
+          <PillColumn slots={col1} getValue={getValue} formatValue={formatValue} getSecondaryValue={getSecondaryValue} formatSecondaryValue={formatSecondaryValue} />
+          {col2.length > 0 && (
+            <PillColumn slots={col2} getValue={getValue} formatValue={formatValue} getSecondaryValue={getSecondaryValue} formatSecondaryValue={formatSecondaryValue} />
+          )}
         </div>
       )}
     </div>
@@ -184,12 +204,16 @@ function PodiumText<T extends StaircaseRow>({
   getValue,
   formatValue,
   spots,
+  getSecondaryValue,
+  formatSecondaryValue,
 }: {
   rank: 0 | 1 | 2;
   row: T;
   getValue: (r: T) => number;
   formatValue: (v: number) => string;
   spots: PodiumSpots;
+  getSecondaryValue?: (r: T) => number;
+  formatSecondaryValue?: (v: number) => string;
 }) {
   const spot = spots[rank];
   if (!spot) return null;
@@ -216,6 +240,28 @@ function PodiumText<T extends StaircaseRow>({
       >
         {formatValue(getValue(row))}
       </div>
+      {getSecondaryValue && formatSecondaryValue && (
+        <div
+          style={{
+            position: 'absolute',
+            left: `${spot.valueLeft}%`,
+            top: `${spot.valueTop + spot.valueSize * 0.9}%`,
+            width: `${spot.valueMaxWidth}%`,
+            transform: 'translate(-50%,-50%)',
+            textAlign: 'center',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            fontFamily: "'Orbitron', sans-serif",
+            fontWeight: 600,
+            fontSize: `${spot.valueSize * 0.5}cqw`,
+            color: '#dbeafe',
+            textShadow,
+          }}
+        >
+          {formatSecondaryValue(getSecondaryValue(row))}
+        </div>
+      )}
       <div
         style={{
           position: 'absolute',
@@ -253,10 +299,14 @@ function PillColumn<T extends StaircaseRow>({
   slots,
   getValue,
   formatValue,
+  getSecondaryValue,
+  formatSecondaryValue,
 }: {
   slots: PillSlot<T>[];
   getValue: (r: T) => number;
   formatValue: (v: number) => string;
+  getSecondaryValue?: (r: T) => number;
+  formatSecondaryValue?: (v: number) => string;
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: '1 1 0', minWidth: 0 }}>
@@ -299,8 +349,15 @@ function PillColumn<T extends StaircaseRow>({
             >
               {slot.row.apelido || slot.row.nome}
             </span>
-            <span style={{ marginLeft: 'auto', flexShrink: 0, fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, fontSize: 12, color: '#64B5F6' }}>
-              {formatValue(getValue(slot.row))}
+            <span style={{ marginLeft: 'auto', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, fontSize: 12, color: '#64B5F6' }}>
+                {formatValue(getValue(slot.row))}
+              </span>
+              {getSecondaryValue && formatSecondaryValue && (
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, fontSize: 9, color: '#94a3b8' }}>
+                  {formatSecondaryValue(getSecondaryValue(slot.row))}
+                </span>
+              )}
             </span>
           </div>
         ),
