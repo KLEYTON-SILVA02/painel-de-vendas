@@ -67,7 +67,7 @@ const ZONE_COLORS = { foto: '#00f0ff', logo: '#ffb700' } as const;
 const ZONE_LABELS = { foto: 'Foto do colaborador', logo: 'Logo da loja' } as const;
 
 const TEXT_KIND_LABEL: Record<CardTextKind, string> = {
-  tier: '1º texto — Nível (1K, 2K, 3K, 5K, 10K...)',
+  tier: '1º texto — Nível (1K, 2K, 3K... para R$; 1un., 2un., 3un... para Levmel/Chip)',
   categoria: '2º texto — Nome da categoria',
   custom: '3º texto — Texto livre',
 };

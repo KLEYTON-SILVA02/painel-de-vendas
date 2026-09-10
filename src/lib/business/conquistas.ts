@@ -79,7 +79,7 @@ const CONQUISTA_TIER_SUFFIX: Record<FixedConquistaCategoria, string> = {
  * one half rather than the combined string. */
 export function conquistaTierParts(categoria: ConquistaCategoria, tier: number, generic?: GenericConquistaConfig): { valor: string; categoria: string } {
   const nome = generic ? generic.nome.toUpperCase() : (CONQUISTA_TIER_SUFFIX[categoria as FixedConquistaCategoria] ?? categoria);
-  return { valor: isUnitConquista(categoria) ? `${tier}un` : `${tier / 1000}K`, categoria: nome };
+  return { valor: isUnitConquista(categoria) ? `${tier}un.` : `${tier / 1000}K`, categoria: nome };
 }
 
 /** "3K DERMOCOSMÉTICOS" / "1K MARCA PRÓPRIA" / "5un LEVMEL" / "10un CHIP" */

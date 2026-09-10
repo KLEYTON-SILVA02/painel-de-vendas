@@ -142,15 +142,15 @@ describe('conquistaTierLabel', () => {
     expect(conquistaTierLabel('GEN', 2000)).toBe('2K GENÉRICOS');
   });
 
-  it('formats unit categories as "<N>un <categoria>"', () => {
-    expect(conquistaTierLabel('LEVMEL', 5)).toBe('5un LEVMEL');
-    expect(conquistaTierLabel('CHIP', 50)).toBe('50un CHIP');
+  it('formats unit categories as "<N>un. <categoria>"', () => {
+    expect(conquistaTierLabel('LEVMEL', 5)).toBe('5un. LEVMEL');
+    expect(conquistaTierLabel('CHIP', 50)).toBe('50un. CHIP');
   });
 });
 
 describe('conquistaTierParts', () => {
   it('splits into the same value/categoria halves conquistaTierLabel combines', () => {
     expect(conquistaTierParts('DERM', 3000)).toEqual({ valor: '3K', categoria: 'DERMOCOSMÉTICOS' });
-    expect(conquistaTierParts('LEVMEL', 5)).toEqual({ valor: '5un', categoria: 'LEVMEL' });
+    expect(conquistaTierParts('LEVMEL', 5)).toEqual({ valor: '5un.', categoria: 'LEVMEL' });
   });
 });
