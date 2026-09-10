@@ -144,7 +144,7 @@ export function CollaboratorShell() {
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <NotificationBell />
+          <NotificationBell audience="collaborator" />
         </div>
       </header>
 
@@ -186,7 +186,7 @@ export function CollaboratorShell() {
               </>
             )}
             <Route path="/configuracoes" element={<CollaboratorConfiguracoesPage />} />
-            <Route path="/notificacoes" element={<CollaboratorNotificacoesPage />} />
+            <Route path="/notificacoes" element={<CollaboratorNotificacoesPage audience="collaborator" />} />
           </Routes>
           </Suspense>
         </main>

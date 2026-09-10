@@ -57,9 +57,9 @@ const CardConquistaPage = lazy(() => import('./admin/CardConquistaPage').then((m
 const CategoriasPage = lazy(() => import('./admin/CategoriasPage').then((m) => ({ default: m.CategoriasPage })));
 const NomesCategoriasPage = lazy(() => import('./admin/NomesCategoriasPage').then((m) => ({ default: m.NomesCategoriasPage })));
 const CategoryTypePage = lazy(() => import('./category-type/CategoryTypePage').then((m) => ({ default: m.CategoryTypePage })));
-// Reused as-is from the collaborator shell — the notification list itself
-// (tabs, read-state handling) has nothing collaborator-specific in it, it
-// just renders whatever useNotifications() returns for the signed-in user.
+// Reused from the collaborator shell — the notification list itself (tabs,
+// read-state handling) has nothing collaborator-specific in it, it just
+// renders whichever feed `audience` points it at (see useNotifications).
 const CollaboratorNotificacoesPage = lazy(() =>
   import('./collaborator/CollaboratorNotificacoesPage').then((m) => ({ default: m.CollaboratorNotificacoesPage })),
 );
@@ -196,7 +196,7 @@ export function AppShell() {
                 {storeSettings && (
                   <ClosingClock horario={storeSettings.horario as unknown as Horario} feriadosDatas={storeSettings.feriados_datas} />
                 )}
-                <NotificationBell />
+                <NotificationBell audience="admin" />
               </div>
             </div>
           </header>
@@ -216,7 +216,7 @@ export function AppShell() {
             <Route path="/bio" element={<BioPage />} />
             <Route path="/conquistas" element={<ConquistasPage />} />
             <Route path="/conquistas/figurinhas" element={<GaleriaFigurinhasPage />} />
-            <Route path="/notificacoes" element={<CollaboratorNotificacoesPage />} />
+            <Route path="/notificacoes" element={<CollaboratorNotificacoesPage audience="admin" />} />
             <Route
               path="/categoria-parceria/:chave"
               element={
