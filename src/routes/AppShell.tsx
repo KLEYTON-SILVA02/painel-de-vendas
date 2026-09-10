@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthContext';
 import { BackButton } from '../components/BackButton';
 import { ChampionHeaderButton } from '../components/dashboard/ChampionOfDay';
 import { ClosingClock } from '../components/ClosingClock';
+import { BirthdayCelebrationHost } from '../components/BirthdayCelebration';
 import { ConquistaCelebrationHost } from '../components/ConquistaCelebration';
 import { HamburgerIcon, MedalIcon } from '../components/icons/NavIcons';
 import { NotificationBell } from '../components/NotificationBell';
@@ -144,6 +145,7 @@ export function AppShell() {
   return (
     <DateRangeProvider>
       <ConquistaCelebrationHost />
+      <BirthdayCelebrationHost />
       <div className={`app-shell min-h-screen bg-slate-950 text-slate-100 ${collapsed ? 'is-collapsed' : ''} ${mobileOpen ? 'is-mobile-open' : ''}`}>
         <Sidebar
           collapsed={collapsed}
