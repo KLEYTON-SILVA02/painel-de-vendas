@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 import type { BioGroupKey, GoalCategoryKey } from './business/classification';
 import type { BioGroupGoal, CommissionRate, Goal } from './business/types';
 import type { GenericConquistaConfig } from './business/conquistas';
-import type { SpecialListItem } from './business/summary';
+import type { CategoryTotalRow, SpecialListItem } from './business/summary';
 import type { CardTextLayer, CardZone, ConquistaCardTemplate } from './conquistaCardRender';
 import { monthFirstISO, monthLastISO } from './dateRange';
 import { mapBioGroupGoal, mapCollaborator, mapCommissionRate, mapDynamic, mapGoal, mapSale, mapSpecialListItem, SALE_COLUMNS, type SaleRow } from './mappers';
@@ -172,6 +172,33 @@ export function useCurrentMonthSales() {
   return useQuery({
     queryKey: ['sales', 'month', fromISO, toISO],
     queryFn: async () => (await fetchSalesPages({ fromISO, toISO })).map(mapSale),
+  });
+}
+
+/** Per-(matricula, categoria) totals for a date range, from the
+ * `mobile_category_totals()` RPC (supabase/migrations/0060) — the mobile
+ * category/ranking/Mercadoria Geral screens use this instead of `useSales()`
+ * so a phone never downloads item-level sales just to show aggregate totals.
+ * `categoria` covers DERM/GEN/MP/MER/LEVMEL/CHIP/ALL; convert the rows into
+ * ranked rows with `summaryFromCategoryTotals()` (src/lib/business/summary.ts).
+ * Item-level detail (Lista de Vendas) is untouched — it keeps using
+ * `useSalesDetailList`/`useSales()` behind its own opt-in unlock. */
+export function useMobileCategoryTotals(fromISO: string, toISO: string, enabled = true) {
+  return useQuery({
+    queryKey: ['mobile_category_totals', fromISO, toISO],
+    enabled,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('mobile_category_totals', { from_iso: fromISO, to_iso: toISO });
+      if (error) throw error;
+      return (data ?? []).map(
+        (row): CategoryTotalRow => ({
+          matricula: row.matricula,
+          categoria: row.categoria,
+          valorTotal: Number(row.valor_total),
+          itensTotal: Number(row.itens_total),
+        }),
+      );
+    },
   });
 }
 

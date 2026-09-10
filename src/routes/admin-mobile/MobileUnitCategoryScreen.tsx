@@ -2,12 +2,12 @@ import { useMemo, useState } from 'react';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { diasRestantesNoMes } from '../../lib/business/goals';
-import { computeSummary, matchesSpecialList } from '../../lib/business/summary';
+import { matchesSpecialList, summaryFromCategoryTotals } from '../../lib/business/summary';
 import type { Collaborator } from '../../lib/business/types';
 import { copyText, formatRankingText } from '../../lib/clipboard';
 import { todayISO } from '../../lib/dateRange';
 import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
-import { useCollaborators, useGoals, useSales, useSpecialLists, useStore } from '../../lib/queries';
+import { useCollaborators, useGoals, useMobileCategoryTotals, useSales, useSpecialLists, useStore } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { MobileDateFilter } from './MobileDateFilter';
 import { MobileSalesListLockedNotice, MobileSalesTable, MobileSellerAccordion } from './MobileSellerDetail';
@@ -33,7 +33,6 @@ export function MobileUnitCategoryScreen({
   const categoryLabels = useCategoryLabelMap();
   const title = categoryLabels[catKey] ?? defaultTitle;
   const { data: collaborators } = useCollaborators();
-  const { data: sales } = useSales();
   const { data: specialLists } = useSpecialLists();
   const { data: store } = useStore();
   const { data: goals } = useGoals();
@@ -43,6 +42,14 @@ export function MobileUnitCategoryScreen({
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
+
+  const today = todayISO();
+  // Item-level sales only fetched once "Lista de vendas detalhada" is
+  // unlocked — the ranking/today counters above come from
+  // mobile_category_totals() instead.
+  const { data: sales } = useSales(salesListEnabled);
+  const { data: categoryTotals } = useMobileCategoryTotals(dashFrom, dashTo);
+  const { data: todayTotals } = useMobileCategoryTotals(today, today);
 
   const byMatricula = useMemo(() => {
     const map = new Map<string, Collaborator>();
@@ -55,15 +62,14 @@ export function MobileUnitCategoryScreen({
   // "Carregando…" guard comes after them, not before.
   const salesData = sales ?? [];
   const collaboratorsData = collaborators ?? [];
-  const today = todayISO();
 
   const ranking = useMemo(
-    () => computeSummary(salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists),
-    [salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists],
+    () => summaryFromCategoryTotals(categoryTotals ?? [], collaboratorsData, catKey),
+    [categoryTotals, collaboratorsData, catKey],
   );
   const todayRanking = useMemo(
-    () => computeSummary(salesData, collaboratorsData, today, today, catKey, specialLists),
-    [salesData, collaboratorsData, today, catKey, specialLists],
+    () => summaryFromCategoryTotals(todayTotals ?? [], collaboratorsData, catKey),
+    [todayTotals, collaboratorsData, catKey],
   );
 
   const list = specialLists ? (catKey === 'LEVMEL' ? specialLists.levmel : specialLists.chip) : undefined;
@@ -85,7 +91,7 @@ export function MobileUnitCategoryScreen({
     [salesListEnabled, salesData, dashFrom, dashTo, list, selectedSeller],
   );
 
-  if (!collaborators || !sales || !specialLists || !goals) {
+  if (!collaborators || !categoryTotals || !todayTotals || !specialLists || !goals || (salesListEnabled && !sales)) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 

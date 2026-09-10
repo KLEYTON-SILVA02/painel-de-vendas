@@ -1,7 +1,7 @@
 // Ported 1:1 from legacy/index-original.html (getGoal / getSuperMeta /
 // computeMetaDiariaRedistribuida / effectiveMetaGeral / bioDiasRestantes).
 import type { CategoryKey } from './classification';
-import { computeSummary } from './summary';
+import { computeSummary, summaryFromCategoryTotals, type CategoryTotalRow } from './summary';
 import type { Collaborator, Goal, Sale } from './types';
 
 export type GoalMode = 'dia' | 'mes';
@@ -65,6 +65,66 @@ export function computeMetaDiariaRedistribuida(
   const restante = Math.max(0, metaAlvo - realizado);
   const diasRestantes = Math.max(1, diasRestantesNoMes(now));
   return restante / diasRestantes;
+}
+
+/** Mobile-performance counterpart to computeMetaDiariaRedistribuida():
+ * same "(meta - já vendido no mês) / dias restantes" formula, but reads the
+ * already-aggregated `mobile_category_totals()` rows for [1º do mês, hoje]
+ * instead of scanning full `sales`. */
+export function computeMetaDiariaRedistribuidaFromTotals(
+  goal: Goal | undefined,
+  monthToDateRows: CategoryTotalRow[],
+  collaborators: Collaborator[],
+  campo: 'mensal' | 'superMeta' = 'mensal',
+  now = new Date(),
+): number {
+  const g = goal || ({ mensal: 0, superMeta: 0, metrica: 'valor' } as Goal);
+  const metaAlvo = Number(g[campo]) || 0;
+  if (metaAlvo <= 0) return 0;
+
+  const rows = summaryFromCategoryTotals(monthToDateRows, collaborators, g.categoria as CategoryKey);
+  const realizado = g.metrica === 'unidade' ? rows.reduce((a, r) => a + r.itens, 0) : rows.reduce((a, r) => a + r.valor, 0);
+  const restante = Math.max(0, metaAlvo - realizado);
+  const diasRestantes = Math.max(1, diasRestantesNoMes(now));
+  return restante / diasRestantes;
+}
+
+/** Mobile-performance counterpart to getGoal() — takes the same pre-fetched
+ * `monthToDateRows` (see computeMetaDiariaRedistribuidaFromTotals) instead
+ * of full `sales`/`collaborators` for the auto-redistribute path. */
+export function getGoalFromTotals(
+  goal: Goal | undefined,
+  mode: GoalMode,
+  monthToDateRows: CategoryTotalRow[],
+  collaborators: Collaborator[],
+  proration?: GoalProration,
+  now = new Date(),
+): number {
+  const g = goal || ({ mensal: 0, diaria: 0 } as Goal);
+  if (mode === 'dia' && g.autoRedistribuir) {
+    return computeMetaDiariaRedistribuidaFromTotals(g, monthToDateRows, collaborators, 'mensal', now);
+  }
+  const base = mode === 'dia' ? Number(g.diaria) || 0 : Number(g.mensal) || 0;
+  if (mode === 'mes' && proration) return base * (proration.periodDays / proration.monthDays);
+  return base;
+}
+
+/** Mobile-performance counterpart to getSuperMeta() — see getGoalFromTotals. */
+export function getSuperMetaFromTotals(
+  goal: Goal | undefined,
+  mode: GoalMode,
+  monthToDateRows: CategoryTotalRow[],
+  collaborators: Collaborator[],
+  proration?: GoalProration,
+  now = new Date(),
+): number {
+  const g = goal || ({ superMeta: 0 } as Goal);
+  if (mode === 'dia' && g.superMetaAuto) {
+    return computeMetaDiariaRedistribuidaFromTotals(g, monthToDateRows, collaborators, 'superMeta', now);
+  }
+  const base = Number(g.superMeta) || 0;
+  if (mode === 'mes' && proration) return base * (proration.periodDays / proration.monthDays);
+  return base;
 }
 
 export function getGoal(
