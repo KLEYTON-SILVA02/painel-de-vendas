@@ -422,18 +422,26 @@ export function useCollaboratorsWithLogin() {
   });
 }
 
-/** The signed-in collaborator's own recent notifications — RLS already
- * scopes `select *` to their own rows (or every row in the store for an
- * ADM), so no explicit collaborator_id filter is needed here. A plain
+/** Recent notifications for the current viewer. `audience` picks which feed:
+ * 'collaborator' is the signed-in collaborator's own notifications (sales/
+ * import alerts, birthdays, etc.); 'admin' is the ADM-only feed (password
+ * reset requests from the mobile app, client error reports — see
+ * notifications.audience, migration 0053). RLS still scopes each to what
+ * that viewer is actually allowed to see; the explicit `.eq('audience', …)`
+ * filter here is what keeps an ADM's bell from also pulling in every
+ * collaborator's own sale/import notifications the way it used to (RLS
+ * alone lets an admin SELECT all of them by design, for other admin
+ * screens — this query just doesn't ask for that here). A plain
  * 30-most-recent feed is enough for a first version; this isn't a screen
  * anyone scrolls through history on. */
-export function useNotifications() {
+export function useNotifications(audience: 'admin' | 'collaborator') {
   return useQuery({
-    queryKey: ['notifications'],
+    queryKey: ['notifications', audience],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
+        .eq('audience', audience)
         .order('created_at', { ascending: false })
         .limit(30);
       if (error) throw error;

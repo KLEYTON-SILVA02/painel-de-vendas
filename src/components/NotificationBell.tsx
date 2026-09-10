@@ -1,14 +1,15 @@
 import { useNavigate } from 'react-router-dom';
 import { useNotifications } from '../lib/queries';
 
-/** Bell + unread badge for the collaborator-facing shell — tapping it opens
- * the dedicated /notificacoes screen (Hoje/Antigas tabs) instead of a small
- * dropdown, so the full list has room to breathe on a phone. Polls every
- * 60s (see useNotifications) instead of holding a realtime subscription
- * open, since the dispatch cron only ever adds rows every few minutes at
- * most. */
-export function NotificationBell() {
-  const { data: notifications } = useNotifications();
+/** Bell + unread badge, reused by both the collaborator shell and the
+ * desktop ADM shell — `audience` picks which notification feed each sees
+ * (see useNotifications). Tapping it opens the dedicated /notificacoes
+ * screen (Hoje/Antigas tabs) instead of a small dropdown, so the full list
+ * has room to breathe on a phone. Polls every 60s (see useNotifications)
+ * instead of holding a realtime subscription open, since notifications
+ * only ever arrive every few minutes at most. */
+export function NotificationBell({ audience }: { audience: 'admin' | 'collaborator' }) {
+  const { data: notifications } = useNotifications(audience);
   const navigate = useNavigate();
 
   const unreadCount = (notifications ?? []).filter((n) => !n.read_at).length;

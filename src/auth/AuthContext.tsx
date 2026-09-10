@@ -2,6 +2,7 @@ import type { Session } from '@supabase/supabase-js';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { queryPersister } from '../lib/queryPersister';
+import { setReportingProfile } from '../lib/reportClientError';
 import { supabase } from '../lib/supabase';
 import type { Tables } from '../types/database';
 
@@ -35,6 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loadedForUserId.current = userId;
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
     setProfile(data ?? null);
+    setReportingProfile(data ? { storeId: data.store_id, profileId: data.id } : null);
   }
 
   useEffect(() => {
@@ -54,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         loadedForUserId.current = null;
         setProfile(null);
+        setReportingProfile(null);
       }
       setLoading(false);
     });

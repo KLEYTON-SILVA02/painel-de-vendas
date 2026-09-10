@@ -4,6 +4,9 @@ import { registerSW } from 'virtual:pwa-register'
 import './index.css'
 import './styles/mobile-v2.css'
 import App from './App.tsx'
+import { installClientErrorReporter } from './lib/reportClientError'
+
+installClientErrorReporter()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

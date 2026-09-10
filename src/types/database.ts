@@ -252,6 +252,51 @@ export type Database = {
           },
         ]
       }
+      client_error_reports: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          profile_id: string | null
+          stack: string | null
+          store_id: string
+          url: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          profile_id?: string | null
+          stack?: string | null
+          store_id: string
+          url?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          profile_id?: string | null
+          stack?: string | null
+          store_id?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_error_reports_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_error_reports_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       collaborators: {
         Row: {
           apelido: string | null
@@ -728,8 +773,9 @@ export type Database = {
       }
       notifications: {
         Row: {
+          audience: string
           body: string
-          collaborator_id: string
+          collaborator_id: string | null
           created_at: string
           data: Json
           id: string
@@ -739,8 +785,9 @@ export type Database = {
           title: string
         }
         Insert: {
+          audience?: string
           body: string
-          collaborator_id: string
+          collaborator_id?: string | null
           created_at?: string
           data?: Json
           id?: string
@@ -750,8 +797,9 @@ export type Database = {
           title: string
         }
         Update: {
+          audience?: string
           body?: string
-          collaborator_id?: string
+          collaborator_id?: string | null
           created_at?: string
           data?: Json
           id?: string
@@ -930,6 +978,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      rate_limit_hits: {
+        Row: {
+          bucket: string
+          hit_at: string
+          id: number
+        }
+        Insert: {
+          bucket: string
+          hit_at?: string
+          id?: never
+        }
+        Update: {
+          bucket?: string
+          hit_at?: string
+          id?: never
+        }
+        Relationships: []
       }
       sales: {
         Row: {
@@ -1267,37 +1333,96 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _rate_limit_client_ip: { Args: never; Returns: string }
+      archive_old_sales: { Args: never; Returns: Json }
+      archive_old_sales_for_store: {
+        Args: { cutoff: string; store_id_param: string }
+        Returns: Json
+      }
+      category_display_label: { Args: { categoria: string }; Returns: string }
+      category_display_order: { Args: { categoria: string }; Returns: number }
+      check_rate_limit: {
+        Args: { p_bucket: string; p_max_hits: number; p_window_seconds: number }
+        Returns: boolean
+      }
+      classify_bio: {
+        Args: { produto: string; store_id_param: string }
+        Returns: string
+      }
       current_collaborator_id: { Args: never; Returns: string }
       current_collaborator_matricula: { Args: never; Returns: string }
       current_role: { Args: never; Returns: string }
       current_store_id: { Args: never; Returns: string }
-      is_admin: { Args: never; Returns: boolean }
-      list_store_collaborators: {
-        Args: never
-        Returns: {
-          id: string
-          store_id: string
-          matricula: string
-          nome: string
-          apelido: string | null
-          celular: string | null
-          foto_url: string | null
-          foto_conquista_url: string | null
-          setor: string | null
-          meta_individual: number
-          data_nascimento: string | null
-          categorias_visitante: string[]
-          created_at: string
-        }[]
+      dispatch_import_notification_for_collaborator: {
+        Args: {
+          apelido_param: string
+          chip_keywords: string[]
+          collaborator_id_param: string
+          dia: string
+          levmel_keywords: string[]
+          matricula_param: string
+          nome_param: string
+          setor_param: string
+          store_id_param: string
+        }
+        Returns: undefined
+      }
+      dispatch_sales_notification_for_collaborator: {
+        Args: {
+          chip_keywords: string[]
+          collaborator_id_param: string
+          hoje: string
+          levmel_keywords: string[]
+          matricula_param: string
+          store_id_param: string
+        }
+        Returns: undefined
+      }
+      dispatch_sales_notifications: { Args: never; Returns: Json }
+      dispatch_sales_notifications_for_schedule: {
+        Args: {
+          schedule_row: Database["public"]["Tables"]["notification_schedules"]["Row"]
+        }
+        Returns: undefined
       }
       dispatch_todays_import_notifications: {
         Args: { p_import_id: string }
         Returns: undefined
       }
+      format_money_brl: { Args: { v: number }; Returns: string }
+      is_admin: { Args: never; Returns: boolean }
+      list_store_collaborators: {
+        Args: never
+        Returns: {
+          apelido: string
+          categorias_visitante: string[]
+          celular: string
+          created_at: string
+          data_nascimento: string
+          foto_conquista_url: string
+          foto_url: string
+          id: string
+          matricula: string
+          meta_individual: number
+          nome: string
+          setor: string
+          store_id: string
+        }[]
+      }
+      matches_special_list: {
+        Args: { keywords: string[]; produto: string }
+        Returns: boolean
+      }
       mobile_category_totals: {
         Args: { from_iso: string; to_iso: string }
-        Returns: { matricula: string; categoria: string; valor_total: number; itens_total: number }[]
+        Returns: {
+          categoria: string
+          itens_total: number
+          matricula: string
+          valor_total: number
+        }[]
       }
+      normalize_text: { Args: { input: string }; Returns: string }
       remove_inactive_collaborators: { Args: never; Returns: undefined }
       resolve_collaborator_email: {
         Args: { p_matricula: string }
@@ -1305,10 +1430,19 @@ export type Database = {
       }
       sales_month_totals: {
         Args: never
-        Returns: { year_month: string; valor_total: number; itens_total: number; vendas_total: number }[]
+        Returns: {
+          itens_total: number
+          valor_total: number
+          vendas_total: number
+          year_month: string
+        }[]
+      }
+      sector_base_categories: {
+        Args: { setor_param: string }
+        Returns: string[]
       }
       update_own_collaborator_photo: {
-        Args: { new_foto_url: string | null; new_foto_conquista_url: string | null }
+        Args: { new_foto_conquista_url: string | null; new_foto_url: string | null }
         Returns: undefined
       }
     }
@@ -1329,12 +1463,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1358,11 +1492,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1383,11 +1517,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1408,11 +1542,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1425,11 +1559,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

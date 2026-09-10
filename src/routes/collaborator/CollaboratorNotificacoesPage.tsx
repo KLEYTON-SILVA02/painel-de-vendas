@@ -16,31 +16,44 @@ function formatWhen(iso: string): string {
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 }
 
-// Full-screen notification list, reached by tapping the sino on the
-// collaborator topbar — replaces the old small dropdown panel. The two tabs
-// split by READ STATUS, not by calendar date: "Hoje" is whatever was still
-// pending (unread) when this screen was opened — tapping one marks it read
-// but it stays put in "Hoje" for the rest of this visit, so the list
-// doesn't shuffle under the collaborator's finger while they're still
-// reading it; only leaving and reopening the screen (a fresh mount of this
-// component, since it's its own route) moves read items into "Antigas". A
-// notification that arrives while the screen is already open (the 60s poll
-// in useNotifications) still lands in "Hoje", since it wasn't part of the
-// "already read" snapshot either.
-export function CollaboratorNotificacoesPage() {
-  const { data: notifications } = useNotifications();
+// Full-screen notification list, reached by tapping the sino — replaces the
+// old small dropdown panel. `audience` picks which feed to show (see
+// useNotifications); the desktop ADM shell and the collaborator shell both
+// route here with their own audience. The two tabs split by READ STATUS,
+// not by calendar date: "Hoje" is whatever was still pending (unread) when
+// this screen was opened, PLUS the single notification the viewer most
+// recently tapped (the "active" one) — clicking a notification marks it
+// read and keeps it visible in "Hoje" instead of yanking it away mid-read,
+// but as soon as a *different* notification is clicked (or this screen is
+// left and reopened, a fresh mount) that previous one moves into "Antigas".
+// A notification that arrives while the screen is already open (the 60s
+// poll in useNotifications) still lands in "Hoje", since it wasn't part of
+// the "already read" snapshot either.
+export function CollaboratorNotificacoesPage({ audience }: { audience: 'admin' | 'collaborator' }) {
+  const { data: notifications } = useNotifications(audience);
   const markRead = useMarkNotificationRead();
   const [tab, setTab] = useState<'hoje' | 'antigas'>('hoje');
   const alreadyReadAtOpenRef = useRef<Set<string> | null>(null);
+  const [movedToAntigas, setMovedToAntigas] = useState<Set<string>>(new Set());
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   const list = notifications ?? [];
   if (notifications && alreadyReadAtOpenRef.current === null) {
     alreadyReadAtOpenRef.current = new Set(notifications.filter((n) => n.read_at).map((n) => n.id));
   }
   const alreadyReadAtOpen = alreadyReadAtOpenRef.current;
-  const hoje = alreadyReadAtOpen ? list.filter((n) => !alreadyReadAtOpen.has(n.id)) : list;
-  const antigas = alreadyReadAtOpen ? list.filter((n) => alreadyReadAtOpen.has(n.id)) : [];
+  const isAntigas = (id: string) => (alreadyReadAtOpen?.has(id) ?? false) || movedToAntigas.has(id);
+  const hoje = list.filter((n) => !isAntigas(n.id));
+  const antigas = list.filter((n) => isAntigas(n.id));
   const shown = tab === 'hoje' ? hoje : antigas;
+
+  function handleClick(n: (typeof list)[number]) {
+    if (activeId && activeId !== n.id) {
+      setMovedToAntigas((prev) => new Set(prev).add(activeId));
+    }
+    if (!n.read_at) markRead.mutate(n.id);
+    setActiveId(n.id);
+  }
 
   return (
     <div>
@@ -67,9 +80,7 @@ export function CollaboratorNotificacoesPage() {
             {shown.map((n) => (
               <button
                 key={n.id}
-                onClick={() => {
-                  if (!n.read_at) markRead.mutate(n.id);
-                }}
+                onClick={() => handleClick(n)}
                 style={{
                   display: 'block',
                   width: '100%',
