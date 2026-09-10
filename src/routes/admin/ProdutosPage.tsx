@@ -732,6 +732,8 @@ function SubstanciasTab() {
   const [bulkText, setBulkText] = useState('');
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<string[] | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   if (!substances || !sales || !catalog || !products || !brandKeywords || !exclusiveBrands) return <PageLoading />;
 
@@ -836,17 +838,70 @@ function SubstanciasTab() {
       />
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <h3 className="font-semibold mb-3 text-sm">Substâncias cadastradas ({substances.length})</h3>
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <h3 className="font-semibold text-sm">Substâncias cadastradas ({substances.length})</h3>
+          {substances.length > 0 && (
+            <button
+              onClick={() => {
+                setSelectMode(!selectMode);
+                setSelected(new Set());
+              }}
+              className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300"
+            >
+              {selectMode ? 'Cancelar' : 'Selecionar'}
+            </button>
+          )}
+        </div>
+        {selectMode && (
+          <div className="flex items-center gap-2 mb-3">
+            <label className="flex items-center gap-1.5 text-xs text-slate-300">
+              <input
+                type="checkbox"
+                checked={selected.size === substances.length}
+                onChange={(e) => setSelected(e.target.checked ? new Set(substances.map((s) => s.id)) : new Set())}
+              />
+              Selecionar todos
+            </label>
+            {selected.size > 0 && (
+              <button
+                onClick={() => {
+                  selected.forEach((id) => deleteSubstance.mutate(id));
+                  setSelected(new Set());
+                  setSelectMode(false);
+                }}
+                className="rounded-lg bg-rose-600 text-white px-3 py-1.5 text-xs font-medium"
+              >
+                Excluir selecionadas ({selected.size})
+              </button>
+            )}
+          </div>
+        )}
         {substances.length === 0 ? (
           <span className="text-xs text-slate-500">Nenhuma substância cadastrada.</span>
         ) : (
           <div className="flex flex-wrap gap-1.5">
             {substances.map((s) => (
               <span key={s.id} className="text-xs bg-slate-800 rounded-full px-2 py-1 flex items-center gap-1.5">
+                {selectMode && (
+                  <input
+                    type="checkbox"
+                    checked={selected.has(s.id)}
+                    onChange={() =>
+                      setSelected((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(s.id)) next.delete(s.id);
+                        else next.add(s.id);
+                        return next;
+                      })
+                    }
+                  />
+                )}
                 {s.nome}
-                <button onClick={() => deleteSubstance.mutate(s.id)} className="text-slate-500 hover:text-rose-400">
-                  ✕
-                </button>
+                {!selectMode && (
+                  <button onClick={() => deleteSubstance.mutate(s.id)} className="text-slate-500 hover:text-rose-400">
+                    ✕
+                  </button>
+                )}
               </span>
             ))}
           </div>
