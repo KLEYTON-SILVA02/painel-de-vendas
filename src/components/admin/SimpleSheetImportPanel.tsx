@@ -88,7 +88,18 @@ export function SimpleSheetImportPanel({
       setResult(res);
       setRows(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao importar.');
+      // Supabase erros (PostgrestError) não são `instanceof Error` — são
+      // objetos simples com `.message` (e às vezes `.details`/`.hint`). Sem
+      // isso, qualquer erro de banco/RLS cai no fallback genérico abaixo e
+      // esconde o motivo real da falha do ADM (e de quem for diagnosticar).
+      const message =
+        err instanceof Error
+          ? err.message
+          : err && typeof err === 'object' && 'message' in err && typeof (err as { message: unknown }).message === 'string'
+            ? (err as { message: string; details?: string }).message +
+              ((err as { details?: string }).details ? ` (${(err as { details?: string }).details})` : '')
+            : 'Falha ao importar.';
+      setError(message);
     } finally {
       setBusy(false);
     }

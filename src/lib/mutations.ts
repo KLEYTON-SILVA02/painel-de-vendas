@@ -327,12 +327,19 @@ export function useBulkUpsertCollaborators(storeId: string | undefined) {
   return useMutation({
     mutationFn: async (rows: { matricula: string; nome: string; apelido: string; setor: string; celular?: string | null }[]) => {
       if (!storeId) throw new Error('store not loaded');
+      // Duas linhas da planilha podem virar a mesma matrícula depois do
+      // normalizeMatricula() (zeros à esquerda removidos) — sem isso o
+      // upsert manda duas linhas com o mesmo (store_id, matricula) no mesmo
+      // comando e o Postgres rejeita com "ON CONFLICT DO UPDATE command
+      // cannot affect row a second time". Mantém a última ocorrência.
+      const byMatricula = new Map<string, (typeof rows)[number] & { matricula: string; store_id: string }>();
+      for (const r of rows) {
+        const matricula = normalizeMatricula(r.matricula);
+        byMatricula.set(matricula, { ...r, matricula, store_id: storeId });
+      }
       const { error } = await supabase
         .from('collaborators')
-        .upsert(
-          rows.map((r) => ({ ...r, matricula: normalizeMatricula(r.matricula), store_id: storeId })),
-          { onConflict: 'store_id,matricula' },
-        );
+        .upsert(Array.from(byMatricula.values()), { onConflict: 'store_id,matricula' });
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['collaborators'] }),
