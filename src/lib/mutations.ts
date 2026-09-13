@@ -431,6 +431,23 @@ export function useUpdateOwnCollaboratorUsername() {
   });
 }
 
+/** ADM self-service: renames only the caller's own login handle (username)
+ * — see update_own_admin_username (migration 0066). Mirrors
+ * useUpdateOwnCollaboratorUsername; the RPC rejects a bad format or a name
+ * already taken, surfacing here as `error`. Unlike a collaborator's
+ * username (read from the `collaborators` query), an admin's lives on
+ * `profiles` (held in AuthContext, not react-query) — the caller is
+ * responsible for refreshing that (see AuthContext's refreshProfile) after
+ * a successful change. */
+export function useUpdateOwnAdminUsername() {
+  return useMutation({
+    mutationFn: async (username: string) => {
+      const { error } = await supabase.rpc('update_own_admin_username', { new_username: username });
+      if (error) throw error;
+    },
+  });
+}
+
 /** Upserts the native FCM token a device registered for push (see
  * useNativePushRegistration) — `token` is unique across the whole table, so
  * re-registering the same device (app reinstall, token rotation) just

@@ -947,6 +947,7 @@ export type Database = {
           id: string
           role: string
           store_id: string
+          username: string | null
         }
         Insert: {
           collaborator_id?: string | null
@@ -954,6 +955,7 @@ export type Database = {
           id: string
           role: string
           store_id: string
+          username?: string | null
         }
         Update: {
           collaborator_id?: string | null
@@ -961,6 +963,7 @@ export type Database = {
           id?: string
           role?: string
           store_id?: string
+          username?: string | null
         }
         Relationships: [
           {
@@ -1461,6 +1464,7 @@ export type Database = {
       normalize_text: { Args: { input: string }; Returns: string }
       notify_admin_birthdays: { Args: never; Returns: undefined }
       remove_inactive_collaborators: { Args: never; Returns: undefined }
+      resolve_admin_email: { Args: { p_username: string }; Returns: string }
       resolve_collaborator_email: {
         Args: { p_matricula: string }
         Returns: string
@@ -1477,6 +1481,10 @@ export type Database = {
       sector_base_categories: {
         Args: { setor_param: string }
         Returns: string[]
+      }
+      update_own_admin_username: {
+        Args: { new_username: string }
+        Returns: undefined
       }
       update_own_collaborator_photo: {
         Args: { new_foto_conquista_url: string; new_foto_url: string }

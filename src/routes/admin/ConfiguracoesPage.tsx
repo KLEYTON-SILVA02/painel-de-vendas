@@ -16,6 +16,7 @@ import {
   useSetImportFieldOverride,
   useUpdateBioWeights,
   useUpdateNotificationSchedule,
+  useUpdateOwnAdminUsername,
   useUpdateStoreSettings,
   type BulkDeletableTable,
 } from '../../lib/mutations';
@@ -184,6 +185,8 @@ export function ConfiguracoesPage() {
       <ImportNotificationToggleCard />
 
       <ImportColumnsCard />
+
+      <AccessCard />
 
       <DangerZoneCard />
     </div>
@@ -736,6 +739,70 @@ const DELETE_TARGETS: { key: BulkDeletableTable; label: string; supportsMonth: b
   { key: 'goals', label: 'Metas', supportsMonth: false },
   { key: 'dynamics', label: 'Dinâmicas', supportsMonth: false },
 ];
+
+/** Lets the ADM set/change a login username as an alternative to the
+ * e-mail used at signup — same self-service pattern as
+ * CollaboratorConfiguracoesPage's own username card, but for the store's
+ * admin account (update_own_admin_username, migration 0066). The e-mail on
+ * file keeps working for login and stays the only way to recover a
+ * forgotten password; this only adds a second, easier-to-type identifier
+ * that resolves to the same account (see resolve_admin_email + LoginPage). */
+function AccessCard() {
+  const { profile, refreshProfile } = useAuth();
+  const updateUsername = useUpdateOwnAdminUsername();
+  const [usernameDraft, setUsernameDraft] = useState('');
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (profile && !usernameDraft) setUsernameDraft(profile.username ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.username]);
+
+  function handleSave() {
+    setSaved(false);
+    updateUsername.mutate(usernameDraft.trim(), {
+      onSuccess: async () => {
+        await refreshProfile();
+        setSaved(true);
+      },
+    });
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+      <h3 className="font-semibold mb-1 text-sm">Acesso</h3>
+      <p className="text-xs text-slate-500 mb-3">
+        Escolha um nome de usuário para entrar no lugar do e-mail. O e-mail cadastrado continua funcionando e é o
+        único jeito de recuperar a senha caso você a esqueça — sua senha não muda.
+      </p>
+      <div className="flex gap-2 max-w-md">
+        <input
+          value={usernameDraft}
+          onChange={(e) => {
+            setUsernameDraft(e.target.value);
+            setSaved(false);
+          }}
+          placeholder="ex: kleyton.silva"
+          className="input flex-1"
+          maxLength={32}
+        />
+        <button
+          onClick={handleSave}
+          disabled={updateUsername.isPending || !usernameDraft.trim() || usernameDraft.trim() === (profile?.username ?? '')}
+          className="rounded-md bg-cyan-500 text-slate-950 px-4 py-1.5 text-sm font-medium disabled:opacity-50"
+        >
+          {updateUsername.isPending ? 'Salvando…' : 'Salvar'}
+        </button>
+      </div>
+      {updateUsername.error && (
+        <p className="text-xs text-rose-400 mt-2">
+          {updateUsername.error instanceof Error ? updateUsername.error.message : 'Não foi possível salvar.'}
+        </p>
+      )}
+      {saved && !updateUsername.error && <p className="text-xs text-emerald-400 mt-2">✓ Nome de usuário atualizado.</p>}
+    </div>
+  );
+}
 
 /** Destructive-action card: pick a data type (and, for Vendas, a month) and
  * permanently delete the matching rows. Every other admin bulk-delete in
