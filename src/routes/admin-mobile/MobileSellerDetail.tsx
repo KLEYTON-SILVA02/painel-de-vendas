@@ -85,13 +85,22 @@ export function MobileSellerAccordion({
  * mounting every individual sale row by default. */
 export function MobileSalesListLockedNotice({ onEnable }: { onEnable: () => void }) {
   return (
-    <p style={{ margin: '0 18px 16px', fontSize: 10, color: 'var(--mv2-texto-2)' }}>
-      Mostrando só o ranking e os totais — mais rápido para abrir e trocar de aba. Ligue{' '}
-      <button onClick={onEnable} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--mv2-ciano-claro)', textDecoration: 'underline', fontSize: 10 }}>
-        "Lista de vendas detalhada"
-      </button>{' '}
-      no calendário da tela Início pra ver os itens vendidos.
-    </p>
+    <button
+      onClick={onEnable}
+      style={{
+        margin: '0 18px 16px',
+        border: '1px solid var(--mv2-ciano-claro)',
+        background: 'rgba(107, 200, 221, 0.1)',
+        borderRadius: 8,
+        padding: '6px 12px',
+        color: 'var(--mv2-ciano-claro)',
+        fontSize: 10,
+        fontWeight: 600,
+        cursor: 'pointer',
+      }}
+    >
+      Lista de vendas detalhada
+    </button>
   );
 }
 
