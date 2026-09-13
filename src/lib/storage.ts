@@ -97,6 +97,24 @@ export async function uploadConquistaCardLogo(storeId: string, templateId: strin
   return `${data.publicUrl}?t=${Date.now()}`;
 }
 
+/** Uploads a print (screenshot) for one step of a tutorial (função
+ * Tutoriais), under {storeId}/tutoriais/{tutorialId}/passo-{stepIndex}.{ext}.
+ * `tutorials` is global content (no store_id column of its own — the same
+ * training applies to every loja), but storage.objects' write RLS is still
+ * store-scoped like every other upload in this bucket, so the image simply
+ * lands under whichever admin's store happened to upload it — irrelevant
+ * for reading it back, since the bucket is public-read regardless of
+ * folder. */
+export async function uploadTutorialStepImage(storeId: string, tutorialId: string, stepIndex: number, file: File): Promise<string> {
+  const webpFile = await toWebP(file);
+  const ext = webpFile.name.split('.').pop() || 'png';
+  const fullPath = `${storeId}/tutoriais/${tutorialId}/passo-${stepIndex}.${ext}`;
+  const { error } = await supabase.storage.from('photos').upload(fullPath, webpFile, { upsert: true });
+  if (error) throw error;
+  const { data } = supabase.storage.from('photos').getPublicUrl(fullPath);
+  return `${data.publicUrl}?t=${Date.now()}`;
+}
+
 /** Uploads a store's own custom Ranking Geral podium background (replacing
  * the ADM-supplied stock artwork), under {storeId}/ranking-podium/bg.{ext}
  * — calibrated in Configurações via the "varinha mágica" tool, which marks

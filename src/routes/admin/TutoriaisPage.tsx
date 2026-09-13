@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { PageLoading } from '../../components/PageLoading';
 import { normalize } from '../../lib/business/normalize';
-import { useMarkTutorialDone } from '../../lib/mutations';
+import { useMarkTutorialDone, useUpdateTutorialStepImage } from '../../lib/mutations';
 import { useTutorialProgress, useTutorials } from '../../lib/queries';
-import type { Tables } from '../../types/database';
+import { uploadTutorialStepImage } from '../../lib/storage';
+import type { Json, Tables } from '../../types/database';
 
 type Tutorial = Tables<'tutorials'>;
 type TutorialStep = { texto: string; imagem_url?: string | null };
@@ -40,10 +41,23 @@ export function TutoriaisPage() {
   const { data: tutorials } = useTutorials();
   const { data: progress } = useTutorialProgress();
   const markDone = useMarkTutorialDone(profile?.id);
+  const updateStepImage = useUpdateTutorialStepImage();
 
   const [busca, setBusca] = useState('');
   const [grupoAtivo, setGrupoAtivo] = useState<string | null>(null);
   const [aberto, setAberto] = useState<Tutorial | null>(null);
+
+  // Depois do upload de um print (botão "Adicionar print" no visualizador),
+  // atualiza a cópia local `aberto` na hora — sem isso a imagem só apareceria
+  // depois de fechar e reabrir o tutorial, já que `aberto` é um snapshot da
+  // lista tomado no momento em que "Começar" foi clicado.
+  async function handleUploadStepImage(tutorialAlvo: Tutorial, stepIndex: number, file: File) {
+    if (!profile) return;
+    const url = await uploadTutorialStepImage(profile.store_id, tutorialAlvo.id, stepIndex, file);
+    const passos = tutorialSteps(tutorialAlvo);
+    const novosPassos = await updateStepImage.mutateAsync({ tutorialId: tutorialAlvo.id, passos, stepIndex, imagemUrl: url });
+    setAberto((prev) => (prev && prev.id === tutorialAlvo.id ? { ...prev, passos: novosPassos as unknown as Json } : prev));
+  }
 
   if (!tutorials || !progress || !profile) return <PageLoading />;
 
@@ -152,6 +166,7 @@ export function TutoriaisPage() {
           onClose={() => setAberto(null)}
           onMarkDone={() => markDone.mutate(aberto.id)}
           marking={markDone.isPending}
+          onUploadStepImage={(stepIndex, file) => handleUploadStepImage(aberto, stepIndex, file)}
         />
       )}
     </div>
@@ -185,16 +200,36 @@ function TutorialViewer({
   onClose,
   onMarkDone,
   marking,
+  onUploadStepImage,
 }: {
   tutorial: Tutorial;
   done: boolean;
   onClose: () => void;
   onMarkDone: () => void;
   marking: boolean;
+  onUploadStepImage: (stepIndex: number, file: File) => Promise<void>;
 }) {
   const steps = tutorialSteps(tutorial);
   const [stepIdx, setStepIdx] = useState(0);
   const step = steps[stepIdx];
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      await onUploadStepImage(stepIdx, file);
+    } catch {
+      setUploadError('Não foi possível enviar a imagem. Tente novamente.');
+    } finally {
+      setUploading(false);
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
@@ -252,6 +287,18 @@ function TutorialViewer({
               Imagem deste passo ainda não cadastrada
             </div>
           )}
+
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelected} />
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+            className="shrink-0 text-xs rounded-lg border border-slate-700 px-3 py-1.5 text-slate-300 hover:border-slate-600 disabled:opacity-50"
+          >
+            {uploading ? 'Enviando…' : step?.imagem_url ? '📷 Trocar print deste passo' : '📷 Adicionar print deste passo'}
+          </button>
+          {uploadError && <p className="text-[10px] text-rose-400 shrink-0">{uploadError}</p>}
+
           {steps.length > 1 && (
             <div className="flex items-center justify-between shrink-0">
               <button

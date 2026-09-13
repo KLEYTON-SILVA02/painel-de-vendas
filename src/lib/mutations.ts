@@ -878,3 +878,30 @@ export function useMarkTutorialDone(profileId: string | undefined) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tutorial_progress'] }),
   });
 }
+
+/** Atualiza a `imagem_url` de um passo específico de um tutorial (função
+ * Tutoriais), depois do upload do print em uploadTutorialStepImage. Reescreve
+ * o array `passos` inteiro porque é um jsonb — não dá pra fazer update
+ * parcial de um índice do array direto no Postgres via supabase-js. */
+export function useUpdateTutorialStepImage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      tutorialId,
+      passos,
+      stepIndex,
+      imagemUrl,
+    }: {
+      tutorialId: string;
+      passos: { texto: string; imagem_url?: string | null }[];
+      stepIndex: number;
+      imagemUrl: string;
+    }) => {
+      const novosPassos = passos.map((p, i) => (i === stepIndex ? { ...p, imagem_url: imagemUrl } : p));
+      const { error } = await supabase.from('tutorials').update({ passos: novosPassos }).eq('id', tutorialId);
+      if (error) throw error;
+      return novosPassos;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tutorials'] }),
+  });
+}
