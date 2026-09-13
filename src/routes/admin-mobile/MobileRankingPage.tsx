@@ -26,8 +26,14 @@ export function MobileRankingPage() {
   const { data: store } = useStore();
   const { dashFrom, dashTo } = useDateRange();
   const categoryLabels = useCategoryLabelMap();
+  // MER's chip is the store's grand-total bucket (every sale, regardless of
+  // category — see the `catKey === 'MER' ? 'ALL' : catKey` mapping below),
+  // the same merged "Todas" filter Desktop's RankFilterBar already exposes
+  // (DashboardPage.tsx). Desktop labels it with the store's own Mercadoria
+  // Geral name; here it's shortened to "Mercadoria" per the mobile spec,
+  // instead of the longer store-customizable label used everywhere else.
   const RANKING_COLS_LABELED = useMemo(
-    () => RANKING_COLS.map((c) => ({ ...c, titulo: categoryLabels[c.key] ?? c.titulo })),
+    () => RANKING_COLS.map((c) => ({ ...c, titulo: c.key === 'MER' ? 'Mercadoria' : (categoryLabels[c.key] ?? c.titulo) })),
     [categoryLabels],
   );
   const [catKey, setCatKey] = useState<(typeof RANKING_COLS)[number]['key']>('DERM');

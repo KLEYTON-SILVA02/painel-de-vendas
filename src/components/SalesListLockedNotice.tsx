@@ -9,12 +9,11 @@
  * the line-item table under them. */
 export function SalesListLockedNotice({ onEnable }: { onEnable: () => void }) {
   return (
-    <p className="text-xs text-slate-500 py-2">
-      Mostrando só o ranking e os totais, sem exibir cada venda individualmente — mais rápido para abrir e trocar de categoria. Ligue{' '}
-      <button onClick={onEnable} className="text-cyan-400 underline underline-offset-2 hover:text-cyan-300">
-        "Lista de vendas detalhada"
-      </button>{' '}
-      no calendário da tela Início para ver os itens vendidos.
-    </p>
+    <button
+      onClick={onEnable}
+      className="my-2 rounded-lg border border-cyan-500/50 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-400 transition-colors hover:bg-cyan-500/20 hover:text-cyan-300"
+    >
+      Lista de vendas detalhada
+    </button>
   );
 }
