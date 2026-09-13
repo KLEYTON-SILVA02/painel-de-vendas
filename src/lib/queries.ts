@@ -744,6 +744,37 @@ export function useTutorialProgress() {
   });
 }
 
+/** Acesso Construtor (Fase 2) — true só para a allow-list `platform_builders`
+ * (hoje, só o dono da plataforma). Controla se a seção aparece na Área de
+ * Suporte e se a tela de seleção de loja é oferecida quando o usuário está
+ * autenticado mas ainda sem profile — nunca confie só nisso pra proteger
+ * dado nenhum, é a RPC (security definer) quem decide de verdade. */
+export function useIsPlatformBuilder(enabled = true) {
+  return useQuery({
+    queryKey: ['is_platform_builder'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('is_platform_builder');
+      if (error) throw error;
+      return data;
+    },
+    enabled,
+  });
+}
+
+/** Lista de lojas que o Construtor pode escolher para entrar — a RPC em si
+ * já barra qualquer chamador que não esteja em platform_builders (retorna
+ * vazio), então não precisa de guarda extra aqui. */
+export function useStoresForBuilder() {
+  return useQuery({
+    queryKey: ['stores_for_builder'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('list_stores_for_builder');
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
 /** On-demand row count for the "Excluir dados" danger zone (ADM >
  * Configurações) — a plain async lookup rather than a cached query hook,
  * since it's only ever used right before a destructive action to show
