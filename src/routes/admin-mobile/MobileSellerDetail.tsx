@@ -88,11 +88,14 @@ export function MobileSalesListLockedNotice({ onEnable }: { onEnable: () => void
     <button
       onClick={onEnable}
       style={{
+        display: 'block',
+        width: 'calc(100% - 36px)',
+        boxSizing: 'border-box',
         margin: '0 18px 16px',
         border: '1px solid var(--mv2-ciano-claro)',
         background: 'rgba(107, 200, 221, 0.1)',
         borderRadius: 8,
-        padding: '6px 12px',
+        padding: '8px 12px',
         color: 'var(--mv2-ciano-claro)',
         fontSize: 10,
         fontWeight: 600,

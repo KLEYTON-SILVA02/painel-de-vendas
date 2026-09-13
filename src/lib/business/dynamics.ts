@@ -178,6 +178,44 @@ export function computeDinamicaColaboradorVendas(din: Dynamic, sales: Sale[], ma
   return Array.from(map.values()).sort((a, b) => b.dataISO.localeCompare(a.dataISO) || a.produto.localeCompare(b.produto));
 }
 
+export interface DinamicaVendaLinha {
+  dataISO: string;
+  produto: string;
+  vendedor: string;
+  qtd: number;
+  valor: number;
+}
+
+/** Every sale counting toward this dynamic's overall progress, across every
+ * eligible participant — same period/product/participantes/setorAlvo
+ * filters as computeDinamicaProgresso, one row per sale (not aggregated by
+ * product like computeDinamicaColaboradorProdutos, nor scoped to a single
+ * matricula like computeDinamicaColaboradorVendas). Used by the "Lista de
+ * vendas detalhada" table shown directly on the active dynamic, as opposed
+ * to the per-participant popup those two other functions feed. Most recent
+ * sale first. */
+export function computeDinamicaVendas(din: Dynamic, sales: Sale[], collaborators: Collaborator[]): DinamicaVendaLinha[] {
+  const participantesSet = din.participantes.length ? new Set(din.participantes.map(normalizeMatricula)) : null;
+  const collaboratorByMatricula = new Map(collaborators.map((c) => [normalizeMatricula(c.matricula), c]));
+  const linhas: DinamicaVendaLinha[] = [];
+  sales.forEach((s) => {
+    if (!s.dataISO || s.dataISO < din.dataInicio || s.dataISO > din.dataFim) return;
+    if (!dinamicaProdutoParticipa(din, s.produto)) return;
+    const matriculaKey = normalizeMatricula(s.matricula);
+    if (participantesSet && !participantesSet.has(matriculaKey)) return;
+    const c = collaboratorByMatricula.get(matriculaKey);
+    if (din.setorAlvo !== 'ambos' && (!c || !dynamicAllowsCollaborator(din, c))) return;
+    linhas.push({
+      dataISO: s.dataISO,
+      produto: s.produto || '(sem nome)',
+      vendedor: c?.apelido || c?.nome || s.vendedor || s.matricula,
+      qtd: Number(s.qtd) || 0,
+      valor: Number(s.valor) || 0,
+    });
+  });
+  return linhas.sort((a, b) => b.dataISO.localeCompare(a.dataISO));
+}
+
 /** Whether a collaborator's sector matches the dynamic's target sector —
  * 'ambos' (the default, and every dynamic created before this field
  * existed) never restricts. Determines who can participate, be counted
