@@ -21,7 +21,14 @@ import {
   type BulkDeletableTable,
 } from '../../lib/mutations';
 import { FIELD_NAMES, type ImportField } from '../../lib/business/importMapping';
-import { countRowsInRange, useImportFieldOverrides, useNotificationSchedules, useSpecialListRows, useStoreSettings } from '../../lib/queries';
+import {
+  countRowsInRange,
+  useCategoryTypes,
+  useImportFieldOverrides,
+  useNotificationSchedules,
+  useSpecialListRows,
+  useStoreSettings,
+} from '../../lib/queries';
 import { uploadRankingPodiumBackground } from '../../lib/storage';
 import podiumPremiumBg from '../../assets/ranking/podium-premium-bg.jpg';
 import {
@@ -43,6 +50,8 @@ export function ConfiguracoesPage() {
   const { profile } = useAuth();
   const { data: rows } = useSpecialListRows();
   const { data: storeSettings } = useStoreSettings();
+  const { data: categoryTypes } = useCategoryTypes();
+  const hasBiosintetica = (categoryTypes ?? []).some((c) => c.chave === 'biosintetica');
   const addProduct = useAddSpecialListProduct(profile?.store_id);
   const deleteProduct = useDeleteSpecialListProduct();
   const updateWeights = useUpdateBioWeights(profile?.store_id);
@@ -54,7 +63,7 @@ export function ConfiguracoesPage() {
   const [levmelShown, setLevmelShown] = useState(KEYWORD_PAGE_SIZE);
   const [chipShown, setChipShown] = useState(KEYWORD_PAGE_SIZE);
 
-  if (!rows || !storeSettings) return <PageLoading />;
+  if (!rows || !storeSettings || !categoryTypes) return <PageLoading />;
   const currentWeights = weights ?? (storeSettings.bio_weights as unknown as BioWeights);
   const levmel = rows.filter((r) => r.tipo === 'levmel');
   const chip = rows.filter((r) => r.tipo === 'chip');
@@ -155,28 +164,32 @@ export function ConfiguracoesPage() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <h3 className="text-green-400 font-semibold mb-1">🧪 Pesos da BIOSINTÉTICA</h3>
-        <p className="text-xs text-slate-500 mb-3">Pontos ganhos por item vendido em cada grupo.</p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {(['G1', 'G2', 'G3', 'G4'] as const).map((g) => (
-            <div key={g}>
-              <label className="block text-xs text-slate-400 mb-1">{g}</label>
-              <input
-                type="number"
-                step="0.1"
-                value={currentWeights[g]}
-                onChange={(e) => setWeights({ ...currentWeights, [g]: Number(e.target.value) })}
-                className="input"
-              />
+      {hasBiosintetica && (
+        <>
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+            <h3 className="text-green-400 font-semibold mb-1">🧪 Pesos da BIOSINTÉTICA</h3>
+            <p className="text-xs text-slate-500 mb-3">Pontos ganhos por item vendido em cada grupo.</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {(['G1', 'G2', 'G3', 'G4'] as const).map((g) => (
+                <div key={g}>
+                  <label className="block text-xs text-slate-400 mb-1">{g}</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={currentWeights[g]}
+                    onChange={(e) => setWeights({ ...currentWeights, [g]: Number(e.target.value) })}
+                    className="input"
+                  />
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
 
-      <button onClick={handleSave} disabled={saving} className="self-start rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm disabled:opacity-50">
-        {saving ? 'Salvando…' : 'Salvar configurações'}
-      </button>
+          <button onClick={handleSave} disabled={saving} className="self-start rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm disabled:opacity-50">
+            {saving ? 'Salvando…' : 'Salvar configurações'}
+          </button>
+        </>
+      )}
 
       <RankingAppearanceCard />
 
