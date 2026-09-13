@@ -198,11 +198,15 @@ function TutorialViewer({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+      {/* 80% da tela (largura e altura) — pedido explícito para que a área
+          do print tenha espaço de sobra para uma boa visualização, em vez de
+          ficar espremida num modal de largura fixa pequena. As duas colunas
+          rolam cada uma por conta própria dentro dessa altura fixa. */}
       <div
-        className="w-full max-w-3xl max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950 p-5 flex flex-col md:flex-row gap-5"
+        className="w-[80vw] h-[80vh] rounded-2xl border border-slate-800 bg-slate-950 p-5 flex flex-col md:flex-row gap-5 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 min-h-0 overflow-y-auto pr-1">
           <div className="flex items-start justify-between gap-2">
             <h3 className="font-semibold text-base">{tutorial.titulo}</h3>
             <button onClick={onClose} className="text-slate-400 hover:text-slate-200 text-sm">
@@ -238,16 +242,18 @@ function TutorialViewer({
           </label>
         </div>
 
-        <div className="w-full md:w-64 shrink-0 flex flex-col gap-2">
+        <div className="w-full md:w-1/2 shrink-0 min-h-0 flex flex-col gap-2">
           {step?.imagem_url ? (
-            <img src={step.imagem_url} alt={`Passo ${stepIdx + 1}`} className="rounded-xl border border-slate-800 w-full" />
+            <div className="flex-1 min-h-0 rounded-xl border border-slate-800 bg-slate-900/60 flex items-center justify-center overflow-hidden">
+              <img src={step.imagem_url} alt={`Passo ${stepIdx + 1}`} className="max-w-full max-h-full object-contain" />
+            </div>
           ) : (
-            <div className="rounded-xl border border-slate-800 bg-slate-900/60 aspect-video flex items-center justify-center text-xs text-slate-600 text-center p-3">
+            <div className="flex-1 min-h-0 rounded-xl border border-slate-800 bg-slate-900/60 flex items-center justify-center text-xs text-slate-600 text-center p-3">
               Imagem deste passo ainda não cadastrada
             </div>
           )}
           {steps.length > 1 && (
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between shrink-0">
               <button
                 type="button"
                 disabled={stepIdx === 0}
