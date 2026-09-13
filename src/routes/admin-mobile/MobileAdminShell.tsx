@@ -15,8 +15,8 @@ import {
   HexagonIcon,
   HomeIcon,
   LeafIcon,
+  MedalIcon,
   PillIcon,
-  RefreshIcon,
   SettingsIcon,
   TagIcon,
   TargetIcon,
@@ -24,10 +24,8 @@ import {
 } from '../../components/icons/NavIcons';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import type { GoalCategoryKey } from '../../lib/business/classification';
-import type { Horario } from '../../lib/business/horario';
 import { useResolvePasswordRequest } from '../../lib/mutations';
-import { useCategoryTypes, useCollaborators, usePendingPasswordRequests, useStore, useStoreSettings } from '../../lib/queries';
-import { MobileClosingTimer } from './MobileClosingTimer';
+import { useCategoryTypes, useCollaborators, usePendingPasswordRequests, useStore } from '../../lib/queries';
 
 // Every screen below is lazy-loaded: this shell previously imported all of
 // them (plus every desktop /admin/* maintenance page) statically at the top
@@ -103,6 +101,7 @@ const SLOT_TO_CATEGORY_LABEL_KEY: Partial<Record<string, GoalCategoryKey>> = {
 
 const CATEGORIES_AFTER_BIO = [
   { to: '/dinamicas', end: false, cls: 'mv2-cat-dinamicas', Icon: TargetIcon, label: 'Dinâmicas', slot: 'dinamicas' },
+  { to: '/conquistas', end: false, cls: 'mv2-cat-conquistas', Icon: MedalIcon, label: 'Conquistas', slot: 'conquistas' },
   { to: '/admin', end: false, cls: 'mv2-cat-adm', Icon: SettingsIcon, label: 'ADM', slot: 'adm' },
 ] as const;
 
@@ -113,7 +112,6 @@ const ImportarPage = lazy(() => import('../admin/ImportarPage').then((m) => ({ d
 export function MobileAdminShell() {
   const { signOut } = useAuth();
   const { data: store } = useStore();
-  const { data: storeSettings } = useStoreSettings();
   const { data: categoryTypes } = useCategoryTypes();
   const { data: collaborators } = useCollaborators();
   const { data: pendingPasswordRequests } = usePendingPasswordRequests();
@@ -188,62 +186,6 @@ export function MobileAdminShell() {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {storeSettings && (
-            <MobileClosingTimer horario={storeSettings.horario as unknown as Horario} feriadosDatas={storeSettings.feriados_datas} />
-          )}
-          <div className="mv2-collab-menu-wrap">
-            <button
-              className="mv2-icon-btn"
-              title="Solicitações de nova senha"
-              onClick={() => setPwMenuOpen((v) => !v)}
-              style={{ position: 'relative', fontSize: 12 }}
-            >
-              🔑
-              {!!pendingPasswordRequests?.length && (
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: -4,
-                    right: -4,
-                    background: '#ff3df0',
-                    color: '#0b0e1d',
-                    borderRadius: '50%',
-                    width: 15,
-                    height: 15,
-                    fontSize: 9,
-                    fontWeight: 800,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  {pendingPasswordRequests.length}
-                </span>
-              )}
-            </button>
-            {pwMenuOpen && (
-              <>
-                <div className="mv2-collab-menu-backdrop" onClick={() => setPwMenuOpen(false)} />
-                <div className="mv2-collab-menu" style={{ minWidth: 220, right: 0, left: 'auto' }}>
-                  {!pendingPasswordRequests || pendingPasswordRequests.length === 0 ? (
-                    <div style={{ padding: 10, fontSize: 11, color: 'var(--mv2-texto-2)' }}>Nenhuma solicitação pendente.</div>
-                  ) : (
-                    pendingPasswordRequests.map((req) => {
-                      const c = collaborators?.find((col) => col.id === req.collaborator_id);
-                      return (
-                        <button key={req.id} onClick={() => handleAttendRequest(req.id, req.collaborator_id)}>
-                          🔑 {c?.apelido || c?.nome || 'Colaborador'}
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-          <button className="mv2-icon-btn" title="Atualizar" onClick={() => window.location.reload()}>
-            <RefreshIcon width={14} height={14} />
-          </button>
           <button className="mv2-icon-btn" title="Sair" onClick={() => signOut()} style={{ fontSize: 10 }}>
             ⏻
           </button>
@@ -252,14 +194,53 @@ export function MobileAdminShell() {
 
       <nav className="mv2-category-menu">
         {categories.map((c) => (
-          <NavLink key={c.to} to={c.to} end={c.end} title={c.label} className={({ isActive }) => `mv2-cat-icon ${c.cls} ${isActive ? 'active' : ''}`}>
-            {c.iconeUrl ? (
-              <img src={c.iconeUrl} alt="" width={26} height={26} style={{ objectFit: 'contain' }} />
-            ) : (
-              <FunctionIcon slot={c.slot} fallback={c.Icon} size={26} />
+          <div key={c.to} className="mv2-cat-icon-wrap">
+            <NavLink to={c.to} end={c.end} title={c.label} className={({ isActive }) => `mv2-cat-icon ${c.cls} ${isActive ? 'active' : ''}`}>
+              {c.iconeUrl ? (
+                <img src={c.iconeUrl} alt="" width={29} height={29} style={{ objectFit: 'contain' }} />
+              ) : (
+                <FunctionIcon slot={c.slot} fallback={c.Icon} size={29} />
+              )}
+            </NavLink>
+            {/* The key-shaped password-request shortcut used to live in the
+                topbar (removed per mobile ADM redesign — the topbar now
+                shows only the store name); relocated here as a badge on the
+                ADM icon since that's this shell's only other ADM-only nav
+                item, so pending requests stay visible without the topbar. */}
+            {c.slot === 'adm' && !!pendingPasswordRequests?.length && (
+              <button
+                className="mv2-cat-badge"
+                title="Solicitações de nova senha"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setPwMenuOpen((v) => !v);
+                }}
+              >
+                {pendingPasswordRequests.length}
+              </button>
             )}
-          </NavLink>
+          </div>
         ))}
+        {pwMenuOpen && (
+          <>
+            <div className="mv2-collab-menu-backdrop" onClick={() => setPwMenuOpen(false)} />
+            <div className="mv2-collab-menu" style={{ minWidth: 220, right: 10, left: 'auto' }}>
+              {!pendingPasswordRequests || pendingPasswordRequests.length === 0 ? (
+                <div style={{ padding: 10, fontSize: 11, color: 'var(--mv2-texto-2)' }}>Nenhuma solicitação pendente.</div>
+              ) : (
+                pendingPasswordRequests.map((req) => {
+                  const c = collaborators?.find((col) => col.id === req.collaborator_id);
+                  return (
+                    <button key={req.id} onClick={() => handleAttendRequest(req.id, req.collaborator_id)}>
+                      🔑 {c?.apelido || c?.nome || 'Colaborador'}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </>
+        )}
       </nav>
 
       <main style={{ paddingBottom: 24 }}>

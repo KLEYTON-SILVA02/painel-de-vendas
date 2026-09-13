@@ -9,7 +9,12 @@
 
 .mv2 {
   /* Neutros / fundos */
-  --mv2-bg-principal: #040811;
+  /* Dark purple/violet gradient (client reference image), kept dark enough
+     at every edge to stay consistent with the app's existing near-black
+     theme instead of reading as a lighter "purple app". Built from the
+     brand's own violet tones (--mv2-roxo-marca/--mv2-indigo below) instead
+     of new arbitrary hues. */
+  --mv2-bg-principal: radial-gradient(130% 85% at 50% -12%, #2a1454 0%, #170b30 32%, #0b0620 58%, #05030d 100%);
   --mv2-bg-cards: #080815;
   --mv2-bg-input: #091a38;
   --mv2-texto: #ffffff;
@@ -43,10 +48,7 @@
   --mv2-radius-md: 12px;
   --mv2-radius-lg: 24px;
 
-  /* Altura real da barra superior do ADM mobile (.mv2-topbar) — usada tanto
-     para fixar sua própria altura quanto para reservar, abaixo do respiro,
-     o espaço que ela ocupa (ver .mv2-topbar abaixo). Um único valor em vez
-     de repetir o número em vários lugares. */
+  /* Altura da barra superior do ADM mobile (.mv2-topbar). */
   --mv2-topbar-h: 48px;
   /* Respiro entre o topo real da tela e a barra, para a barra não ficar
      colada nos ícones de notificação/status do Android. Pedido do cliente
@@ -266,50 +268,30 @@
    PÁGINA INICIAL
    ============================================================ */
 
-/* ---------- 1. Barra fixa superior ---------- */
-/* position: fixed (não sticky) travada a --mv2-topbar-gap do topo real da
-   tela — deixa, permanentemente, um pequeno espaço vazio acima da barra
-   (pedido do cliente para dar "respiro" abaixo da barra de status do
-   celular/APK; reduzido depois a pedido dele mesmo para um recuo bem
-   menor — não precisava mais de uma barra inteira de folga), em vez de
-   sticky, que reverte a barra para colada no topo assim que a rolagem
-   passa do respiro inicial. O conteúdo abaixo (.mv2-category-menu) recebe
-   a margem equivalente para nunca ficar escondido atrás dela — ver mais
-   abaixo.
-   env(safe-area-inset-top) é reforço, não a correção principal: no APK
-   instalado, quem realmente evita a barra de status do Android sobrepor o
-   conteúdo é o plugin nativo (useNativeStatusBarInset.ts, StatusBar.
-   setOverlaysWebView) — isso aqui só entra em jogo em contextos onde esse
-   plugin não se aplica (navegador comum, PWA), e some sozinho (vira 0)
-   quando o WebView já não desenha sob a área de sistema. */
-/* Both .mv2-topbar (fixed) and .mv2-category-menu (sticky, pinned right
-   below it — see its own comment) are removed from or start at the very
-   top of the normal document flow, so without this the flow never
-   reserves the (respiro + barra) space they visually occupy: .mv2-topbar
-   is `position: fixed` and contributes zero height to the flow, and
-   .mv2-category-menu's *static* flow position sits at y=0 (nothing above
-   it takes up flow space either) even though it renders pinned lower —
-   its reserved flow slot is only its own ~54px, not the full offset it
-   actually occupies on screen. The result: scrolling the page moves
-   content up faster than the bars' real footprint accounts for, so
-   content that should stay below the bars slides in and gets covered by
-   them ("passa por baixo das barras"). Padding the shell itself pushes
-   the flow's start down to exactly gap+barra — matching
-   .mv2-category-menu's own sticky `top` — so its reserved slot lines up
-   with where it's actually painted, and every element after it (the
-   routed page content) is reserved the correct amount of space, at rest
-   and while scrolling. */
+/* ---------- 1. Barra superior ---------- */
+/* Both the topbar and the category-menu below it used to be pinned to the
+   viewport (fixed / sticky) so they'd stay visible while scrolling. On real
+   devices that "stuck" state is exactly what read as a bug: the bars never
+   scrolled at all, and the routed page content — reserved only its own
+   flow height by the padding-top hack this replaced — moved as if the bars
+   weren't there, gets partly hidden behind them. Fixed by going back to
+   plain, un-pinned document flow: the topbar and category-menu are normal
+   in-flow siblings of the routed content, so the whole shell scrolls
+   together as one unit, and there's nothing left to "gruda" or leave
+   behind.
+   The phone's own status bar (notifications/wifi/battery/clock) is a
+   separate concern, handled two ways instead of by pinning our own bars:
+   on the installed APK, useNativeStatusBarInset.ts (StatusBar.
+   setOverlaysWebView) tells Android to resize the WebView below that area
+   so nothing the app draws is ever hidden under it; env(safe-area-inset-top)
+   below is the browser/PWA fallback for the same reservation (a no-op,
+   i.e. 0, once the native plugin already resized the WebView). */
 .mv2.app-shell {
-  padding-top: calc(var(--mv2-topbar-gap) + var(--mv2-topbar-h) + env(safe-area-inset-top, 0px));
+  padding-top: calc(var(--mv2-topbar-gap) + env(safe-area-inset-top, 0px));
 }
 
 .mv2-topbar {
-  position: fixed;
-  top: calc(var(--mv2-topbar-gap) + env(safe-area-inset-top, 0px));
-  left: 0;
-  right: 0;
   height: var(--mv2-topbar-h);
-  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -317,13 +299,6 @@
   padding: 8px 12px;
   box-sizing: border-box;
   background: #080a08;
-  /* Promotes this fixed bar to its own GPU compositing layer — without it,
-     some Android WebViews (notably Samsung's) repaint a position:fixed
-     element per scroll frame instead of just recompositing it, which on a
-     fast fling shows up as the bar visibly lagging a frame behind (reads
-     as "freezing") before it catches up to the correct position. */
-  will-change: transform;
-  transform: translateZ(0);
 }
 .mv2-topbar .mv2-store-info {
   display: flex;
@@ -344,68 +319,36 @@
   cursor: pointer;
   flex-shrink: 0;
 }
-.mv2-topbar .mv2-close-timer {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: rgba(96, 187, 70, 0.15);
-  border: 1px solid var(--mv2-verde);
-  color: var(--mv2-verde);
-  border-radius: 999px;
-  padding: 3px 10px;
-  font-size: 10px;
-  font-weight: 600;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-.mv2-topbar .mv2-close-timer.mv2-closed {
-  border-color: var(--mv2-bronze);
-  color: var(--mv2-bronze);
-  background: rgba(237, 28, 36, 0.15);
-}
-
-/* ---------- 2. Barra fixa do menu (categorias) ---------- */
+/* ---------- 2. Barra do menu (categorias) ---------- */
+/* Grid instead of a horizontally-scrolling row: fixed at 6 columns so the
+   icons (Início, Ranking, as 6 fixed categorias, Biosintética/extra
+   categorias if any, Dinâmicas, Conquistas, ADM) wrap into full rows
+   instead of requiring a side-scroll to reach the later ones. */
 .mv2-category-menu {
-  /* .mv2-topbar é position: fixed, ocupando de --mv2-topbar-gap a
-     --mv2-topbar-gap + --mv2-topbar-h (mais a área de sistema, se houver)
-     a partir do topo real da tela. `position: sticky` (não fixed) aqui
-     porque essa barra
-     não precisa de altura travada como .mv2-topbar precisou (nenhum
-     "respiro" a preservar) — sticky já usa a altura natural do conteúdo
-     (ícones + padding) tanto em repouso quanto colada, então não exige
-     descobrir/travar essa altura numa variável à parte. Como o `top` bate
-     exatamente com a posição de repouso logo abaixo do .mv2-topbar, o
-     efeito prático é idêntico a fixed: assim que a página rola, ela gruda
-     ali — sem isso, sendo apenas conteúdo normal (como era antes), ela
-     rolava e desaparecia por baixo da barra fixa acima, sumindo do
-     alcance do usuário até ele rolar de volta ao topo. */
-  position: sticky;
-  top: calc(var(--mv2-topbar-gap) + var(--mv2-topbar-h) + env(safe-area-inset-top, 0px));
-  z-index: 20;
-  display: flex;
-  gap: 10px;
-  padding: 8px 10px;
-  overflow-x: auto;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px 2px;
+  padding: 8px 6px;
   background: #080a08;
-  scrollbar-width: none;
-  will-change: transform;
-  transform: translateZ(0);
-}
-.mv2-category-menu::-webkit-scrollbar {
-  display: none;
 }
 /* Icons render bare (no circle behind them) — the category color lives on
    the glyph itself via `color`, sized up to fill the space the circle used
-   to occupy (38px) instead of the small 16px glyph that sat inside it. */
+   to occupy (42px) instead of the small 16px glyph that sat inside it.
+   42px/29px = the original 38px/26px scaled up 10%. */
+.mv2-cat-icon-wrap {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
 .mv2-category-menu .mv2-cat-icon {
-  flex: 0 0 auto;
-  width: 38px;
-  height: 38px;
+  width: 42px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
-  font-size: 26px;
+  font-size: 29px;
   text-decoration: none;
   cursor: pointer;
   border-bottom: 2px solid transparent;
@@ -414,6 +357,27 @@
 .mv2-category-menu .mv2-cat-icon.active {
   opacity: 1;
   border-bottom-color: currentColor;
+}
+/* Badge for the ADM icon's relocated pending-password-request shortcut
+   (moved out of the topbar, which now shows only the store name — see
+   MobileAdminShell.tsx). */
+.mv2-cat-badge {
+  position: absolute;
+  top: -2px;
+  right: 6px;
+  background: #ff3df0;
+  color: #0b0e1d;
+  border: none;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  font-size: 9px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
 }
 /* cor individual por categoria */
 .mv2-cat-icon.mv2-cat-inicio {
@@ -442,6 +406,9 @@
 }
 .mv2-cat-icon.mv2-cat-biosintetica {
   color: var(--mv2-verde);
+}
+.mv2-cat-icon.mv2-cat-conquistas {
+  color: var(--mv2-verde-lima);
 }
 .mv2-cat-icon.mv2-cat-dinamicas {
   color: var(--mv2-azul-violeta);
