@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { HelpTip } from '../HelpTip';
 import type { ColumnRankingRow } from '../../lib/business/ranking';
 import { copyText, formatRankingText } from '../../lib/clipboard';
 import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
@@ -174,6 +175,7 @@ export function RankingColumnCard({
       >
         {generating ? 'Gerando...' : '🖼️ Gerar imagem'}
       </button>
+      <HelpTip helpKey="ranking.gerar_imagem_coluna" fallback="Escolha entre gerar a imagem só desta categoria ou de todas as colunas do ranking de uma vez." />
 
       {scopeModalOpen && (
         <GenerateImageScopeModal

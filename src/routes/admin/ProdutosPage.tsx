@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
+import { HelpTip } from '../../components/HelpTip';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import {
@@ -43,6 +44,22 @@ export function ProdutosPage() {
               {t.label}
             </button>
           ))}
+          <HelpTip
+            helpKey={`produtos.aba_${tab}`}
+            fallback={
+              tab === 'produtos'
+                ? 'Cadastro manual de produtos por categoria (Dermo/Genérico/Marcas Exclusivas), um de cada vez.'
+                : tab === 'catalogo'
+                  ? 'Lista de produtos exatos já reconhecidos automaticamente na importação de vendas.'
+                  : tab === 'classificados'
+                    ? 'Todo produto já visto em alguma venda, com a categoria que o sistema identificou — reclassifique aqui se algo saiu errado.'
+                    : tab === 'palavras'
+                      ? 'Palavras-chave usadas para reconhecer produtos novos automaticamente, sem precisar cadastrar um a um.'
+                      : tab === 'exclusivas'
+                        ? 'Marcas que sempre entram em Marcas Exclusivas, mesmo sem estar no catálogo ou nas palavras-chave.'
+                        : 'Substâncias usadas para reconhecer produtos Genéricos automaticamente pelo nome.'
+            }
+          />
         </div>
       </div>
 

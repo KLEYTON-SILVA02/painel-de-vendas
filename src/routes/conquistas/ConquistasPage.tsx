@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { Link } from 'react-router-dom';
+import { HelpTip } from '../../components/HelpTip';
 import { SidebarCalendarCard } from '../../components/SidebarCalendarCard';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
@@ -159,7 +160,8 @@ export function ConquistasPage() {
               pra filtrar por aqui: a galeria sempre mostra automaticamente
               tudo que foi vendido no dia selecionado. */}
           {!isUnit && (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <HelpTip helpKey="conquistas.faixas" fallback="Cada faixa é um valor de premiação da categoria — filtre por uma faixa para ver só quem já bateu ela no dia." />
               {(['ALL', ...tiersFor(catKey, generic)] as TierFilter[]).map((f) => (
                 <button
                   key={String(f)}

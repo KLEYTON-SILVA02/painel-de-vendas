@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
+import { HelpTip } from '../../components/HelpTip';
 import { useReauthGuard } from '../../hooks/useReauthGuard';
 import { useCreateCategoryType, useDeleteCategoryType } from '../../lib/mutations';
 import { useCategoryTypes, useCollaborators } from '../../lib/queries';
@@ -84,12 +85,15 @@ export function CategoriasPage() {
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         {!creating ? (
-          <button
-            onClick={() => setCreating(true)}
-            className="rounded-lg bg-amber-500 text-slate-950 px-4 py-2 text-sm font-medium"
-          >
-            + Criar Nova Categoria
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCreating(true)}
+              className="rounded-lg bg-amber-500 text-slate-950 px-4 py-2 text-sm font-medium"
+            >
+              + Criar Nova Categoria
+            </button>
+            <HelpTip helpKey="categorias.criar_nova" fallback="Só use isto para uma parceria de verdade nova, como a Biosintética — cada categoria criada aqui ganha seu próprio botão fixo no menu lateral." />
+          </div>
         ) : (
           <div className="flex flex-col gap-3">
             <h4 className="text-sm font-semibold">Nova categoria</h4>

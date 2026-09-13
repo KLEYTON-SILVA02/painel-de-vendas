@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
+import { HelpTip } from '../../components/HelpTip';
 import { MoneyInput } from '../../components/MoneyInput';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { CAT_KEYS, GOAL_UNIT_KEYS, type CategoryKey, type GoalCategoryKey } from '../../lib/business/classification';
@@ -70,6 +71,18 @@ export function MetasPage() {
         >
           Comissões
         </button>
+        <HelpTip
+          helpKey={`metas.aba_${tab}`}
+          fallback={
+            tab === 'categoria'
+              ? 'Meta mensal de cada categoria — a meta diária pode ser redistribuída automaticamente.'
+              : tab === 'individuais'
+                ? 'Define uma meta própria para um colaborador específico, além da meta geral da categoria.'
+                : tab === 'unidade'
+                  ? 'Meta Mensal e Meta Diária de Levmel/Chip, em unidades (não em R$).'
+                  : 'Percentual de comissão pago por categoria, usado no detalhamento e nos extratos impressos.'
+          }
+        />
       </div>
       {tab === 'categoria' ? (
         <MetasPorCategoria />
