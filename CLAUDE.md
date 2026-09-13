@@ -7,6 +7,10 @@
 - Fluxo padrão de publicação (estabelecido nesta sessão): commit → rebase em `origin/main` → validar (`tsc --noEmit`, `vitest run`, `npm run build`) → push → abrir PR → aguardar checks (priorizando o da Vercel) → squash-merge.
 - O usuário pediu que, a partir de um certo ponto desta sessão, toda tarefa finalizada seja publicada automaticamente (commit/push/PR/merge) sem precisar perguntar, desde que validação (tsc/vitest/build) passe limpa.
 
+## Organização de novas funções administrativas: Área de Suporte vs. novo item no menu ADM
+
+O usuário quer evitar que funções de conta/configuração fiquem espalhadas pelo sistema. Isso **não é uma regra fixa** para aplicar automaticamente — é um critério de julgamento: quando eu for propor ou construir uma função nova que seja de **alta importância** e de natureza parecida com o que já vive na Área de Suporte (`src/routes/admin/SuportePage.tsx` — hoje: troca de senha, e-mail de recuperação, transferência de administração, Acesso Construtor), devo **sugerir ao usuário** colocá-la como um novo card dentro da Área de Suporte, em vez de criar automaticamente um item novo separado no menu/grid do ADM (`AdminLandingPage.tsx`). A decisão final de onde a função vai morar é sempre do usuário — eu só levanto a sugestão quando fizer sentido pelo critério acima.
+
 ## Nomes oficiais dos sistemas
 
 - **Gestão de Vendas** — este projeto (o painel web).
