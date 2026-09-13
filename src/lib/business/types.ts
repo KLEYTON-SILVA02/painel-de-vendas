@@ -15,6 +15,12 @@ export interface Sale {
 export interface Collaborator {
   id: string;
   matricula: string;
+  /** Login handle a collaborator can set for themselves, separate from
+   * `matricula` — matricula stays the immutable key sales-import matching
+   * relies on, so self-service renaming never touches it. Optional for the
+   * same reason as `fotoConquista`/`dataNascimento` below: existing test
+   * literals and rows created before this field existed don't have it. */
+  username?: string | null;
   nome: string;
   apelido: string | null;
   /** Optional for the same reason as `fotoConquista`/`dataNascimento` below —

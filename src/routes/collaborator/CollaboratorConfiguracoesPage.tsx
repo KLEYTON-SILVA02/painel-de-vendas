@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { PhotoCropModal } from '../../components/PhotoCropModal';
-import { useRequestNewPassword, useUpdateOwnCollaboratorPhoto } from '../../lib/mutations';
+import { useRequestNewPassword, useUpdateOwnCollaboratorPhoto, useUpdateOwnCollaboratorUsername } from '../../lib/mutations';
 import { useCollaborators, useMyPasswordRequest } from '../../lib/queries';
 import { uploadPhoto } from '../../lib/storage';
 
@@ -19,17 +19,35 @@ export function CollaboratorConfiguracoesPage() {
   const { data: collaborators } = useCollaborators();
   const { data: myRequest } = useMyPasswordRequest();
   const updatePhoto = useUpdateOwnCollaboratorPhoto();
+  const updateUsername = useUpdateOwnCollaboratorUsername();
   const requestPassword = useRequestNewPassword(profile?.store_id, profile?.collaborator_id ?? undefined);
 
   const [cropTarget, setCropTarget] = useState<'avatar' | 'conquista' | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [usernameDraft, setUsernameDraft] = useState('');
+  const [usernameSaved, setUsernameSaved] = useState(false);
 
   const me = collaborators?.find((c) => c.id === profile?.collaborator_id);
   const pendente = myRequest?.status === 'pendente';
 
+  // Seeds the input from the loaded value exactly once — after that the
+  // field is the user's own draft, not something to keep overwriting every
+  // time `collaborators` refetches in the background.
+  useEffect(() => {
+    if (me && !usernameDraft) setUsernameDraft(me.username ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me?.username]);
+
+  function handleSaveUsername() {
+    setUsernameSaved(false);
+    updateUsername.mutate(usernameDraft.trim(), { onSuccess: () => setUsernameSaved(true) });
+  }
+
   function handleFileSelected(target: 'avatar' | 'conquista', file: File | undefined) {
     if (!file) return;
+    setUploadError(null);
     setPendingFile(file);
     setCropTarget(target);
   }
@@ -37,6 +55,7 @@ export function CollaboratorConfiguracoesPage() {
   async function handleCropped(blob: Blob) {
     if (!profile?.store_id || !cropTarget) return;
     setUploading(true);
+    setUploadError(null);
     try {
       const file = new File([blob], 'foto.webp', { type: 'image/webp' });
       const collaboratorId = profile.collaborator_id;
@@ -44,6 +63,12 @@ export function CollaboratorConfiguracoesPage() {
       const path = cropTarget === 'avatar' ? `collaborators/${collaboratorId}` : `collaborators/${collaboratorId}-conquista`;
       const url = await uploadPhoto(profile.store_id, path, file);
       await updatePhoto.mutateAsync(cropTarget === 'avatar' ? { fotoUrl: url } : { fotoConquistaUrl: url });
+    } catch (err) {
+      // Antes, uma falha aqui (rede, RLS, formato de imagem não suportado
+      // pelo celular) era engolida em silêncio: o modal fechava e a tela
+      // voltava ao normal como se nada tivesse acontecido, sem nenhuma
+      // indicação de que a foto não foi salva.
+      setUploadError(err instanceof Error ? err.message : 'Não foi possível salvar a foto. Tente novamente.');
     } finally {
       setUploading(false);
       setCropTarget(null);
@@ -67,6 +92,42 @@ export function CollaboratorConfiguracoesPage() {
             onSelect={(f) => handleFileSelected('conquista', f)}
           />
         </div>
+        {uploadError && <p style={{ fontSize: 11, color: '#ff8a8a', textAlign: 'center', marginTop: 8 }}>{uploadError}</p>}
+      </div>
+
+      <div className="mv2-card">
+        <div className="mv2-card-title">Nome de usuário</div>
+        <p style={{ fontSize: 11, color: 'var(--mv2-texto-2)', marginBottom: 10 }}>
+          Escolha um nome de usuário para entrar no app no lugar da matrícula ({me?.matricula}). Sua senha continua a
+          mesma — isso só troca o que você digita para entrar.
+        </p>
+        <input
+          value={usernameDraft}
+          onChange={(e) => {
+            setUsernameDraft(e.target.value);
+            setUsernameSaved(false);
+          }}
+          placeholder="ex: joao.silva"
+          className="mv2-input"
+          style={{ width: '100%', marginBottom: 8 }}
+          maxLength={32}
+        />
+        <button
+          onClick={handleSaveUsername}
+          disabled={updateUsername.isPending || !usernameDraft.trim() || usernameDraft.trim() === (me?.username ?? '')}
+          className="mv2-btn-outline"
+          style={{ width: '100%' }}
+        >
+          {updateUsername.isPending ? 'Salvando…' : 'Salvar nome de usuário'}
+        </button>
+        {updateUsername.error && (
+          <p style={{ fontSize: 11, color: '#ff8a8a', marginTop: 8 }}>
+            {updateUsername.error instanceof Error ? updateUsername.error.message : 'Não foi possível salvar.'}
+          </p>
+        )}
+        {usernameSaved && !updateUsername.error && (
+          <p style={{ fontSize: 11, color: '#7fe7a8', marginTop: 8 }}>✓ Nome de usuário atualizado.</p>
+        )}
       </div>
 
       <div className="mv2-card">

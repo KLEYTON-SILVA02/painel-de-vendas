@@ -315,6 +315,7 @@ export type Database = {
           nome: string
           setor: string | null
           store_id: string
+          username: string | null
         }
         Insert: {
           apelido?: string | null
@@ -330,6 +331,7 @@ export type Database = {
           nome: string
           setor?: string | null
           store_id: string
+          username?: string | null
         }
         Update: {
           apelido?: string | null
@@ -345,6 +347,7 @@ export type Database = {
           nome?: string
           setor?: string | null
           store_id?: string
+          username?: string | null
         }
         Relationships: [
           {
@@ -944,6 +947,7 @@ export type Database = {
           id: string
           role: string
           store_id: string
+          username: string | null
         }
         Insert: {
           collaborator_id?: string | null
@@ -951,6 +955,7 @@ export type Database = {
           id: string
           role: string
           store_id: string
+          username?: string | null
         }
         Update: {
           collaborator_id?: string | null
@@ -958,6 +963,7 @@ export type Database = {
           id?: string
           role?: string
           store_id?: string
+          username?: string | null
         }
         Relationships: [
           {
@@ -1439,6 +1445,7 @@ export type Database = {
           nome: string
           setor: string
           store_id: string
+          username: string
         }[]
       }
       matches_special_list: {
@@ -1457,6 +1464,7 @@ export type Database = {
       normalize_text: { Args: { input: string }; Returns: string }
       notify_admin_birthdays: { Args: never; Returns: undefined }
       remove_inactive_collaborators: { Args: never; Returns: undefined }
+      resolve_admin_email: { Args: { p_username: string }; Returns: string }
       resolve_collaborator_email: {
         Args: { p_matricula: string }
         Returns: string
@@ -1474,8 +1482,16 @@ export type Database = {
         Args: { setor_param: string }
         Returns: string[]
       }
+      update_own_admin_username: {
+        Args: { new_username: string }
+        Returns: undefined
+      }
       update_own_collaborator_photo: {
-        Args: { new_foto_conquista_url: string | null; new_foto_url: string | null }
+        Args: { new_foto_conquista_url: string; new_foto_url: string }
+        Returns: undefined
+      }
+      update_own_collaborator_username: {
+        Args: { new_username: string }
         Returns: undefined
       }
     }

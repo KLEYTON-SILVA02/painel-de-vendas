@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CategoryKey, GoalCategoryKey } from './business/classification';
 import { normalize } from './business/normalize';
 import { normalizeMatricula } from './business/parsing';
-import { updateOwnCollaboratorPhoto } from './collaborators';
+import { updateOwnCollaboratorPhoto, updateOwnCollaboratorUsername } from './collaborators';
 import { uploadCategoryIcon } from './storage';
 import { supabase } from './supabase';
 import type { TablesInsert, TablesUpdate } from '../types/database';
@@ -414,6 +414,37 @@ export function useUpdateOwnCollaboratorPhoto() {
       await updateOwnCollaboratorPhoto(input.fotoUrl ?? null, input.fotoConquistaUrl ?? null);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['collaborators'] }),
+  });
+}
+
+/** Collaborator self-service: renames only their own login handle
+ * (username) — see update_own_collaborator_username (migration 0065). The
+ * RPC itself rejects a bad format or a name already taken, surfacing here
+ * as `error` for the UI to display. */
+export function useUpdateOwnCollaboratorUsername() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (username: string) => {
+      await updateOwnCollaboratorUsername(username);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['collaborators'] }),
+  });
+}
+
+/** ADM self-service: renames only the caller's own login handle (username)
+ * — see update_own_admin_username (migration 0066). Mirrors
+ * useUpdateOwnCollaboratorUsername; the RPC rejects a bad format or a name
+ * already taken, surfacing here as `error`. Unlike a collaborator's
+ * username (read from the `collaborators` query), an admin's lives on
+ * `profiles` (held in AuthContext, not react-query) — the caller is
+ * responsible for refreshing that (see AuthContext's refreshProfile) after
+ * a successful change. */
+export function useUpdateOwnAdminUsername() {
+  return useMutation({
+    mutationFn: async (username: string) => {
+      const { error } = await supabase.rpc('update_own_admin_username', { new_username: username });
+      if (error) throw error;
+    },
   });
 }
 

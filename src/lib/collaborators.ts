@@ -30,9 +30,25 @@ export async function resetCollaboratorLogin(collaboratorId: string, senha: stri
  * update_own_collaborator_photo, migration 0047) — `null` for either arg
  * means "leave that one unchanged". */
 export async function updateOwnCollaboratorPhoto(fotoUrl: string | null, fotoConquistaUrl: string | null) {
+  // The generated Args type below can't express that a plain SQL `text`
+  // parameter accepts NULL — update_own_collaborator_photo's own body
+  // (coalesce(new_foto_url, foto_url)) relies on exactly that to mean
+  // "leave this one unchanged", so this cast reflects the real RPC
+  // contract rather than papering over a bug.
   const { error } = await supabase.rpc('update_own_collaborator_photo', {
     new_foto_url: fotoUrl,
     new_foto_conquista_url: fotoConquistaUrl,
-  });
+  } as never);
+  if (error) throw error;
+}
+
+/** Collaborator self-service: renames only their own login handle
+ * (`username`, migration 0065) via a narrow SECURITY DEFINER RPC — never
+ * `matricula`, which sales-import matching depends on staying stable. The
+ * RPC itself validates format/uniqueness and raises a Postgres error (with
+ * a user-facing message) when the chosen name is invalid or already taken,
+ * which surfaces here as a thrown error for the caller to display. */
+export async function updateOwnCollaboratorUsername(username: string) {
+  const { error } = await supabase.rpc('update_own_collaborator_username', { new_username: username });
   if (error) throw error;
 }

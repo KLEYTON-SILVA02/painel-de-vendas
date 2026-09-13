@@ -155,7 +155,15 @@ function FieldError({ message }: { message: string | null }) {
 }
 
 function AdminLoginForm() {
-  const [email, setEmail] = useState('');
+  // Holds an e-mail on signup (always required, per the store-creation
+  // flow) but either an e-mail or a self-chosen username on login — the
+  // ADM equivalent of a collaborator's matrícula/username field. A plain
+  // `@` check decides which one was typed: a real e-mail goes straight to
+  // signInWithPassword, anything else is resolved to the real e-mail behind
+  // it first via resolve_admin_email (migration 0066), same anti-
+  // enumeration shape as resolve_collaborator_email (ambiguous match or no
+  // match both return null, and the login error message never says which).
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
   const [mode, setMode] = useState<'login' | 'signup'>('login');
@@ -168,8 +176,20 @@ function AdminLoginForm() {
     setBusy(true);
     try {
       if (mode === 'login') {
-        const { error: err } = await supabase.auth.signInWithPassword({ email, password });
-        if (err) setError('E-mail ou senha inválidos.');
+        const trimmed = identifier.trim();
+        let loginEmail = trimmed;
+        if (!trimmed.includes('@')) {
+          const { data: resolved, error: resolveErr } = await supabase.rpc('resolve_admin_email', {
+            p_username: trimmed,
+          });
+          if (resolveErr || !resolved) {
+            setError('Usuário/e-mail ou senha inválidos.');
+            return;
+          }
+          loginEmail = resolved;
+        }
+        const { error: err } = await supabase.auth.signInWithPassword({ email: loginEmail, password });
+        if (err) setError('Usuário/e-mail ou senha inválidos.');
       } else {
         const policyError = validatePassword(password);
         if (policyError) {
@@ -177,7 +197,7 @@ function AdminLoginForm() {
           return;
         }
         const { error: err } = await supabase.auth.signUp({
-          email,
+          email: identifier,
           password,
           options: { emailRedirectTo: window.location.origin },
         });
@@ -193,7 +213,13 @@ function AdminLoginForm() {
     <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <label className="mv2-input-group">
         <UserIcon />
-        <input type="email" required placeholder="E-mail" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <input
+          type={mode === 'signup' ? 'email' : 'text'}
+          required
+          placeholder={mode === 'signup' ? 'E-mail' : 'E-mail ou usuário'}
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
+        />
       </label>
       <label className="mv2-input-group">
         <LockIcon />
@@ -247,21 +273,23 @@ function CollaboratorLoginForm() {
     setError(null);
     setBusy(true);
     try {
-      // Same error message whether the matrícula doesn't exist or the senha
-      // is wrong — a distinct "matrícula não encontrada" message here would
-      // let anyone probe matrículas one by one and read the response as an
+      // Same error message whether the matrícula/usuário doesn't exist or
+      // the senha is wrong — a distinct "não encontrado" message here would
+      // let anyone probe values one by one and read the response as an
       // oracle for which ones exist (and in which loja, since a resolved
       // login email embeds the store's id). resolve_collaborator_email is
-      // also rate-limited server-side for the same reason.
+      // also rate-limited server-side for the same reason, and now accepts
+      // either the matrícula or the self-chosen username (migration 0065)
+      // in this same field — same call, same result shape either way.
       const { data: email, error: resolveErr } = await supabase.rpc('resolve_collaborator_email', {
         p_matricula: matricula,
       });
       if (resolveErr || !email) {
-        setError('Matrícula ou senha inválidos.');
+        setError('Matrícula/usuário ou senha inválidos.');
         return;
       }
       const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
-      if (signInErr) setError('Matrícula ou senha inválidos.');
+      if (signInErr) setError('Matrícula/usuário ou senha inválidos.');
     } finally {
       setBusy(false);
     }
@@ -271,7 +299,13 @@ function CollaboratorLoginForm() {
     <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <label className="mv2-input-group">
         <UserIcon />
-        <input type="text" required placeholder="Matrícula" value={matricula} onChange={(e) => setMatricula(e.target.value)} />
+        <input
+          type="text"
+          required
+          placeholder="Matrícula ou usuário"
+          value={matricula}
+          onChange={(e) => setMatricula(e.target.value)}
+        />
       </label>
       <label className="mv2-input-group">
         <LockIcon />
