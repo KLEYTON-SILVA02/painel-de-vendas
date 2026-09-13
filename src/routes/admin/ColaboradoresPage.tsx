@@ -216,6 +216,8 @@ export function ColaboradoresPage() {
 
       <SimpleSheetImportPanel
         title="Importar planilha de colaboradores"
+        helpKey="colaboradores.importar_planilha"
+        helpFallback="Cadastre vários colaboradores de uma vez enviando uma planilha com nome, matrícula e setor."
         columns={['Código de venda', 'Nome', 'Apelido', 'Setor', 'Celular']}
         idColumnIndex={0}
         onConfirm={async (rows) => {

@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react';
+import { HelpTip } from './HelpTip';
 import { useCategoryLabelMap } from '../lib/business/categoryLabels';
 import { todayISO } from '../lib/dateRange';
 import { buildMonthExtract, buildMonthExtractHtml, openPrintPreview } from '../lib/printExtract';
@@ -96,7 +97,8 @@ export function SidebarCalendarCard() {
         ))}
       </div>
 
-      <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+        <HelpTip helpKey="dashboard.filtro_data" fallback='Clique num dia ou use "Buscar período" para escolher um intervalo de datas.' />
         <button
           onClick={toggleBuscaPeriodo}
           style={{

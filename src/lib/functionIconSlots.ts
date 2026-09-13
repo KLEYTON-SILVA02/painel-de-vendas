@@ -22,6 +22,7 @@ export const FUNCTION_ICON_SLOTS: FunctionIconSlot[] = [
   { key: 'dinamicas', label: 'Dinâmicas', group: 'Navegação' },
   { key: 'biosintetica', label: 'Biosintética', group: 'Navegação' },
   { key: 'conquistas', label: 'Conquistas', group: 'Navegação' },
+  { key: 'tutoriais', label: 'Tutoriais', group: 'Navegação' },
   { key: 'adm', label: 'ADM (menu)', group: 'Navegação' },
   { key: 'adm_colaboradores', label: 'ADM · Colaboradores', group: 'ADM' },
   { key: 'adm_produtos', label: 'ADM · Produtos', group: 'ADM' },
