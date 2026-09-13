@@ -905,3 +905,18 @@ export function useUpdateTutorialStepImage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tutorials'] }),
   });
 }
+
+/** Área de Suporte — transfere a administração da loja atual para um
+ * colaborador que já tem login (RPC security definer transfer_administration,
+ * migration 0071). Ao concluir, o ADM que chamou deixa de existir como
+ * profile daquela loja — o chamador deve encerrar a própria sessão logo em
+ * seguida, já que ela não abre mais nada aqui. Sem invalidateQueries: a
+ * sessão será encerrada antes de qualquer tela voltar a ler esse cache. */
+export function useTransferAdministration() {
+  return useMutation({
+    mutationFn: async (collaboratorId: string) => {
+      const { error } = await supabase.rpc('transfer_administration', { p_collaborator_id: collaboratorId });
+      if (error) throw error;
+    },
+  });
+}

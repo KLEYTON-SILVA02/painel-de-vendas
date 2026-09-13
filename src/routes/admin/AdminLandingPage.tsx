@@ -11,6 +11,7 @@ import {
   ListIcon,
   PackageIcon,
   SearchIcon,
+  ShieldIcon,
   SlidersIcon,
   TagIcon,
   TargetIcon,
@@ -43,6 +44,7 @@ const ADMIN_CARDS = [
   { to: '/admin/card-conquista', label: 'Modelos de Card', icon: AwardIcon, slot: null },
   { to: '/admin/categorias', label: 'Categorias', icon: TagIcon, slot: null },
   { to: '/admin/nomes-categorias', label: 'Nomes das Categorias', icon: BagIcon, slot: null },
+  { to: '/admin/suporte', label: 'Área de Suporte', icon: ShieldIcon, slot: null },
 ];
 
 /** Count of distinct products seen in sales that never matched a specific

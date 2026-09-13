@@ -10,15 +10,16 @@ import { ReauthModal } from '../components/ReauthModal';
  * delete handler instead of running the deletion directly, and render
  * `reauthModal` once anywhere in the component's JSX. */
 export function useReauthGuard() {
-  const [pending, setPending] = useState<{ message: string; action: () => void } | null>(null);
+  const [pending, setPending] = useState<{ message: string; action: () => void; confirmLabel?: string } | null>(null);
 
-  function guard(message: string, action: () => void) {
-    setPending({ message, action });
+  function guard(message: string, action: () => void, confirmLabel?: string) {
+    setPending({ message, action, confirmLabel });
   }
 
   const reauthModal = pending ? (
     <ReauthModal
       message={pending.message}
+      confirmLabel={pending.confirmLabel}
       onConfirm={() => {
         const { action } = pending;
         setPending(null);

@@ -59,6 +59,7 @@ const IconesPage = lazy(() => import('./admin/IconesPage').then((m) => ({ defaul
 const CardConquistaPage = lazy(() => import('./admin/CardConquistaPage').then((m) => ({ default: m.CardConquistaPage })));
 const CategoriasPage = lazy(() => import('./admin/CategoriasPage').then((m) => ({ default: m.CategoriasPage })));
 const NomesCategoriasPage = lazy(() => import('./admin/NomesCategoriasPage').then((m) => ({ default: m.NomesCategoriasPage })));
+const SuportePage = lazy(() => import('./admin/SuportePage').then((m) => ({ default: m.SuportePage })));
 const CategoryTypePage = lazy(() => import('./category-type/CategoryTypePage').then((m) => ({ default: m.CategoryTypePage })));
 // Reused from the collaborator shell — the notification list itself (tabs,
 // read-state handling) has nothing collaborator-specific in it, it just
@@ -251,6 +252,7 @@ export function AppShell() {
                     <Route path="card-conquista" element={<CardConquistaPage />} />
                     <Route path="categorias" element={<CategoriasPage />} />
                     <Route path="nomes-categorias" element={<NomesCategoriasPage />} />
+                    <Route path="suporte" element={<SuportePage />} />
                   </Routes>
                 </Suspense>
               }
