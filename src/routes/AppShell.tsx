@@ -17,7 +17,7 @@ import type { GoalCategoryKey } from '../lib/business/classification';
 import type { Horario } from '../lib/business/horario';
 import { supabase } from '../lib/supabase';
 import { useIsMobileV2 } from '../lib/useIsMobileV2';
-import { useStoreSettings } from '../lib/queries';
+import { useIsPlatformBuilder, useStoreSettings } from '../lib/queries';
 import { DateRangeProvider } from './DateRangeContext';
 import { HelpModeProvider, useHelpMode } from './HelpModeContext';
 
@@ -60,6 +60,7 @@ const CardConquistaPage = lazy(() => import('./admin/CardConquistaPage').then((m
 const CategoriasPage = lazy(() => import('./admin/CategoriasPage').then((m) => ({ default: m.CategoriasPage })));
 const NomesCategoriasPage = lazy(() => import('./admin/NomesCategoriasPage').then((m) => ({ default: m.NomesCategoriasPage })));
 const SuportePage = lazy(() => import('./admin/SuportePage').then((m) => ({ default: m.SuportePage })));
+const BuilderStorePickerPage = lazy(() => import('./admin/BuilderStorePickerPage').then((m) => ({ default: m.BuilderStorePickerPage })));
 const CategoryTypePage = lazy(() => import('./category-type/CategoryTypePage').then((m) => ({ default: m.CategoryTypePage })));
 // Reused from the collaborator shell — the notification list itself (tabs,
 // read-state handling) has nothing collaborator-specific in it, it just
@@ -94,6 +95,11 @@ function pageTitleLabel(entry: { label: string; categoryKey?: GoalCategoryKey },
 
 export function AppShell() {
   const { profile } = useAuth();
+  // Acesso Construtor (Fase 2): autenticado, mas sem profile ainda, é o
+  // estado normal de quem está na allow-list platform_builders e ainda não
+  // escolheu uma loja — só dispara essa checagem extra nesse caso raro,
+  // não para todo login normal de ADM/colaborador.
+  const { data: isPlatformBuilder } = useIsPlatformBuilder(!profile);
   const categoryLabels = useCategoryLabelMap();
   const [collapsed, setCollapsed] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -112,6 +118,13 @@ export function AppShell() {
   });
 
   if (!profile) {
+    if (isPlatformBuilder) {
+      return (
+        <Suspense fallback={<PageLoading fullScreen />}>
+          <BuilderStorePickerPage />
+        </Suspense>
+      );
+    }
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-400 text-sm">
         Preparando sua conta…

@@ -920,3 +920,33 @@ export function useTransferAdministration() {
     },
   });
 }
+
+/** Acesso Construtor (Fase 2) — entra (ou troca) na loja escolhida como
+ * ADM, reaproveitando `profiles` (ver migration 0072): o próprio profile
+ * do construtor passa a apontar pra essa loja, então toda a RLS/UI do
+ * sistema já funciona sem mudança nenhuma. Invalida `profile` isoladamente
+ * não é suficiente — quem lê o profile é o AuthContext, então o chamador
+ * precisa chamar `refreshProfile()` (useAuth) depois do sucesso. */
+export function useEnterStoreAsBuilder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (storeId: string) => {
+      const { error } = await supabase.rpc('enter_store_as_builder', { p_store_id: storeId });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+/** Sai do modo Construtor — apaga o profile atual, voltando ao estado
+ * "autenticado, sem loja" (a tela de seleção de loja volta a aparecer). */
+export function useExitBuilderSession() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.rpc('exit_builder_session');
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}

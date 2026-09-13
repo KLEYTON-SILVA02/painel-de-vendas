@@ -171,6 +171,35 @@ export type Database = {
           },
         ]
       }
+      builder_store_switches: {
+        Row: {
+          id: string
+          store_id: string
+          switched_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          store_id: string
+          switched_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          store_id?: string
+          switched_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "builder_store_switches_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       catalog: {
         Row: {
           categoria: string
@@ -959,6 +988,24 @@ export type Database = {
           },
         ]
       }
+      platform_builders: {
+        Row: {
+          created_at: string
+          label: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          label?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          label?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           categoria: string
@@ -1565,8 +1612,14 @@ export type Database = {
         Args: { p_import_id: string }
         Returns: undefined
       }
+      enter_store_as_builder: {
+        Args: { p_store_id: string }
+        Returns: undefined
+      }
+      exit_builder_session: { Args: never; Returns: undefined }
       format_money_brl: { Args: { v: number }; Returns: string }
       is_admin: { Args: never; Returns: boolean }
+      is_platform_builder: { Args: never; Returns: boolean }
       list_store_collaborators: {
         Args: never
         Returns: {
@@ -1584,6 +1637,14 @@ export type Database = {
           setor: string
           store_id: string
           username: string
+        }[]
+      }
+      list_stores_for_builder: {
+        Args: never
+        Returns: {
+          id: string
+          nome_loja: string
+          numero_loja: string
         }[]
       }
       matches_special_list: {

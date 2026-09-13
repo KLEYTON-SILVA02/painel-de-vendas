@@ -2,18 +2,19 @@ import { useState, type FormEvent } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { useReauthGuard } from '../../hooks/useReauthGuard';
 import { PASSWORD_HINT, validatePassword } from '../../lib/passwordPolicy';
-import { useTransferAdministration } from '../../lib/mutations';
-import { useCollaborators, useCollaboratorsWithLogin } from '../../lib/queries';
+import { useEnterStoreAsBuilder, useExitBuilderSession, useTransferAdministration } from '../../lib/mutations';
+import { useCollaborators, useCollaboratorsWithLogin, useIsPlatformBuilder, useStore, useStoresForBuilder } from '../../lib/queries';
 import { supabase } from '../../lib/supabase';
 
-// Área de Suporte (Fase 1) — pedido explícito do usuário: separar sua conta
-// pessoal (hoje ADM da loja 7152) do dia a dia da loja, transferindo o
-// título de administrador para o gerente já cadastrado como colaborador.
-// Aqui só a Fase 1 (troca de senha, transferência de administração, e-mail
-// de recuperação) — "Acesso Construtor" (Fase 2: login pessoal + allow-list
-// pra acessar qualquer loja remotamente) fica pra depois, de propósito.
+// Área de Suporte — Fase 1 (troca de senha, transferência de administração,
+// e-mail de recuperação) pedida explicitamente pelo usuário pra separar sua
+// conta pessoal do dia a dia de uma loja, e Fase 2 ("Acesso Construtor":
+// login pessoal + allow-list pra entrar em qualquer loja, sem senha mestre
+// — ver migration 0072). O fluxo de pedido de autorização remota + bloqueio
+// de tela pra outros usuários continua fora do escopo, de propósito.
 export function SuportePage() {
   const { session, signOut } = useAuth();
+  const { data: isPlatformBuilder } = useIsPlatformBuilder();
 
   return (
     <div className="flex flex-col gap-3">
@@ -28,6 +29,7 @@ export function SuportePage() {
       <TrocaSenhaCard email={session?.user.email} />
       <EmailRecuperacaoCard email={session?.user.email} />
       <TransferenciaAdminCard onTransferred={signOut} />
+      {isPlatformBuilder && <AcessoConstrutorCard />}
     </div>
   );
 }
@@ -262,6 +264,84 @@ function TransferenciaAdminCard({ onTransferred }: { onTransferred: () => Promis
           </button>
         </div>
       )}
+      {error && <p className="text-xs text-rose-400 mt-2">{error}</p>}
+    </div>
+  );
+}
+
+function AcessoConstrutorCard() {
+  const { refreshProfile } = useAuth();
+  const { data: currentStore } = useStore();
+  const { data: stores } = useStoresForBuilder();
+  const enterStore = useEnterStoreAsBuilder();
+  const exitSession = useExitBuilderSession();
+  const [targetId, setTargetId] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const outrasLojas = (stores ?? []).filter((s) => s.id !== currentStore?.id);
+
+  async function handleSwitch() {
+    if (!targetId) return;
+    setError(null);
+    setBusy(true);
+    try {
+      await enterStore.mutateAsync(targetId);
+      await refreshProfile();
+      setTargetId('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Falha ao entrar na loja.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleExit() {
+    setError(null);
+    setBusy(true);
+    try {
+      await exitSession.mutateAsync();
+      await refreshProfile();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Falha ao sair do modo Construtor.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-cyan-500/40 bg-cyan-500/5 p-4">
+      <h3 className="font-semibold mb-1 text-sm text-cyan-400">🛠️ Acesso Construtor</h3>
+      <p className="text-xs text-slate-500 mb-3">
+        Loja atual: <b>{currentStore?.nome_loja || '—'}</b> (#{currentStore?.numero_loja || '—'}). Troque para outra
+        loja ou saia do modo Construtor para voltar à tela de seleção.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <select value={targetId} onChange={(e) => setTargetId(e.target.value)} className="input !w-auto">
+          <option value="">Ir para outra loja…</option>
+          {outrasLojas.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.nome_loja || '(sem nome)'} (#{s.numero_loja || '—'})
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={handleSwitch}
+          disabled={!targetId || busy}
+          className="rounded-lg border border-cyan-500 text-cyan-400 px-3 py-1.5 text-sm disabled:opacity-50"
+        >
+          Entrar
+        </button>
+        <button
+          type="button"
+          onClick={handleExit}
+          disabled={busy}
+          className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+        >
+          Sair do modo Construtor
+        </button>
+      </div>
       {error && <p className="text-xs text-rose-400 mt-2">{error}</p>}
     </div>
   );
