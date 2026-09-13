@@ -64,9 +64,14 @@ export function useDeleteRow<T extends SimpleTable>(table: T, invalidateKey: str
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      // A DELETE that a row-level security policy filters out (e.g. a
+      // store_id/role mismatch) matches 0 rows and comes back as success
+      // with no error — .select() is what makes that visible, so a filtered
+      // delete throws instead of silently leaving the row in place.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase.from(table) as any).delete().eq('id', id);
+      const { data, error } = await (supabase.from(table) as any).delete().eq('id', id).select('id');
       if (error) throw error;
+      if (!data || data.length === 0) throw new Error('Nenhum registro foi excluído (permissão negada ou já removido).');
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: [invalidateKey] }),
   });
