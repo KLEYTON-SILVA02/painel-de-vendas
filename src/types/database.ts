@@ -1,5 +1,3 @@
-// Auto-generated from the Supabase project schema via `generate_typescript_types`.
-// Regenerate after any migration under supabase/migrations/.
 export type Json =
   | string
   | number
@@ -16,6 +14,38 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_transfers: {
+        Row: {
+          created_at: string
+          from_user_id: string
+          id: string
+          store_id: string
+          to_user_id: string
+        }
+        Insert: {
+          created_at?: string
+          from_user_id: string
+          id?: string
+          store_id: string
+          to_user_id: string
+        }
+        Update: {
+          created_at?: string
+          from_user_id?: string
+          id?: string
+          store_id?: string
+          to_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_transfers_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bio_group_goals: {
         Row: {
           category_type_id: string
@@ -1589,6 +1619,10 @@ export type Database = {
       sector_base_categories: {
         Args: { setor_param: string }
         Returns: string[]
+      }
+      transfer_administration: {
+        Args: { p_collaborator_id: string }
+        Returns: undefined
       }
       update_own_admin_username: {
         Args: { new_username: string }

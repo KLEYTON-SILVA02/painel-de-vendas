@@ -9,7 +9,20 @@ import { supabase } from '../lib/supabase';
  * Re-authenticates by calling signInWithPassword again with the session's
  * own e-mail: on success it silently refreshes the session (harmless, same
  * user) and calls onConfirm; on failure it shows an error and blocks. */
-export function ReauthModal({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) {
+export function ReauthModal({
+  message,
+  onConfirm,
+  onCancel,
+  confirmLabel = 'Confirmar e excluir',
+}: {
+  message: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  /** Overrides the confirm button's label for guards that aren't a deletion
+   * (e.g. "Confirmar transferência") — defaults to the original wording so
+   * every existing DangerZoneCard-style caller is unaffected. */
+  confirmLabel?: string;
+}) {
   const { session } = useAuth();
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +69,7 @@ export function ReauthModal({ message, onConfirm, onCancel }: { message: string;
             Cancelar
           </button>
           <button type="submit" disabled={busy} className="flex-1 rounded-lg bg-rose-600 text-white font-medium px-3 py-2 text-sm disabled:opacity-50">
-            {busy ? 'Verificando…' : 'Confirmar e excluir'}
+            {busy ? 'Verificando…' : confirmLabel}
           </button>
         </div>
       </form>
