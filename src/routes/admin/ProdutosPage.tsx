@@ -389,8 +389,7 @@ function ClassificadosTab() {
   const { data: brandKeywords } = useBrandKeywords();
   const { data: exclusiveBrands } = useExclusiveBrands();
   const { profile } = useAuth();
-  const insertCatalog = useInsertRow('catalog', profile?.store_id, 'catalog');
-  const updateCatalog = useUpdateRow('catalog', 'catalog');
+  const reclassifyMutation = useReclassifyProdutos(profile?.store_id);
   const [filtro, setFiltro] = useState<CategoryKey | 'ALL'>('ALL');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkCategoria, setBulkCategoria] = useState<CategoryKey>('DERM');
@@ -444,14 +443,14 @@ function ClassificadosTab() {
   const pageList = list.slice(pageSafe * PAGE_SIZE, pageSafe * PAGE_SIZE + PAGE_SIZE);
 
   async function reclassify(produtoNomes: string[], categoria: CategoryKey) {
-    for (const nome of produtoNomes) {
-      const existing = catalog!.find((c) => c.nome.toLowerCase() === nome.toLowerCase());
-      if (existing) {
-        await updateCatalog.mutateAsync({ id: existing.id, patch: { categoria } });
-      } else {
-        await insertCatalog.mutateAsync({ nome, codigo: null, categoria } as never);
-      }
-    }
+    // Also retroactively updates every already-imported sale for these
+    // products (sales.grupo) — updating only `catalog` fixes future imports
+    // but leaves the value already sold stuck under the old category
+    // forever, since sales.grupo is written once at import time and never
+    // recomputed on its own. Without this, the totals shown for each
+    // category would never reflect a reclassification made here.
+    await reclassifyMutation.mutateAsync({ produtos: produtoNomes, categoria, catalog: catalog!, sales: sales! });
+    setSelected(new Set());
   }
 
   return (
@@ -460,7 +459,11 @@ function ClassificadosTab() {
         <h3 className="font-semibold mb-1 text-sm">Produtos classificados (a partir das vendas importadas)</h3>
         <p className="text-xs text-slate-500 mb-3">
           Mostra cada produto distinto que já apareceu numa venda, com a categoria que o sistema atribuiu. Selecione
-          um ou mais e reclassifique — isso cria/atualiza entradas no Catálogo (prioridade máxima).
+          um ou mais e reclassifique — isso cria/atualiza entradas no Catálogo (prioridade máxima) e{' '}
+          <b>também transfere retroativamente o valor de todas as vendas já importadas desse produto</b> da
+          categoria antiga para a nova. Ex.: se um produto estava em Marcas Exclusivas mas pertence a
+          Dermocosméticos, ao reclassificá-lo o valor sai do total de Marcas Exclusivas e passa a contar em
+          Dermocosméticos — em rankings, comissões e no Dashboard.
         </p>
         <div className="flex flex-wrap gap-1">
           {(['ALL', ...CAT_KEYS] as const).map((k) => (
