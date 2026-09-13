@@ -391,6 +391,7 @@ function ClassificadosTab() {
   const { profile } = useAuth();
   const reclassifyMutation = useReclassifyProdutos(profile?.store_id);
   const [filtro, setFiltro] = useState<CategoryKey | 'ALL'>('ALL');
+  const [busca, setBusca] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkCategoria, setBulkCategoria] = useState<CategoryKey>('DERM');
   const [ordem, setOrdem] = useState<'ocorrencias' | 'alfabetica'>('ocorrencias');
@@ -438,6 +439,8 @@ function ClassificadosTab() {
     ordem === 'alfabetica' ? a.produto.localeCompare(b.produto, 'pt-BR') : b.ocorrencias - a.ocorrencias,
   );
   if (filtro !== 'ALL') list = list.filter((p) => p.categoria === filtro);
+  const buscaNormalizada = normalize(busca.trim());
+  if (buscaNormalizada) list = list.filter((p) => normalize(p.produto).includes(buscaNormalizada));
   const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
   const pageSafe = Math.min(page, totalPages - 1);
   const pageList = list.slice(pageSafe * PAGE_SIZE, pageSafe * PAGE_SIZE + PAGE_SIZE);
@@ -481,6 +484,15 @@ function ClassificadosTab() {
         </div>
       </div>
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+        <input
+          value={busca}
+          onChange={(e) => {
+            setBusca(e.target.value);
+            setPage(0);
+          }}
+          placeholder="Buscar produto já classificado…"
+          className="input w-full mb-3"
+        />
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <div className="text-xs text-slate-500">{list.length} produto(s)</div>
@@ -513,7 +525,9 @@ function ClassificadosTab() {
           </div>
         </div>
         {list.length === 0 ? (
-          <div className="text-sm text-slate-500 py-4 text-center">Nenhum produto encontrado. Importe uma planilha de vendas primeiro.</div>
+          <div className="text-sm text-slate-500 py-4 text-center">
+            {buscaNormalizada || filtro !== 'ALL' ? 'Nenhum produto encontrado para esse filtro.' : 'Nenhum produto encontrado. Importe uma planilha de vendas primeiro.'}
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
