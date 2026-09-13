@@ -1,6 +1,7 @@
 import { useId, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
+import { HelpTip } from '../../components/HelpTip';
 import { CategoriasProdutosEditor } from '../../components/dinamicas/CategoriasProdutosEditor';
 import { ParticipantesPicker } from '../../components/dinamicas/ParticipantesPicker';
 import { DinamicaProgressList } from '../../components/ranking/DinamicaProgressList';
@@ -372,6 +373,7 @@ function NewDynamicForm({
         <span>+ Nova dinâmica</span>
         <span className="text-xs text-slate-400">{expanded ? '▲ recolher' : '▼ expandir'}</span>
       </button>
+      <HelpTip helpKey="dinamicas.nova" fallback="Uma campanha à parte das metas normais, com meta, período e participantes próprios — os produtos/categorias escolhidos contam só para essa dinâmica." />
       {expanded && (
         <>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

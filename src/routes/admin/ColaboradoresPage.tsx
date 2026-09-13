@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
+import { HelpTip } from '../../components/HelpTip';
 import { PhotoCropModal } from '../../components/PhotoCropModal';
 import { useReauthGuard } from '../../hooks/useReauthGuard';
 import { grantCollaboratorLogin, resetCollaboratorLogin } from '../../lib/collaborators';
@@ -255,6 +256,10 @@ export function ColaboradoresPage() {
           Colaboradores sem vendas há 60 dias ou mais aparecem como <b>Inativo</b>. Toque no card pra editar os
           dados e as fotos (avatar e foto da Galeria de Conquistas).
         </p>
+        <p className="text-xs text-slate-500 mb-3 flex items-center gap-1.5">
+          "🔑 Criar acesso"/"🔑 Gerar nova senha" definem a senha de login do colaborador no sistema.
+          <HelpTip helpKey="colaboradores.criar_acesso" fallback="Criar acesso gera a primeira senha do colaborador; Gerar nova senha troca a senha de quem já tem login. O login em si (matrícula) não muda." />
+        </p>
         {selectMode && (
           <button
             onClick={handleDeleteSelected}
@@ -436,7 +441,10 @@ function EditCollaboratorModal({
         <div className="flex flex-col gap-3">
           <div className="flex gap-4 justify-center">
             <PhotoField label="Avatar" url={foto} uploading={uploading} onSelect={(f) => handleFileSelected('avatar', f)} />
-            <PhotoField label="Foto p/ Conquistas" url={fotoConquista} uploading={uploading} onSelect={(f) => handleFileSelected('conquista', f)} />
+            <div className="flex flex-col items-center gap-1">
+              <PhotoField label="Foto p/ Conquistas" url={fotoConquista} uploading={uploading} onSelect={(f) => handleFileSelected('conquista', f)} />
+              <HelpTip helpKey="colaboradores.foto_conquistas" fallback="Foto separada, usada só nos cards de premiação da Galeria de Conquistas — pode ser diferente do avatar do dia a dia." />
+            </div>
           </div>
           <div>
             <label className="block text-xs text-slate-400 mb-1">Matrícula</label>

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
+import { HelpTip } from '../../components/HelpTip';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
 import { SalesListLockedNotice } from '../../components/SalesListLockedNotice';
 import { ReclassifyBar } from '../../components/admin/ReclassifyBar';
@@ -317,12 +318,14 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
           >
             {generating ? 'Gerando...' : '🖼️ Gerar imagem do ranking'}
           </button>
+          <HelpTip helpKey="categoria.gerar_imagem" fallback="Monta uma imagem pronta do ranking desta categoria, para copiar ou baixar e compartilhar no WhatsApp." />
           <button
             onClick={() => setGalleryOpen(true)}
             className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800"
           >
             👥 Detalhamento por vendedor
           </button>
+          <HelpTip helpKey="categoria.detalhamento_vendedor" fallback="Mostra o total de cada colaborador nesta categoria, do maior para o menor, no período selecionado." />
           <RankingModeToggle
             on={storeSettings.ranking_moderno}
             onToggle={() => updateStoreSettings.mutate({ ranking_moderno: !storeSettings.ranking_moderno })}
@@ -360,6 +363,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
                     🖨️ Imprimir extrato
                   </button>
                 )}
+                <HelpTip helpKey="categoria.imprimir_extrato" fallback="Gera um extrato pronto para impressão com data, produto, quantidade e valor de cada venda do colaborador/comissão filtrado." />
                 <ReclassifyBar
                   active={reclassifyMode}
                   onToggle={() => {

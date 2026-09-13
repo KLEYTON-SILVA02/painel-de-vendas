@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
+import { HelpTip } from '../../components/HelpTip';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
 import { SalesListLockedNotice } from '../../components/SalesListLockedNotice';
@@ -196,6 +197,10 @@ export function BioPage() {
         </div>
       )}
 
+      <div className="flex items-center gap-2 flex-wrap">
+        <HelpTip helpKey="biosintetica.grupos_pontos" fallback="'Gerenciar Grupos' vincula produtos aos grupos G1-G4; 'Gerenciar Pontos' define a pontuação (Meta 1/2/3) de cada grupo." />
+        <span className="text-xs text-slate-500">Filtrar por grupo:</span>
+      </div>
       <div className="flex gap-2">
         {(['ALL', ...BIO_GROUP_KEYS] as const).map((k) => (
           <button

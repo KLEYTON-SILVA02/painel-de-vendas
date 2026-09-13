@@ -1,3 +1,4 @@
+import { HelpTip } from '../HelpTip';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
 
@@ -50,6 +51,7 @@ export function ReclassifyBar({
       >
         🏷️ Reclassificar produtos{active ? ' (ativo)' : ''}
       </button>
+      <HelpTip helpKey="reclassificar.produtos" fallback="Selecione um ou mais produtos na lista e mude a categoria deles de uma vez — inclui as vendas já importadas desse produto." />
       {active && (
         <>
           <span className="text-xs text-slate-500">{selectedCount} produto(s) selecionado(s)</span>

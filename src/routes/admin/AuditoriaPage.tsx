@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
+import { HelpTip } from '../../components/HelpTip';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { CAT_KEYS, classifyProductTier, type CategoryKey } from '../../lib/business/classification';
 import { buildClassificationInputs } from '../../lib/mappers';
@@ -103,6 +104,7 @@ export function AuditoriaPage() {
           >
             Pendentes de Revisão
           </button>
+          <HelpTip helpKey="auditoria.pendentes" fallback="Produtos vendidos que o sistema ainda não conseguiu classificar automaticamente — selecione um ou mais e escolha a categoria certa." />
           {CAT_KEYS.map((k) => (
             <button
               key={k}
