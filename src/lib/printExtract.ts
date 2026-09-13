@@ -7,11 +7,13 @@
 //
 // O layout segue a referência de impressora térmica 80mm (compatível com A4)
 // que o usuário forneceu: texto preto sobre fundo branco (sem cores do tema
-// escuro do app — ficariam claras/ilegíveis no papel), sem sobrescrever a
-// margem do navegador (o próprio driver da impressora já reserva ~3mm), e um
-// aviso `.no-print` lembrando as opções do diálogo de impressão (Escala 100%,
-// cabeçalho/rodapé e gráficos de fundo desligados) — nada disso é controlável
-// via CSS/JS, só via aquele diálogo.
+// escuro do app — ficariam claras/ilegíveis no papel), uma regra @page com
+// margem fixa e simétrica (reduzida, em vez de depender do padrão variável
+// de cada navegador/driver — a causa da impressão saindo deslocada para um
+// dos lados) para que a impressão sempre saia centralizada, e um aviso
+// `.no-print` lembrando as opções do diálogo de impressão (Escala 100%,
+// cabeçalho/rodapé e gráficos de fundo desligados) — isso continua não
+// controlável via CSS/JS, só via aquele diálogo.
 import { matchesSpecialList, type SpecialListItem } from './business/summary';
 import type { Sale } from './business/types';
 import { fmtDateBR, fmtMoney } from './format';
@@ -21,8 +23,16 @@ function escapeHtml(s: string): string {
 }
 
 const PRINT_STYLES = `
+  /* Margem fixa e igual nos 4 lados — garante que a área impressa fique
+     centralizada no papel (nem mais para a direita, nem mais para a
+     esquerda), em vez de ficar sujeita à margem padrão de cada navegador/
+     impressora, que varia e é a causa do desalinhamento. Reduzida (6mm) em
+     vez do padrão usual do navegador (~10mm), para sobrar mais espaço
+     horizontal às colunas da tabela — importante em impressoras térmicas de
+     80mm, onde essa sobra faz diferença real. */
+  @page { size: auto; margin: 6mm; }
   * { box-sizing: border-box; }
-  body { margin: 0; padding: 16px; font-family: 'Courier New', monospace; color: #000; background: #fff; font-size: 12px; }
+  body { margin: 0; padding: 6px; font-family: 'Courier New', monospace; color: #000; background: #fff; font-size: 12px; }
   h1 { font-size: 16px; margin: 0 0 4px; }
   h2 { font-size: 13px; margin: 18px 0 4px; border-bottom: 1.5px solid #000; padding-bottom: 2px; }
   .meta { font-size: 11px; color: #222; margin-bottom: 12px; }
