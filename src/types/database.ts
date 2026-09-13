@@ -315,6 +315,7 @@ export type Database = {
           nome: string
           setor: string | null
           store_id: string
+          username: string | null
         }
         Insert: {
           apelido?: string | null
@@ -330,6 +331,7 @@ export type Database = {
           nome: string
           setor?: string | null
           store_id: string
+          username?: string | null
         }
         Update: {
           apelido?: string | null
@@ -345,6 +347,7 @@ export type Database = {
           nome?: string
           setor?: string | null
           store_id?: string
+          username?: string | null
         }
         Relationships: [
           {
@@ -1439,6 +1442,7 @@ export type Database = {
           nome: string
           setor: string
           store_id: string
+          username: string
         }[]
       }
       matches_special_list: {
@@ -1475,7 +1479,11 @@ export type Database = {
         Returns: string[]
       }
       update_own_collaborator_photo: {
-        Args: { new_foto_conquista_url: string | null; new_foto_url: string | null }
+        Args: { new_foto_conquista_url: string; new_foto_url: string }
+        Returns: undefined
+      }
+      update_own_collaborator_username: {
+        Args: { new_username: string }
         Returns: undefined
       }
     }

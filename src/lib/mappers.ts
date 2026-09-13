@@ -9,6 +9,7 @@ export function mapCollaborator(row: Tables<'collaborators'>): Collaborator {
   return {
     id: row.id,
     matricula: normalizeMatricula(row.matricula),
+    username: row.username,
     nome: row.nome,
     apelido: row.apelido,
     celular: row.celular,

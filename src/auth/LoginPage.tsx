@@ -247,21 +247,23 @@ function CollaboratorLoginForm() {
     setError(null);
     setBusy(true);
     try {
-      // Same error message whether the matrícula doesn't exist or the senha
-      // is wrong — a distinct "matrícula não encontrada" message here would
-      // let anyone probe matrículas one by one and read the response as an
+      // Same error message whether the matrícula/usuário doesn't exist or
+      // the senha is wrong — a distinct "não encontrado" message here would
+      // let anyone probe values one by one and read the response as an
       // oracle for which ones exist (and in which loja, since a resolved
       // login email embeds the store's id). resolve_collaborator_email is
-      // also rate-limited server-side for the same reason.
+      // also rate-limited server-side for the same reason, and now accepts
+      // either the matrícula or the self-chosen username (migration 0065)
+      // in this same field — same call, same result shape either way.
       const { data: email, error: resolveErr } = await supabase.rpc('resolve_collaborator_email', {
         p_matricula: matricula,
       });
       if (resolveErr || !email) {
-        setError('Matrícula ou senha inválidos.');
+        setError('Matrícula/usuário ou senha inválidos.');
         return;
       }
       const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
-      if (signInErr) setError('Matrícula ou senha inválidos.');
+      if (signInErr) setError('Matrícula/usuário ou senha inválidos.');
     } finally {
       setBusy(false);
     }
@@ -271,7 +273,13 @@ function CollaboratorLoginForm() {
     <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <label className="mv2-input-group">
         <UserIcon />
-        <input type="text" required placeholder="Matrícula" value={matricula} onChange={(e) => setMatricula(e.target.value)} />
+        <input
+          type="text"
+          required
+          placeholder="Matrícula ou usuário"
+          value={matricula}
+          onChange={(e) => setMatricula(e.target.value)}
+        />
       </label>
       <label className="mv2-input-group">
         <LockIcon />
