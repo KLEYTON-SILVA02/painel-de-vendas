@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { PageLoading } from '../../components/PageLoading';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../auth/AuthContext';
+import { HelpTip } from '../../components/HelpTip';
 import { Spinner } from '../../components/Spinner';
 import { classifyProductTier } from '../../lib/business/classification';
 import { autoMapColumns, detectHeaderRow, type ColumnMap, type ImportField } from '../../lib/business/importMapping';
@@ -494,7 +495,13 @@ export function ImportarPage() {
       {step === 'pick' && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <div className="flex items-start justify-between gap-3 mb-1">
-            <h3 className="font-semibold text-sm">Importar planilha de vendas</h3>
+            <h3 className="font-semibold text-sm flex items-center gap-1.5">
+              Importar planilha de vendas
+              <HelpTip
+                helpKey="importar.botao_importar"
+                fallback="Envie a planilha de vendas do dia (.xlsx, .xls, .csv ou .ods) para atualizar o sistema."
+              />
+            </h3>
             <Link
               to="/admin/configuracoes"
               className="shrink-0 rounded-lg border border-slate-700 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-slate-800"
@@ -575,9 +582,15 @@ export function ImportarPage() {
       {step === 'map' && (
         <>
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-            <p className="text-xs text-slate-500">
-              {sheets.length} aba(s), {sheets.reduce((a, s) => a + s.rows.length, 0)} linhas encontradas. Colunas
-              mapeadas automaticamente — confira abaixo (uma seção por aba):
+            <p className="text-xs text-slate-500 flex items-start gap-1.5">
+              <span>
+                {sheets.length} aba(s), {sheets.reduce((a, s) => a + s.rows.length, 0)} linhas encontradas. Colunas
+                mapeadas automaticamente — confira abaixo (uma seção por aba):
+              </span>
+              <HelpTip
+                helpKey="importar.mapeamento_colunas"
+                fallback="Confira se cada coluna da sua planilha foi identificada corretamente antes de confirmar."
+              />
             </p>
           </div>
           {sheets.map((sheet, si) => (

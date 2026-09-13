@@ -1,3 +1,4 @@
+import { HelpTip } from './HelpTip';
 import { todayISO } from '../lib/dateRange';
 import { useDateRange } from '../routes/DateRangeContext';
 
@@ -244,7 +245,13 @@ export function MetricsFilterBar({ statCards }: { statCards: MfbStatCard[] }) {
             ))}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <ToggleButton on={buscaPeriodoOpen} onClick={toggleBuscaPeriodo} label="Busca período" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <ToggleButton on={buscaPeriodoOpen} onClick={toggleBuscaPeriodo} label="Busca período" />
+              <HelpTip
+                helpKey="ranking.filtros"
+                fallback="Use 'Modo Geral' para ver o mês inteiro, ou 'Busca período' para escolher um intervalo específico de datas."
+              />
+            </div>
             <ToggleButton on={modoGeral} onClick={setModoGeral} label="Modo Geral" />
           </div>
         </div>

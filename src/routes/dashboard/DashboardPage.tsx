@@ -1,5 +1,6 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { PageLoading } from '../../components/PageLoading';
+import { HelpTip } from '../../components/HelpTip';
 import { useAuth } from '../../auth/AuthContext';
 import { DailyEvolutionChart } from '../../components/dashboard/DailyEvolutionChart';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
@@ -94,7 +95,8 @@ function RankFilterBar({ dynamics, singleLine }: { dynamics: Dynamic[]; singleLi
 
   return (
     <>
-      <div style={{ display: 'flex', gap: 'clamp(3px, 0.5vw, 6px)', marginBottom: 6, flexWrap: singleLine ? 'nowrap' : 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(3px, 0.5vw, 6px)', marginBottom: 6, flexWrap: singleLine ? 'nowrap' : 'wrap' }}>
+        <HelpTip helpKey="dashboard.filtro_categoria" fallback="Escolha uma categoria para ver só as vendas dela na tela e no ranking." />
         {[...RANK_FILTERS, { k: 'LEVMEL' as RankFilter, l: 'Levmel' }, { k: 'CHIP' as RankFilter, l: 'Chip' }].map((x) => (
           <SubtabButton key={x.k} active={rankFilter === x.k} onClick={() => setRankFilter(x.k)} shrink={singleLine}>
             {/* Abreviação só para este filtro da tela Início — o rótulo completo

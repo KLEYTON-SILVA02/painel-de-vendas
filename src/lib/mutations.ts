@@ -855,3 +855,26 @@ export function useReclassifyProdutos(storeId: string | undefined) {
     },
   });
 }
+
+/** Marca um tutorial como concluído para o perfil logado (função Tutoriais).
+ * profileId precisa vir de useAuth() no chamador — RLS já garante que
+ * ninguém grava tutorial_progress em nome de outro perfil, mas o insert em
+ * si precisa do valor explícito, diferente de um select (que a policy
+ * filtra sozinha). */
+export function useMarkTutorialDone(profileId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (tutorialId: string) => {
+      if (!profileId) throw new Error('profile not loaded');
+      // ignoreDuplicates faz um INSERT ... ON CONFLICT DO NOTHING — não
+      // precisa de policy de UPDATE (só existe insert/select/delete em
+      // tutorial_progress), e marcar de novo um tutorial já concluído não
+      // deveria mudar `concluido_em` mesmo.
+      const { error } = await supabase
+        .from('tutorial_progress')
+        .upsert({ profile_id: profileId, tutorial_id: tutorialId }, { onConflict: 'profile_id,tutorial_id', ignoreDuplicates: true });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tutorial_progress'] }),
+  });
+}

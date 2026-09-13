@@ -694,6 +694,33 @@ export type Database = {
           },
         ]
       }
+      help_tips: {
+        Row: {
+          ativo: boolean
+          chave: string
+          created_at: string
+          id: string
+          texto: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          chave: string
+          created_at?: string
+          id?: string
+          texto: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          chave?: string
+          created_at?: string
+          id?: string
+          texto?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       import_field_overrides: {
         Row: {
           field: string
@@ -1363,6 +1390,87 @@ export type Database = {
           numero_loja?: string
           whatsapp?: string
           whatsapp_group_link?: string
+        }
+        Relationships: []
+      }
+      tutorial_progress: {
+        Row: {
+          concluido_em: string
+          profile_id: string
+          tutorial_id: string
+        }
+        Insert: {
+          concluido_em?: string
+          profile_id: string
+          tutorial_id: string
+        }
+        Update: {
+          concluido_em?: string
+          profile_id?: string
+          tutorial_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tutorial_progress_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tutorial_progress_tutorial_id_fkey"
+            columns: ["tutorial_id"]
+            isOneToOne: false
+            referencedRelation: "tutorials"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tutorials: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          descricao: string
+          duracao_min: number
+          grupo: string
+          id: string
+          nivel: string
+          ordem: number
+          passos: Json
+          perfil_alvo: string
+          resumo: string
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          descricao?: string
+          duracao_min?: number
+          grupo: string
+          id?: string
+          nivel: string
+          ordem?: number
+          passos?: Json
+          perfil_alvo?: string
+          resumo: string
+          titulo: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          descricao?: string
+          duracao_min?: number
+          grupo?: string
+          id?: string
+          nivel?: string
+          ordem?: number
+          passos?: Json
+          perfil_alvo?: string
+          resumo?: string
+          titulo?: string
+          updated_at?: string
         }
         Relationships: []
       }

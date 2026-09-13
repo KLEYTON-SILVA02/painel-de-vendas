@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { HelpTip } from '../../components/HelpTip';
 import { PageLoading } from '../../components/PageLoading';
 import { ReauthModal } from '../../components/ReauthModal';
 import { useAuth } from '../../auth/AuthContext';
@@ -232,7 +233,13 @@ function NotificationSchedulesCard() {
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-      <h3 className="text-amber-400 font-semibold mb-1">🔔 Notificações automáticas de vendas</h3>
+      <h3 className="text-amber-400 font-semibold mb-1 flex items-center gap-1.5">
+        🔔 Notificações automáticas de vendas
+        <HelpTip
+          helpKey="configuracoes.notificacoes"
+          fallback="Defina o horário e os dias em que o sistema avisa a equipe sobre as vendas do dia."
+        />
+      </h3>
       <p className="text-xs text-slate-500 mb-3">
         Nos horários abaixo, cada colaborador recebe uma notificação no app com o total de vendas do dia em cada categoria.
       </p>

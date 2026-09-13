@@ -702,6 +702,48 @@ export function useDynamics() {
   });
 }
 
+/** Balões de ajuda (função Tutoriais) — conteúdo global, o mesmo para
+ * qualquer loja, então sem filtro de store_id (a tabela não tem essa
+ * coluna). Retorna um mapa chave→texto pronto para lookup por componente. */
+export function useHelpTips() {
+  return useQuery({
+    queryKey: ['help_tips'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('help_tips').select('*').eq('ativo', true);
+      if (error) throw error;
+      return Object.fromEntries(data.map((t) => [t.chave, t.texto])) as Record<string, string>;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/** Central de Tutoriais — conteúdo global (sem store_id), igual à
+ * `useHelpTips` acima. */
+export function useTutorials() {
+  return useQuery({
+    queryKey: ['tutorials'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('tutorials').select('*').eq('ativo', true).order('grupo').order('ordem');
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/** Progresso de tutoriais do usuário logado — RLS já restringe a
+ * `profile_id = auth.uid()`, então não precisa filtro explícito aqui. */
+export function useTutorialProgress() {
+  return useQuery({
+    queryKey: ['tutorial_progress'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('tutorial_progress').select('*');
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
 /** On-demand row count for the "Excluir dados" danger zone (ADM >
  * Configurações) — a plain async lookup rather than a cached query hook,
  * since it's only ever used right before a destructive action to show

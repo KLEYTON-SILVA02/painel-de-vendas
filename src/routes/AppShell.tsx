@@ -19,6 +19,7 @@ import { supabase } from '../lib/supabase';
 import { useIsMobileV2 } from '../lib/useIsMobileV2';
 import { useStoreSettings } from '../lib/queries';
 import { DateRangeProvider } from './DateRangeContext';
+import { HelpModeProvider, useHelpMode } from './HelpModeContext';
 
 // Any one session only ever renders exactly one of these three trees
 // (desktop admin routes below, or one of the shells here) — splitting them
@@ -39,6 +40,7 @@ const AdminLandingPage = lazy(() => import('./admin/AdminLandingPage').then((m) 
 const BioPage = lazy(() => import('./bio/BioPage').then((m) => ({ default: m.BioPage })));
 const CategoryPage = lazy(() => import('./category/CategoryPage').then((m) => ({ default: m.CategoryPage })));
 const ConquistasPage = lazy(() => import('./conquistas/ConquistasPage').then((m) => ({ default: m.ConquistasPage })));
+const TutoriaisPage = lazy(() => import('./admin/TutoriaisPage').then((m) => ({ default: m.TutoriaisPage })));
 const GaleriaFigurinhasPage = lazy(() => import('./conquistas/GaleriaFigurinhasPage').then((m) => ({ default: m.GaleriaFigurinhasPage })));
 const DashboardPage = lazy(() => import('./dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })));
 const DinamicasPage = lazy(() => import('./dinamicas/DinamicasPage').then((m) => ({ default: m.DinamicasPage })));
@@ -144,6 +146,7 @@ export function AppShell() {
 
   return (
     <DateRangeProvider>
+      <HelpModeProvider>
       <ConquistaCelebrationHost />
       <BirthdayCelebrationHost />
       <div className={`app-shell min-h-screen bg-slate-950 text-slate-100 ${collapsed ? 'is-collapsed' : ''} ${mobileOpen ? 'is-mobile-open' : ''}`}>
@@ -198,6 +201,7 @@ export function AppShell() {
                 {storeSettings && (
                   <ClosingClock horario={storeSettings.horario as unknown as Horario} feriadosDatas={storeSettings.feriados_datas} />
                 )}
+                <HelpModeToggle />
                 <NotificationBell audience="admin" />
               </div>
             </div>
@@ -218,6 +222,7 @@ export function AppShell() {
             <Route path="/bio" element={<BioPage />} />
             <Route path="/conquistas" element={<ConquistasPage />} />
             <Route path="/conquistas/figurinhas" element={<GaleriaFigurinhasPage />} />
+            <Route path="/tutoriais" element={<TutoriaisPage />} />
             <Route path="/notificacoes" element={<CollaboratorNotificacoesPage audience="admin" />} />
             <Route
               path="/categoria-parceria/:chave"
@@ -256,6 +261,29 @@ export function AppShell() {
         </div>
       </div>
       <VersionFooter />
+      </HelpModeProvider>
     </DateRangeProvider>
+  );
+}
+
+/** Botão "?" do header que liga/desliga os balões de ajuda (<HelpTip>) do
+ * sistema inteiro — ligado por padrão, para quem está começando; some assim
+ * que o próprio ADM decide que não precisa mais. */
+function HelpModeToggle() {
+  const { helpModeEnabled, toggleHelpMode } = useHelpMode();
+  return (
+    <button
+      type="button"
+      onClick={toggleHelpMode}
+      title={helpModeEnabled ? 'Desligar balões de ajuda' : 'Ligar balões de ajuda'}
+      className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-semibold"
+      style={
+        helpModeEnabled
+          ? { borderColor: '#00f0ff', background: '#00f0ff', color: '#001a1c' }
+          : { borderColor: '#334155', color: '#94a3b8', background: 'transparent' }
+      }
+    >
+      ?
+    </button>
   );
 }

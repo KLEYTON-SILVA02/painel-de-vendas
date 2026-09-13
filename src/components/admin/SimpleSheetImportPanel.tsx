@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { HelpTip } from '../HelpTip';
 import { idFromCell } from '../../lib/business/parsing';
 
 const MAX_SIZE = 50 * 1024 * 1024;
@@ -15,11 +16,18 @@ export function SimpleSheetImportPanel({
   columns,
   idColumnIndex,
   onConfirm,
+  helpKey,
+  helpFallback,
 }: {
   title: string;
   columns: string[];
   idColumnIndex?: number;
   onConfirm: (rows: string[][]) => Promise<{ count: number; skipped: number }>;
+  /** Chave/texto opcionais do balão de ajuda (função Tutoriais) exibido ao
+   * lado do título — a maioria dos usos ainda não tem um, e o painel
+   * funciona normalmente sem eles. */
+  helpKey?: string;
+  helpFallback?: string;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
@@ -107,14 +115,17 @@ export function SimpleSheetImportPanel({
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="text-sm font-semibold flex items-center justify-between w-full"
-      >
-        <span>📥 {title}</span>
-        <span className="text-xs text-slate-400">{open ? '▲' : '▼'}</span>
-      </button>
+      <div className="flex items-center gap-2 w-full">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="text-sm font-semibold flex items-center justify-between flex-1 min-w-0"
+        >
+          <span>📥 {title}</span>
+          <span className="text-xs text-slate-400">{open ? '▲' : '▼'}</span>
+        </button>
+        {helpKey && <HelpTip helpKey={helpKey} fallback={helpFallback} />}
+      </div>
       {open && (
         <div className="mt-3 flex flex-col gap-3">
           <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
