@@ -9,6 +9,7 @@ import {
   computeDinamicaCategoriaTotais,
   computeDinamicaProgresso,
   computeDinamicaRanking,
+  computeDinamicaVendas,
   dinamicaMetaTotal,
   dinamicaUnidadeLabel,
   dynamicStatus,
@@ -20,13 +21,15 @@ import type { Collaborator, Dynamic, DynamicProductCategory, Sale } from '../../
 import { VISITANTE_SETOR } from '../../lib/business/types';
 import { todayISO } from '../../lib/dateRange';
 import { generateDinamicaCardBlob } from '../../lib/dinamicaImage';
-import { fmtDateBR, fmtMoney } from '../../lib/format';
+import { fmtDateBR, fmtDateShortBR, fmtMoney } from '../../lib/format';
 import { useCreateDynamic, useDeleteDynamic, useUpdateDynamic } from '../../lib/mutations';
 import { tryCopyImage } from '../../lib/rankingImage';
 import { useCollaborators, useDynamics, useSales, useStore } from '../../lib/queries';
 import type { Json } from '../../types/database';
+import { useDateRange } from '../DateRangeContext';
 import { EditDynamicModal } from '../dinamicas/DinamicasPage';
 import { MobileDateFilter } from './MobileDateFilter';
+import { MobileSalesListLockedNotice } from './MobileSellerDetail';
 
 const STATUS_LABEL: Record<DynamicStatus, string> = { ativa: 'Ativa', agendada: 'Agendada', encerrada: 'Encerrada' };
 const STATUS_COLOR: Record<DynamicStatus, string> = { ativa: '#14ff00', agendada: '#f26122', encerrada: '#666' };
@@ -429,6 +432,7 @@ function MobileDinamicaAccordionItem({
   onEdit: () => void;
 }) {
   const [cardMatricula, setCardMatricula] = useState<string | null>(null);
+  const { salesListEnabled, toggleSalesListEnabled } = useDateRange();
   const isUnidade = d.metrica === 'unidade';
   const realizado = computeDinamicaProgresso(d, sales, collaborators);
   const metaTotal = dinamicaMetaTotal(d, collaborators);
@@ -436,6 +440,11 @@ function MobileDinamicaAccordionItem({
   const ranking = computeDinamicaRanking(d, sales, collaborators);
   const categoriaTotais = computeDinamicaCategoriaTotais(d, sales, collaborators);
   const unidadeLabel = dinamicaUnidadeLabel(d);
+  // Direct sales list for the dynamic as a whole — only for the active one,
+  // and only computed once the table is actually shown, since it scans every
+  // sale in the period (same salesListEnabled gate every other detailed
+  // sales table in the app uses).
+  const vendas = status === 'ativa' && salesListEnabled ? computeDinamicaVendas(d, sales, collaborators) : [];
 
   return (
     <div>
@@ -516,6 +525,46 @@ function MobileDinamicaAccordionItem({
                   )}
                 </div>
               ))}
+            </div>
+          )}
+
+          {status === 'ativa' && (
+            <div style={{ margin: '10px 0 4px' }}>
+              <div style={{ fontSize: 9, fontWeight: 700, marginBottom: 6 }}>Lista de vendas detalhada</div>
+              {!salesListEnabled ? (
+                <MobileSalesListLockedNotice onEnable={toggleSalesListEnabled} />
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="mv2-data-table">
+                    <thead>
+                      <tr>
+                        <th>Data</th>
+                        <th>Vendedor</th>
+                        <th>Produto</th>
+                        <th>{isUnidade ? unidadeLabel : 'Valor'}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {vendas.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} style={{ textAlign: 'center', color: 'var(--mv2-texto-2)', padding: 8 }}>
+                            Nenhuma venda no período.
+                          </td>
+                        </tr>
+                      ) : (
+                        vendas.map((v, i) => (
+                          <tr key={`${v.dataISO}-${v.produto}-${i}`}>
+                            <td>{fmtDateShortBR(v.dataISO)}</td>
+                            <td>{v.vendedor}</td>
+                            <td>{v.produto}</td>
+                            <td>{isUnidade ? v.qtd : fmtMoney(v.valor)}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 
