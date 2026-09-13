@@ -1,10 +1,11 @@
 import { useAuth } from '../../auth/AuthContext';
-import { computeDinamicaProgresso, dynamicAllowsCollaborator, dynamicStatus } from '../../lib/business/dynamics';
+import { computeDinamicaColaboradorVendas, computeDinamicaProgresso, dynamicAllowsCollaborator, dynamicStatus } from '../../lib/business/dynamics';
 import { normalize } from '../../lib/business/normalize';
 import type { Collaborator, Dynamic } from '../../lib/business/types';
 import { todayISO } from '../../lib/dateRange';
-import { fmtDateBR, fmtMoney } from '../../lib/format';
+import { fmtDateBR, fmtDateShortBR, fmtMoney } from '../../lib/format';
 import { useCollaborators, useDynamics, useSales } from '../../lib/queries';
+import { useDateRange } from '../DateRangeContext';
 
 // Collaborators see only their own standing within each dynamic — never the
 // full participant ranking — so this never reuses PodiumStaircase/admin's
@@ -96,6 +97,7 @@ function MyDinamicaCard({
   collaborators: Collaborator[];
   matricula: string | undefined;
 }) {
+  const { salesListEnabled, toggleSalesListEnabled } = useDateRange();
   const isUnidade = d.metrica === 'unidade';
   const realizadoLoja = computeDinamicaProgresso(d, sales ?? [], collaborators);
   const pct = d.metaValor > 0 ? Math.min(100, (realizadoLoja / d.metaValor) * 100) : null;
@@ -110,6 +112,11 @@ function MyDinamicaCard({
     myValor += Number(s.valor) || 0;
     myItens += Number(s.qtd) || 0;
   });
+  // Same "Lista de vendas detalhada" toggle as the ADM version's dynamic
+  // accordion, but scoped to this collaborator's own sales — this screen
+  // never shows the full participant list (see the file-level comment).
+  const minhasVendas =
+    status === 'ativa' && salesListEnabled && matricula ? computeDinamicaColaboradorVendas(d, sales ?? [], matricula) : [];
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
@@ -134,6 +141,35 @@ function MyDinamicaCard({
           </div>
         </>
       )}
+
+      {status === 'ativa' &&
+        (!salesListEnabled ? (
+          <button
+            onClick={toggleSalesListEnabled}
+            className="mt-3 block w-full rounded-lg border border-cyan-500/50 bg-cyan-500/10 px-3 py-2 text-center text-xs font-medium text-cyan-400 transition-colors hover:bg-cyan-500/20 hover:text-cyan-300"
+          >
+            Lista de vendas detalhada
+          </button>
+        ) : (
+          <div className="mt-3">
+            <div className="mb-1.5 text-[10px] font-semibold uppercase text-slate-500">Minhas vendas nesta dinâmica</div>
+            {minhasVendas.length === 0 ? (
+              <div className="py-2 text-center text-xs text-slate-500">Nenhuma venda no período.</div>
+            ) : (
+              <div className="flex flex-col gap-1">
+                {minhasVendas.map((v, i) => (
+                  <div key={`${v.dataISO}-${v.produto}-${i}`} className="flex items-center gap-2 rounded-lg bg-slate-800/60 px-2.5 py-1.5 text-xs">
+                    <span className="flex-shrink-0 font-mono text-cyan-400">{fmtDateShortBR(v.dataISO)}</span>
+                    <span className="flex-1 truncate">{v.produto}</span>
+                    <span className="flex-shrink-0 font-mono font-semibold text-amber-400">
+                      {isUnidade ? `${v.qtd} un.` : fmtMoney(v.valor)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
     </div>
   );
 }
