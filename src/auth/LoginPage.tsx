@@ -176,7 +176,11 @@ function AdminLoginForm() {
           setError(policyError);
           return;
         }
-        const { error: err } = await supabase.auth.signUp({ email, password });
+        const { error: err } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: window.location.origin },
+        });
         if (err) setError(err.message);
         else setError('Conta criada. Verifique o e-mail se a confirmação estiver ativa, ou apenas entre.');
       }

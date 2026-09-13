@@ -734,6 +734,7 @@ function SubstanciasTab() {
   const [scanResult, setScanResult] = useState<string[] | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDeleteError, setBulkDeleteError] = useState<string | null>(null);
 
   if (!substances || !sales || !catalog || !products || !brandKeywords || !exclusiveBrands) return <PageLoading />;
 
@@ -751,6 +752,20 @@ function SubstanciasTab() {
     if (!nomes.length) return;
     await bulkInsertSubstances.mutateAsync(nomes);
     setBulkText('');
+  }
+
+  async function handleBulkDelete() {
+    setBulkDeleteError(null);
+    const ids = Array.from(selected);
+    const results = await Promise.allSettled(ids.map((id) => deleteSubstance.mutateAsync(id)));
+    const failedIds = ids.filter((_, i) => results[i].status === 'rejected');
+    if (failedIds.length > 0) {
+      setBulkDeleteError(`${failedIds.length} de ${ids.length} substância(s) não puderam ser excluídas.`);
+      setSelected(new Set(failedIds));
+    } else {
+      setSelected(new Set());
+      setSelectMode(false);
+    }
   }
 
   async function handleScan() {
@@ -864,18 +879,16 @@ function SubstanciasTab() {
             </label>
             {selected.size > 0 && (
               <button
-                onClick={() => {
-                  selected.forEach((id) => deleteSubstance.mutate(id));
-                  setSelected(new Set());
-                  setSelectMode(false);
-                }}
-                className="rounded-lg bg-rose-600 text-white px-3 py-1.5 text-xs font-medium"
+                onClick={handleBulkDelete}
+                disabled={deleteSubstance.isPending}
+                className="rounded-lg bg-rose-600 text-white px-3 py-1.5 text-xs font-medium disabled:opacity-50"
               >
-                Excluir selecionadas ({selected.size})
+                {deleteSubstance.isPending ? 'Excluindo…' : `Excluir selecionadas (${selected.size})`}
               </button>
             )}
           </div>
         )}
+        {bulkDeleteError && <p className="text-xs text-rose-400 mb-3">{bulkDeleteError}</p>}
         {substances.length === 0 ? (
           <span className="text-xs text-slate-500">Nenhuma substância cadastrada.</span>
         ) : (
