@@ -764,7 +764,7 @@ export function useIsPlatformBuilder(enabled = true) {
 /** Lista de lojas que o Construtor pode escolher para entrar — a RPC em si
  * já barra qualquer chamador que não esteja em platform_builders (retorna
  * vazio), então não precisa de guarda extra aqui. */
-export function useStoresForBuilder() {
+export function useStoresForBuilder(enabled = true) {
   return useQuery({
     queryKey: ['stores_for_builder'],
     queryFn: async () => {
@@ -772,6 +772,7 @@ export function useStoresForBuilder() {
       if (error) throw error;
       return data;
     },
+    enabled,
   });
 }
 

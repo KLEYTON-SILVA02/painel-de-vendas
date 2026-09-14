@@ -5,6 +5,7 @@ import { FUNCTION_ICON_SLOTS } from '../../lib/functionIconSlots';
 import { useSetFunctionIcon } from '../../lib/mutations';
 import { useFunctionIcons } from '../../lib/queries';
 import { uploadIcon } from '../../lib/storage';
+import { errorMessage } from '../../lib/errors';
 
 const GROUPS = ['Navegação', 'ADM'] as const;
 
@@ -25,7 +26,7 @@ export function IconesPage() {
       const url = await uploadIcon(profile.store_id, functionKey, file);
       await setIcon.mutateAsync({ functionKey, iconUrl: url });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Falha ao enviar o ícone.');
+      setError(errorMessage(e, 'Falha ao enviar o ícone.'));
     } finally {
       setUploadingKey(null);
     }

@@ -18,6 +18,7 @@ import { useBulkUpsertCollaborators, useCreateCollaborator, useDeleteCollaborato
 import { PASSWORD_HINT, PASSWORD_MIN_LENGTH, validatePassword } from '../../lib/passwordPolicy';
 import { useCategoryTypes, useCollaborators, useCollaboratorsWithLogin, useSales } from '../../lib/queries';
 import { uploadPhoto } from '../../lib/storage';
+import { errorMessage } from '../../lib/errors';
 
 const SETORES = ['Balcão', 'Caixa', 'Dermoconsultora', 'Farmacêutico', 'Gerência', VISITANTE_SETOR];
 
@@ -569,7 +570,7 @@ function GrantLoginModal({ collaborator, onClose }: { collaborator: Collaborator
       await grantCollaboratorLogin(collaborator.id, senha);
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao criar acesso');
+      setError(errorMessage(err, 'Falha ao criar acesso'));
     } finally {
       setBusy(false);
     }
@@ -623,7 +624,7 @@ function ResetLoginModal({ collaborator, onClose }: { collaborator: Collaborator
       await resetCollaboratorLogin(collaborator.id, senha);
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao gerar nova senha');
+      setError(errorMessage(err, 'Falha ao gerar nova senha'));
     } finally {
       setBusy(false);
     }

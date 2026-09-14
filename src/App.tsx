@@ -6,6 +6,7 @@ import { LoginPage } from './auth/LoginPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { PageLoading } from './components/PageLoading';
 import { queryPersister } from './lib/queryPersister';
+import { useNativeAuthRefresh } from './lib/useNativeAuthRefresh';
 import { useNativeStatusBarInset } from './lib/useNativeStatusBarInset';
 import { AppShell } from './routes/AppShell';
 import { PrivacyPolicyPage } from './routes/PrivacyPolicyPage';
@@ -81,6 +82,7 @@ function AuthedRoot() {
 
 export default function App() {
   useNativeStatusBarInset();
+  useNativeAuthRefresh();
 
   return (
     <ErrorBoundary>

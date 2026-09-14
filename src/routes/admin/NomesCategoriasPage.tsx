@@ -4,6 +4,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { CATEGORY_LABEL_KEYS, DEFAULT_CATEGORY_LABELS } from '../../lib/business/categoryLabels';
 import { useSetCategoryLabel } from '../../lib/mutations';
 import { useCategoryLabels } from '../../lib/queries';
+import { errorMessage } from '../../lib/errors';
 
 /** Lets a store's ADM rename any of the 6 fixed categories (DERM/GEN/MP/
  * MER/LEVMEL/CHIP) — the label chosen here is read by every screen via
@@ -41,7 +42,7 @@ export function NomesCategoriasPage() {
     try {
       await setLabel.mutateAsync({ categoryKey: key, label });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Falha ao salvar o nome.');
+      setError(errorMessage(e, 'Falha ao salvar o nome.'));
     } finally {
       setSavingKey(null);
     }

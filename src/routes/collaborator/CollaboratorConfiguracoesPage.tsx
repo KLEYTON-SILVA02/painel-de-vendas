@@ -4,6 +4,7 @@ import { PhotoCropModal } from '../../components/PhotoCropModal';
 import { useRequestNewPassword, useUpdateOwnCollaboratorPhoto, useUpdateOwnCollaboratorUsername } from '../../lib/mutations';
 import { useCollaborators, useMyPasswordRequest } from '../../lib/queries';
 import { uploadPhoto } from '../../lib/storage';
+import { errorMessage } from '../../lib/errors';
 
 // Collaborator-only self-service settings, reached via the menu in the
 // avatar/name button on CollaboratorShell's topbar (not a bottom-nav tab —
@@ -68,7 +69,7 @@ export function CollaboratorConfiguracoesPage() {
       // pelo celular) era engolida em silêncio: o modal fechava e a tela
       // voltava ao normal como se nada tivesse acontecido, sem nenhuma
       // indicação de que a foto não foi salva.
-      setUploadError(err instanceof Error ? err.message : 'Não foi possível salvar a foto. Tente novamente.');
+      setUploadError(errorMessage(err, 'Não foi possível salvar a foto. Tente novamente.'));
     } finally {
       setUploading(false);
       setCropTarget(null);
@@ -122,7 +123,7 @@ export function CollaboratorConfiguracoesPage() {
         </button>
         {updateUsername.error && (
           <p style={{ fontSize: 11, color: '#ff8a8a', marginTop: 8 }}>
-            {updateUsername.error instanceof Error ? updateUsername.error.message : 'Não foi possível salvar.'}
+            {errorMessage(updateUsername.error, 'Não foi possível salvar.')}
           </p>
         )}
         {usernameSaved && !updateUsername.error && (

@@ -20,6 +20,7 @@ import {
 import { useConquistaCardTemplates, useStore, type ConquistaCardTemplateRow } from '../../lib/queries';
 import { uploadConquistaCardBackground, uploadConquistaCardLogo } from '../../lib/storage';
 import type { Json } from '../../types/database';
+import { errorMessage } from '../../lib/errors';
 
 // Manual configuration tool for Galeria de Conquistas card templates. Each
 // template's photo/logo zones and up to 3 independent text layers are built
@@ -368,7 +369,7 @@ export function CardConquistaPage() {
       const url = await uploadConquistaCardBackground(profile.store_id, editing.id, file);
       setEditingRaw((ed) => (ed ? { ...ed, backgroundUrl: url, uploadingBackground: false } : ed));
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Falha ao enviar o plano de fundo.');
+      setError(errorMessage(e, 'Falha ao enviar o plano de fundo.'));
       setEditingRaw((ed) => (ed ? { ...ed, uploadingBackground: false } : ed));
     }
   }
@@ -380,7 +381,7 @@ export function CardConquistaPage() {
       const url = await uploadConquistaCardLogo(profile.store_id, editing.id, file);
       setEditingRaw((ed) => (ed ? { ...ed, logoUrl: url, uploadingLogo: false } : ed));
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Falha ao enviar a logo.');
+      setError(errorMessage(e, 'Falha ao enviar a logo.'));
       setEditingRaw((ed) => (ed ? { ...ed, uploadingLogo: false } : ed));
     }
   }
@@ -419,7 +420,7 @@ export function CardConquistaPage() {
       });
       closeEditor();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Falha ao salvar o modelo.');
+      setError(errorMessage(e, 'Falha ao salvar o modelo.'));
     } finally {
       setSaving(false);
     }
