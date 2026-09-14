@@ -1,26 +1,61 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useHelpMode } from '../routes/HelpModeContext';
 import { useHelpTips } from '../lib/queries';
+
+const BALLOON_WIDTH = 224; // w-56
+const VIEWPORT_MARGIN = 8;
 
 /** Balão de ajuda (função Tutoriais, Etapa 1) — um badge "?" pequeno ao lado
  * de um botão/campo, que ao clicar mostra uma explicação curta. `fallback`
  * é o texto usado se `helpKey` ainda não tiver uma linha em `help_tips`
  * (ex.: recém-adicionado no código, migration de conteúdo ainda não rodou) —
  * assim a tela nunca fica com um "?" mudo. Some por completo quando o "Modo
- * de Ajuda" está desligado (ver HelpModeContext). */
+ * de Ajuda" está desligado (ver HelpModeContext).
+ *
+ * O balão em si é renderizado via portal direto em `document.body`, com
+ * `position: fixed` calculada a partir da posição real do botão na tela —
+ * isso é o que evita o corte relatado: um `position: absolute` comum fica
+ * preso à área visível (overflow) do card/painel mais próximo que a
+ * contenha, então balões perto da borda de uma tela rolável ou de um card
+ * mais justo apareciam cortados. Renderizando fora dessa hierarquia, o
+ * balão sempre fica por cima do resto do sistema, inteiro. */
 export function HelpTip({ helpKey, fallback }: { helpKey: string; fallback?: string }) {
   const { helpModeEnabled } = useHelpMode();
   const { data: tips } = useHelpTips();
   const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLSpanElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return;
+    const rect = btnRef.current.getBoundingClientRect();
+    const left = Math.min(
+      Math.max(rect.left + rect.width / 2 - BALLOON_WIDTH / 2, VIEWPORT_MARGIN),
+      window.innerWidth - BALLOON_WIDTH - VIEWPORT_MARGIN,
+    );
+    setPos({ top: rect.bottom + 6, left });
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
     function onOutsideClick(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (btnRef.current && !btnRef.current.contains(target) && !(target as Element).closest?.('[data-help-tip-balloon]')) {
+        setOpen(false);
+      }
+    }
+    // Fecha ao rolar em vez de tentar acompanhar a posição — evita o balão
+    // ficar "grudado" no lugar errado da tela conforme o conteúdo rola.
+    function onScroll() {
+      setOpen(false);
     }
     document.addEventListener('mousedown', onOutsideClick);
-    return () => document.removeEventListener('mousedown', onOutsideClick);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', onOutsideClick);
+      window.removeEventListener('scroll', onScroll, true);
+    };
   }, [open]);
 
   if (!helpModeEnabled) return null;
@@ -28,8 +63,9 @@ export function HelpTip({ helpKey, fallback }: { helpKey: string; fallback?: str
   if (!texto) return null;
 
   return (
-    <span ref={wrapRef} className="relative inline-flex align-middle">
+    <span className="relative inline-flex align-middle">
       <button
+        ref={btnRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label="Ajuda"
@@ -37,11 +73,18 @@ export function HelpTip({ helpKey, fallback }: { helpKey: string; fallback?: str
       >
         ?
       </button>
-      {open && (
-        <div className="absolute left-1/2 top-full z-50 mt-1.5 w-56 -translate-x-1/2 rounded-lg border border-slate-700 bg-slate-900 p-2.5 text-xs leading-snug text-slate-200 shadow-xl">
-          {texto}
-        </div>
-      )}
+      {open &&
+        pos &&
+        createPortal(
+          <div
+            data-help-tip-balloon
+            style={{ position: 'fixed', top: pos.top, left: pos.left, width: BALLOON_WIDTH, zIndex: 9999 }}
+            className="rounded-lg border border-slate-700 bg-slate-900 p-2.5 text-xs leading-snug text-slate-200 shadow-xl"
+          >
+            {texto}
+          </div>,
+          document.body,
+        )}
     </span>
   );
 }

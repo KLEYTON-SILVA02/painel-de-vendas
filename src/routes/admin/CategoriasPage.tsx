@@ -5,6 +5,7 @@ import { HelpTip } from '../../components/HelpTip';
 import { useReauthGuard } from '../../hooks/useReauthGuard';
 import { useCreateCategoryType, useDeleteCategoryType } from '../../lib/mutations';
 import { useCategoryTypes, useCollaborators } from '../../lib/queries';
+import { errorMessage } from '../../lib/errors';
 
 /** Gerenciar Categorias — lets the ADM create a new partnership category
  * (like BIOSINTÉTICA) that automatically gets the same mechanics: its own
@@ -56,7 +57,7 @@ export function CategoriasPage() {
       await createCategory.mutateAsync({ nome: nome.trim(), setoresElegiveis: setores, iconFile });
       resetForm();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Falha ao criar categoria.');
+      setError(errorMessage(e, 'Falha ao criar categoria.'));
     }
   }
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { HelpTip } from '../../components/HelpTip';
+import { errorMessage } from '../../lib/errors';
 import { PageLoading } from '../../components/PageLoading';
 import { ReauthModal } from '../../components/ReauthModal';
 import { useAuth } from '../../auth/AuthContext';
@@ -526,7 +527,7 @@ function RankingAppearanceCard() {
       const url = await uploadRankingPodiumBackground(profile.store_id, file);
       setDraftBgUrl(url);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Falha ao enviar imagem.');
+      alert(errorMessage(err, 'Falha ao enviar imagem.'));
     } finally {
       setUploading(false);
       e.target.value = '';
@@ -816,7 +817,7 @@ function AccessCard() {
       </div>
       {updateUsername.error && (
         <p className="text-xs text-rose-400 mt-2">
-          {updateUsername.error instanceof Error ? updateUsername.error.message : 'Não foi possível salvar.'}
+          {errorMessage(updateUsername.error, 'Não foi possível salvar.')}
         </p>
       )}
       {saved && !updateUsername.error && <p className="text-xs text-emerald-400 mt-2">✓ Nome de usuário atualizado.</p>}
@@ -859,7 +860,7 @@ function DangerZoneCard() {
       const count = await countRowsInRange(target, targetInfo.supportsMonth ? 'data_iso' : undefined, from, to);
       setPreviewCount(count);
     } catch (e) {
-      setResult(e instanceof Error ? e.message : 'Falha ao verificar.');
+      setResult(errorMessage(e, 'Falha ao verificar.'));
     } finally {
       setChecking(false);
     }
@@ -888,7 +889,7 @@ function DangerZoneCard() {
       setResult(`${deletedCount} registro(s) excluído(s).`);
       setPreviewCount(null);
     } catch (e) {
-      setResult(e instanceof Error ? e.message : 'Falha ao excluir.');
+      setResult(errorMessage(e, 'Falha ao excluir.'));
     } finally {
       setDeleting(false);
     }

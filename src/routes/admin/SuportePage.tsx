@@ -5,6 +5,7 @@ import { PASSWORD_HINT, validatePassword } from '../../lib/passwordPolicy';
 import { useEnterStoreAsBuilder, useExitBuilderSession, useTransferAdministration } from '../../lib/mutations';
 import { useCollaborators, useCollaboratorsWithLogin, useIsPlatformBuilder, useStore, useStoresForBuilder } from '../../lib/queries';
 import { supabase } from '../../lib/supabase';
+import { errorMessage } from '../../lib/errors';
 
 // Área de Suporte — Fase 1 (troca de senha, transferência de administração,
 // e-mail de recuperação) pedida explicitamente pelo usuário pra separar sua
@@ -214,7 +215,7 @@ function TransferenciaAdminCard({ onTransferred }: { onTransferred: () => Promis
           setDone(true);
           setTimeout(() => onTransferred(), 1800);
         } catch (e) {
-          setError(e instanceof Error ? e.message : 'Falha ao transferir a administração.');
+          setError(errorMessage(e, 'Falha ao transferir a administração.'));
         }
       },
       'Confirmar transferência',
@@ -272,12 +273,14 @@ function TransferenciaAdminCard({ onTransferred }: { onTransferred: () => Promis
 function AcessoConstrutorCard() {
   const { refreshProfile } = useAuth();
   const { data: currentStore } = useStore();
-  const { data: stores } = useStoresForBuilder();
+  const [unlocked, setUnlocked] = useState(false);
+  const { data: stores } = useStoresForBuilder(unlocked);
   const enterStore = useEnterStoreAsBuilder();
   const exitSession = useExitBuilderSession();
   const [targetId, setTargetId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { guard, reauthModal } = useReauthGuard();
 
   const outrasLojas = (stores ?? []).filter((s) => s.id !== currentStore?.id);
 
@@ -290,7 +293,7 @@ function AcessoConstrutorCard() {
       await refreshProfile();
       setTargetId('');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Falha ao entrar na loja.');
+      setError(errorMessage(e, 'Falha ao entrar na loja.'));
     } finally {
       setBusy(false);
     }
@@ -303,7 +306,7 @@ function AcessoConstrutorCard() {
       await exitSession.mutateAsync();
       await refreshProfile();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Falha ao sair do modo Construtor.');
+      setError(errorMessage(e, 'Falha ao sair do modo Construtor.'));
     } finally {
       setBusy(false);
     }
@@ -317,22 +320,40 @@ function AcessoConstrutorCard() {
         loja ou saia do modo Construtor para voltar à tela de seleção.
       </p>
       <div className="flex flex-wrap items-center gap-2">
-        <select value={targetId} onChange={(e) => setTargetId(e.target.value)} className="input !w-auto">
-          <option value="">Ir para outra loja…</option>
-          {outrasLojas.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.nome_loja || '(sem nome)'} (#{s.numero_loja || '—'})
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          onClick={handleSwitch}
-          disabled={!targetId || busy}
-          className="rounded-lg border border-cyan-500 text-cyan-400 px-3 py-1.5 text-sm disabled:opacity-50"
-        >
-          Entrar
-        </button>
+        {unlocked ? (
+          <>
+            <select value={targetId} onChange={(e) => setTargetId(e.target.value)} className="input !w-auto">
+              <option value="">Ir para outra loja…</option>
+              {outrasLojas.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nome_loja || '(sem nome)'} (#{s.numero_loja || '—'})
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={handleSwitch}
+              disabled={!targetId || busy}
+              className="rounded-lg border border-cyan-500 text-cyan-400 px-3 py-1.5 text-sm disabled:opacity-50"
+            >
+              Entrar
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() =>
+              guard(
+                'Por segurança, confirme sua senha para ver a lista de lojas cadastradas no sistema.',
+                () => setUnlocked(true),
+                'Desbloquear',
+              )
+            }
+            className="rounded-lg border border-cyan-500 text-cyan-400 px-3 py-1.5 text-sm"
+          >
+            🔒 Ver lojas disponíveis
+          </button>
+        )}
         <button
           type="button"
           onClick={handleExit}
@@ -343,6 +364,7 @@ function AcessoConstrutorCard() {
         </button>
       </div>
       {error && <p className="text-xs text-rose-400 mt-2">{error}</p>}
+      {reauthModal}
     </div>
   );
 }

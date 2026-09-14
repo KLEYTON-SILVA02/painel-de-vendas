@@ -167,26 +167,30 @@ export function buildCategoryExtractHtml(params: {
 
   const rows = sales
     .map((s) => {
+      const valorCell = showComissao ? '' : `<td style="text-align:right">${fmtMoney(s.valor)}</td>`;
       const comissaoCell = showComissao ? `<td style="text-align:right">${fmtMoney((s.valor * commissionPercent!) / 100)}</td>` : '';
       return `<tr>
         <td>${fmtDateBR(s.dataISO)}</td>
         <td>${escapeHtml(s.produto)}</td>
         <td style="text-align:right">${s.qtd}</td>
-        <td style="text-align:right">${fmtMoney(s.valor)}</td>
+        ${valorCell}
         ${comissaoCell}
       </tr>`;
     })
     .join('');
 
   // Impressão voltada ao colaborador (extrato individual, já filtrado por
-  // vendedor/comissão na tela) — só as 5 colunas que interessam a quem
-  // recebe o papel: Matrícula/Vendedor/Tipo são redundantes aqui (o extrato
-  // já é de um vendedor e uma categoria só).
+  // vendedor/comissão na tela) — só as colunas que interessam a quem recebe
+  // o papel: Matrícula/Vendedor/Tipo são redundantes aqui (o extrato já é de
+  // um vendedor e uma categoria só). Quando o extrato é o de comissão, o
+  // Valor da venda em si não faz parte do que o colaborador precisa ver
+  // impresso — só Data, Produto, Qtd e Comissão.
   const table = sales.length
     ? `<table>
         <thead><tr>
           <th>Data</th><th>Produto</th>
-          <th style="text-align:right">Qtd</th><th style="text-align:right">Valor</th>
+          <th style="text-align:right">Qtd</th>
+          ${showComissao ? '' : '<th style="text-align:right">Valor</th>'}
           ${showComissao ? '<th style="text-align:right">Comissão</th>' : ''}
         </tr></thead>
         <tbody>
@@ -194,7 +198,7 @@ export function buildCategoryExtractHtml(params: {
           <tr class="total-row">
             <td colspan="2">Subtotal</td>
             <td style="text-align:right">${totalQtd}</td>
-            <td style="text-align:right">${fmtMoney(totalValor)}</td>
+            ${showComissao ? '' : `<td style="text-align:right">${fmtMoney(totalValor)}</td>`}
             ${showComissao ? `<td style="text-align:right">${fmtMoney(totalComissao)}</td>` : ''}
           </tr>
         </tbody>
