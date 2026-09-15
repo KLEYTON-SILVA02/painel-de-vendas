@@ -1,3 +1,4 @@
+import { edgeFunctionErrorMessage } from './errors';
 import { supabase } from './supabase';
 
 /** Calls the grant-collaborator-login edge function (service-role only
@@ -9,7 +10,7 @@ export async function grantCollaboratorLogin(collaboratorId: string, senha: stri
   const { data, error } = await supabase.functions.invoke<{ user_id: string }>('grant-collaborator-login', {
     body: { collaborator_id: collaboratorId, senha },
   });
-  if (error) throw error;
+  if (error) throw new Error(await edgeFunctionErrorMessage(error, 'Falha ao criar acesso.'));
   return data;
 }
 
@@ -21,7 +22,7 @@ export async function resetCollaboratorLogin(collaboratorId: string, senha: stri
   const { data, error } = await supabase.functions.invoke<{ ok: true }>('reset-collaborator-login', {
     body: { collaborator_id: collaboratorId, senha },
   });
-  if (error) throw error;
+  if (error) throw new Error(await edgeFunctionErrorMessage(error, 'Falha ao gerar nova senha.'));
   return data;
 }
 
