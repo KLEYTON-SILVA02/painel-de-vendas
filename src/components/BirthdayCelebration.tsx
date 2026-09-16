@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useCollaborators } from '../lib/queries';
-import type { Collaborator } from '../lib/business/types';
+import { VISITANTE_SETOR, type Collaborator } from '../lib/business/types';
 
 const SEEN_KEY = 'aniversario_celebration_seen_v1';
 const AUTO_CLOSE_MS = 30000;
@@ -46,6 +46,7 @@ function useBirthdayCelebration() {
     const year = now.getFullYear();
 
     const todays = collaborators.filter((c) => {
+      if (c.setor === VISITANTE_SETOR) return false;
       if (!c.dataNascimento) return false;
       const [, mStr, dStr] = c.dataNascimento.split('-');
       return Number(mStr) === month && Number(dStr) === day;

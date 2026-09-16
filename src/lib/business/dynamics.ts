@@ -2,7 +2,7 @@
 // computeDinamicaRanking / resolveRankFilterParams' dynamic-intersection branch).
 import { firstName, normalize } from './normalize';
 import { normalizeMatricula } from './parsing';
-import type { Collaborator, Dynamic, DynamicProductCategory, Sale } from './types';
+import { VISITANTE_SETOR, type Collaborator, type Dynamic, type DynamicProductCategory, type Sale } from './types';
 
 export interface DinamicaRankingRow {
   matricula: string;
@@ -83,6 +83,7 @@ export function computeDinamicaCategoriaTotais(
   sales: Sale[],
   collaborators: Collaborator[],
 ): DinamicaCategoriaTotal[] {
+  collaborators = collaborators.filter((c) => c.setor !== VISITANTE_SETOR);
   const collaboratorByMatricula = new Map(collaborators.map((c) => [normalizeMatricula(c.matricula), c]));
   const participantesSet = din.participantes.length ? new Set(din.participantes.map(normalizeMatricula)) : null;
 
@@ -195,6 +196,7 @@ export interface DinamicaVendaLinha {
  * to the per-participant popup those two other functions feed. Most recent
  * sale first. */
 export function computeDinamicaVendas(din: Dynamic, sales: Sale[], collaborators: Collaborator[]): DinamicaVendaLinha[] {
+  collaborators = collaborators.filter((c) => c.setor !== VISITANTE_SETOR);
   const participantesSet = din.participantes.length ? new Set(din.participantes.map(normalizeMatricula)) : null;
   const collaboratorByMatricula = new Map(collaborators.map((c) => [normalizeMatricula(c.matricula), c]));
   const linhas: DinamicaVendaLinha[] = [];
@@ -231,6 +233,7 @@ export function dynamicAllowsCollaborator(din: Dynamic, collaborator: Pick<Colla
  * (a sale by a collaborator outside the target sector doesn't count),
  * using the dynamic's own metric (R$ or units). */
 export function computeDinamicaProgresso(din: Dynamic, sales: Sale[], collaborators: Collaborator[]): number {
+  collaborators = collaborators.filter((c) => c.setor !== VISITANTE_SETOR);
   const participantesSet = din.participantes.length ? new Set(din.participantes.map(normalizeMatricula)) : null;
   const collaboratorByMatricula = new Map(collaborators.map((c) => [normalizeMatricula(c.matricula), c]));
   let valor = 0;
@@ -253,6 +256,7 @@ export function computeDinamicaRanking(
   sales: Sale[],
   collaborators: Collaborator[],
 ): DinamicaRankingRow[] {
+  collaborators = collaborators.filter((c) => c.setor !== VISITANTE_SETOR);
   const participantesSet = din.participantes.length ? new Set(din.participantes.map(normalizeMatricula)) : null;
   // Keyed by normalized matricula — see the comment on the same pattern in
   // summary.ts's computeSummary.
@@ -304,6 +308,7 @@ export function computeDinamicaRanking(
  * counts, same as the ranking above). */
 export function dinamicaMetaTotal(din: Dynamic, collaborators: Collaborator[]): number {
   if (din.metaModo !== 'individual') return din.metaValor;
+  collaborators = collaborators.filter((c) => c.setor !== VISITANTE_SETOR);
   const participantesSet = din.participantes.length ? new Set(din.participantes.map(normalizeMatricula)) : null;
   return collaborators.reduce((sum, c) => {
     const key = normalizeMatricula(c.matricula);
