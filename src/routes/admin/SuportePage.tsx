@@ -6,6 +6,7 @@ import { useEnterStoreAsBuilder, useExitBuilderSession, useTransferAdministratio
 import { useCollaborators, useCollaboratorsWithLogin, useIsPlatformBuilder, useStore, useStoresForBuilder } from '../../lib/queries';
 import { supabase } from '../../lib/supabase';
 import { errorMessage } from '../../lib/errors';
+import { VISITANTE_SETOR } from '../../lib/business/types';
 
 // Área de Suporte — Fase 1 (troca de senha, transferência de administração,
 // e-mail de recuperação) pedida explicitamente pelo usuário pra separar sua
@@ -201,7 +202,9 @@ function TransferenciaAdminCard({ onTransferred }: { onTransferred: () => Promis
   // Só quem já tem login pode virar ADM — a promoção só reaproveita o
   // acesso que já existe (mesma senha de sempre), sem criar credencial
   // nova. Se ainda não tem, o ADM cria o acesso em Colaboradores primeiro.
-  const elegiveis = (collaborators ?? []).filter((c) => withLogin?.has(c.id));
+  // Visitante é um convidado somente-leitura, nunca elegível a assumir a
+  // administração da loja, mesmo que tenha um login concedido.
+  const elegiveis = (collaborators ?? []).filter((c) => c.setor !== VISITANTE_SETOR && withLogin?.has(c.id));
 
   function handleTransferClick() {
     const target = elegiveis.find((c) => c.id === selectedId);

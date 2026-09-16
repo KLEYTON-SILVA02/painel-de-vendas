@@ -15,7 +15,7 @@ import { copyText, formatRankingText } from '../../lib/clipboard';
 import { diasRestantesNoMes, getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
 import { todayISO } from '../../lib/dateRange';
 import { computeSummary, computeVendorExtract } from '../../lib/business/summary';
-import type { CommissionRate, SummaryRow } from '../../lib/business/types';
+import { VISITANTE_SETOR, type CommissionRate, type SummaryRow } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { buildCategoryExtractHtml, openPrintPreview } from '../../lib/printExtract';
 import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
@@ -348,7 +348,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
                   className="input !w-auto"
                 >
                   <option value="">Todos os colaboradores</option>
-                  {collaborators.map((c) => (
+                  {collaborators.filter((c) => c.setor !== VISITANTE_SETOR).map((c) => (
                     <option key={c.id} value={c.matricula}>
                       {c.apelido || c.nome}
                     </option>

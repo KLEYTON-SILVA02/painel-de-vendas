@@ -6,6 +6,7 @@ import { useReauthGuard } from '../../hooks/useReauthGuard';
 import { useCreateCategoryType, useDeleteCategoryType } from '../../lib/mutations';
 import { useCategoryTypes, useCollaborators } from '../../lib/queries';
 import { errorMessage } from '../../lib/errors';
+import { VISITANTE_SETOR } from '../../lib/business/types';
 
 /** Gerenciar Categorias — lets the ADM create a new partnership category
  * (like BIOSINTÉTICA) that automatically gets the same mechanics: its own
@@ -29,7 +30,14 @@ export function CategoriasPage() {
   const [setores, setSetores] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const knownSetores = Array.from(new Set((collaborators ?? []).map((c) => c.setor).filter((s): s is string => !!s))).sort();
+  const knownSetores = Array.from(
+    new Set(
+      (collaborators ?? [])
+        .filter((c) => c.setor !== VISITANTE_SETOR)
+        .map((c) => c.setor)
+        .filter((s): s is string => !!s),
+    ),
+  ).sort();
 
   function toggleSetor(s: string) {
     setSetores((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));

@@ -8,6 +8,7 @@ import { buildClassificationInputs } from '../../lib/mappers';
 import { fmtMoney } from '../../lib/format';
 import { useDeleteRow, useReclassifyProdutos } from '../../lib/mutations';
 import { useBrandKeywords, useCatalog, useCollaborators, useExclusiveBrands, useProducts, useSales } from '../../lib/queries';
+import { VISITANTE_SETOR } from '../../lib/business/types';
 
 type Tab = 'pendentes' | CategoryKey | 'recentes';
 
@@ -89,7 +90,7 @@ export function AuditoriaPage() {
             <label className="block text-xs text-slate-400 mb-1">Colaborador</label>
             <select value={colab} onChange={(e) => setColab(e.target.value)} className="input">
               <option value="">Todos</option>
-              {collaborators.map((c) => (
+              {collaborators.filter((c) => c.setor !== VISITANTE_SETOR).map((c) => (
                 <option key={c.id} value={c.matricula}>
                   {c.apelido || c.nome}
                 </option>

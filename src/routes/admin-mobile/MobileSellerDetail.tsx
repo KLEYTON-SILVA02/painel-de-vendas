@@ -3,7 +3,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { ReclassifyBar } from '../../components/admin/ReclassifyBar';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import type { CategoryKey } from '../../lib/business/classification';
-import type { Collaborator, Sale } from '../../lib/business/types';
+import { VISITANTE_SETOR, type Collaborator, type Sale } from '../../lib/business/types';
 import { fmtDateShortBR, fmtMoney } from '../../lib/format';
 import { useReclassifyProdutos } from '../../lib/mutations';
 import { useCatalog, useSales } from '../../lib/queries';
@@ -66,7 +66,7 @@ export function MobileSellerAccordion({
             </div>
             <span className="mv2-name">Todos</span>
           </button>
-          {collaborators.map((c) => (
+          {collaborators.filter((c) => c.setor !== VISITANTE_SETOR).map((c) => (
             <button key={c.id} className={`mv2-seller ${selected === c.matricula ? 'active' : ''}`} onClick={() => onSelect(c.matricula)}>
               {c.foto ? <img src={c.foto} alt="" className="mv2-avatar" /> : <div className="mv2-avatar" />}
               <span className="mv2-name">{c.apelido || c.nome}</span>
