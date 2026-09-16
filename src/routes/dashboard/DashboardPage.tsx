@@ -1,8 +1,8 @@
-import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { HelpTip } from '../../components/HelpTip';
 import { useAuth } from '../../auth/AuthContext';
-import { DailyEvolutionChart } from '../../components/dashboard/DailyEvolutionChart';
+import { DailyEvolutionChart, formatChartValue } from '../../components/dashboard/DailyEvolutionChart';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { SemicircleGauge } from '../../components/SemicircleGauge';
 import { SidebarCalendarCard } from '../../components/SidebarCalendarCard';
@@ -244,8 +244,17 @@ export function DashboardPage() {
   const { data: store } = useStore();
   const { data: specialLists } = useSpecialLists();
   const { data: dynamics } = useDynamics();
-  const { dashFrom, dashTo, refYear, refMonth, rankFilter, modoGeral } = useDateRange();
+  const { dashFrom, dashTo, refYear, refMonth, rankFilter, modoGeral, setRankFilter } = useDateRange();
   const updateStoreSettings = useUpdateStoreSettings(profile?.store_id);
+
+  // rankFilter lives in DateRangeContext, shared with RankingPage — sem
+  // isso, escolher uma categoria lá (ou aqui, numa visita anterior) deixava
+  // a Tela Início sempre "presa" naquela categoria da próxima vez que fosse
+  // aberta. Volta sempre para Mercadoria Geral ao entrar/retornar aqui.
+  useEffect(() => {
+    setRankFilter('ALL');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Safe stand-ins for the useMemo calls below, so their hook call order
   // never depends on whether every query has resolved yet — the
@@ -354,21 +363,16 @@ export function DashboardPage() {
   const atingiuMeta = metaGeral > 0 && totalValor >= metaGeral;
   const saldo = totalValor - metaGeral;
 
-  let pct: number;
-  let marker: number | null = null;
   let metaLabel: string;
   let faltaLabel: string;
   let faltaValor: number;
   let metaExibida: number;
   if (atingiuMeta && metaSuper > metaGeral) {
-    pct = Math.min(100, (totalValor / metaSuper) * 100);
-    marker = (metaGeral / metaSuper) * 100;
     metaLabel = 'Super Meta';
     metaExibida = metaSuper;
     faltaValor = Math.max(0, metaSuper - totalValor);
     faltaLabel = 'Falta p/ Super Meta';
   } else {
-    pct = metaGeral > 0 ? Math.min(100, (totalValor / metaGeral) * 100) : 0;
     metaLabel = modoDia ? 'Meta Diária' : 'Meta Geral';
     metaExibida = metaGeral;
     faltaValor = Math.max(0, metaGeral - totalValor);
@@ -382,6 +386,41 @@ export function DashboardPage() {
     rankFilterParams.catFilter === 'LEVMEL' || rankFilterParams.catFilter === 'CHIP' || rankFilterParams.dinamica?.metrica === 'unidade';
   const rankingFilteredList = rankingFiltered.filter((r) => r.valor > 0 || r.itens > 0);
   const modeloRanking = storeSettings.modelo_ranking as 'escadinha' | 'lista';
+
+  // Barra de evolução (topo): "Venda total do período" + "Atingim. período"
+  // ligados à categoria escolhida no filtro de ranking logo abaixo — antes
+  // sempre mostravam o total/meta da loja inteira (MER) mesmo com outra
+  // categoria selecionada. rankingFiltered já é o mesmo total filtrado por
+  // categoria que o ranking abaixo usa, então reaproveita-lo aqui garante
+  // que os dois nunca divirjam. Modo Geral compara com a Meta Geral (mês
+  // inteiro, sem proração — Modo Geral já É o mês inteiro); Busca período/
+  // Dia único sempre compara com a Meta Diária dessa categoria (nunca
+  // prorateada pelo tamanho do período: "meta do dia" é sempre o alvo de um
+  // único dia), a mesma meta diária redistribuída — (meta mensal - já
+  // vendido no mês) / dias restantes — que EVOLUÇÃO DIÁRIA já usa. 'ALL'
+  // (Mercadoria Geral) usa o mesmo fallback que effectiveMetaGeral() já
+  // aplica no resto da tela.
+  const barValor = isUnitRanking
+    ? rankingFiltered.reduce((a, r) => a + r.itens, 0)
+    : rankingFiltered.reduce((a, r) => a + r.valor, 0);
+  const barGoalMode = modoGeral ? 'mes' : 'dia';
+  const barMetaBase =
+    rankFilterParams.catFilter === 'ALL'
+      ? effectiveMetaGeral(goals, barGoalMode, sales, collaborators, storeSettings.meta_geral_fallback)
+      : getGoal(goals[rankFilterParams.catFilter], barGoalMode, sales, collaborators);
+  const barSuperBase =
+    rankFilterParams.catFilter === 'ALL'
+      ? getSuperMeta(goals.MER, barGoalMode, sales, collaborators)
+      : getSuperMeta(goals[rankFilterParams.catFilter], barGoalMode, sales, collaborators);
+  const atingiuBarMeta = barMetaBase > 0 && barValor >= barMetaBase;
+  let barPct: number;
+  let barMarker: number | null = null;
+  if (atingiuBarMeta && barSuperBase > barMetaBase) {
+    barPct = Math.min(100, (barValor / barSuperBase) * 100);
+    barMarker = (barMetaBase / barSuperBase) * 100;
+  } else {
+    barPct = barMetaBase > 0 ? Math.min(100, (barValor / barMetaBase) * 100) : 0;
+  }
 
   async function handleCopyRanking() {
     const text = formatRankingText(rankingFilteredList, rankFilterParams.label, rankFilterParams.from, rankFilterParams.to, store?.nome_loja);
@@ -470,11 +509,11 @@ export function DashboardPage() {
                 <div style={{ color: '#ffb700', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 700 }}>
                   ⭐ Venda total do período
                 </div>
-                <div style={{ fontSize: 26, textShadow: '0 0 10px rgba(0,240,255,.55)' }}>{fmtMoney(totalValor)}</div>
+                <div style={{ fontSize: 26, textShadow: '0 0 10px rgba(0,240,255,.55)' }}>{formatChartValue(barValor, isUnitRanking)}</div>
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ color: '#8b90bf', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.08em' }}>Atingim. período</div>
-                <div style={{ fontSize: 26, textShadow: '0 0 10px rgba(0,240,255,.55)', color: '#00f0ff' }}>{pct.toFixed(0)}%</div>
+                <div style={{ fontSize: 26, textShadow: '0 0 10px rgba(0,240,255,.55)', color: '#00f0ff' }}>{barPct.toFixed(0)}%</div>
               </div>
             </div>
 
@@ -483,8 +522,8 @@ export function DashboardPage() {
             <BestDayCard bestDay={bestDay} expanded={bestDayExpanded} onToggle={() => setBestDayExpanded((v) => !v)} />
           </div>
           <div style={{ position: 'relative', height: 8, borderRadius: 5, background: '#080818', border: '1px solid #212948', overflow: 'hidden', marginTop: 8 }}>
-            <div style={{ height: '100%', width: `${pct}%`, background: 'linear-gradient(90deg,#00f0ff,#a82bff)', borderRadius: 5 }} />
-            {marker !== null && <div style={{ position: 'absolute', top: -3, bottom: -3, width: 2, background: '#ffb700', left: `${marker}%` }} />}
+            <div style={{ height: '100%', width: `${barPct}%`, background: 'linear-gradient(90deg,#00f0ff,#a82bff)', borderRadius: 5 }} />
+            {barMarker !== null && <div style={{ position: 'absolute', top: -3, bottom: -3, width: 2, background: '#ffb700', left: `${barMarker}%` }} />}
           </div>
         </div>
 
