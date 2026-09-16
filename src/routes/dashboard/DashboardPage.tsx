@@ -358,27 +358,6 @@ export function DashboardPage() {
     return <PageLoading />;
   }
 
-  const metaGeral = effectiveMetaGeral(goals, mode, sales, collaborators, storeSettings.meta_geral_fallback, proration);
-  const metaSuper = getSuperMeta(goals.MER, mode, sales, collaborators, proration);
-  const atingiuMeta = metaGeral > 0 && totalValor >= metaGeral;
-  const saldo = totalValor - metaGeral;
-
-  let metaLabel: string;
-  let faltaLabel: string;
-  let faltaValor: number;
-  let metaExibida: number;
-  if (atingiuMeta && metaSuper > metaGeral) {
-    metaLabel = 'Super Meta';
-    metaExibida = metaSuper;
-    faltaValor = Math.max(0, metaSuper - totalValor);
-    faltaLabel = 'Falta p/ Super Meta';
-  } else {
-    metaLabel = modoDia ? 'Meta Diária' : 'Meta Geral';
-    metaExibida = metaGeral;
-    faltaValor = Math.max(0, metaGeral - totalValor);
-    faltaLabel = 'Falta p/ Meta';
-  }
-
   const hora = new Date().getHours();
   const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
 
@@ -421,6 +400,29 @@ export function DashboardPage() {
   } else {
     barPct = barMetaBase > 0 ? Math.min(100, (barValor / barMetaBase) * 100) : 0;
   }
+
+  // Cards "Meta"/"Falta p/ Meta"/"Saldo"/"Itens Vendidos" (abaixo, ao lado
+  // do ranking): seguem a mesma categoria e a mesma meta (geral ou diária,
+  // normal ou super) que a barra de evolução acima já está mostrando — os
+  // dois nunca podem divergir, já que vêm exatamente dos mesmos
+  // barValor/barMetaBase/barSuperBase.
+  let metaLabel: string;
+  let faltaLabel: string;
+  let faltaValor: number;
+  let metaExibida: number;
+  if (atingiuBarMeta && barSuperBase > barMetaBase) {
+    metaLabel = modoGeral ? 'Super Meta' : 'Super Meta do Dia';
+    metaExibida = barSuperBase;
+    faltaValor = Math.max(0, barSuperBase - barValor);
+    faltaLabel = 'Falta p/ Super Meta';
+  } else {
+    metaLabel = modoGeral ? 'Meta Geral' : 'Meta Diária';
+    metaExibida = barMetaBase;
+    faltaValor = Math.max(0, barMetaBase - barValor);
+    faltaLabel = 'Falta p/ Meta';
+  }
+  const saldo = barValor - barMetaBase;
+  const itensCategoria = rankingFiltered.reduce((a, r) => a + r.itens, 0);
 
   async function handleCopyRanking() {
     const text = formatRankingText(rankingFilteredList, rankFilterParams.label, rankFilterParams.from, rankFilterParams.to, store?.nome_loja);
@@ -636,11 +638,11 @@ export function DashboardPage() {
             header (ChampionHeaderButton, in AppShell) — Evolução Diária and
             Vendas por Categoria below now both span the freed width. */}
         <div className="lg:col-start-2 lg:row-start-1 grid grid-cols-2 gap-2">
-          <StatCard label={metaLabel} value={fmtMoney(metaExibida)} color="#00f0ff" badge={atingiuMeta ? 'MG ✓' : undefined} />
-          <StatCard label={faltaLabel} value={fmtMoney(faltaValor)} color="#a82bff" />
+          <StatCard label={metaLabel} value={formatChartValue(metaExibida, isUnitRanking)} color="#00f0ff" badge={atingiuBarMeta ? 'MG ✓' : undefined} />
+          <StatCard label={faltaLabel} value={formatChartValue(faltaValor, isUnitRanking)} color="#a82bff" />
           {/* Sign hidden by design (visual only) — `saldo` itself stays negative for every calculation elsewhere. */}
-          <StatCard label="Saldo" value={fmtMoney(Math.abs(saldo))} color={saldo >= 0 ? '#ffb700' : '#ff3df0'} />
-          <StatCard label="Itens Vendidos" value={`${totalItens} un.`} color="#14ff00" />
+          <StatCard label="Saldo" value={formatChartValue(Math.abs(saldo), isUnitRanking)} color={saldo >= 0 ? '#ffb700' : '#ff3df0'} />
+          <StatCard label="Itens Vendidos" value={`${itensCategoria} un.`} color="#14ff00" />
         </div>
 
         <div className="lg:col-start-2 lg:row-start-2">
