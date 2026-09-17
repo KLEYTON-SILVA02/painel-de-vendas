@@ -1438,6 +1438,7 @@ export type Database = {
           id: string
           logo_url: string | null
           mensagem: string
+          modelo_catalogo: string | null
           nome_equipe: string
           nome_loja: string
           numero_loja: string
@@ -1450,6 +1451,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           mensagem?: string
+          modelo_catalogo?: string | null
           nome_equipe?: string
           nome_loja?: string
           numero_loja?: string
@@ -1462,6 +1464,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           mensagem?: string
+          modelo_catalogo?: string | null
           nome_equipe?: string
           nome_loja?: string
           numero_loja?: string

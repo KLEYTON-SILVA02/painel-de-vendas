@@ -9,6 +9,7 @@ import { useStore, useStoreSettings } from '../../lib/queries';
 import { uploadPhoto } from '../../lib/storage';
 import type { Json } from '../../types/database';
 import { onlyDigits } from '../../lib/whatsapp';
+import { CATALOG_MODELS } from '../../lib/business/catalogModels';
 
 const TEMAS = [
   { id: 'ciano', label: 'Ciano Padrão', cor: '#00f0ff' },
@@ -30,6 +31,7 @@ export function MinhaLojaPage() {
   const [nomeEquipe, setNomeEquipe] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [whatsappGroupLink, setWhatsappGroupLink] = useState('');
+  const [modeloCatalogo, setModeloCatalogo] = useState('');
   const [metaFallback, setMetaFallback] = useState(0);
   const [corDestaque, setCorDestaque] = useState('#00f0ff');
   const [brilho, setBrilho] = useState(100);
@@ -48,6 +50,7 @@ export function MinhaLojaPage() {
     setNomeEquipe(store.nome_equipe);
     setWhatsapp(store.whatsapp);
     setWhatsappGroupLink(store.whatsapp_group_link);
+    setModeloCatalogo(store.modelo_catalogo ?? '');
     setMetaFallback(storeSettings.meta_geral_fallback);
     setCorDestaque(storeSettings.cor_destaque);
     setBrilho(storeSettings.brilho);
@@ -100,6 +103,7 @@ export function MinhaLojaPage() {
         nome_equipe: nomeEquipe,
         whatsapp: onlyDigits(whatsapp),
         whatsapp_group_link: whatsappGroupLink.trim(),
+        modelo_catalogo: modeloCatalogo || null,
       });
       await updateSettings.mutateAsync({
         meta_geral_fallback: metaFallback,
@@ -146,11 +150,23 @@ export function MinhaLojaPage() {
               className="input"
             />
           </Field>
+          <Field label="Modelo de identificação de produtos">
+            <select value={modeloCatalogo} onChange={(e) => setModeloCatalogo(e.target.value)} className="input">
+              <option value="">Nenhum / loja independente</option>
+              {CATALOG_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </select>
+          </Field>
         </div>
         <p className="text-xs text-slate-500 mt-2">
           Usado pelo botão "Enviar por WhatsApp" nas imagens de ranking, conquistas e card de campeão. Se o link do
           grupo for preenchido, o botão abre esse grupo diretamente em vez de uma conversa com o número da loja — a
           imagem é copiada antes, então é só colar (Ctrl/Cmd+V) assim que o grupo abrir.
+        </p>
+        <p className="text-xs text-slate-500 mt-2">
+          Lojas que usam a mesma rede/padrão de nomenclatura de produto podem se identificar aqui com o mesmo modelo.
+          Só isso — nenhum outro cadastro da loja muda com essa escolha.
         </p>
         <div className="mt-4">
           <label className="block text-xs text-slate-400 mb-1">Logo do sistema (substitui o "GV" no menu lateral)</label>
