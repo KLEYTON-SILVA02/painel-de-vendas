@@ -17,7 +17,7 @@ O usuário quer evitar que funções de conta/configuração fiquem espalhadas p
 - **Gestão de Vendas Mobile** — a versão empacotada para celular (Capacitor/APK) deste mesmo projeto.
 - **Monitoramento de Lojas** — sistema novo, ainda não iniciado (ver seção abaixo).
 
-## PLANO B (MONITORAMENTO DE LOJAS) — decisão registrada, aguardando início
+## PLANO B (MONITORAMENTO DE LOJAS) — Fase 1 iniciada neste projeto
 
 Palavra-chave para retomar este assunto em qualquer sessão futura: **"PLANO B(MONITORAMENTO DE LOJAS)"**.
 
@@ -36,4 +36,16 @@ Especificação completa (arquitetura, diagrama, exatamente o que cada lado prec
 Peças já identificadas neste projeto como reaproveitáveis para o Monitoramento de Lojas:
 - `client_error_reports` (tabela) — já captura erros JS não tratados por loja (`src/lib/reportClientError.ts`); hoje só alimenta o sino de notificação do próprio ADM da loja. Para o Monitoramento de Lojas, precisaria ser agregado entre lojas (via a sincronização somente-leitura da Opção B).
 - Edge Functions `grant-collaborator-login` e `reset-collaborator-login` — já isoladas, usam service role, chamáveis de fora sem tocar direto no banco. Podem ser reutilizadas como estão para o gerenciamento de senhas/acessos do Monitoramento de Lojas.
-- Motor de classificação (`src/lib/business/classification.ts`, `classifyProductTier`) e o padrão de `useReclassifyProdutos` (`src/lib/mutations.ts`) — servem de referência/base de código para a reclassificação em massa sobre a nova tabela de produtos compartilhada entre lojas (que ainda não existe e seria criada do zero, sem relação com `catalog`/`products` por-loja).
+- Motor de classificação (`src/lib/business/classification.ts`, `classifyProductTier`) e o padrão de `useReclassifyProdutos` (`src/lib/mutations.ts`) — servem de referência/base de código para a reclassificação em massa sobre a nova tabela de produtos compartilhada entre lojas (que ainda não existe e seria criada do zero, sem relação com `catalog`/`products` por-loja). Importante: `useReclassifyProdutos` é um hook client-side, rodando sob a sessão de um admin e as policies RLS de uma única loja — não é chamável diretamente por um job cross-loja; o que se reaproveita é a lógica (upsert em `catalog` + retroagir `sales.grupo`), portada para uma rotina server-side que itera loja a loja.
+
+### Refinamento do catálogo compartilhado: casamento de produto por "modelo", não por nome cru entre todas as lojas
+
+Problema identificado nesta sessão: `catalog`/`sales` são isolados por `store_id` e o casamento de produto é por `normalize(nome)` (ou um `codigo` que também é local à loja, não um EAN/barcode universal) — duas lojas nomeiam o mesmo produto físico de formas diferentes, então uma "biblioteca global" única de produtos, classificada uma vez e propagada para todas as lojas indiscriminadamente, falharia silenciosamente na maioria das lojas (a correção não encontra nada para casar, sem erro visível).
+
+Solução decidida: agrupar lojas por **modelo de identificação de produto** — lojas da mesma rede/franquia (ex.: Extrafarma e Pague Menos) usam o mesmo padrão de nomenclatura, então o casamento por nome é confiável *dentro* de um grupo, mesmo sem ser confiável *entre* grupos. Implementado nesta sessão (branch `claude/monitoramento-lojas-83lksc`):
+- `stores.modelo_catalogo` (migration `0076_catalog_shared_model.sql`) — coluna nova, nullable, com `check` restringindo aos valores da lista fixa. Nulo = loja independente, fora de qualquer sincronização de catálogo.
+- Lista fixa de modelos em `src/lib/business/catalogModels.ts` (`CATALOG_MODELS`) — hoje só `rede_extrafarma_pague_menos`. Adicionar um grupo novo é deploy (mudar esse arquivo **e** o `check` da migration juntos), nunca uma ação de admin.
+- Campo "Modelo de identificação de produtos" em **Minha Loja** (`MinhaLojaPage.tsx`, card "Identidade da loja") — cada admin só escolhe a própria chave, nunca vê quais outras lojas compartilham o mesmo grupo. Grava em `stores` via `useUpdateStore`, sob a policy `stores_update_admin` que já existia — zero RLS nova.
+- Edge Function `export-catalogo-monitoramento` — o único ponto de saída de catálogo para o Monitoramento: somente-leitura, devolve `{ modelo_catalogo, nome, categoria }` só das lojas com `modelo_catalogo` preenchido (sem preço, sem identificar a loja de origem). Protegida por um segredo de aplicação (header `x-monitoramento-secret` comparado ao secret `MONITORAMENTO_SYNC_SECRET`, mesmo raciocínio de autenticação em duas camadas já documentado em `send-pending-notifications/index.ts`) — não é uma credencial de banco, não aparece em RLS, só abre essa leitura agregada.
+
+**Pendente, fora do escopo deste repositório:** configurar o secret `MONITORAMENTO_SYNC_SECRET` nas Edge Function secrets deste projeto Supabase (dashboard ou `supabase secrets set`) e compartilhar o mesmo valor com o Monitoramento quando esse projeto existir — isso é operação de infraestrutura, não código.
