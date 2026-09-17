@@ -33,6 +33,12 @@ Quando o usuário pedir para seguir com isso (usando a palavra-chave acima), o t
 
 Especificação completa (arquitetura, diagrama, exatamente o que cada lado precisa construir, fases sugeridas): **[artefato "Monitoramento de Lojas"](https://claude.ai/artifact/UQt41ZU1oPtSvSW4gaBu1V)**, produzido nesta sessão. Nada foi implementado ainda neste repositório — é só a especificação, para levar ao outro chat/projeto quando o usuário decidir começar.
 
+**Gate de aprovação de novas lojas (implementado — migration `0076_store_approval_gate.sql`):** sistema privado, não público/gratuito — toda loja criada por auto-cadastro nasce com `stores.status = 'pending'` e fica **sem nenhum acesso** (RLS bloqueia toda tabela, via `current_store_id()` exigindo `status = 'active'`) até ser aprovada manualmente por mim. Lojas já existentes continuam `active` automaticamente. Quem cai numa loja pendente/rejeitada vê uma tela de bloqueio (`LockedStoreNotice`) em vez do painel.
+
+Decisão explícita do usuário: **não construir nenhuma UI interina de aprovação neste projeto** — a aprovação só vai acontecer de dentro do Monitoramento de Lojas, quando ele existir. Ou seja, **todo cadastro novo a partir de agora fica travado sem nenhuma forma de liberar até o Monitoramento existir e a sincronização de aprovação estar funcionando** (nem um botão, nem uma tela — isso foi perguntado e confirmado explicitamente). Liberar uma loja específica antes disso só é possível manualmente via SQL direto no banco (`update stores set status = 'active' where id = ...`).
+
+Quando o Monitoramento for implementado, a aprovação se encaixa no mesmo modelo de pull já descrito acima: uma fila de decisões pendentes (aprovar/rejeitar) do lado do Monitoramento, puxada por uma rotina agendada aqui dentro que aplica `status = 'active'`/`'rejected'` localmente — mesmo padrão da fila de correção de categoria de produto, terceiro tipo de fila no mesmo mecanismo.
+
 Peças já identificadas neste projeto como reaproveitáveis para o Monitoramento de Lojas:
 - `client_error_reports` (tabela) — já captura erros JS não tratados por loja (`src/lib/reportClientError.ts`); hoje só alimenta o sino de notificação do próprio ADM da loja. Para o Monitoramento de Lojas, precisaria ser agregado entre lojas (via a sincronização somente-leitura da Opção B).
 - Edge Functions `grant-collaborator-login` e `reset-collaborator-login` — já isoladas, usam service role, chamáveis de fora sem tocar direto no banco. Podem ser reutilizadas como estão para o gerenciamento de senhas/acessos do Monitoramento de Lojas.

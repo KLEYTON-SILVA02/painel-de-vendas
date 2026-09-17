@@ -1442,6 +1442,7 @@ export type Database = {
           nome_equipe: string
           nome_loja: string
           numero_loja: string
+          status: string
           whatsapp: string
           whatsapp_group_link: string
         }
@@ -1455,6 +1456,7 @@ export type Database = {
           nome_equipe?: string
           nome_loja?: string
           numero_loja?: string
+          status?: string
           whatsapp?: string
           whatsapp_group_link?: string
         }
@@ -1468,6 +1470,7 @@ export type Database = {
           nome_equipe?: string
           nome_loja?: string
           numero_loja?: string
+          status?: string
           whatsapp?: string
           whatsapp_group_link?: string
         }
@@ -1573,6 +1576,10 @@ export type Database = {
       }
       classify_bio: {
         Args: { produto: string; store_id_param: string }
+        Returns: string
+      }
+      classify_bio_for_category: {
+        Args: { category_type_id_param: string; produto: string }
         Returns: string
       }
       current_collaborator_id: { Args: never; Returns: string }

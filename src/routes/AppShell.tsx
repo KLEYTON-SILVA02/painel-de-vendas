@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Suspense, lazy, useState } from 'react';
 import { Link, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { LockedStoreNotice } from '../components/LockedStoreNotice';
 import { BackButton } from '../components/BackButton';
 import { ChampionHeaderButton } from '../components/dashboard/ChampionOfDay';
 import { ClosingClock } from '../components/ClosingClock';
@@ -130,6 +131,19 @@ export function AppShell() {
         Preparando sua conta…
       </div>
     );
+  }
+
+  // Sistema privado (não público/gratuito): toda loja nova nasce 'pending'
+  // (ver migration 0076) e fica sem acesso a nenhuma tabela até ser aprovada
+  // — inclusive para quem já tem profile (admin ou colaborador). storeQuery
+  // continua enxergando a própria linha de `stores` mesmo pendente (policy
+  // aditiva dedicada a isso), então dá pra mostrar o motivo em vez de travar
+  // silenciosamente ou deixar a tela quebrar tentando carregar dados vazios.
+  if (storeQuery.isLoading) {
+    return <PageLoading fullScreen />;
+  }
+  if (storeQuery.data && storeQuery.data.status !== 'active') {
+    return <LockedStoreNotice status={storeQuery.data.status} />;
   }
 
   // Collaborators get a wholly separate, minimal tree — not just hidden nav
