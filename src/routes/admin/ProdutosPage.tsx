@@ -1211,6 +1211,13 @@ function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
           <button
             onClick={handleScan}
             disabled={scanning || !dadosProntos || groupKeywords.length === 0}
+            title={
+              groupKeywords.length === 0
+                ? 'Cadastre pelo menos uma palavra-chave acima para poder escanear.'
+                : !dadosProntos
+                  ? 'Carregando vendas e catálogo…'
+                  : undefined
+            }
             className="rounded-md bg-cyan-500 text-slate-950 font-medium px-4 py-1.5 text-sm disabled:opacity-50"
           >
             {scanning ? 'Escaneando…' : 'Escanear'}
@@ -1221,6 +1228,13 @@ function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
           alguma das palavras-chave cadastradas acima. Nada é reclassificado sozinho — revise a lista e aprove uma a
           uma ou em massa.
         </p>
+        {groupKeywords.length === 0 ? (
+          <p className="text-[11px] text-amber-400 mb-2">
+            Cadastre pelo menos uma palavra-chave acima para habilitar o botão "Escanear".
+          </p>
+        ) : (
+          !dadosProntos && <p className="text-[11px] text-slate-500 mb-2">Carregando vendas e catálogo…</p>
+        )}
         <MutationError error={reclassifyMutation.error} />
         {scanResults &&
           (scanResults.length === 0 ? (
