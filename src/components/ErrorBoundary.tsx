@@ -1,4 +1,5 @@
-import { Component, type ReactNode } from 'react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { reportCaughtRenderError } from '../lib/reportClientError';
 
 const CHUNK_RELOAD_KEY = 'gv_chunk_reload_attempted';
 
@@ -45,7 +46,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
     }
   }
 
-  componentDidCatch(error: Error) {
+  componentDidCatch(error: Error, info: ErrorInfo) {
     if (isChunkLoadError(error)) {
       let alreadyTried = false;
       try {
@@ -61,6 +62,12 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
       }
     }
     console.error('Uncaught error rendering the app:', error);
+    // A stale-chunk reload above is a known, self-healing case — not worth a
+    // report. Anything else is a genuine render bug with no other trace
+    // today (client_error_reports only ever sees window.onerror/
+    // unhandledrejection, which React never lets reach it once this
+    // boundary catches the error), so report it here instead.
+    if (!isChunkLoadError(error)) reportCaughtRenderError(error, info.componentStack);
   }
 
   render() {
