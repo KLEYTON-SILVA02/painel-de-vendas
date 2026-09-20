@@ -877,6 +877,43 @@ export function useReclassifyProdutos(storeId: string | undefined) {
   });
 }
 
+/** Promove em massa produtos que a Lista de Vendas já resolve para uma
+ * categoria (por qualquer tier do motor) mas que ainda não têm linha no
+ * Catálogo (Tier 1) — aba "Da Lista de Vendas" em Produtos > Catálogo.
+ * Diferente de useReclassifyProdutos: não existe `sales.grupo` para
+ * retroagir (esses produtos já carregam a categoria certa), só o ganho de
+ * tornar essa classificação instantânea/determinística nas próximas
+ * importações em vez de sempre re-derivada por palavra-chave/heurística.
+ * Quando a loja pertence a um modelo_catalogo, também contribui para
+ * catalog_shared_library (mesmo upsert que useReclassifyProdutos já faz),
+ * para que uma aprovação aqui beneficie as lojas irmãs do grupo também. */
+export function useBulkPromoteFromSales(storeId: string | undefined, modeloCatalogo: string | null | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ produtos, categoria }: { produtos: string[]; categoria: CategoryKey }) => {
+      if (!storeId) throw new Error('store not loaded');
+      const { error } = await supabase
+        .from('catalog')
+        .insert(produtos.map((nome) => ({ store_id: storeId, nome, codigo: null, categoria, origem: 'vendas' })));
+      if (error) throw error;
+
+      if (modeloCatalogo) {
+        const { error: sharedError } = await supabase
+          .from('catalog_shared_library')
+          .upsert(
+            produtos.map((nome) => ({ modelo_catalogo: modeloCatalogo, nome, nome_normalizado: normalize(nome), categoria })),
+            { onConflict: 'modelo_catalogo,nome_normalizado' },
+          );
+        if (sharedError) throw sharedError;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['catalog'] });
+      qc.invalidateQueries({ queryKey: ['catalog_shared_library'] });
+    },
+  });
+}
+
 /** Marca um tutorial como concluído para o perfil logado (função Tutoriais).
  * profileId precisa vir de useAuth() no chamador — RLS já garante que
  * ninguém grava tutorial_progress em nome de outro perfil, mas o insert em
