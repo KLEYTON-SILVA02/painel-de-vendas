@@ -1447,6 +1447,7 @@ export type Database = {
         Row: {
           bio_weights: Json
           brilho: number
+          catalog_group_scan_last_date: string | null
           cor_destaque: string
           feriados_datas: string[]
           horario: Json
@@ -1462,6 +1463,7 @@ export type Database = {
         Insert: {
           bio_weights?: Json
           brilho?: number
+          catalog_group_scan_last_date?: string | null
           cor_destaque?: string
           feriados_datas?: string[]
           horario?: Json
@@ -1477,6 +1479,7 @@ export type Database = {
         Update: {
           bio_weights?: Json
           brilho?: number
+          catalog_group_scan_last_date?: string | null
           cor_destaque?: string
           feriados_datas?: string[]
           horario?: Json
@@ -1754,6 +1757,7 @@ export type Database = {
         Args: { p_matricula: string }
         Returns: string
       }
+      run_catalog_group_scan: { Args: never; Returns: Json }
       sales_month_totals: {
         Args: never
         Returns: {
