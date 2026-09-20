@@ -59,7 +59,10 @@ export const EXCLUSIVE_BRANDS_DEFAULT = [
   'pague menos', 'p menos', 'choices', 'nutrabix', 'levmel', 'vita mais',
 ];
 
-const GENERIC_MARKERS = ['generico', 'genérico', 'similar', ' gen ', ' gn ', 'g-ems', 'gn-med'];
+// Exportado para o scanner de palavras-chave em ProdutosPage.tsx (Escanear
+// produtos correspondentes) reaproveitar a mesma lista em vez de duplicá-la
+// — sem isso, um marcador novo adicionado aqui não seria refletido lá.
+export const GENERIC_MARKERS = ['generico', 'genérico', 'similar', ' gen ', ' gn ', 'g-ems', 'gn-med'];
 
 const HEURISTICS: Record<CategoryKey, string[]> = {
   MP: ['needs', 'sensi', 'genyo', 'farma22', 'nutrissi'],
