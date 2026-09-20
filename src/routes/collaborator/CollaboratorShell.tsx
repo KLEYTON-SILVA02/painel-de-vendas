@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState, type ReactElement } from 'react';
-import { NavLink, Route, Routes } from 'react-router-dom';
+import { NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
+import { ErrorBoundary } from '../../components/ErrorBoundary';
 import {
   BagIcon,
   CoinIcon,
@@ -81,6 +82,7 @@ const VISITOR_SCREENS: Record<string, { label: string; icon: typeof HomeIcon; el
 // .mv2-collab-nav media query in mobile-v2.css), same transition pattern
 // the admin spec uses for its own off-canvas-to-fixed sidebar.
 export function CollaboratorShell() {
+  const location = useLocation();
   const { profile, signOut } = useAuth();
   const categoryLabels = useCategoryLabelMap();
   const { data: collaborators } = useCollaborators();
@@ -159,6 +161,9 @@ export function CollaboratorShell() {
         </nav>
 
         <main className="mv2-collab-main">
+          {/* Same reasoning as the ADM shells: a crash in one tab recovers
+              by tapping any other nav item instead of a full reload. */}
+          <ErrorBoundary key={location.pathname}>
           <Suspense fallback={<PageLoading />}>
           <Routes>
             {isVisitante ? (
@@ -189,6 +194,7 @@ export function CollaboratorShell() {
             <Route path="/notificacoes" element={<CollaboratorNotificacoesPage audience="collaborator" />} />
           </Routes>
           </Suspense>
+          </ErrorBoundary>
         </main>
       </div>
     </div>
