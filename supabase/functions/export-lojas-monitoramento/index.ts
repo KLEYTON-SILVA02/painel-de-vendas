@@ -6,6 +6,11 @@
 // erros, colaboradores, vendas) é para todas as lojas, sempre. Inclui o
 // `id` (uuid interno) porque é a chave que o Monitoramento usa para
 // correlacionar esta lista com as de colaboradores/vendas/erros abaixo.
+// Inclui `status` ('pending'/'active'/'rejected', 0077_store_approval_gate.sql)
+// de propósito — sem isso o Monitoramento não teria como ver quais lojas
+// novas estão esperando aprovação, que é justamente o terceiro tipo de
+// fila (além de catálogo e correções) já previsto no CLAUDE.md para
+// quando o Monitoramento existir.
 // Somente-leitura; mesma autenticação em duas camadas documentada em
 // export-catalogo-monitoramento/index.ts.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -30,7 +35,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: stores, error } = await admin
     .from('stores')
-    .select('id, nome_loja, numero_loja, admin_email, created_at, modelo_catalogo');
+    .select('id, nome_loja, numero_loja, admin_email, created_at, modelo_catalogo, status');
   if (error) return jsonResponse({ error: error.message }, 500);
 
   return jsonResponse({ lojas: stores ?? [] }, 200);

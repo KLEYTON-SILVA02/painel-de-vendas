@@ -1,7 +1,7 @@
 // PLANO B (MONITORAMENTO DE LOJAS) — o item crítico do fluxo de volta:
-// disparado por pg_cron (ver migration 0078_apply_monitoramento_correcoes_cron.sql),
+// disparado por pg_cron (ver migration 0079_apply_monitoramento_correcoes_cron.sql),
 // puxa a fila de correções pendentes do Monitoramento e aplica cada uma via
-// public.apply_catalog_correction (migration 0077_catalog_correction_pullback.sql),
+// public.apply_catalog_correction (migration 0078_catalog_correction_pullback.sql),
 // que já faz o trabalho pesado (upsert em catalog + retroagir sales.grupo,
 // por loja, dentro do grupo de modelo_catalogo certo).
 //

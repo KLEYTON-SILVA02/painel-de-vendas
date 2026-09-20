@@ -69,7 +69,11 @@ begin
     raise exception 'categoria inválida: %', p_categoria;
   end if;
 
-  for v_store in select id from public.stores where modelo_catalogo = p_modelo_catalogo loop
+  -- status = 'active' exclui lojas pendentes/rejeitadas do gate de
+  -- aprovação (0077_store_approval_gate.sql, mesma sessão que introduziu
+  -- essa coluna) — uma loja sem acesso próprio não deve ganhar catálogo/
+  -- vendas reescritos por uma correção automática vinda de fora.
+  for v_store in select id from public.stores where modelo_catalogo = p_modelo_catalogo and status = 'active' loop
     select id into v_existing_id from public.catalog
       where store_id = v_store.id and normalize_text(nome) = normalize_text(p_produto)
       limit 1;

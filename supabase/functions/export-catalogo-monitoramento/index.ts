@@ -40,10 +40,14 @@ Deno.serve(async (req: Request) => {
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const admin = createClient(supabaseUrl, serviceRoleKey);
 
+  // status = 'active' exclui lojas pendentes/rejeitadas do gate de
+  // aprovação (0077_store_approval_gate.sql) — uma loja sem acesso próprio
+  // não deve alimentar a biblioteca de catálogo compartilhada.
   const { data: stores, error: storesErr } = await admin
     .from('stores')
     .select('id, modelo_catalogo')
-    .not('modelo_catalogo', 'is', null);
+    .not('modelo_catalogo', 'is', null)
+    .eq('status', 'active');
   if (storesErr) return jsonResponse({ error: storesErr.message }, 500);
   if (!stores || stores.length === 0) return jsonResponse({ produtos: [] }, 200);
 
