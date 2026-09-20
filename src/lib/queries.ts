@@ -518,6 +518,24 @@ export function useCatalog() {
   });
 }
 
+/** Biblioteca compartilhada por modelo_catalogo (PLANO B/MONITORAMENTO DE
+ * LOJAS) — sugestões de classificação vindas de outras lojas do mesmo
+ * grupo, usadas em Auditoria > Pendentes. RLS já restringe ao próprio
+ * grupo (catalog_shared_library_select), então não há filtro extra aqui;
+ * `enabled` só evita a consulta para lojas sem modelo_catalogo, que nunca
+ * teriam linha nenhuma mesmo. */
+export function useCatalogSharedLibrary(modeloCatalogo: string | null | undefined) {
+  return useQuery({
+    queryKey: ['catalog_shared_library', modeloCatalogo],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('catalog_shared_library').select('nome_normalizado, categoria');
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!modeloCatalogo,
+  });
+}
+
 // PostgREST caps a single request at 1000 rows — same truncation bug as
 // useSales had (see its comment above) but for the keyword-based product
 // classification list, which has grown past that cap too.

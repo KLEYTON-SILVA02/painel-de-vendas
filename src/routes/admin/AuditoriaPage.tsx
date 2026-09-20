@@ -6,8 +6,18 @@ import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { CAT_KEYS, classifyProductTier, type CategoryKey } from '../../lib/business/classification';
 import { buildClassificationInputs } from '../../lib/mappers';
 import { fmtMoney } from '../../lib/format';
+import { normalize } from '../../lib/business/normalize';
 import { useDeleteRow, useReclassifyProdutos } from '../../lib/mutations';
-import { useBrandKeywords, useCatalog, useCollaborators, useExclusiveBrands, useProducts, useSales } from '../../lib/queries';
+import {
+  useBrandKeywords,
+  useCatalog,
+  useCatalogSharedLibrary,
+  useCollaborators,
+  useExclusiveBrands,
+  useProducts,
+  useSales,
+  useStore,
+} from '../../lib/queries';
 import { VISITANTE_SETOR } from '../../lib/business/types';
 
 type Tab = 'pendentes' | CategoryKey | 'recentes';
@@ -21,6 +31,8 @@ export function AuditoriaPage() {
   const { data: products } = useProducts();
   const { data: brandKeywords } = useBrandKeywords();
   const { data: exclusiveBrands } = useExclusiveBrands();
+  const { data: store } = useStore();
+  const { data: sharedLibrary } = useCatalogSharedLibrary(store?.modelo_catalogo);
   const deleteCatalog = useDeleteRow('catalog', 'catalog');
   const reclassifyMutation = useReclassifyProdutos(profile?.store_id);
 
@@ -40,6 +52,11 @@ export function AuditoriaPage() {
     () => (catalog && products && brandKeywords && exclusiveBrands ? buildClassificationInputs(catalog, products, brandKeywords, exclusiveBrands) : null),
     [catalog, products, brandKeywords, exclusiveBrands],
   );
+  const sharedSuggestions = useMemo(() => {
+    const map = new Map<string, CategoryKey>();
+    (sharedLibrary ?? []).forEach((row) => map.set(row.nome_normalizado, row.categoria as CategoryKey));
+    return map;
+  }, [sharedLibrary]);
   const unmatchedList = useMemo(() => {
     if (!sales || !collaborators) return [];
     const knownMatriculas = new Set(collaborators.map((c) => c.matricula));
@@ -125,7 +142,19 @@ export function AuditoriaPage() {
       </div>
 
       {tab === 'pendentes' && (
-        <PendentesTab sales={sales} from={from} to={to} colab={colab} inputs={inputs} selected={selected} setSelected={setSelected} bulkCat={bulkCat} setBulkCat={setBulkCat} reclassify={reclassify} />
+        <PendentesTab
+          sales={sales}
+          from={from}
+          to={to}
+          colab={colab}
+          inputs={inputs}
+          selected={selected}
+          setSelected={setSelected}
+          bulkCat={bulkCat}
+          setBulkCat={setBulkCat}
+          reclassify={reclassify}
+          sharedSuggestions={sharedSuggestions}
+        />
       )}
       {tab === 'recentes' && <RecentesTab catalog={catalog} />}
       {CAT_KEYS.includes(tab as CategoryKey) && (
@@ -176,6 +205,7 @@ function PendentesTab({
   bulkCat,
   setBulkCat,
   reclassify,
+  sharedSuggestions,
 }: {
   sales: { produto: string; codigo?: string | null; qtd: number; valor: number; dataISO: string | null; matricula: string }[];
   from: string;
@@ -187,6 +217,10 @@ function PendentesTab({
   bulkCat: CategoryKey;
   setBulkCat: (k: CategoryKey) => void;
   reclassify: (produtos: string[], categoria: CategoryKey) => void;
+  /** Biblioteca compartilhada por modelo_catalogo — sugestão vinda de outra
+   * loja do mesmo grupo que já classificou esse mesmo produto. Só sugere:
+   * aplicar continua sendo um clique explícito do ADM, nunca automático. */
+  sharedSuggestions: Map<string, CategoryKey>;
 }) {
   const categoryLabels = useCategoryLabelMap();
   // classifyProductTier() runs once per sale here — a full re-classification
@@ -252,7 +286,10 @@ function PendentesTab({
       <p className="text-xs text-slate-500 mb-3">
         Mercadoria Geral é a categoria padrão: tudo que não bate com Dermo, Gen/Sim ou Marcas Excl. cai aqui. Marque
         um ou vários produtos e reclassifique-os — ou use o seletor rápido em cada linha. A reclassificação retroativa
-        das vendas já gravadas segue o filtro De/Até acima (em branco = todo o histórico do produto).
+        das vendas já gravadas segue o filtro De/Até acima (em branco = todo o histórico do produto). Quando a coluna
+        "Sugestão do grupo" aparece preenchida, é porque outra loja com o mesmo modelo de catálogo (Minha Loja) já
+        classificou esse mesmo produto — um clique aplica a mesma categoria aqui, sem esperar o Monitoramento de
+        Lojas existir.
       </p>
       {list.length === 0 ? (
         <div className="text-sm text-slate-500 py-4 text-center">Nenhum produto pendente de revisão neste período/filtro.</div>
@@ -267,31 +304,48 @@ function PendentesTab({
               <th className="py-1.5 pr-3">Ocorrências</th>
               <th className="py-1.5 pr-3">Qtd</th>
               <th className="py-1.5 pr-3">Valor</th>
+              <th className="py-1.5 pr-3">Sugestão do grupo</th>
               <th className="py-1.5 pr-3">Reclassificar</th>
             </tr>
           </thead>
           <tbody>
-            {list.map((p) => (
-              <tr key={p.produto} className="border-b border-slate-900">
-                <td className="py-1.5 pr-3">
-                  <input type="checkbox" checked={selected.has(p.produto)} onChange={() => toggle(p.produto)} />
-                </td>
-                <td className="py-1.5 pr-3">{p.produto}</td>
-                <td className="py-1.5 pr-3 font-mono">{p.ocorrencias}</td>
-                <td className="py-1.5 pr-3 font-mono">{p.qtd}</td>
-                <td className="py-1.5 pr-3 font-mono">{fmtMoney(p.valor)}</td>
-                <td className="py-1.5 pr-3">
-                  <select defaultValue="" onChange={(e) => e.target.value && reclassify([p.produto], e.target.value as CategoryKey)} className="input">
-                    <option value="">—</option>
-                    {CAT_KEYS.map((k) => (
-                      <option key={k} value={k}>
-                        {categoryLabels[k]}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-              </tr>
-            ))}
+            {list.map((p) => {
+              const sugestao = sharedSuggestions.get(normalize(p.produto));
+              return (
+                <tr key={p.produto} className="border-b border-slate-900">
+                  <td className="py-1.5 pr-3">
+                    <input type="checkbox" checked={selected.has(p.produto)} onChange={() => toggle(p.produto)} />
+                  </td>
+                  <td className="py-1.5 pr-3">{p.produto}</td>
+                  <td className="py-1.5 pr-3 font-mono">{p.ocorrencias}</td>
+                  <td className="py-1.5 pr-3 font-mono">{p.qtd}</td>
+                  <td className="py-1.5 pr-3 font-mono">{fmtMoney(p.valor)}</td>
+                  <td className="py-1.5 pr-3">
+                    {sugestao ? (
+                      <button
+                        onClick={() => reclassify([p.produto], sugestao)}
+                        className="rounded-full bg-fuchsia-500/20 text-fuchsia-300 px-2 py-0.5 text-[11px] font-medium hover:bg-fuchsia-500/30"
+                        title="Outra loja do mesmo grupo já classificou este produto assim — clique para aplicar aqui também."
+                      >
+                        {categoryLabels[sugestao]} ✓
+                      </button>
+                    ) : (
+                      <span className="text-slate-700">—</span>
+                    )}
+                  </td>
+                  <td className="py-1.5 pr-3">
+                    <select defaultValue="" onChange={(e) => e.target.value && reclassify([p.produto], e.target.value as CategoryKey)} className="input">
+                      <option value="">—</option>
+                      {CAT_KEYS.map((k) => (
+                        <option key={k} value={k}>
+                          {categoryLabels[k]}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}
