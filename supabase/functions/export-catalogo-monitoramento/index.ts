@@ -21,6 +21,7 @@
 // segredo só abre esta leitura agregada; não é uma credencial de banco e
 // não aparece em nenhuma policy de RLS.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { checkMonitoramentoSecret } from '../_shared/monitoramentoAuth.ts';
 
 function jsonResponse(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
@@ -32,11 +33,8 @@ function jsonResponse(body: unknown, status: number): Response {
 Deno.serve(async (req: Request) => {
   if (req.method !== 'GET') return jsonResponse({ error: 'Method not allowed' }, 405);
 
-  const expectedSecret = Deno.env.get('MONITORAMENTO_SYNC_SECRET');
-  const providedSecret = req.headers.get('x-monitoramento-secret');
-  if (!expectedSecret || providedSecret !== expectedSecret) {
-    return jsonResponse({ error: 'Unauthorized' }, 401);
-  }
+  const authError = checkMonitoramentoSecret(req);
+  if (authError) return authError;
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
