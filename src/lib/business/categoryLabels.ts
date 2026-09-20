@@ -20,6 +20,19 @@ export const DEFAULT_CATEGORY_LABELS: Record<GoalCategoryKey, string> = {
   CHIP: 'Chip',
 };
 
+/** Fixed per-category color, ported 1:1 from CategoryPage.tsx's original
+ * local CATEGORY_EMOJI/CATEGORY_COLOR maps — moved here so every screen that
+ * needs to color-code a category (Lista de Vendas, Classificados, category
+ * screens themselves) shares the same source instead of each re-declaring
+ * its own copy. Unlike the label, this isn't store-overridable — it's a
+ * fixed visual identity, same reasoning as the emoji. */
+export const CATEGORY_EMOJI: Record<GoalCategoryKey, string> = {
+  DERM: '🩹', GEN: '💊', MP: '🏷️', MER: '📦', LEVMEL: '🍯', CHIP: '🔴',
+};
+export const CATEGORY_COLOR: Record<GoalCategoryKey, string> = {
+  DERM: '#ff3df0', GEN: '#14ff00', MP: '#a82bff', MER: '#ff6a00', LEVMEL: '#ffb700', CHIP: '#00e5ff',
+};
+
 /** The store's full category-label map: an ADM override takes priority,
  * falling back to the built-in default for any key without one. This is
  * the one lookup every screen should use instead of its own hardcoded map. */

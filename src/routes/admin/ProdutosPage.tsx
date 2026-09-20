@@ -3,7 +3,7 @@ import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { HelpTip } from '../../components/HelpTip';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
-import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
+import { CATEGORY_COLOR, useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import {
   CAT_KEYS,
   classifyProductTier,
@@ -398,6 +398,21 @@ function CatalogoTab() {
   );
 }
 
+/** Numbered page buttons with an ellipsis window instead of just Anterior/
+ * Próxima — always shows the first/last page plus a small window around the
+ * current one, so a long list (hundreds of pages) doesn't render hundreds
+ * of buttons. */
+function pageWindow(current: number, total: number): (number | '...')[] {
+  const pages = new Set<number>([0, total - 1, current - 1, current, current + 1]);
+  const sorted = Array.from(pages).filter((p) => p >= 0 && p < total).sort((a, b) => a - b);
+  const result: (number | '...')[] = [];
+  sorted.forEach((p, i) => {
+    if (i > 0 && p - sorted[i - 1] > 1) result.push('...');
+    result.push(p);
+  });
+  return result;
+}
+
 function ClassificadosTab() {
   const CAT_LABEL = useCategoryLabelMap();
   const { data: sales } = useSales();
@@ -413,12 +428,16 @@ function ClassificadosTab() {
   const [bulkCategoria, setBulkCategoria] = useState<CategoryKey>('DERM');
   const [ordem, setOrdem] = useState<'ocorrencias' | 'alfabetica'>('ocorrencias');
   const [page, setPage] = useState(0);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [dermoScanning, setDermoScanning] = useState(false);
+  const [dermoSuggestions, setDermoSuggestions] = useState<string[] | null>(null);
   const PAGE_SIZE = 500;
 
-  // classifyProductTier() runs once per distinct product across the
-  // *entire* sales history here (thousands of products × the full
-  // keyword-matching pass) — without this memo it re-ran from scratch on
-  // every render of this tab (ticking a checkbox, changing the sort order,
+  // classifyProductTier() runs once per distinct product across the sales
+  // history in scope here (thousands of products × the full keyword-
+  // matching pass) — without this memo it re-ran from scratch on every
+  // render of this tab (ticking a checkbox, changing the sort order,
   // turning a page), measured at 12-20s of main-thread blocking on a real
   // store's history. Same fix already applied to Colaboradores/Auditoria/
   // AdminLandingPage (see commit c992cbf) — this tab was the one screen
@@ -429,6 +448,8 @@ function ClassificadosTab() {
     const map = new Map<string, { produto: string; qtd: number; valor: number; ocorrencias: number; categoria: CategoryKey }>();
     sales.forEach((s) => {
       if (!s.produto) return;
+      if (dateFrom && s.dataISO && s.dataISO < dateFrom) return;
+      if (dateTo && s.dataISO && s.dataISO > dateTo) return;
       const existing = map.get(s.produto);
       if (existing) {
         existing.qtd += s.qtd;
@@ -446,7 +467,7 @@ function ClassificadosTab() {
       }
     });
     return Array.from(map.values());
-  }, [sales, catalog, products, brandKeywords, exclusiveBrands]);
+  }, [sales, catalog, products, brandKeywords, exclusiveBrands, dateFrom, dateTo]);
 
   if (!sales || !catalog || !products || !brandKeywords || !exclusiveBrands || !classifiedProducts) {
     return <PageLoading />;
@@ -468,9 +489,49 @@ function ClassificadosTab() {
     // but leaves the value already sold stuck under the old category
     // forever, since sales.grupo is written once at import time and never
     // recomputed on its own. Without this, the totals shown for each
-    // category would never reflect a reclassification made here.
-    await reclassifyMutation.mutateAsync({ produtos: produtoNomes, categoria, catalog: catalog!, sales: sales! });
+    // category would never reflect a reclassification made here. Scoped by
+    // the De/Até filter above when set, same convention as Auditoria — in
+    // branco (o padrão) continua corrigindo todo o histórico do produto.
+    await reclassifyMutation.mutateAsync({
+      produtos: produtoNomes,
+      categoria,
+      catalog: catalog!,
+      sales: sales!,
+      dateRange: { from: dateFrom || undefined, to: dateTo || undefined },
+    });
     setSelected(new Set());
+  }
+
+  // "Sugestões Dermo" — segunda análise, manual, dos produtos JÁ
+  // classificados em outra categoria. classifyProductTier já roda a mesma
+  // busca por palavra-chave de Dermocosméticos automaticamente (Tier 2),
+  // mas duas regras podem esconder um sinal genuíno de Dermo do resultado
+  // final: o override de Marcas Exclusivas (sempre vence, não importa o
+  // tier) e o "maior trecho vence" entre categorias empatadas. Este scanner
+  // ignora as duas — olha só "esse nome bate com alguma palavra/padrão
+  // cadastrado para Dermo?" — e lista os achados para o ADM aceitar um a
+  // um, nunca aplica sozinho.
+  function handleScanDermo() {
+    setDermoScanning(true);
+    try {
+      const inputs = buildClassificationInputs(catalog!, products!, brandKeywords!, exclusiveBrands!);
+      const dermoWords = [
+        ...(inputs.productsByCategory.DERM || []).flatMap((p) => (p.palavras?.length ? p.palavras : [p.padrao || p.nome])),
+        ...(inputs.brandKeywordsByCategory.DERM || []),
+      ]
+        .map((kw) => normalize(kw))
+        .filter((kw) => kw.length >= 3);
+      const candidates = classifiedProducts!
+        .filter((p) => p.categoria !== 'DERM')
+        .filter((p) => {
+          const n = normalize(p.produto);
+          return dermoWords.some((kw) => n.includes(kw));
+        })
+        .map((p) => p.produto);
+      setDermoSuggestions(candidates);
+    } finally {
+      setDermoScanning(false);
+    }
   }
 
   return (
@@ -485,7 +546,7 @@ function ClassificadosTab() {
           Dermocosméticos, ao reclassificá-lo o valor sai do total de Marcas Exclusivas e passa a contar em
           Dermocosméticos — em rankings, comissões e no Dashboard.
         </p>
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1 mb-3">
           {(['ALL', ...CAT_KEYS] as const).map((k) => (
             <button
               key={k}
@@ -499,7 +560,103 @@ function ClassificadosTab() {
             </button>
           ))}
         </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">De</label>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => {
+                setDateFrom(e.target.value);
+                setPage(0);
+              }}
+              className="input"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Até</label>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => {
+                setDateTo(e.target.value);
+                setPage(0);
+              }}
+              className="input"
+            />
+          </div>
+          {(dateFrom || dateTo) && (
+            <button
+              onClick={() => {
+                setDateFrom('');
+                setDateTo('');
+                setPage(0);
+              }}
+              className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300"
+            >
+              Limpar período
+            </button>
+          )}
+          <p className="text-[11px] text-slate-500">
+            Em branco = todo o histórico de vendas. Com período definido, a reclassificação feita abaixo também fica
+            restrita a ele — igual à Auditoria.
+          </p>
+        </div>
       </div>
+
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+          <h3 className="font-semibold text-sm">🔍 Sugestões Dermo (segunda análise, manual)</h3>
+          <button
+            onClick={handleScanDermo}
+            disabled={dermoScanning}
+            className="rounded-md border border-pink-500/60 text-pink-400 px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+          >
+            {dermoScanning ? 'Escaneando…' : 'Escanear'}
+          </button>
+        </div>
+        <p className="text-xs text-slate-500 mb-2">
+          Procura, entre os produtos já classificados em outra categoria, quem também bate com alguma palavra ou
+          padrão cadastrado para Dermocosméticos — inclusive casos que a classificação automática decidiu para outro
+          lado (ex.: uma Marca Exclusiva que também é Dermo). Só sugere: nada é reclassificado sem você confirmar.
+        </p>
+        {dermoSuggestions && (
+          <>
+            {dermoSuggestions.length === 0 ? (
+              <div className="text-xs text-slate-500 py-2">Nenhuma sugestão encontrada — nada fora do lugar.</div>
+            ) : (
+              <div className="flex flex-col gap-1.5 mt-2">
+                {dermoSuggestions.map((nome) => (
+                  <div
+                    key={nome}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-1.5"
+                  >
+                    <span className="text-xs">{nome}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={async () => {
+                          await reclassify([nome], 'DERM');
+                          setDermoSuggestions((prev) => (prev ? prev.filter((n) => n !== nome) : prev));
+                        }}
+                        className="rounded-md bg-pink-500 text-slate-950 px-2.5 py-1 text-[11px] font-medium"
+                      >
+                        Reclassificar p/ Dermo
+                      </button>
+                      <button
+                        onClick={() => setDermoSuggestions((prev) => (prev ? prev.filter((n) => n !== nome) : prev))}
+                        className="text-[11px] text-slate-500 hover:text-slate-300"
+                      >
+                        Ignorar
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <input
           value={busca}
@@ -591,7 +748,12 @@ function ClassificadosTab() {
                     </td>
                     <td className="py-1.5 pr-3">{p.produto}</td>
                     <td className="py-1.5 pr-3">
-                      <span className="bg-slate-800 rounded-full px-2 py-0.5">{CAT_LABEL[p.categoria]}</span>
+                      <span
+                        className="rounded-full px-2 py-0.5 font-medium"
+                        style={{ color: CATEGORY_COLOR[p.categoria], background: `${CATEGORY_COLOR[p.categoria]}22` }}
+                      >
+                        {CAT_LABEL[p.categoria]}
+                      </span>
                     </td>
                     <td className="py-1.5 pr-3 font-mono">{p.ocorrencias}</td>
                     <td className="py-1.5 pr-3 font-mono">{p.qtd}</td>
@@ -614,22 +776,39 @@ function ClassificadosTab() {
               </tbody>
             </table>
             {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-3">
+              <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
                 <span className="text-xs text-slate-500">
                   Página {pageSafe + 1} de {totalPages} — mostrando {pageList.length} de {list.length} produtos
                 </span>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-1">
                   <button
                     onClick={() => setPage((p) => Math.max(0, p - 1))}
                     disabled={pageSafe === 0}
-                    className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 disabled:opacity-40"
+                    className="rounded-lg border border-slate-700 px-2.5 py-1.5 text-xs text-slate-300 disabled:opacity-40"
                   >
                     ← Anterior
                   </button>
+                  {pageWindow(pageSafe, totalPages).map((p, i) =>
+                    p === '...' ? (
+                      <span key={`ellipsis-${i}`} className="px-1 text-xs text-slate-600">
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        key={p}
+                        onClick={() => setPage(p)}
+                        className={`rounded-lg px-2.5 py-1.5 text-xs min-w-[28px] ${
+                          p === pageSafe ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'
+                        }`}
+                      >
+                        {p + 1}
+                      </button>
+                    ),
+                  )}
                   <button
                     onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                     disabled={pageSafe >= totalPages - 1}
-                    className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 disabled:opacity-40"
+                    className="rounded-lg border border-slate-700 px-2.5 py-1.5 text-xs text-slate-300 disabled:opacity-40"
                   >
                     Próxima →
                   </button>
