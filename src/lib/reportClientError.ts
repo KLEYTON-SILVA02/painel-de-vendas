@@ -55,3 +55,15 @@ export function installClientErrorReporter() {
     void sendReport(`Promise rejeitada: ${message}`, stack, window.location.href);
   });
 }
+
+/** A render error caught by a React ErrorBoundary's componentDidCatch never
+ * reaches `window.onerror`/`unhandledrejection` — React swallows it once a
+ * boundary handles it, which is exactly why `client_error_reports` (and the
+ * ADM notification bell it feeds) has historically stayed empty for the
+ * "Algo deu errado" screen even when it fires for real. Called from
+ * ErrorBoundary.tsx so that crash finally leaves a trace with the actual
+ * message + stack instead of only a generic screen the ADM can't act on. */
+export function reportCaughtRenderError(error: Error, componentStack?: string | null) {
+  const stack = [error.stack, componentStack ? `Component stack:${componentStack}` : null].filter(Boolean).join('\n\n');
+  void sendReport(`Erro de renderização: ${error.message}`, stack || null, window.location.href);
+}
