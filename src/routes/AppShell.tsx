@@ -166,9 +166,18 @@ export function AppShell() {
   if (isMobileV2) {
     return (
       <DateRangeProvider>
-        <Suspense fallback={<PageLoading fullScreen />}>
-          <MobileAdminShell />
-        </Suspense>
+        {/* MobileAdminShell reuses several desktop ADM pages verbatim
+            (Produtos, Auditoria, Categorias, Colaboradores, Configurações,
+            Importar, Conquistas, Metas) — all of which render <HelpTip>,
+            and useHelpMode() throws if no HelpModeProvider is above it in
+            the tree. Missing here, this crashed every one of those screens
+            on mobile with "Algo deu errado" (confirmed via the render-error
+            report a real occurrence left in client_error_reports). */}
+        <HelpModeProvider>
+          <Suspense fallback={<PageLoading fullScreen />}>
+            <MobileAdminShell />
+          </Suspense>
+        </HelpModeProvider>
       </DateRangeProvider>
     );
   }
