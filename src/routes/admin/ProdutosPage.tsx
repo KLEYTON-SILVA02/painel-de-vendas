@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { HelpTip } from '../../components/HelpTip';
@@ -413,6 +413,256 @@ function pageWindow(current: number, total: number): (number | '...')[] {
   return result;
 }
 
+/** Exportar/Importar planilha de Classificados (nome + categoria) — ideia
+ * do usuário para analisar/editar a classificação fora do sistema (Excel/
+ * Sheets) e trazer de volta as correções. Import nunca aplica direto: lê a
+ * planilha, compara com a classificação atual e lista as divergências para
+ * o ADM selecionar e aprovar — mesmo requisito de segurança "de forma
+ * pacífica" discutido para toda esta função. */
+function ExportImportCard({
+  produtosVisiveis,
+  produtosCompletos,
+  catalog,
+  sales,
+  reclassifyMutation,
+}: {
+  produtosVisiveis: { produto: string; categoria: CategoryKey }[];
+  produtosCompletos: { produto: string; categoria: CategoryKey }[];
+  catalog: { id: string; nome: string }[];
+  sales: { id: string; produto: string; dataISO?: string | null }[];
+  reclassifyMutation: ReturnType<typeof useReclassifyProdutos>;
+}) {
+  const CAT_LABEL = useCategoryLabelMap();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [exporting, setExporting] = useState(false);
+  const [fileName, setFileName] = useState('');
+  const [reading, setReading] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [ignorados, setIgnorados] = useState(0);
+  const [diffs, setDiffs] = useState<{ produto: string; atual: CategoryKey; proposta: CategoryKey }[] | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const XLSX = await import('xlsx');
+      const rows = produtosVisiveis.map((p) => ({ Produto: p.produto, Categoria: CAT_LABEL[p.categoria] }));
+      const ws = XLSX.utils.json_to_sheet(rows, { header: ['Produto', 'Categoria'] });
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Classificados');
+      XLSX.writeFile(wb, `classificados-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  function resetImport() {
+    setFileName('');
+    setDiffs(null);
+    setSelected(new Set());
+    setImportError(null);
+    setIgnorados(0);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  function handleFile(file: File) {
+    setImportError(null);
+    setDiffs(null);
+    setFileName(file.name);
+    setReading(true);
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        const XLSX = await import('xlsx');
+        const data = new Uint8Array(ev.target!.result as ArrayBuffer);
+        const wb = XLSX.read(data, { type: 'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const body = (XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' }) as unknown[][]).slice(1);
+
+        const atualByNome = new Map<string, { produto: string; categoria: CategoryKey }>();
+        produtosCompletos.forEach((p) => atualByNome.set(normalize(p.produto), p));
+
+        const found: { produto: string; atual: CategoryKey; proposta: CategoryKey }[] = [];
+        let naoEncontrados = 0;
+        body.forEach((row) => {
+          const nomePlanilha = String(row[0] ?? '').trim();
+          const categoriaPlanilha = String(row[1] ?? '').trim();
+          if (!nomePlanilha || !categoriaPlanilha) return;
+          const existente = atualByNome.get(normalize(nomePlanilha));
+          if (!existente) {
+            naoEncontrados += 1;
+            return;
+          }
+          const proposta = normalizeCategoriaImport(categoriaPlanilha);
+          if (proposta !== existente.categoria) {
+            found.push({ produto: existente.produto, atual: existente.categoria, proposta });
+          }
+        });
+        setDiffs(found);
+        setSelected(new Set(found.map((d) => d.produto)));
+        setIgnorados(naoEncontrados);
+      } catch {
+        setImportError('Falha ao ler o arquivo. Confira se é uma planilha válida (.xlsx, .xls, .csv, .ods) com Produto na coluna A e Categoria na coluna B.');
+      } finally {
+        setReading(false);
+      }
+    };
+    reader.onerror = () => {
+      setImportError('Falha ao ler o arquivo.');
+      setReading(false);
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function toggle(produto: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(produto)) next.delete(produto);
+      else next.add(produto);
+      return next;
+    });
+  }
+
+  async function handleApply() {
+    if (!diffs) return;
+    const aplicar = diffs.filter((d) => selected.has(d.produto));
+    if (aplicar.length === 0) return;
+    // Agrupado por categoria proposta — useReclassifyProdutos aceita uma
+    // categoria por chamada, então uma planilha que propõe duas categorias
+    // diferentes vira duas chamadas sequenciais, uma por grupo.
+    const grupos = new Map<CategoryKey, string[]>();
+    aplicar.forEach((d) => {
+      const arr = grupos.get(d.proposta) ?? [];
+      arr.push(d.produto);
+      grupos.set(d.proposta, arr);
+    });
+    setProgress({ done: 0, total: aplicar.length });
+    for (const [categoria, produtos] of grupos) {
+      await reclassifyMutation.mutateAsync({ produtos, categoria, catalog, sales });
+      setProgress((p) => (p ? { done: p.done + produtos.length, total: p.total } : p));
+    }
+    setProgress(null);
+    resetImport();
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+      <h3 className="font-semibold mb-1 text-sm">📊 Exportar / Importar planilha</h3>
+      <p className="text-xs text-slate-500 mb-3">
+        Exporte os produtos classificados (nome na coluna A, categoria na coluna B) para analisar fora do sistema.
+        Depois, importe a planilha de volta — o sistema compara com a classificação atual e lista só as diferenças,
+        para você aprovar uma a uma antes de aplicar.
+      </p>
+
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <button
+          onClick={handleExport}
+          disabled={exporting || produtosVisiveis.length === 0}
+          className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 disabled:opacity-50"
+        >
+          {exporting ? 'Gerando planilha…' : `⬇ Exportar (${produtosVisiveis.length} produto(s) na lista atual)`}
+        </button>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".xlsx,.xls,.xlsm,.csv,.ods"
+          onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+          style={{ display: 'none' }}
+        />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={reading}
+          className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 disabled:opacity-50"
+        >
+          {reading ? 'Lendo planilha…' : '⬆ Importar planilha para comparar'}
+        </button>
+        {fileName && !reading && <span className="text-xs text-slate-500">{fileName}</span>}
+      </div>
+
+      {importError && <p className="text-xs text-rose-400 mb-2">{importError}</p>}
+
+      {progress && (
+        <div className="mb-3">
+          <div style={{ height: 6, borderRadius: 6, background: '#0f172a', overflow: 'hidden' }}>
+            <div
+              style={{
+                height: '100%',
+                width: `${Math.round((progress.done / progress.total) * 100)}%`,
+                background: 'linear-gradient(90deg, #00f0ff, #a82bff)',
+                transition: 'width 0.2s ease',
+              }}
+            />
+          </div>
+          <p className="text-[11px] text-slate-500 mt-1">
+            Aplicando… {progress.done} de {progress.total} produto(s)
+          </p>
+        </div>
+      )}
+
+      {diffs && (
+        diffs.length === 0 ? (
+          <div className="text-xs text-slate-500 py-2">
+            Nenhuma diferença encontrada — a planilha já bate com a classificação atual.
+            {ignorados > 0 && ` (${ignorados} produto(s) da planilha não foram encontrados no sistema e foram ignorados.)`}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <p className="text-xs text-slate-500">
+                {diffs.length} divergência(s) encontrada(s){ignorados > 0 && ` · ${ignorados} produto(s) não encontrado(s), ignorado(s)`}.
+                Marque as que quer aplicar.
+              </p>
+              <button
+                onClick={handleApply}
+                disabled={selected.size === 0 || !!progress}
+                className="rounded-md bg-amber-500 text-slate-950 px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+              >
+                Aplicar selecionadas ({selected.size})
+              </button>
+            </div>
+            <div className="overflow-x-auto max-h-72 overflow-y-auto rounded-lg border border-slate-800">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left text-slate-400 border-b border-slate-800 sticky top-0 bg-slate-950">
+                    <th className="py-1.5 px-2">
+                      <input
+                        type="checkbox"
+                        checked={diffs.every((d) => selected.has(d.produto))}
+                        onChange={(e) => setSelected(e.target.checked ? new Set(diffs.map((d) => d.produto)) : new Set())}
+                      />
+                    </th>
+                    <th className="py-1.5 px-2">Produto</th>
+                    <th className="py-1.5 px-2">Categoria atual</th>
+                    <th className="py-1.5 px-2">Categoria na planilha</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {diffs.map((d) => (
+                    <tr key={d.produto} className="border-b border-slate-900">
+                      <td className="py-1.5 px-2">
+                        <input type="checkbox" checked={selected.has(d.produto)} onChange={() => toggle(d.produto)} />
+                      </td>
+                      <td className="py-1.5 px-2">{d.produto}</td>
+                      <td className="py-1.5 px-2">
+                        <span style={{ color: CATEGORY_COLOR[d.atual] }}>{CAT_LABEL[d.atual]}</span>
+                      </td>
+                      <td className="py-1.5 px-2">
+                        <span style={{ color: CATEGORY_COLOR[d.proposta] }}>{CAT_LABEL[d.proposta]}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
 function ClassificadosTab() {
   const CAT_LABEL = useCategoryLabelMap();
   const { data: sales } = useSales();
@@ -656,6 +906,14 @@ function ClassificadosTab() {
           </>
         )}
       </div>
+
+      <ExportImportCard
+        produtosVisiveis={list}
+        produtosCompletos={classifiedProducts}
+        catalog={catalog}
+        sales={sales}
+        reclassifyMutation={reclassifyMutation}
+      />
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <input
