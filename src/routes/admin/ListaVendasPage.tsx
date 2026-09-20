@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { ReclassifyBar } from '../../components/admin/ReclassifyBar';
-import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
+import { CATEGORY_COLOR, useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import type { CategoryKey } from '../../lib/business/classification';
 import type { Collaborator, Sale } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney, monthName } from '../../lib/format';
@@ -330,7 +330,21 @@ export function ListaVendasPage() {
                                       <td className="py-1.5 px-2">{s.produto}</td>
                                       <td className="py-1.5 px-2 font-mono">{s.qtd}</td>
                                       <td className="py-1.5 px-2 font-mono text-amber-400">{fmtMoney(s.valor)}</td>
-                                      <td className="py-1.5 px-2">{s.grupo ? TIPO_LABEL[s.grupo] ?? s.grupo : 'Não classificado'}</td>
+                                      <td className="py-1.5 px-2">
+                                        {s.grupo ? (
+                                          <span
+                                            className="inline-block rounded px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap"
+                                            style={{
+                                              color: CATEGORY_COLOR[s.grupo as keyof typeof CATEGORY_COLOR] ?? '#94a3b8',
+                                              background: `${CATEGORY_COLOR[s.grupo as keyof typeof CATEGORY_COLOR] ?? '#94a3b8'}22`,
+                                            }}
+                                          >
+                                            {TIPO_LABEL[s.grupo] ?? s.grupo}
+                                          </span>
+                                        ) : (
+                                          <span className="text-slate-600">Não classificado</span>
+                                        )}
+                                      </td>
                                     </tr>
                                   ))}
                                 </tbody>

@@ -9,7 +9,7 @@ import { PodiumSplit, type PodiumSpots } from '../../components/ranking/PodiumSp
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { RankingModeToggle } from '../../components/ranking/RankingModeToggle';
-import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
+import { CATEGORY_COLOR, CATEGORY_EMOJI, useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import type { CategoryKey } from '../../lib/business/classification';
 import { copyText, formatRankingText } from '../../lib/clipboard';
 import { diasRestantesNoMes, getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
@@ -25,14 +25,9 @@ import { useDateRange } from '../DateRangeContext';
 
 export type PageCategoryKey = CategoryKey | 'LEVMEL' | 'CHIP';
 
-// Ported 1:1 from legacy/index-original.html (CATEGORIA_META / CATS / catLabel / catCls / .pill.*),
-// split into emoji/color (fixed) + label (store-overridable via useCategoryLabelMap).
-const CATEGORY_EMOJI: Record<PageCategoryKey, string> = {
-  DERM: '🩹', GEN: '💊', MP: '🏷️', MER: '📦', LEVMEL: '🍯', CHIP: '🔴',
-};
-const CATEGORY_COLOR: Record<PageCategoryKey, string> = {
-  DERM: '#ff3df0', GEN: '#14ff00', MP: '#a82bff', MER: '#ff6a00', LEVMEL: '#ffb700', CHIP: '#00e5ff',
-};
+// CATEGORY_EMOJI/CATEGORY_COLOR now live in categoryLabels.ts (shared with
+// Lista de Vendas and Classificados) — kept only the CAT_PILL derivative
+// here since it's specific to this screen's pill styling.
 const CAT_PILL: Record<CategoryKey, { bg: string; color: string }> = {
   DERM: { bg: '#ff3df033', color: '#ff3df0' },
   GEN: { bg: '#39ff1433', color: '#14ff00' },
