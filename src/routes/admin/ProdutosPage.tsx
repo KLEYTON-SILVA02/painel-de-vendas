@@ -1111,7 +1111,6 @@ function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
   const { data: brandKeywords } = useBrandKeywords();
   const { data: sales } = useSales();
   const { data: catalog } = useCatalog();
-  const { data: products } = useProducts();
   const { data: exclusiveBrands } = useExclusiveBrands();
   const insertKw = useInsertRow('brand_keywords', profile?.store_id, 'brand_keywords');
   const deleteKw = useDeleteRow('brand_keywords', 'brand_keywords');
@@ -1130,7 +1129,7 @@ function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
   const groupKeywords = isMP ? exclusiveBrands : brandKeywords.filter((b) => b.categoria === group);
   const insertMutation = isMP ? insertExclusive : insertKw;
   const deleteMutation = isMP ? deleteExclusive : deleteKw;
-  const dadosProntos = !!sales && !!catalog && !!products;
+  const dadosProntos = !!sales && !!catalog;
 
   function handleAdd() {
     if (!kw.trim()) return;
@@ -1147,7 +1146,7 @@ function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
   }
 
   function handleScan() {
-    if (!sales || !catalog || !products || !exclusiveBrands || !brandKeywords) return;
+    if (!sales) return;
     setScanning(true);
     try {
       // Mantém o texto original de cada palavra-chave ao lado da versão
@@ -1158,61 +1157,43 @@ function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
       const keywords = groupKeywords
         .map((k) => ({ original: k.palavra, normalizada: normalize(k.palavra) }))
         .filter((k) => k.normalizada.length >= 3);
-      const candidates: { produto: string; categoriaAtual: CategoryKey; palavrasBatidas: string[] }[] = [];
-      if (isMP) {
-        // Marcas Exclusivas é um override incondicional (ver
-        // "Exclusive-brand rule" em classification.ts): qualquer produto
-        // batendo com uma dessas palavras já é computado como MP na hora,
-        // então comparar contra uma classificação recém-calculada nunca
-        // haveria divergência para achar. O que precisa ser encontrado
-        // aqui é diferente: vendas já importadas cujo `grupo` gravado no
-        // banco ainda não é MP (ficaram "para trás" de quando a marca foi
-        // cadastrada) — exatamente o que "Aplicar/Reclassificar" corrige
-        // de forma retroativa.
-        const porProduto = new Map<
-          string,
-          { produto: string; categoriaAtual: CategoryKey; palavrasBatidas: string[]; precisaCorrigir: boolean }
-        >();
-        if (keywords.length > 0) {
-          sales.forEach((s) => {
-            if (!s.produto) return;
-            const n = normalize(s.produto);
-            const palavrasBatidas = keywords.filter((kwItem) => n.includes(kwItem.normalizada)).map((kwItem) => kwItem.original);
-            if (palavrasBatidas.length === 0) return;
-            const existing = porProduto.get(n);
-            if (existing) {
-              if (s.grupo !== 'MP') existing.precisaCorrigir = true;
-            } else {
-              porProduto.set(n, {
-                produto: s.produto,
-                categoriaAtual: s.grupo ?? 'MER',
-                palavrasBatidas,
-                precisaCorrigir: s.grupo !== 'MP',
-              });
-            }
-          });
-        }
-        porProduto.forEach((c) => {
-          if (c.precisaCorrigir) candidates.push({ produto: c.produto, categoriaAtual: c.categoriaAtual, palavrasBatidas: c.palavrasBatidas });
+      // Compara contra o `grupo` já GRAVADO em cada venda, não contra uma
+      // classificação recém-calculada — decisão importante, não só um
+      // detalhe de implementação: uma classificação recém-calculada já
+      // reflete a própria palavra-chave sendo escaneada (via Tier 1
+      // catálogo ou Tier 3), então ela nunca vai divergir do grupo-alvo
+      // para um produto que bate com a palavra — o scan sempre voltaria
+      // vazio, mesmo com centenas de vendas ainda presas na categoria
+      // antiga. O `grupo` gravado é o que realmente aparece hoje em
+      // rankings/totais, e é exatamente isso que "Aplicar/Reclassificar"
+      // corrige de forma retroativa.
+      const porProduto = new Map<
+        string,
+        { produto: string; categoriaAtual: CategoryKey; palavrasBatidas: string[]; precisaCorrigir: boolean }
+      >();
+      if (keywords.length > 0) {
+        sales.forEach((s) => {
+          if (!s.produto) return;
+          const n = normalize(s.produto);
+          const palavrasBatidas = keywords.filter((kwItem) => n.includes(kwItem.normalizada)).map((kwItem) => kwItem.original);
+          if (palavrasBatidas.length === 0) return;
+          if (group === 'GEN' && !GENERIC_MARKERS.some((m) => n.includes(m.trim()))) return;
+          const existing = porProduto.get(n);
+          if (existing) {
+            if (s.grupo !== group) existing.precisaCorrigir = true;
+          } else {
+            porProduto.set(n, {
+              produto: s.produto,
+              categoriaAtual: s.grupo ?? 'MER',
+              palavrasBatidas,
+              precisaCorrigir: s.grupo !== group,
+            });
+          }
         });
-      } else {
-        const inputs = buildClassificationInputs(catalog, products, brandKeywords, exclusiveBrands);
-        const seen = new Set<string>();
-        if (keywords.length > 0) {
-          sales.forEach((s) => {
-            if (!s.produto) return;
-            const n = normalize(s.produto);
-            if (seen.has(n)) return;
-            seen.add(n);
-            const palavrasBatidas = keywords.filter((kwItem) => n.includes(kwItem.normalizada)).map((kwItem) => kwItem.original);
-            if (palavrasBatidas.length === 0) return;
-            if (group === 'GEN' && !GENERIC_MARKERS.some((m) => n.includes(m.trim()))) return;
-            const categoriaAtual = classifyProductTier(s.produto, s.codigo, inputs).categoria!;
-            if (categoriaAtual === group) return;
-            candidates.push({ produto: s.produto, categoriaAtual, palavrasBatidas });
-          });
-        }
       }
+      const candidates = Array.from(porProduto.values())
+        .filter((c) => c.precisaCorrigir)
+        .map(({ produto, categoriaAtual, palavrasBatidas }) => ({ produto, categoriaAtual, palavrasBatidas }));
       setScanResults(candidates);
       setSelected(new Set(candidates.map((c) => c.produto)));
     } finally {
@@ -1294,9 +1275,9 @@ function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
           </button>
         </div>
         <p className="text-xs text-slate-500 mb-2">
-          {isMP
-            ? `Procura, entre os produtos já vendidos, quem bate com alguma das palavras-chave cadastradas acima mas ainda tem vendas gravadas fora de ${CAT_LABEL[group]}. Nada é reclassificado sozinho — revise a lista e aprove uma a uma ou em massa.`
-            : `Procura, entre os produtos já vendidos e ainda não classificados em ${CAT_LABEL[group]}, quem bate com alguma das palavras-chave cadastradas acima. Nada é reclassificado sozinho — revise a lista e aprove uma a uma ou em massa.`}
+          Procura, entre os produtos já vendidos, quem bate com alguma das palavras-chave cadastradas acima mas ainda
+          tem vendas gravadas fora de {CAT_LABEL[group]}. Nada é reclassificado sozinho — revise a lista e aprove uma
+          a uma ou em massa.
         </p>
         {groupKeywords.length === 0 ? (
           <p className="text-[11px] text-amber-400 mb-2">
