@@ -8,6 +8,7 @@ import { ChampionHeaderButton } from '../components/dashboard/ChampionOfDay';
 import { ClosingClock } from '../components/ClosingClock';
 import { BirthdayCelebrationHost } from '../components/BirthdayCelebration';
 import { ConquistaCelebrationHost } from '../components/ConquistaCelebration';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { HamburgerIcon, MedalIcon } from '../components/icons/NavIcons';
 import { NotificationBell } from '../components/NotificationBell';
 import { PageLoading } from '../components/PageLoading';
@@ -235,6 +236,14 @@ export function AppShell() {
             </div>
           </header>
           <main className="p-3">
+          {/* Keyed by pathname so a crash in one screen (caught here instead
+              of by the app-wide boundary in App.tsx) doesn't strand the
+              user on a dead "Algo deu errado" card forever — clicking any
+              other sidebar link changes the key, which remounts a fresh
+              boundary instead of reusing one still stuck in error state,
+              recovering without a full page reload and without losing the
+              session/sidebar. */}
+          <ErrorBoundary key={location.pathname}>
           <Suspense fallback={<PageLoading />}>
           <Routes>
             <Route path="/" element={<DashboardPage />} />
@@ -286,6 +295,7 @@ export function AppShell() {
             />
           </Routes>
           </Suspense>
+          </ErrorBoundary>
           </main>
         </div>
       </div>

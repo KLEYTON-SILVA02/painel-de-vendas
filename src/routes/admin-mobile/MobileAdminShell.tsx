@@ -3,6 +3,7 @@ import { NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-d
 import { useAuth } from '../../auth/AuthContext';
 import { BackButton } from '../../components/BackButton';
 import { ConquistaCelebrationHost } from '../../components/ConquistaCelebration';
+import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { FunctionIcon } from '../../components/icons/FunctionIcon';
 import { PageLoading } from '../../components/PageLoading';
 import { Sidebar } from '../../components/Sidebar';
@@ -244,6 +245,10 @@ export function MobileAdminShell() {
       </nav>
 
       <main style={{ paddingBottom: 24 }}>
+        {/* Keyed by pathname — a crash in one screen recovers by tapping any
+            other topbar/category-menu item instead of needing a full
+            reload, same reasoning as the desktop AppShell. */}
+        <ErrorBoundary key={location.pathname}>
         <Suspense fallback={<PageLoading />}>
           <Routes>
             <Route path="/" element={<MobileInicioPage />} />
@@ -275,6 +280,7 @@ export function MobileAdminShell() {
             <Route path="/admin/categorias" element={<CategoriasPage />} />
           </Routes>
         </Suspense>
+        </ErrorBoundary>
       </main>
     </div>
     <VersionFooter />
