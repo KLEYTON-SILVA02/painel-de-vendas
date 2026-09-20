@@ -1106,7 +1106,9 @@ function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
   const reclassifyMutation = useReclassifyProdutos(profile?.store_id);
   const [kw, setKw] = useState('');
   const [scanning, setScanning] = useState(false);
-  const [scanResults, setScanResults] = useState<{ produto: string; categoriaAtual: CategoryKey }[] | null>(null);
+  const [scanResults, setScanResults] = useState<
+    { produto: string; categoriaAtual: CategoryKey; palavrasBatidas: string[] }[] | null
+  >(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   if (!brandKeywords) return <PageLoading />;
@@ -1128,20 +1130,28 @@ function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
     setScanning(true);
     try {
       const inputs = buildClassificationInputs(catalog, products, brandKeywords, exclusiveBrands);
-      const keywords = groupKeywords.map((k) => normalize(k.palavra)).filter((k) => k.length >= 3);
+      // Mantém o texto original de cada palavra-chave ao lado da versão
+      // normalizada — o candidato mostra qual palavra-chave bateu (não só
+      // "produto X apareceu"), pra o ADM enxergar se é um match de verdade
+      // ou uma coincidência (ex.: a palavra-chave "GN-" bate em "...GN-SAN"
+      // sem que isso signifique nada relacionado a Genéricos ali).
+      const keywords = groupKeywords
+        .map((k) => ({ original: k.palavra, normalizada: normalize(k.palavra) }))
+        .filter((k) => k.normalizada.length >= 3);
       const seen = new Set<string>();
-      const candidates: { produto: string; categoriaAtual: CategoryKey }[] = [];
+      const candidates: { produto: string; categoriaAtual: CategoryKey; palavrasBatidas: string[] }[] = [];
       if (keywords.length > 0) {
         sales.forEach((s) => {
           if (!s.produto) return;
           const n = normalize(s.produto);
           if (seen.has(n)) return;
           seen.add(n);
-          if (!keywords.some((kwN) => n.includes(kwN))) return;
+          const palavrasBatidas = keywords.filter((kw) => n.includes(kw.normalizada)).map((kw) => kw.original);
+          if (palavrasBatidas.length === 0) return;
           if (group === 'GEN' && !GENERIC_MARKERS.some((m) => n.includes(m.trim()))) return;
           const categoriaAtual = classifyProductTier(s.produto, s.codigo, inputs).categoria!;
           if (categoriaAtual === group) return;
-          candidates.push({ produto: s.produto, categoriaAtual });
+          candidates.push({ produto: s.produto, categoriaAtual, palavrasBatidas });
         });
       }
       setScanResults(candidates);
@@ -1264,10 +1274,14 @@ function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
                     key={c.produto}
                     className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-1.5"
                   >
-                    <label className="flex items-center gap-2 text-xs flex-1 min-w-0">
-                      <input type="checkbox" checked={selected.has(c.produto)} onChange={() => toggle(c.produto)} />
-                      <span className="truncate">{c.produto}</span>
-                      <span className="text-slate-500 shrink-0">— atualmente {CAT_LABEL[c.categoriaAtual]}</span>
+                    <label className="flex items-start gap-2 text-xs flex-1 min-w-0">
+                      <input type="checkbox" checked={selected.has(c.produto)} onChange={() => toggle(c.produto)} className="mt-0.5" />
+                      <span className="min-w-0">
+                        <span className="block truncate">{c.produto}</span>
+                        <span className="block text-slate-500">
+                          atualmente {CAT_LABEL[c.categoriaAtual]} — bate com: {c.palavrasBatidas.join(', ')}
+                        </span>
+                      </span>
                     </label>
                     <div className="flex items-center gap-2 shrink-0">
                       <button
