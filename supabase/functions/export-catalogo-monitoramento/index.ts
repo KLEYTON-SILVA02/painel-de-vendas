@@ -21,6 +21,7 @@
 // segredo só abre esta leitura agregada; não é uma credencial de banco e
 // não aparece em nenhuma policy de RLS.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { checkMonitoramentoSecret } from '../_shared/monitoramentoAuth.ts';
 
 function jsonResponse(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
@@ -32,20 +33,21 @@ function jsonResponse(body: unknown, status: number): Response {
 Deno.serve(async (req: Request) => {
   if (req.method !== 'GET') return jsonResponse({ error: 'Method not allowed' }, 405);
 
-  const expectedSecret = Deno.env.get('MONITORAMENTO_SYNC_SECRET');
-  const providedSecret = req.headers.get('x-monitoramento-secret');
-  if (!expectedSecret || providedSecret !== expectedSecret) {
-    return jsonResponse({ error: 'Unauthorized' }, 401);
-  }
+  const authError = checkMonitoramentoSecret(req);
+  if (authError) return authError;
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const admin = createClient(supabaseUrl, serviceRoleKey);
 
+  // status = 'active' exclui lojas pendentes/rejeitadas do gate de
+  // aprovação (0077_store_approval_gate.sql) — uma loja sem acesso próprio
+  // não deve alimentar a biblioteca de catálogo compartilhada.
   const { data: stores, error: storesErr } = await admin
     .from('stores')
     .select('id, modelo_catalogo')
-    .not('modelo_catalogo', 'is', null);
+    .not('modelo_catalogo', 'is', null)
+    .eq('status', 'active');
   if (storesErr) return jsonResponse({ error: storesErr.message }, 500);
   if (!stores || stores.length === 0) return jsonResponse({ produtos: [] }, 200);
 
