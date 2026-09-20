@@ -15,8 +15,16 @@ import {
 import { normalize } from '../../lib/business/normalize';
 import { buildClassificationInputs } from '../../lib/mappers';
 import { fmtMoney } from '../../lib/format';
-import { useBulkInsertGenericSubstances, useBulkInsertProducts, useDeleteRow, useInsertRow, useReclassifyProdutos, useUpdateRow } from '../../lib/mutations';
-import { useBrandKeywords, useCatalog, useExclusiveBrands, useGenericSubstances, useProducts, useSales } from '../../lib/queries';
+import {
+  useBulkInsertGenericSubstances,
+  useBulkInsertProducts,
+  useBulkPromoteFromSales,
+  useDeleteRow,
+  useInsertRow,
+  useReclassifyProdutos,
+  useUpdateRow,
+} from '../../lib/mutations';
+import { useBrandKeywords, useCatalog, useExclusiveBrands, useGenericSubstances, useProducts, useSales, useStore } from '../../lib/queries';
 
 type Tab = 'produtos' | 'catalogo' | 'classificados' | 'palavras' | 'substancias';
 const TABS: { id: Tab; label: string }[] = [
@@ -235,23 +243,49 @@ function CatalogoTab() {
   const CAT_LABEL = useCategoryLabelMap();
   const { profile } = useAuth();
   const { data: catalog } = useCatalog();
+  const { data: sales } = useSales();
+  const { data: store } = useStore();
   const insertCatalog = useInsertRow('catalog', profile?.store_id, 'catalog');
   const deleteCatalog = useDeleteRow('catalog', 'catalog');
+  const promoteFromSales = useBulkPromoteFromSales(profile?.store_id, store?.modelo_catalogo);
   const [nome, setNome] = useState('');
   const [codigo, setCodigo] = useState('');
   const [categoria, setCategoria] = useState<CategoryKey>('DERM');
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  // Cadastrados (manual) e Via Substância (inseridos pela varredura da aba
-  // Substâncias, ver SubstanciasTab) ficam na mesma tabela `catalog` e
-  // valem igualmente como Tier 1 — só a listagem é separada, para que os
-  // dois grupos não se misturem visualmente ("ficará isolado", como pedido).
-  const [origemTab, setOrigemTab] = useState<'manual' | 'substancia'>('manual');
+  // Cadastrados (manual), Via Substância (varredura da aba Substâncias),
+  // Da Lista de Vendas (aprovados abaixo) e Multilojas (recebidos
+  // automaticamente de uma loja irmã do mesmo modelo_catalogo — ver
+  // migration 0082) ficam todos na mesma tabela `catalog` e valem
+  // igualmente como Tier 1 — só a listagem é separada por origem, para que
+  // os grupos não se misturem visualmente.
+  const [origemTab, setOrigemTab] = useState<'manual' | 'substancia' | 'vendas' | 'multilojas'>('manual');
+  const [vendasCategoria, setVendasCategoria] = useState<CategoryKey>('DERM');
+  const [candidatos, setCandidatos] = useState<Set<string>>(new Set());
+
+  const candidatosVendas = useMemo(() => {
+    if (!sales || !catalog) return [];
+    const known = new Set(catalog.map((c) => normalize(c.nome)));
+    const seen = new Set<string>();
+    const result: string[] = [];
+    sales.forEach((s) => {
+      if (!s.produto || s.grupo !== vendasCategoria) return;
+      const n = normalize(s.produto);
+      if (known.has(n) || seen.has(n)) return;
+      seen.add(n);
+      result.push(s.produto);
+    });
+    return result.sort((a, b) => a.localeCompare(b));
+  }, [sales, catalog, vendasCategoria]);
 
   if (!catalog) return <PageLoading />;
-  const manualCount = catalog.filter((c) => c.origem !== 'substancia').length;
-  const substanciaCount = catalog.length - manualCount;
-  const list = catalog.filter((c) => (origemTab === 'substancia' ? c.origem === 'substancia' : c.origem !== 'substancia'));
+  const counts = {
+    manual: catalog.filter((c) => c.origem === 'manual').length,
+    substancia: catalog.filter((c) => c.origem === 'substancia').length,
+    vendas: catalog.filter((c) => c.origem === 'vendas').length,
+    multilojas: catalog.filter((c) => c.origem === 'multilojas').length,
+  };
+  const list = catalog.filter((c) => c.origem === origemTab);
 
   function handleAdd() {
     if (!nome.trim()) return;
@@ -267,6 +301,21 @@ function CatalogoTab() {
       else next.add(id);
       return next;
     });
+  }
+
+  function toggleCandidato(produto: string) {
+    setCandidatos((prev) => {
+      const next = new Set(prev);
+      if (next.has(produto)) next.delete(produto);
+      else next.add(produto);
+      return next;
+    });
+  }
+
+  async function handlePromote() {
+    if (candidatos.size === 0) return;
+    await promoteFromSales.mutateAsync({ produtos: Array.from(candidatos), categoria: vendasCategoria });
+    setCandidatos(new Set());
   }
 
   return (
@@ -312,7 +361,7 @@ function CatalogoTab() {
               }}
               className={`rounded-lg px-3 py-1.5 text-xs ${origemTab === 'manual' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
             >
-              Cadastrados ({manualCount})
+              Cadastrados ({counts.manual})
             </button>
             <button
               onClick={() => {
@@ -323,7 +372,29 @@ function CatalogoTab() {
               className={`rounded-lg px-3 py-1.5 text-xs ${origemTab === 'substancia' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
               title="Produtos inseridos automaticamente pela varredura da aba Substâncias"
             >
-              Via Substância ({substanciaCount})
+              Via Substância ({counts.substancia})
+            </button>
+            <button
+              onClick={() => {
+                setOrigemTab('vendas');
+                setSelected(new Set());
+                setSelectMode(false);
+              }}
+              className={`rounded-lg px-3 py-1.5 text-xs ${origemTab === 'vendas' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+              title="Produtos que a Lista de Vendas já resolve para uma categoria, aprovados manualmente aqui"
+            >
+              Da Lista de Vendas ({counts.vendas})
+            </button>
+            <button
+              onClick={() => {
+                setOrigemTab('multilojas');
+                setSelected(new Set());
+                setSelectMode(false);
+              }}
+              className={`rounded-lg px-3 py-1.5 text-xs ${origemTab === 'multilojas' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+              title="Produtos recebidos automaticamente de uma loja irmã do mesmo modelo de catálogo (Minha Loja)"
+            >
+              Multilojas ({counts.multilojas})
             </button>
           </div>
           {list.length > 0 && (
@@ -338,6 +409,70 @@ function CatalogoTab() {
             </button>
           )}
         </div>
+        {origemTab === 'vendas' && (
+          <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3 mb-3">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <label className="text-xs text-slate-400">Categoria</label>
+              <select
+                value={vendasCategoria}
+                onChange={(e) => {
+                  setVendasCategoria(e.target.value as CategoryKey);
+                  setCandidatos(new Set());
+                }}
+                className="input w-auto"
+              >
+                {CAT_KEYS.map((k) => (
+                  <option key={k} value={k}>
+                    {CAT_LABEL[k]}
+                  </option>
+                ))}
+              </select>
+              {candidatosVendas.length > 0 && (
+                <>
+                  <button
+                    onClick={() =>
+                      setCandidatos((prev) => (prev.size === candidatosVendas.length ? new Set() : new Set(candidatosVendas)))
+                    }
+                    className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300"
+                  >
+                    {candidatos.size === candidatosVendas.length ? 'Desmarcar todos' : 'Selecionar todos'}
+                  </button>
+                  <button
+                    onClick={handlePromote}
+                    disabled={candidatos.size === 0 || promoteFromSales.isPending}
+                    className="rounded-lg bg-amber-500 text-slate-950 px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+                  >
+                    Adicionar selecionados ({candidatos.size})
+                  </button>
+                </>
+              )}
+            </div>
+            <p className="text-xs text-slate-500 mb-2">
+              Produtos que a Lista de Vendas já resolve para {CAT_LABEL[vendasCategoria]} mas ainda não estão no Catálogo.
+              Aprovar aqui torna a classificação instantânea nas próximas importações, em vez de sempre re-derivada por
+              palavra-chave/heurística{store?.modelo_catalogo ? ' — e também contribui para as lojas irmãs do grupo.' : '.'}
+            </p>
+            <MutationError error={promoteFromSales.error} />
+            {candidatosVendas.length === 0 ? (
+              <div className="text-sm text-slate-500 py-2 text-center">Nenhum candidato novo encontrado.</div>
+            ) : (
+              <div className="max-h-64 overflow-y-auto">
+                <table className="w-full text-xs">
+                  <tbody>
+                    {candidatosVendas.map((produto) => (
+                      <tr key={produto} className="border-b border-slate-900">
+                        <td className="py-1 pr-3 w-6">
+                          <input type="checkbox" checked={candidatos.has(produto)} onChange={() => toggleCandidato(produto)} />
+                        </td>
+                        <td className="py-1 pr-3">{produto}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
         {selectMode && selected.size > 0 && (
           <button
             onClick={() => {
@@ -352,7 +487,13 @@ function CatalogoTab() {
         )}
         {list.length === 0 ? (
           <div className="text-sm text-slate-500 py-4 text-center">
-            {origemTab === 'substancia' ? 'Nenhum item identificado via substância ainda.' : 'Nenhum item cadastrado.'}
+            {origemTab === 'substancia'
+              ? 'Nenhum item identificado via substância ainda.'
+              : origemTab === 'vendas'
+                ? 'Nenhum item aprovado da lista de vendas ainda.'
+                : origemTab === 'multilojas'
+                  ? 'Nenhum item recebido de outra loja do grupo ainda.'
+                  : 'Nenhum item cadastrado.'}
           </div>
         ) : (
           <div className="overflow-x-auto">
