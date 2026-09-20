@@ -7,6 +7,7 @@ import { CATEGORY_COLOR, useCategoryLabelMap } from '../../lib/business/category
 import {
   CAT_KEYS,
   classifyProductTier,
+  GENERIC_MARKERS,
   matchesGenericSubstance,
   normalizeCategoriaImport,
   type CategoryKey,
@@ -1080,21 +1081,94 @@ function ClassificadosTab() {
   );
 }
 
+/** Escanear produtos correspondentes — pedido do usuário: depois de
+ * cadastrar uma palavra-chave, disparar uma varredura nos produtos já
+ * vendidos para achar quem bate com ela e ainda não está em {group}. Mesmo
+ * espírito do "Sugestões Dermo" (ClassificadosTab) e "Aplicar/Escanear"
+ * (SubstanciasTab), mas: (a) generalizado para qualquer categoria/palavra-
+ * chave cadastrada aqui, não só Dermo; (b) nunca aplica sozinho — sempre
+ * lista para o ADM aprovar, individualmente ou em massa (diferente de
+ * SubstanciasTab, que aplica direto). Escaneia contra TODAS as
+ * palavras-chave já cadastradas no grupo, não só a mais recente — cobre
+ * também palavras antigas cujo produto correspondente só passou a ser
+ * vendido depois, sem precisar re-escanear uma por uma.
+ */
 function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: CategoryKey) => void }) {
   const CAT_LABEL = useCategoryLabelMap();
   const { profile } = useAuth();
   const { data: brandKeywords } = useBrandKeywords();
+  const { data: sales } = useSales();
+  const { data: catalog } = useCatalog();
+  const { data: products } = useProducts();
+  const { data: exclusiveBrands } = useExclusiveBrands();
   const insertKw = useInsertRow('brand_keywords', profile?.store_id, 'brand_keywords');
   const deleteKw = useDeleteRow('brand_keywords', 'brand_keywords');
+  const reclassifyMutation = useReclassifyProdutos(profile?.store_id);
   const [kw, setKw] = useState('');
+  const [scanning, setScanning] = useState(false);
+  const [scanResults, setScanResults] = useState<{ produto: string; categoriaAtual: CategoryKey }[] | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   if (!brandKeywords) return <PageLoading />;
   const groupKeywords = brandKeywords.filter((b) => b.categoria === group);
+  const dadosProntos = !!sales && !!catalog && !!products && !!exclusiveBrands;
 
   function handleAdd() {
     if (!kw.trim()) return;
     insertKw.mutate({ categoria: group, palavra: kw.trim() } as never);
     setKw('');
+    // Uma lista já escaneada some ao mudar as palavras-chave — evita o ADM
+    // aplicar uma lista que não reflete mais o que está cadastrado.
+    setScanResults(null);
+    setSelected(new Set());
+  }
+
+  function handleScan() {
+    if (!sales || !catalog || !products || !exclusiveBrands || !brandKeywords) return;
+    setScanning(true);
+    try {
+      const inputs = buildClassificationInputs(catalog, products, brandKeywords, exclusiveBrands);
+      const keywords = groupKeywords.map((k) => normalize(k.palavra)).filter((k) => k.length >= 3);
+      const seen = new Set<string>();
+      const candidates: { produto: string; categoriaAtual: CategoryKey }[] = [];
+      if (keywords.length > 0) {
+        sales.forEach((s) => {
+          if (!s.produto) return;
+          const n = normalize(s.produto);
+          if (seen.has(n)) return;
+          seen.add(n);
+          if (!keywords.some((kwN) => n.includes(kwN))) return;
+          if (group === 'GEN' && !GENERIC_MARKERS.some((m) => n.includes(m.trim()))) return;
+          const categoriaAtual = classifyProductTier(s.produto, s.codigo, inputs).categoria!;
+          if (categoriaAtual === group) return;
+          candidates.push({ produto: s.produto, categoriaAtual });
+        });
+      }
+      setScanResults(candidates);
+      setSelected(new Set(candidates.map((c) => c.produto)));
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  async function reclassify(produtoNomes: string[]) {
+    if (!catalog || !sales || produtoNomes.length === 0) return;
+    await reclassifyMutation.mutateAsync({ produtos: produtoNomes, categoria: group, catalog, sales });
+    setScanResults((prev) => (prev ? prev.filter((c) => !produtoNomes.includes(c.produto)) : prev));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      produtoNomes.forEach((p) => next.delete(p));
+      return next;
+    });
+  }
+
+  function toggle(produto: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(produto)) next.delete(produto);
+      else next.add(produto);
+      return next;
+    });
   }
 
   return (
@@ -1129,6 +1203,85 @@ function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
             ))
           )}
         </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+          <h3 className="font-semibold text-sm">🔍 Escanear produtos correspondentes</h3>
+          <button
+            onClick={handleScan}
+            disabled={scanning || !dadosProntos || groupKeywords.length === 0}
+            className="rounded-md bg-cyan-500 text-slate-950 font-medium px-4 py-1.5 text-sm disabled:opacity-50"
+          >
+            {scanning ? 'Escaneando…' : 'Escanear'}
+          </button>
+        </div>
+        <p className="text-xs text-slate-500 mb-2">
+          Procura, entre os produtos já vendidos e ainda não classificados em {CAT_LABEL[group]}, quem bate com
+          alguma das palavras-chave cadastradas acima. Nada é reclassificado sozinho — revise a lista e aprove uma a
+          uma ou em massa.
+        </p>
+        <MutationError error={reclassifyMutation.error} />
+        {scanResults &&
+          (scanResults.length === 0 ? (
+            <div className="text-xs text-slate-500 py-2">Nenhum produto novo encontrado.</div>
+          ) : (
+            <div className="flex flex-col gap-2 mt-2">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <label className="flex items-center gap-1.5 text-xs text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={selected.size === scanResults.length}
+                    onChange={(e) => setSelected(e.target.checked ? new Set(scanResults.map((c) => c.produto)) : new Set())}
+                  />
+                  Selecionar todos ({scanResults.length})
+                </label>
+                <button
+                  onClick={() => reclassify(Array.from(selected))}
+                  disabled={selected.size === 0 || reclassifyMutation.isPending}
+                  className="rounded-md bg-amber-500 text-slate-950 px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+                >
+                  {reclassifyMutation.isPending ? 'Aplicando…' : `Aplicar selecionados (${selected.size})`}
+                </button>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {scanResults.map((c) => (
+                  <div
+                    key={c.produto}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-1.5"
+                  >
+                    <label className="flex items-center gap-2 text-xs flex-1 min-w-0">
+                      <input type="checkbox" checked={selected.has(c.produto)} onChange={() => toggle(c.produto)} />
+                      <span className="truncate">{c.produto}</span>
+                      <span className="text-slate-500 shrink-0">— atualmente {CAT_LABEL[c.categoriaAtual]}</span>
+                    </label>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => reclassify([c.produto])}
+                        disabled={reclassifyMutation.isPending}
+                        className="rounded-md bg-cyan-500 text-slate-950 px-2.5 py-1 text-[11px] font-medium disabled:opacity-50"
+                      >
+                        Reclassificar
+                      </button>
+                      <button
+                        onClick={() => {
+                          setScanResults((prev) => (prev ? prev.filter((x) => x.produto !== c.produto) : prev));
+                          setSelected((prev) => {
+                            const next = new Set(prev);
+                            next.delete(c.produto);
+                            return next;
+                          });
+                        }}
+                        className="text-[11px] text-slate-500 hover:text-slate-300"
+                      >
+                        Ignorar
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
       </div>
     </>
   );
