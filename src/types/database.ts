@@ -238,6 +238,74 @@ export type Database = {
           },
         ]
       }
+      catalog_correction_log: {
+        Row: {
+          aplicado_em: string
+          categoria: string
+          id: string
+          modelo_catalogo: string
+          produto: string
+          store_id: string
+          vendas_afetadas: number
+        }
+        Insert: {
+          aplicado_em?: string
+          categoria: string
+          id?: string
+          modelo_catalogo: string
+          produto: string
+          store_id: string
+          vendas_afetadas?: number
+        }
+        Update: {
+          aplicado_em?: string
+          categoria?: string
+          id?: string
+          modelo_catalogo?: string
+          produto?: string
+          store_id?: string
+          vendas_afetadas?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_correction_log_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      catalog_shared_library: {
+        Row: {
+          atualizado_em: string
+          categoria: string
+          contribuicoes: number
+          id: string
+          modelo_catalogo: string
+          nome: string
+          nome_normalizado: string
+        }
+        Insert: {
+          atualizado_em?: string
+          categoria: string
+          contribuicoes?: number
+          id?: string
+          modelo_catalogo: string
+          nome: string
+          nome_normalizado: string
+        }
+        Update: {
+          atualizado_em?: string
+          categoria?: string
+          contribuicoes?: number
+          id?: string
+          modelo_catalogo?: string
+          nome?: string
+          nome_normalizado?: string
+        }
+        Relationships: []
+      }
       category_labels: {
         Row: {
           category_key: string
@@ -1563,6 +1631,14 @@ export type Database = {
     }
     Functions: {
       _rate_limit_client_ip: { Args: never; Returns: string }
+      apply_catalog_correction: {
+        Args: {
+          p_categoria: string
+          p_modelo_catalogo: string
+          p_produto: string
+        }
+        Returns: number
+      }
       archive_old_sales: { Args: never; Returns: Json }
       archive_old_sales_for_store: {
         Args: { cutoff: string; store_id_param: string }

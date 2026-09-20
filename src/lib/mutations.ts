@@ -832,6 +832,27 @@ export function useReclassifyProdutos(storeId: string | undefined) {
           if (error) throw error;
         }
       }
+
+      // Biblioteca compartilhada por modelo_catalogo (PLANO B/MONITORAMENTO
+      // DE LOJAS, "consultar a biblioteca compartilhada" — decisão desta
+      // sessão): quando a loja se identificou com um modelo_catalogo (Minha
+      // Loja), toda classificação também contribui aqui, pra que outra loja
+      // do mesmo grupo possa consultar como sugestão ao encontrar um
+      // produto não classificado. Nunca escreve nos dados de outra loja
+      // diretamente — só neste pool neutro do próprio grupo. Melhor-esforço:
+      // uma falha aqui não deve derrubar a reclassificação em si (o efeito
+      // principal, catalog + sales, já foi aplicado acima).
+      const { data: storeRow } = await supabase.from('stores').select('modelo_catalogo').eq('id', storeId).single();
+      if (storeRow?.modelo_catalogo) {
+        const modeloCatalogo = storeRow.modelo_catalogo;
+        await supabase
+          .from('catalog_shared_library')
+          .upsert(
+            produtos.map((nome) => ({ modelo_catalogo: modeloCatalogo, nome, nome_normalizado: normalize(nome), categoria })),
+            { onConflict: 'modelo_catalogo,nome_normalizado' },
+          );
+      }
+
       const targets = new Set(produtos.map((p) => normalize(p)));
       const ids = sales
         .filter((s) => targets.has(normalize(s.produto)))
