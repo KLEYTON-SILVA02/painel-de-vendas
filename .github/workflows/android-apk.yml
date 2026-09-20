@@ -38,7 +38,18 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      # `packages` explícito (em vez do default da action) para não depender
+      # de uma tag flutuante de terceiro decidir sozinha o que instalar — o
+      # Google removeu o pacote legado "tools" do repositório do SDK por
+      # volta de 18/09/2026, e a action tentava instalá-lo por padrão,
+      # quebrando toda build (runs #89-93) com "Failed to find package
+      # 'tools'" logo no setup, antes mesmo de chegar no `npm ci`. O Gradle
+      # (via Android Gradle Plugin) já baixa sozinho platforms/build-tools
+      # que faltarem durante `./gradlew assembleDebug`, então só
+      # platform-tools precisa vir daqui.
       - uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
 
       - name: Install web dependencies
         run: npm ci
