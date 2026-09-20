@@ -18,13 +18,12 @@ import { fmtMoney } from '../../lib/format';
 import { useBulkInsertGenericSubstances, useBulkInsertProducts, useDeleteRow, useInsertRow, useReclassifyProdutos, useUpdateRow } from '../../lib/mutations';
 import { useBrandKeywords, useCatalog, useExclusiveBrands, useGenericSubstances, useProducts, useSales } from '../../lib/queries';
 
-type Tab = 'produtos' | 'catalogo' | 'classificados' | 'palavras' | 'exclusivas' | 'substancias';
+type Tab = 'produtos' | 'catalogo' | 'classificados' | 'palavras' | 'substancias';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'produtos', label: 'Produtos' },
   { id: 'catalogo', label: 'Catálogo' },
   { id: 'classificados', label: 'Classificados' },
   { id: 'palavras', label: 'Palavras-chave' },
-  { id: 'exclusivas', label: 'Marcas Excl.' },
   { id: 'substancias', label: 'Substâncias' },
 ];
 
@@ -55,10 +54,8 @@ export function ProdutosPage() {
                   : tab === 'classificados'
                     ? 'Todo produto já visto em alguma venda, com a categoria que o sistema identificou — reclassifique aqui se algo saiu errado.'
                     : tab === 'palavras'
-                      ? 'Palavras-chave usadas para reconhecer produtos novos automaticamente, sem precisar cadastrar um a um.'
-                      : tab === 'exclusivas'
-                        ? 'Marcas que sempre entram em Marcas Exclusivas, mesmo sem estar no catálogo ou nas palavras-chave.'
-                        : 'Substâncias usadas para reconhecer produtos Genéricos automaticamente pelo nome.'
+                      ? 'Palavras-chave usadas para reconhecer produtos novos automaticamente, sem precisar cadastrar um a um. Em Marcas Exclusivas, qualquer palavra cadastrada aqui sempre vence, mesmo sobre outra categoria.'
+                      : 'Substâncias usadas para reconhecer produtos Genéricos automaticamente pelo nome.'
             }
           />
         </div>
@@ -68,7 +65,6 @@ export function ProdutosPage() {
       {tab === 'catalogo' && <CatalogoTab />}
       {tab === 'classificados' && <ClassificadosTab />}
       {tab === 'palavras' && <PalavrasTab group={group} setGroup={setGroup} />}
-      {tab === 'exclusivas' && <ExclusivasTab />}
       {tab === 'substancias' && <SubstanciasTab />}
     </div>
   );
@@ -1093,6 +1089,22 @@ function ClassificadosTab() {
  * também palavras antigas cujo produto correspondente só passou a ser
  * vendido depois, sem precisar re-escanear uma por uma.
  */
+/** Palavras-chave (Tier 3), incluindo Marcas Exclusivas — antes duas telas
+ * separadas (esta e a extinta "Marcas Excl."), unificadas aqui a pedido do
+ * usuário: cadastrar uma marca em "Marcas Excl." não aparecia na lista
+ * desta aba quando o grupo "Marcas Exclusivas" era selecionado, porque cada
+ * tela lia de uma tabela diferente. A causa raiz não era um bug de UI —
+ * `exclusive_brands` (o `EXCLUSIVE_BRANDS_DEFAULT` override, ver
+ * classification.ts) e `brand_keywords` com `categoria='MP'` sempre foram
+ * dois mecanismos distintos: o primeiro SEMPRE vence, mesmo sobre um
+ * catálogo Tier 1; o segundo é só mais um candidato Tier 3, que pode perder
+ * para outra categoria pelo "trecho mais longo vence". Fundir os dados
+ * (jogar um dentro do outro) mudaria como produtos de OUTRAS lojas já são
+ * classificados hoje — por isso a fusão aqui é só de tela: quando o grupo é
+ * 'MP', a lista e o formulário passam a ler/escrever em `exclusive_brands`
+ * (a mesma tabela que a extinta aba já usava) em vez de `brand_keywords`;
+ * os outros 3 grupos continuam exatamente como antes.
+ */
 function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: CategoryKey) => void }) {
   const CAT_LABEL = useCategoryLabelMap();
   const { profile } = useAuth();
@@ -1103,6 +1115,8 @@ function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
   const { data: exclusiveBrands } = useExclusiveBrands();
   const insertKw = useInsertRow('brand_keywords', profile?.store_id, 'brand_keywords');
   const deleteKw = useDeleteRow('brand_keywords', 'brand_keywords');
+  const insertExclusive = useInsertRow('exclusive_brands', profile?.store_id, 'exclusive_brands');
+  const deleteExclusive = useDeleteRow('exclusive_brands', 'exclusive_brands');
   const reclassifyMutation = useReclassifyProdutos(profile?.store_id);
   const [kw, setKw] = useState('');
   const [scanning, setScanning] = useState(false);
@@ -1111,13 +1125,20 @@ function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
   >(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  if (!brandKeywords) return <PageLoading />;
-  const groupKeywords = brandKeywords.filter((b) => b.categoria === group);
-  const dadosProntos = !!sales && !!catalog && !!products && !!exclusiveBrands;
+  if (!brandKeywords || !exclusiveBrands) return <PageLoading />;
+  const isMP = group === 'MP';
+  const groupKeywords = isMP ? exclusiveBrands : brandKeywords.filter((b) => b.categoria === group);
+  const insertMutation = isMP ? insertExclusive : insertKw;
+  const deleteMutation = isMP ? deleteExclusive : deleteKw;
+  const dadosProntos = !!sales && !!catalog && !!products;
 
   function handleAdd() {
     if (!kw.trim()) return;
-    insertKw.mutate({ categoria: group, palavra: kw.trim() } as never);
+    if (isMP) {
+      insertExclusive.mutate({ palavra: kw.trim() } as never);
+    } else {
+      insertKw.mutate({ categoria: group, palavra: kw.trim() } as never);
+    }
     setKw('');
     // Uma lista já escaneada some ao mudar as palavras-chave — evita o ADM
     // aplicar uma lista que não reflete mais o que está cadastrado.
@@ -1129,7 +1150,6 @@ function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
     if (!sales || !catalog || !products || !exclusiveBrands || !brandKeywords) return;
     setScanning(true);
     try {
-      const inputs = buildClassificationInputs(catalog, products, brandKeywords, exclusiveBrands);
       // Mantém o texto original de cada palavra-chave ao lado da versão
       // normalizada — o candidato mostra qual palavra-chave bateu (não só
       // "produto X apareceu"), pra o ADM enxergar se é um match de verdade
@@ -1138,21 +1158,60 @@ function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
       const keywords = groupKeywords
         .map((k) => ({ original: k.palavra, normalizada: normalize(k.palavra) }))
         .filter((k) => k.normalizada.length >= 3);
-      const seen = new Set<string>();
       const candidates: { produto: string; categoriaAtual: CategoryKey; palavrasBatidas: string[] }[] = [];
-      if (keywords.length > 0) {
-        sales.forEach((s) => {
-          if (!s.produto) return;
-          const n = normalize(s.produto);
-          if (seen.has(n)) return;
-          seen.add(n);
-          const palavrasBatidas = keywords.filter((kw) => n.includes(kw.normalizada)).map((kw) => kw.original);
-          if (palavrasBatidas.length === 0) return;
-          if (group === 'GEN' && !GENERIC_MARKERS.some((m) => n.includes(m.trim()))) return;
-          const categoriaAtual = classifyProductTier(s.produto, s.codigo, inputs).categoria!;
-          if (categoriaAtual === group) return;
-          candidates.push({ produto: s.produto, categoriaAtual, palavrasBatidas });
+      if (isMP) {
+        // Marcas Exclusivas é um override incondicional (ver
+        // "Exclusive-brand rule" em classification.ts): qualquer produto
+        // batendo com uma dessas palavras já é computado como MP na hora,
+        // então comparar contra uma classificação recém-calculada nunca
+        // haveria divergência para achar. O que precisa ser encontrado
+        // aqui é diferente: vendas já importadas cujo `grupo` gravado no
+        // banco ainda não é MP (ficaram "para trás" de quando a marca foi
+        // cadastrada) — exatamente o que "Aplicar/Reclassificar" corrige
+        // de forma retroativa.
+        const porProduto = new Map<
+          string,
+          { produto: string; categoriaAtual: CategoryKey; palavrasBatidas: string[]; precisaCorrigir: boolean }
+        >();
+        if (keywords.length > 0) {
+          sales.forEach((s) => {
+            if (!s.produto) return;
+            const n = normalize(s.produto);
+            const palavrasBatidas = keywords.filter((kwItem) => n.includes(kwItem.normalizada)).map((kwItem) => kwItem.original);
+            if (palavrasBatidas.length === 0) return;
+            const existing = porProduto.get(n);
+            if (existing) {
+              if (s.grupo !== 'MP') existing.precisaCorrigir = true;
+            } else {
+              porProduto.set(n, {
+                produto: s.produto,
+                categoriaAtual: s.grupo ?? 'MER',
+                palavrasBatidas,
+                precisaCorrigir: s.grupo !== 'MP',
+              });
+            }
+          });
+        }
+        porProduto.forEach((c) => {
+          if (c.precisaCorrigir) candidates.push({ produto: c.produto, categoriaAtual: c.categoriaAtual, palavrasBatidas: c.palavrasBatidas });
         });
+      } else {
+        const inputs = buildClassificationInputs(catalog, products, brandKeywords, exclusiveBrands);
+        const seen = new Set<string>();
+        if (keywords.length > 0) {
+          sales.forEach((s) => {
+            if (!s.produto) return;
+            const n = normalize(s.produto);
+            if (seen.has(n)) return;
+            seen.add(n);
+            const palavrasBatidas = keywords.filter((kwItem) => n.includes(kwItem.normalizada)).map((kwItem) => kwItem.original);
+            if (palavrasBatidas.length === 0) return;
+            if (group === 'GEN' && !GENERIC_MARKERS.some((m) => n.includes(m.trim()))) return;
+            const categoriaAtual = classifyProductTier(s.produto, s.codigo, inputs).categoria!;
+            if (categoriaAtual === group) return;
+            candidates.push({ produto: s.produto, categoriaAtual, palavrasBatidas });
+          });
+        }
       }
       setScanResults(candidates);
       setSelected(new Set(candidates.map((c) => c.produto)));
@@ -1186,8 +1245,9 @@ function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <CategoryTabs group={group} setGroup={setGroup} />
         <p className="text-xs text-slate-500">
-          Tier 3 — palavras-chave de marca por categoria. Para <b>Genérico</b>, o nome do produto
-          também precisa conter um marcador de genérico (ex: "generico", "similar", "gen", "gn").
+          {isMP
+            ? 'Marcas Exclusivas funciona diferente das outras 3: qualquer palavra cadastrada aqui sempre vence, mesmo sobre uma categoria já definida por outra regra.'
+            : <>Tier 3 — palavras-chave de marca por categoria. Para <b>Genérico</b>, o nome do produto também precisa conter um marcador de genérico (ex: "generico", "similar", "gen", "gn").</>}
         </p>
       </div>
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
@@ -1198,7 +1258,7 @@ function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
             + Adicionar
           </button>
         </div>
-        <MutationError error={insertKw.error} />
+        <MutationError error={insertMutation.error} />
         <div className="flex flex-wrap gap-1.5">
           {groupKeywords.length === 0 ? (
             <span className="text-xs text-slate-500">Nenhuma palavra-chave cadastrada.</span>
@@ -1206,7 +1266,7 @@ function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
             groupKeywords.map((k) => (
               <span key={k.id} className="text-xs bg-slate-800 rounded-full px-2 py-1 flex items-center gap-1.5">
                 {k.palavra}
-                <button onClick={() => deleteKw.mutate(k.id)} className="text-slate-500 hover:text-rose-400">
+                <button onClick={() => deleteMutation.mutate(k.id)} className="text-slate-500 hover:text-rose-400">
                   ✕
                 </button>
               </span>
@@ -1234,9 +1294,9 @@ function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
           </button>
         </div>
         <p className="text-xs text-slate-500 mb-2">
-          Procura, entre os produtos já vendidos e ainda não classificados em {CAT_LABEL[group]}, quem bate com
-          alguma das palavras-chave cadastradas acima. Nada é reclassificado sozinho — revise a lista e aprove uma a
-          uma ou em massa.
+          {isMP
+            ? `Procura, entre os produtos já vendidos, quem bate com alguma das palavras-chave cadastradas acima mas ainda tem vendas gravadas fora de ${CAT_LABEL[group]}. Nada é reclassificado sozinho — revise a lista e aprove uma a uma ou em massa.`
+            : `Procura, entre os produtos já vendidos e ainda não classificados em ${CAT_LABEL[group]}, quem bate com alguma das palavras-chave cadastradas acima. Nada é reclassificado sozinho — revise a lista e aprove uma a uma ou em massa.`}
         </p>
         {groupKeywords.length === 0 ? (
           <p className="text-[11px] text-amber-400 mb-2">
@@ -1312,49 +1372,6 @@ function PalavrasTab({ group, setGroup }: { group: CategoryKey; setGroup: (k: Ca
           ))}
       </div>
     </>
-  );
-}
-
-function ExclusivasTab() {
-  const { profile } = useAuth();
-  const { data: exclusiveBrands } = useExclusiveBrands();
-  const insertBrand = useInsertRow('exclusive_brands', profile?.store_id, 'exclusive_brands');
-  const deleteBrand = useDeleteRow('exclusive_brands', 'exclusive_brands');
-  const [palavra, setPalavra] = useState('');
-
-  if (!exclusiveBrands) return <PageLoading />;
-
-  function handleAdd() {
-    if (!palavra.trim()) return;
-    insertBrand.mutate({ palavra: palavra.trim() } as never);
-    setPalavra('');
-  }
-
-  return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-      <h3 className="font-semibold mb-1 text-sm">Marcas Exclusivas (recategorização automática)</h3>
-      <p className="text-xs text-slate-500 mb-3">
-        Produtos cujo nome contém qualquer uma destas palavras são <b>sempre</b> reclassificados como Marcas
-        Exclusivas (MP), mesmo que já tenham caído em outra categoria pelas regras acima.
-      </p>
-      <div className="flex gap-2 mb-3 max-w-md">
-        <input value={palavra} onChange={(e) => setPalavra(e.target.value)} className="input flex-1" />
-        <button onClick={handleAdd} className="rounded-md bg-amber-500 text-slate-950 px-4 py-1.5 text-sm font-medium">
-          + Adicionar
-        </button>
-      </div>
-      <MutationError error={insertBrand.error} />
-      <div className="flex flex-wrap gap-1.5">
-        {exclusiveBrands.map((b) => (
-          <span key={b.id} className="text-xs bg-slate-800 rounded-full px-2 py-1 flex items-center gap-1.5">
-            {b.palavra.toUpperCase()}
-            <button onClick={() => deleteBrand.mutate(b.id)} className="text-slate-500 hover:text-rose-400">
-              ✕
-            </button>
-          </span>
-        ))}
-      </div>
-    </div>
   );
 }
 
