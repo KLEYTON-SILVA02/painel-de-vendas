@@ -1458,6 +1458,8 @@ export type Database = {
           ranking_podium_bg_url: string | null
           ranking_podium_spots: Json | null
           store_id: string
+          substances_scan_last_count: number
+          substances_scan_last_run: string | null
           tema: string
         }
         Insert: {
@@ -1474,6 +1476,8 @@ export type Database = {
           ranking_podium_bg_url?: string | null
           ranking_podium_spots?: Json | null
           store_id: string
+          substances_scan_last_count?: number
+          substances_scan_last_run?: string | null
           tema?: string
         }
         Update: {
@@ -1490,6 +1494,8 @@ export type Database = {
           ranking_podium_bg_url?: string | null
           ranking_podium_spots?: Json | null
           store_id?: string
+          substances_scan_last_count?: number
+          substances_scan_last_run?: string | null
           tema?: string
         }
         Relationships: [
@@ -1758,6 +1764,7 @@ export type Database = {
         Returns: string
       }
       run_catalog_group_scan: { Args: never; Returns: Json }
+      run_generic_substances_scan: { Args: never; Returns: Json }
       sales_month_totals: {
         Args: never
         Returns: {
