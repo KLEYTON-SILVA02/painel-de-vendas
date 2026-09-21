@@ -23,8 +23,18 @@ import {
   useInsertRow,
   useReclassifyProdutos,
   useUpdateRow,
+  useUpdateStoreSettings,
 } from '../../lib/mutations';
-import { useBrandKeywords, useCatalog, useExclusiveBrands, useGenericSubstances, useProducts, useSales, useStore } from '../../lib/queries';
+import {
+  useBrandKeywords,
+  useCatalog,
+  useExclusiveBrands,
+  useGenericSubstances,
+  useProducts,
+  useSales,
+  useStore,
+  useStoreSettings,
+} from '../../lib/queries';
 
 type Tab = 'produtos' | 'catalogo' | 'classificados' | 'palavras' | 'substancias';
 const TABS: { id: Tab; label: string }[] = [
@@ -1515,10 +1525,12 @@ function SubstanciasTab() {
   const { data: products } = useProducts();
   const { data: brandKeywords } = useBrandKeywords();
   const { data: exclusiveBrands } = useExclusiveBrands();
+  const { data: storeSettings } = useStoreSettings();
   const insertSubstance = useInsertRow('generic_substances', profile?.store_id, 'generic_substances');
   const bulkInsertSubstances = useBulkInsertGenericSubstances(profile?.store_id);
   const deleteSubstance = useDeleteRow('generic_substances', 'generic_substances');
   const reclassify = useReclassifyProdutos(profile?.store_id);
+  const updateStoreSettings = useUpdateStoreSettings(profile?.store_id);
   const [nome, setNome] = useState('');
   const [bulkText, setBulkText] = useState('');
   const [scanning, setScanning] = useState(false);
@@ -1579,6 +1591,7 @@ function SubstanciasTab() {
       if (candidates.length > 0) {
         await reclassify.mutateAsync({ produtos: candidates, categoria: 'GEN', catalog: catalog!, sales: sales!, origem: 'substancia' });
       }
+      updateStoreSettings.mutate({ substances_scan_last_run: new Date().toISOString(), substances_scan_last_count: candidates.length });
       setScanResult(candidates);
     } finally {
       setScanning(false);
@@ -1594,6 +1607,17 @@ function SubstanciasTab() {
           para identificar, entre os produtos já vendidos, quais contêm alguma dessas substâncias no nome e ainda
           não estão classificados como Genéricos — eles são inseridos automaticamente no Catálogo, isolados na aba
           "Via Substância" (dentro de Catálogo), e as vendas já importadas desses produtos são reclassificadas.
+          Além do botão manual, o sistema também roda essa varredura sozinho 5x por dia (07h, 10h, 15h, 18h, 22h).
+        </p>
+        <p className="text-xs text-cyan-400 mt-2">
+          {storeSettings?.substances_scan_last_run
+            ? `Última varredura: ${new Date(storeSettings.substances_scan_last_run).toLocaleString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+              })} — ${storeSettings.substances_scan_last_count} produto(s) identificado(s)`
+            : 'Nenhuma varredura rodou ainda.'}
         </p>
       </div>
 
