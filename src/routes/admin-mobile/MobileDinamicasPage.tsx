@@ -12,8 +12,10 @@ import {
   computeDinamicaVendas,
   dinamicaMetaTotal,
   dinamicaUnidadeLabel,
+  dynamicSetorOptions,
   dynamicStatus,
   metaFor,
+  normalizeSetorAlvo,
   type DynamicStatus,
 } from '../../lib/business/dynamics';
 import { normalize } from '../../lib/business/normalize';
@@ -33,7 +35,14 @@ import { MobileSalesListLockedNotice } from './MobileSellerDetail';
 
 const STATUS_LABEL: Record<DynamicStatus, string> = { ativa: 'Ativa', agendada: 'Agendada', encerrada: 'Encerrada' };
 const STATUS_COLOR: Record<DynamicStatus, string> = { ativa: '#14ff00', agendada: '#f26122', encerrada: '#666' };
-const SETOR_ALVO_LABEL: Record<Dynamic['setorAlvo'], string> = { balcao: 'Balcão', caixa: 'Caixa', ambos: 'Balcão + Caixa' };
+
+/** Display label for a dynamic's setorAlvo — 'ambos' and the two legacy
+ * sentinels get a fixed label, any real setor name (the common case now
+ * that "Setor participante" lists every registered setor) is shown as-is. */
+function setorAlvoLabel(setorAlvo: Dynamic['setorAlvo']): string {
+  if (setorAlvo === 'ambos') return 'Todos os setores';
+  return normalizeSetorAlvo(setorAlvo);
+}
 
 export function MobileDinamicasPage() {
   const { profile } = useAuth();
@@ -66,6 +75,7 @@ export function MobileDinamicasPage() {
   // Visitante collaborators are view-only — never sell, never belong in the
   // participant picker (see the same filter on the desktop DinamicasPage).
   const participantCollaborators = collaborators.filter((c) => c.setor !== VISITANTE_SETOR);
+  const setorOptions = dynamicSetorOptions(participantCollaborators);
 
   const today = todayISO();
   const list = dynamics.slice().sort((a, b) => (b.dataInicio || '').localeCompare(a.dataInicio || ''));
@@ -137,6 +147,7 @@ export function MobileDinamicasPage() {
       {tab === 'ativas' && (
         <MobileNewDynamicForm
           collaborators={participantCollaborators}
+          setores={setorOptions}
           productNames={productNames}
           onCreate={(input) => createDynamic.mutate(input)}
           creating={createDynamic.isPending}
@@ -175,6 +186,7 @@ export function MobileDinamicasPage() {
         <EditDynamicModal
           dynamic={editing}
           collaborators={participantCollaborators}
+          setores={setorOptions}
           productNames={productNames}
           saving={updateDynamic.isPending}
           onClose={() => setEditing(null)}
@@ -192,11 +204,14 @@ export function MobileDinamicasPage() {
 
 function MobileNewDynamicForm({
   collaborators,
+  setores,
   productNames,
   onCreate,
   creating,
 }: {
   collaborators: Collaborator[];
+  /** Every setor selectable in "Setor participante" — see dynamicSetorOptions. */
+  setores: string[];
   productNames: string[];
   onCreate: (input: {
     titulo: string;
@@ -314,10 +329,13 @@ function MobileNewDynamicForm({
         <input type="date" style={{ flex: 1 }} value={dataFim} onChange={(e) => setDataFim(e.target.value)} />
       </div>
 
-      <select value={setorAlvo} onChange={(e) => setSetorAlvo(e.target.value as Dynamic['setorAlvo'])}>
-        <option value="ambos">Setor: Balcão + Caixa</option>
-        <option value="balcao">Setor: Balcão</option>
-        <option value="caixa">Setor: Caixa</option>
+      <select value={setorAlvo} onChange={(e) => setSetorAlvo(e.target.value)}>
+        <option value="ambos">Setor: Todos os setores</option>
+        {setores.map((s) => (
+          <option key={s} value={s}>
+            Setor: {s}
+          </option>
+        ))}
       </select>
 
       <div className="mv2-row" style={{ gap: 8 }}>
@@ -497,7 +515,7 @@ function MobileDinamicaAccordionItem({
               </thead>
               <tbody>
                 <tr>
-                  <td>{SETOR_ALVO_LABEL[d.setorAlvo]}</td>
+                  <td>{setorAlvoLabel(d.setorAlvo)}</td>
                   <td>{d.participantes.length || 'Todos'}</td>
                   <td>
                     {fmtDateBR(d.dataInicio)}–{fmtDateBR(d.dataFim)}

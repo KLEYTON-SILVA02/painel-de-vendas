@@ -2,7 +2,7 @@
 // computeDinamicaRanking / resolveRankFilterParams' dynamic-intersection branch).
 import { firstName, normalize } from './normalize';
 import { normalizeMatricula } from './parsing';
-import { VISITANTE_SETOR, type Collaborator, type Dynamic, type DynamicProductCategory, type Sale } from './types';
+import { SETORES, VISITANTE_SETOR, type Collaborator, type Dynamic, type DynamicProductCategory, type Sale } from './types';
 
 export interface DinamicaRankingRow {
   matricula: string;
@@ -220,12 +220,46 @@ export function computeDinamicaVendas(din: Dynamic, sales: Sale[], collaborators
 
 /** Whether a collaborator's sector matches the dynamic's target sector —
  * 'ambos' (the default, and every dynamic created before this field
- * existed) never restricts. Determines who can participate, be counted
- * toward the dynamic's total, and appear in its ranking. */
+ * existed) never restricts. 'balcao'/'caixa' are legacy sentinels from
+ * when setorAlvo was a closed 3-option choice instead of free text (see
+ * types.ts) — everything else is matched as an exact collaborators.setor
+ * value, so a dynamic can target any registered setor, not just those two.
+ * Determines who can participate, be counted toward the dynamic's total,
+ * and appear in its ranking. */
 export function dynamicAllowsCollaborator(din: Dynamic, collaborator: Pick<Collaborator, 'setor'>): boolean {
   if (din.setorAlvo === 'ambos') return true;
-  const wanted = din.setorAlvo === 'balcao' ? 'Balcão' : 'Caixa';
-  return collaborator.setor === wanted;
+  if (din.setorAlvo === 'balcao') return collaborator.setor === 'Balcão';
+  if (din.setorAlvo === 'caixa') return collaborator.setor === 'Caixa';
+  return collaborator.setor === din.setorAlvo;
+}
+
+/** Maps a dynamic's setorAlvo to the value its "Setor participante" <select>
+ * should show pre-selected — the real setor name for the two legacy
+ * sentinels ('balcao' -> 'Balcão', 'caixa' -> 'Caixa'), unchanged otherwise.
+ * Only needed when opening an existing dynamic for editing: one created
+ * before setorAlvo became free text stored the lowercase sentinel, which
+ * has no matching <option> in the new per-setor list (dynamicSetorOptions)
+ * and would otherwise render as nothing selected. */
+export function normalizeSetorAlvo(setorAlvo: string): string {
+  if (setorAlvo === 'balcao') return 'Balcão';
+  if (setorAlvo === 'caixa') return 'Caixa';
+  return setorAlvo;
+}
+
+/** Every setor an ADM can target a dynamic at, for the "Setor participante"
+ * picker — the fixed catalog from Colaboradores (minus Visitante, who never
+ * sells and is already excluded from the dynamics participant list) plus
+ * any extra setor value actually in use at this store that isn't in that
+ * catalog (a bulk import can write anything into collaborators.setor), so
+ * a store's real sectors are never missing from the list even if one was
+ * never in the picklist. */
+export function dynamicSetorOptions(collaborators: Pick<Collaborator, 'setor'>[]): string[] {
+  const known = SETORES.filter((s) => s !== VISITANTE_SETOR);
+  const knownSet = new Set(known);
+  const extras = Array.from(
+    new Set(collaborators.map((c) => c.setor).filter((s): s is string => !!s && s !== VISITANTE_SETOR && !knownSet.has(s))),
+  ).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  return [...known, ...extras];
 }
 
 /** Progress of a dynamic — honors the optional product list (empty = all

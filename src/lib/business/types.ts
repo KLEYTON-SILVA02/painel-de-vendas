@@ -52,6 +52,14 @@ export interface Collaborator {
  * already drives ranking-eligibility logic throughout the app. */
 export const VISITANTE_SETOR = 'Visitante';
 
+/** Fixed catalog of setor names offered when registering a collaborator
+ * (ColaboradoresPage) — also the base list Dinâmicas offers when picking
+ * which setor a campaign targets (dynamicSetorOptions in dynamics.ts adds
+ * any extra/custom setor value actually in use at the store on top of
+ * this). Collaborators.setor itself stays free text at the DB level (a
+ * bulk import can write anything), so this is a picklist, not an enum. */
+export const SETORES = ['Balcão', 'Caixa', 'Dermoconsultora', 'Farmacêutico', 'Gerência', VISITANTE_SETOR];
+
 export interface SummaryRow {
   matricula: string;
   nome: string;
@@ -83,8 +91,11 @@ export interface Dynamic {
   metrica: 'valor' | 'unidade';
   produtos: string[];
   participantes: string[]; // matriculas; empty = everyone
-  /** Which sector(s) may participate — 'ambos' (default) means no restriction. */
-  setorAlvo: 'balcao' | 'caixa' | 'ambos';
+  /** Which setor may participate — an exact collaborators.setor value
+   * (e.g. 'Dermoconsultora'), or the sentinel 'ambos' (default) meaning no
+   * restriction at all. 'balcao'/'caixa' are legacy sentinels from before
+   * this became free text — dynamicAllowsCollaborator still honors them. */
+  setorAlvo: string;
   /** 'geral' (default): every participant is measured against the single
    * shared metaValor. 'individual': each participant has their own target
    * in metasIndividuais instead — metaValor is unused in that mode. */

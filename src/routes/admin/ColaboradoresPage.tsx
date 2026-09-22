@@ -11,7 +11,7 @@ import { daysSince } from '../../lib/business/summary';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { normalizeMatricula } from '../../lib/business/parsing';
 import type { Collaborator } from '../../lib/business/types';
-import { VISITANTE_SETOR } from '../../lib/business/types';
+import { SETORES, VISITANTE_SETOR } from '../../lib/business/types';
 import { VISITOR_CATEGORY_OPTIONS } from '../../lib/business/visitorCategories';
 import { fmtMoney } from '../../lib/format';
 import { useBulkUpsertCollaborators, useCreateCollaborator, useDeleteCollaborators, useUpdateCollaborator } from '../../lib/mutations';
@@ -19,8 +19,6 @@ import { PASSWORD_HINT, PASSWORD_MIN_LENGTH, validatePassword } from '../../lib/
 import { useCategoryTypes, useCollaborators, useCollaboratorsWithLogin, useSales } from '../../lib/queries';
 import { uploadPhoto } from '../../lib/storage';
 import { errorMessage } from '../../lib/errors';
-
-const SETORES = ['Balcão', 'Caixa', 'Dermoconsultora', 'Farmacêutico', 'Gerência', VISITANTE_SETOR];
 
 // Display order for the collaborator gallery's collapsible sections — a
 // fixed, curated order (not alphabetical) matching how the store actually

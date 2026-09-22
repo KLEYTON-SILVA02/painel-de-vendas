@@ -7,9 +7,11 @@ import {
   computeDinamicaRanking,
   dinamicaUnidadeLabel,
   dynamicAllowsCollaborator,
+  dynamicSetorOptions,
   dynamicStatus,
   intersectDynamicPeriod,
   isDynamicActive,
+  normalizeSetorAlvo,
   productMatchesCategoria,
 } from './dynamics';
 import type { Collaborator, Dynamic, Sale } from './types';
@@ -64,6 +66,27 @@ describe('dynamicAllowsCollaborator', () => {
     expect(dynamicAllowsCollaborator({ ...din, setorAlvo: 'balcao' }, { setor: 'Caixa' })).toBe(false);
     expect(dynamicAllowsCollaborator({ ...din, setorAlvo: 'caixa' }, { setor: 'Caixa' })).toBe(true);
     expect(dynamicAllowsCollaborator({ ...din, setorAlvo: 'caixa' }, { setor: 'Balcão' })).toBe(false);
+  });
+
+  it('matches any real setor name directly, not just the legacy balcao/caixa sentinels', () => {
+    expect(dynamicAllowsCollaborator({ ...din, setorAlvo: 'Dermoconsultora' }, { setor: 'Dermoconsultora' })).toBe(true);
+    expect(dynamicAllowsCollaborator({ ...din, setorAlvo: 'Dermoconsultora' }, { setor: 'Gerência' })).toBe(false);
+  });
+});
+
+describe('dynamicSetorOptions', () => {
+  it('lists the fixed catalog (minus Visitante) plus any extra setor actually in use', () => {
+    const options = dynamicSetorOptions([{ setor: 'Balcão' }, { setor: 'Estoque' }, { setor: 'Visitante' }, { setor: null }]);
+    expect(options).toEqual(['Balcão', 'Caixa', 'Dermoconsultora', 'Farmacêutico', 'Gerência', 'Estoque']);
+  });
+});
+
+describe('normalizeSetorAlvo', () => {
+  it('maps the legacy sentinels to the real setor name, passes everything else through', () => {
+    expect(normalizeSetorAlvo('balcao')).toBe('Balcão');
+    expect(normalizeSetorAlvo('caixa')).toBe('Caixa');
+    expect(normalizeSetorAlvo('ambos')).toBe('ambos');
+    expect(normalizeSetorAlvo('Dermoconsultora')).toBe('Dermoconsultora');
   });
 });
 
