@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
-import { auditBioOutsideBalcao, BALCAO_SETOR, computeBioSummary, groupBioRows, type BioSummaryRow } from '../../lib/business/bio';
+import { computeBioSummaryAllSectors, groupBioRows, type BioSummaryRow } from '../../lib/business/bio';
 import { classifyBio, normalizeGrupoImport, type BioGroupKey } from '../../lib/business/classification';
 import { diasRestantesNoMes } from '../../lib/business/goals';
 import type { BioGroupGoal, BioGroupsProducts, BioWeights, Collaborator } from '../../lib/business/types';
 import { copyText, formatRankingText } from '../../lib/clipboard';
-import { fmtDateBR, fmtDateShortBR } from '../../lib/format';
+import { fmtDateShortBR } from '../../lib/format';
 import { useAddBioProduct, useBulkInsertBioProducts, useDeleteBioProduct, useUpdateBioGroupGoal, useUpdateBioWeights } from '../../lib/mutations';
 import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
 import { useBioGroupGoals, useBioGroups, useCategoryTypes, useCollaborators, useSales, useStoreSettings } from '../../lib/queries';
@@ -34,7 +34,6 @@ export function MobileBioPage() {
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
-  const [foraDoBalcaoOpen, setForaDoBalcaoOpen] = useState(false);
 
   // Biosintética always opens in Modo Geral (mês inteiro), regardless of what
   // date-mode was left active on another screen — the date filter is shared
@@ -57,24 +56,27 @@ export function MobileBioPage() {
   const salesData = sales ?? [];
   const collaboratorsData = collaborators ?? [];
   const bioWeightsData = (storeSettings?.bio_weights ?? {}) as unknown as BioWeights;
-  const setoresElegiveisData = bioCategoryType?.setores_elegiveis ?? [];
 
   // groupBioRows builds a fresh object every call — memoized so the
   // useMemo calls below (which depend on it) don't recompute on every
   // render just because this reference changed underneath them.
   const bioGroups = useMemo(() => groupBioRows(bioGroupRows), [bioGroupRows]);
 
-  // computeBioSummary/auditBioOutsideBalcao/classifyBio-per-sale are all
-  // O(sales) with keyword matching per row — noticeably heavier per item
-  // than a plain field comparison, and this screen is the one Balcão
-  // collaborators land on by default on mobile.
+  // computeBioSummaryAllSectors/classifyBio-per-sale are all O(sales) with
+  // keyword matching per row — noticeably heavier per item than a plain
+  // field comparison, and this screen is the one collaborators land on by
+  // default on mobile.
+  //
+  // computeBioSummaryAllSectors (not computeBioSummary): every seller with a
+  // G1-G4 sale counts, whatever their setor — decided explicitly by the
+  // user, replacing the earlier Balcão-only ranking + "Fora do Balcão" alert.
   const demonstrativo = useMemo(
-    () => computeBioSummary(salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, 'ALL', setoresElegiveisData),
-    [salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, setoresElegiveisData],
+    () => computeBioSummaryAllSectors(salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, 'ALL'),
+    [salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo],
   );
   const ranking = useMemo(
-    () => computeBioSummary(salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, groupFilter, setoresElegiveisData),
-    [salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, groupFilter, setoresElegiveisData],
+    () => computeBioSummaryAllSectors(salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, groupFilter),
+    [salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, groupFilter],
   );
   // Per-group mini cards always reflect the full G1-G4 split, independent of
   // which tab is selected below (matches the spec: they let you compare
@@ -82,19 +84,7 @@ export function MobileBioPage() {
   // `demonstrativo` above (groupFilter='ALL'), reused instead of a third
   // identical O(sales) pass.
   const allRanking = demonstrativo;
-  const foraDoBalcao = useMemo(
-    () =>
-      auditBioOutsideBalcao(
-        salesData.filter((s) => !s.dataISO || (s.dataISO >= dashFrom && s.dataISO <= dashTo)),
-        collaboratorsData,
-        bioGroups,
-        setoresElegiveisData,
-      ),
-    [salesData, collaboratorsData, bioGroups, setoresElegiveisData, dashFrom, dashTo],
-  );
-  // Always scoped to G1-G4 products only, regardless of seller's sector — a
-  // sale by someone outside Balcão isn't hidden, just flagged with "!" in
-  // the row, matching auditBioOutsideBalcao's own audit criteria.
+  // Always scoped to G1-G4 products only, regardless of seller's sector.
   const salesForTable = useMemo(
     () =>
       salesListEnabled
@@ -115,7 +105,6 @@ export function MobileBioPage() {
   }
 
   const bioWeights = bioWeightsData;
-  const balcaoCollaborators = collaborators.filter((c) => c.setor === BALCAO_SETOR);
   const dias = diasRestantesNoMes();
 
   if (view === 'grupos') {
@@ -142,14 +131,13 @@ export function MobileBioPage() {
     );
   }
 
-  const rankingList = ranking.filter((r) => r.itens > 0).sort((a, b) => b.pontos - a.pontos);
+  const rankingList = ranking;
   const totalItensBio = ranking.reduce((a, r) => a + r.itens, 0);
-  const vendedoresAtivos = ranking.filter((r) => r.itens > 0).length;
+  const vendedoresAtivos = ranking.length;
   const groupTotals = Object.fromEntries(BIO_GROUP_KEYS.map((g) => [g, allRanking.reduce((a, r) => a + (r.qtd[g] || 0), 0)])) as Record<
     BioGroupKey,
     number
   >;
-  const balcaoMatriculas = new Set(balcaoCollaborators.map((c) => c.matricula));
 
   async function handleCopy() {
     const text = formatRankingText(rankingList.map((r) => ({ ...r, valor: r.pontos })), 'Biosintética', dashFrom, dashTo);
@@ -211,41 +199,6 @@ export function MobileBioPage() {
           </div>
         ))}
       </div>
-
-      {foraDoBalcao.length > 0 && (
-        <div
-          style={{
-            margin: '0 18px 12px',
-            fontSize: 9,
-            color: 'var(--mv2-rosa)',
-            border: '1px solid var(--mv2-rosa)',
-            borderRadius: 'var(--mv2-radius-sm)',
-            overflow: 'hidden',
-          }}
-        >
-          <button
-            onClick={() => setForaDoBalcaoOpen((v) => !v)}
-            style={{ width: '100%', background: 'none', border: 'none', color: 'inherit', textAlign: 'left', padding: 8, fontSize: 9 }}
-          >
-            ⚠ {foraDoBalcao.length} venda(s) de produtos G1-G4 fora do setor Balcão não entram neste ranking. Toque para ver detalhes.{' '}
-            {foraDoBalcaoOpen ? '▲' : '▼'}
-          </button>
-          {foraDoBalcaoOpen && (
-            <div style={{ borderTop: '1px solid var(--mv2-rosa)', padding: '6px 8px', overflowX: 'auto' }}>
-              {foraDoBalcao.map((a, i) => (
-                <div key={i} style={{ padding: '4px 0', borderBottom: i < foraDoBalcao.length - 1 ? '1px solid rgba(255,255,255,.08)' : 'none' }}>
-                  <div style={{ fontWeight: 700 }}>
-                    {a.vendedor} · {fmtDateBR(a.dataISO)}
-                  </div>
-                  <div style={{ color: 'var(--mv2-texto-2)' }}>
-                    {a.produto} · {a.setor || '—'} · [{a.grupo}]
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       <MobileDateFilter />
 
@@ -315,21 +268,10 @@ export function MobileBioPage() {
                 salesForTable.map((s) => {
                   const g = classifyBio(s.produto, bioGroups)!;
                   const pontos = s.qtd * (bioWeights[g] || 0);
-                  const outsideBalcao = !balcaoMatriculas.has(s.matricula);
                   return (
                     <tr key={s.id}>
                       <td>{fmtDateShortBR(s.dataISO)}</td>
-                      <td>
-                        {resolveVendorName(s, byMatricula)}
-                        {outsideBalcao && (
-                          <span
-                            title="Produto da Biosintética vendido por colaborador fora do setor Balcão — não entra no ranking."
-                            style={{ marginLeft: 4, color: 'var(--mv2-rosa)', fontWeight: 700 }}
-                          >
-                            !
-                          </span>
-                        )}
-                      </td>
+                      <td>{resolveVendorName(s, byMatricula)}</td>
                       <td>{s.produto}</td>
                       <td>{s.qtd}</td>
                       <td>{GROUP_LABELS[g]}</td>
@@ -564,7 +506,7 @@ function MobileBioPontosView({
               {demonstrativo.length === 0 ? (
                 <tr>
                   <td colSpan={5} style={{ textAlign: 'center', color: 'var(--mv2-texto-2)', padding: 8 }}>
-                    Nenhum colaborador no setor Balcão.
+                    Nenhum vendedor com pontos ainda.
                   </td>
                 </tr>
               ) : (

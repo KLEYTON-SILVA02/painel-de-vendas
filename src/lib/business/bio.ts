@@ -85,28 +85,28 @@ export function computeBioSummary(
   return Object.values(map).sort((a, b) => b.pontos - a.pontos);
 }
 
-/** Same aggregation as computeBioSummary, but for collaborators OUTSIDE the
- * category's eligible sector(s) — the same sales that would otherwise only
- * ever surface as auditBioOutsideBalcao alert rows. Real names are replaced
- * with anonymized "Vend. N" labels (assigned in ranking order, highest
- * pontos first) since these sellers aren't really part of this category's
- * roster — the Premium ranking view still needs to account for their stray
- * sales without exposing who made them. */
-export function computeBioOutsideRanking(
+/** Same aggregation as computeBioSummary, but ignoring sector eligibility
+ * entirely — every collaborator with at least one sale of a G1-G4 product
+ * appears, real name always shown, collaborators with zero matching sales
+ * left out. Decided explicitly by the user: a Biosintética sale counts for
+ * whoever made it, regardless of setor — replaces the earlier combination
+ * of a Balcão-only ranking, an anonymized "Vend. N" secondary ranking for
+ * outsiders (computeBioOutsideRanking, removed) and the "Fora do Balcão"
+ * alert (auditBioOutsideBalcao — still used by the generic category-type
+ * engine in CategoryTypePage.tsx, which keeps its own configurable
+ * setores_elegiveis rule; this function is BIOSINTÉTICA-specific). */
+export function computeBioSummaryAllSectors(
   sales: Sale[],
   collaborators: Collaborator[],
   bioGroups: BioGroupsProducts,
   bioWeights: BioWeights,
   fromDate: string | null,
   toDate: string | null,
-  groupFilter: BioGroupKey | 'ALL',
-  setoresElegiveis: string[] = [BALCAO_SETOR],
+  groupFilter?: BioGroupKey | 'ALL' | null,
 ): BioSummaryRow[] {
-  const eligible = new Set(setoresElegiveis);
   const zeroQtd = Object.fromEntries(Object.keys(bioGroups).map((g) => [g, 0]));
-  const outsiders = collaborators.filter((c) => c.setor === null || !eligible.has(c.setor));
   const map: Record<string, BioSummaryRow> = {};
-  outsiders.forEach((c) => {
+  collaborators.forEach((c) => {
     map[normalizeMatricula(c.matricula)] = {
       matricula: c.matricula,
       nome: c.nome,
@@ -134,8 +134,7 @@ export function computeBioOutsideRanking(
 
   return Object.values(map)
     .filter((r) => r.itens > 0)
-    .sort((a, b) => b.pontos - a.pontos)
-    .map((r, i) => ({ ...r, nome: `Vend. ${i + 1}`, apelido: `Vend. ${i + 1}`, foto: null }));
+    .sort((a, b) => b.pontos - a.pontos);
 }
 
 export interface BioOutsideAlert {

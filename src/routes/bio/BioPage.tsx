@@ -6,14 +6,7 @@ import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImport
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
 import { SalesListLockedNotice } from '../../components/SalesListLockedNotice';
 import { PodiumSplit, type PodiumSpots } from '../../components/ranking/PodiumSplit';
-import {
-  auditBioOutsideBalcao,
-  BALCAO_SETOR,
-  computeBioOutsideRanking,
-  computeBioSummary,
-  groupBioRows,
-  type BioSummaryRow,
-} from '../../lib/business/bio';
+import { computeBioSummaryAllSectors, groupBioRows, type BioSummaryRow } from '../../lib/business/bio';
 import { classifyBio, normalizeGrupoImport, type BioGroupKey } from '../../lib/business/classification';
 import { diasRestantesNoMes } from '../../lib/business/goals';
 import type { BioGroupGoal, BioGroupsProducts, BioWeights } from '../../lib/business/types';
@@ -37,7 +30,6 @@ export function BioPage() {
   const { dashFrom, dashTo, setModoGeral, salesListEnabled, toggleSalesListEnabled } = useDateRange();
   const [view, setView] = useState<'ranking' | 'grupos' | 'pontos'>('ranking');
   const [bioFilter, setBioFilter] = useState<BioGroupKey | 'ALL'>('ALL');
-  const [foraDoBalcaoOpen, setForaDoBalcaoOpen] = useState(false);
 
   // Biosintética always opens in Modo Geral (mês inteiro), regardless of what
   // date-mode was left active on another screen — the date filter is shared
@@ -54,7 +46,6 @@ export function BioPage() {
   const collaboratorsData = collaborators ?? [];
   const bioGroupRowsData = bioGroupRows ?? [];
   const bioWeightsData = (storeSettings?.bio_weights ?? {}) as unknown as BioWeights;
-  const setoresElegiveisData = bioCategoryType?.setores_elegiveis ?? [BALCAO_SETOR];
 
   const bioGroups = useMemo(() => groupBioRows(bioGroupRowsData), [bioGroupRowsData]);
 
@@ -64,24 +55,17 @@ export function BioPage() {
   // change to sales/date range/filter), which is what made Biosintética one
   // of the heaviest screens to navigate. Memoizing ties that work to the
   // data actually changing instead.
+  //
+  // computeBioSummaryAllSectors (not computeBioSummary): every seller with a
+  // G1-G4 sale counts, whatever their setor — decided explicitly by the user,
+  // replacing the earlier Balcão-only ranking + anonymized outsider ranking +
+  // "Fora do Balcão" alert combo.
   const ranking = useMemo(
-    () => computeBioSummary(salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, bioFilter, setoresElegiveisData),
-    [salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, bioFilter, setoresElegiveisData],
-  );
-  const foraDoBalcao = useMemo(
-    () =>
-      auditBioOutsideBalcao(
-        salesData.filter((s) => !s.dataISO || (s.dataISO >= dashFrom && s.dataISO <= dashTo)),
-        collaboratorsData,
-        bioGroups,
-        setoresElegiveisData,
-      ),
-    [salesData, collaboratorsData, bioGroups, setoresElegiveisData, dashFrom, dashTo],
+    () => computeBioSummaryAllSectors(salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, bioFilter),
+    [salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, bioFilter],
   );
   // Only Biosintética products (G1-G4) matter on this screen — every sale
-  // shown here is G1-G4, regardless of the seller's sector. A sale by
-  // someone outside Balcão isn't hidden, just flagged with "!" in the row
-  // (see the pink alert bar above the table).
+  // shown here is G1-G4, regardless of the seller's sector.
   const salesForTable = useMemo(() => {
     if (!salesListEnabled) return [];
     return salesData
@@ -93,15 +77,9 @@ export function BioPage() {
       .sort((a, b) => (b.dataISO || '').localeCompare(a.dataISO || ''))
       .slice(0, 150);
   }, [salesListEnabled, salesData, dashFrom, dashTo, bioGroups]);
-  const outsideRanking = useMemo(
-    () =>
-      computeBioOutsideRanking(salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, bioFilter, setoresElegiveisData),
-    [salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, bioFilter, setoresElegiveisData],
-  );
-  // computeBioSummary already scopes its rows to the category's eligible sector(s).
   const demonstrativo = useMemo(
-    () => computeBioSummary(salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, 'ALL', setoresElegiveisData),
-    [salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, setoresElegiveisData],
+    () => computeBioSummaryAllSectors(salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, 'ALL'),
+    [salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo],
   );
 
   if (!collaborators || !sales || !storeSettings || !bioCategoryType || !bioGroupRows || !groupGoals) {
@@ -134,10 +112,8 @@ export function BioPage() {
     );
   }
 
-  const balcaoMatriculas = new Set(collaborators.filter((c) => c.setor === BALCAO_SETOR).map((c) => c.matricula));
-  const premiumRanking = [...ranking.filter((r) => r.itens > 0), ...outsideRanking].sort((a, b) => b.pontos - a.pontos);
   const totalItensBio = ranking.reduce((a, r) => a + r.itens, 0);
-  const vendedoresAtivos = ranking.filter((r) => r.itens > 0).length;
+  const vendedoresAtivos = ranking.length;
   const dias = diasRestantesNoMes();
 
   const statCards: MfbStatCard[] = [
@@ -158,45 +134,6 @@ export function BioPage() {
         <MetricsFilterBar statCards={statCards} />
       </div>
 
-      {foraDoBalcao.length > 0 && (
-        <div className="rounded-xl border border-pink-500/40 bg-pink-500/5 text-xs text-pink-300">
-          <button onClick={() => setForaDoBalcaoOpen((v) => !v)} className="w-full flex items-center gap-2 p-3 text-left">
-            <span>⚠️</span>
-            <span className="flex-1">
-              Existem <b>{foraDoBalcao.length} venda(s)</b> de produtos G1–G4 registradas por colaboradores fora do setor
-              Balcão neste período. Elas não entram neste ranking. <b>Toque para ver detalhes.</b>
-            </span>
-            <span>{foraDoBalcaoOpen ? '▲' : '▼'}</span>
-          </button>
-          {foraDoBalcaoOpen && (
-            <div className="border-t border-pink-500/30 px-3 py-2 overflow-x-auto">
-              <table className="w-full text-[11px]">
-                <thead>
-                  <tr className="text-left text-pink-300/70">
-                    <th className="py-1 pr-3">Data</th>
-                    <th className="py-1 pr-3">Colaborador</th>
-                    <th className="py-1 pr-3">Setor</th>
-                    <th className="py-1 pr-3">Produto</th>
-                    <th className="py-1 pr-3">Grupo</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {foraDoBalcao.map((a, i) => (
-                    <tr key={i} className="border-t border-pink-500/10">
-                      <td className="py-1 pr-3 font-mono">{fmtDateBR(a.dataISO)}</td>
-                      <td className="py-1 pr-3">{a.vendedor}</td>
-                      <td className="py-1 pr-3">{a.setor || '—'}</td>
-                      <td className="py-1 pr-3">{a.produto}</td>
-                      <td className="py-1 pr-3">{a.grupo}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
       <div className="flex items-center gap-2 flex-wrap">
         <HelpTip helpKey="biosintetica.grupos_pontos" fallback="'Gerenciar Grupos' vincula produtos aos grupos G1-G4; 'Gerenciar Pontos' define a pontuação (Meta 1/2/3) de cada grupo." />
         <span className="text-xs text-slate-500">Filtrar por grupo:</span>
@@ -214,11 +151,11 @@ export function BioPage() {
       </div>
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        {collaborators.filter((c) => c.setor === BALCAO_SETOR).length === 0 ? (
-          <div className="text-sm text-slate-500 py-4 text-center">Nenhum colaborador cadastrado no setor Balcão.</div>
+        {ranking.length === 0 ? (
+          <div className="text-sm text-slate-500 py-4 text-center">Nenhuma venda de produtos G1-G4 registrada ainda.</div>
         ) : (
           <PodiumSplit
-            ranking={premiumRanking}
+            ranking={ranking}
             getValue={(r) => r.pontos}
             formatValue={(v) => `${v.toFixed(1)} pts`}
             bgUrl={storeSettings.ranking_podium_bg_url}
@@ -255,23 +192,12 @@ export function BioPage() {
                 {salesForTable.map((s) => {
                   const g = classifyBio(s.produto, bioGroups);
                   const pontos = g ? s.qtd * (bioWeights[g] || 0) : 0;
-                  const outsideBalcao = g && !balcaoMatriculas.has(s.matricula);
                   return (
                     <tr key={s.id} className="border-b border-slate-900">
                       <td className="py-1.5 pr-3 font-mono">{fmtDateBR(s.dataISO)}</td>
                       <td className="py-1.5 pr-3 font-mono">{s.matricula}</td>
                       <td className="py-1.5 pr-3">{s.vendedor}</td>
-                      <td className="py-1.5 pr-3">
-                        {s.produto}
-                        {outsideBalcao && (
-                          <span
-                            title="Produto da Biosintética vendido por colaborador fora do setor Balcão — não entra no ranking."
-                            className="ml-1 font-bold text-pink-400"
-                          >
-                            !
-                          </span>
-                        )}
-                      </td>
+                      <td className="py-1.5 pr-3">{s.produto}</td>
                       <td className="py-1.5 pr-3 font-mono">{s.qtd}</td>
                       <td className="py-1.5 pr-3">
                         {g ? (
@@ -502,7 +428,7 @@ function BioPontosView({
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <h3 className="font-semibold mb-3 text-sm">Demonstrativo de Metas</h3>
         {demonstrativo.length === 0 ? (
-          <div className="text-sm text-slate-500 py-4 text-center">Nenhum colaborador no setor Balcão.</div>
+          <div className="text-sm text-slate-500 py-4 text-center">Nenhum vendedor com pontos ainda.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
