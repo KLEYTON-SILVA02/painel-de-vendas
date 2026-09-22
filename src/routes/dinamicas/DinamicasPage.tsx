@@ -11,7 +11,9 @@ import {
   computeDinamicaRanking,
   dinamicaMetaTotal,
   dinamicaUnidadeLabel,
+  dynamicSetorOptions,
   dynamicStatus,
+  normalizeSetorAlvo,
 } from '../../lib/business/dynamics';
 import { useReauthGuard } from '../../hooks/useReauthGuard';
 import type { Collaborator, Dynamic, DynamicProductCategory, Sale } from '../../lib/business/types';
@@ -57,6 +59,7 @@ export function DinamicasPage() {
   // ranking display below still gets the full `collaborators` list, same as
   // any other read-only view.
   const participantCollaborators = collaborators.filter((c) => c.setor !== VISITANTE_SETOR);
+  const setorOptions = dynamicSetorOptions(participantCollaborators);
 
   const today = todayISO();
   const list = dynamics.slice().sort((a, b) => (b.dataInicio || '').localeCompare(a.dataInicio || ''));
@@ -129,6 +132,7 @@ export function DinamicasPage() {
         <>
           <NewDynamicForm
             collaborators={participantCollaborators}
+            setores={setorOptions}
             productNames={productNames}
             onCreate={(input) => createDynamic.mutate(input)}
             creating={createDynamic.isPending}
@@ -160,6 +164,7 @@ export function DinamicasPage() {
         <EditDynamicModal
           dynamic={editing}
           collaborators={participantCollaborators}
+          setores={setorOptions}
           productNames={productNames}
           saving={updateDynamic.isPending}
           onClose={() => setEditing(null)}
@@ -270,11 +275,14 @@ function DinamicaCard({
 
 function NewDynamicForm({
   collaborators,
+  setores,
   productNames,
   onCreate,
   creating,
 }: {
   collaborators: { id: string; matricula: string; nome: string; apelido: string | null; foto?: string | null }[];
+  /** Every setor selectable in "Setor participante" — see dynamicSetorOptions. */
+  setores: string[];
   productNames: string[];
   onCreate: (input: {
     titulo: string;
@@ -417,10 +425,13 @@ function NewDynamicForm({
         )}
       </div>
       <Field label="Setor participante">
-        <select value={setorAlvo} onChange={(e) => setSetorAlvo(e.target.value as Dynamic['setorAlvo'])} className="input">
-          <option value="ambos">Balcão + Caixa</option>
-          <option value="balcao">Balcão</option>
-          <option value="caixa">Caixa</option>
+        <select value={setorAlvo} onChange={(e) => setSetorAlvo(e.target.value)} className="input">
+          <option value="ambos">Todos os setores</option>
+          {setores.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
         </select>
       </Field>
       <Field label="Descrição">
@@ -517,6 +528,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 export function EditDynamicModal({
   dynamic,
   collaborators,
+  setores,
   productNames,
   saving,
   onClose,
@@ -524,6 +536,8 @@ export function EditDynamicModal({
 }: {
   dynamic: Dynamic;
   collaborators: { id: string; matricula: string; nome: string; apelido: string | null; foto?: string | null }[];
+  /** Every setor selectable in "Setor participante" — see dynamicSetorOptions. */
+  setores: string[];
   productNames: string[];
   saving: boolean;
   onClose: () => void;
@@ -533,7 +547,7 @@ export function EditDynamicModal({
   const [descricao, setDescricao] = useState(dynamic.descricao);
   const [dataInicio, setDataInicio] = useState(dynamic.dataInicio);
   const [dataFim, setDataFim] = useState(dynamic.dataFim);
-  const [setorAlvo, setSetorAlvo] = useState<Dynamic['setorAlvo']>(dynamic.setorAlvo);
+  const [setorAlvo, setSetorAlvo] = useState<Dynamic['setorAlvo']>(normalizeSetorAlvo(dynamic.setorAlvo));
   const [metrica, setMetrica] = useState<'valor' | 'unidade'>(dynamic.metrica);
   const [medidaLabel, setMedidaLabel] = useState(dynamic.medidaLabel);
   const [metaModo, setMetaModo] = useState<Dynamic['metaModo']>(dynamic.metaModo);
@@ -632,10 +646,13 @@ export function EditDynamicModal({
           )}
         </div>
         <Field label="Setor participante">
-          <select value={setorAlvo} onChange={(e) => setSetorAlvo(e.target.value as Dynamic['setorAlvo'])} className="input">
-            <option value="ambos">Balcão + Caixa</option>
-            <option value="balcao">Balcão</option>
-            <option value="caixa">Caixa</option>
+          <select value={setorAlvo} onChange={(e) => setSetorAlvo(e.target.value)} className="input">
+            <option value="ambos">Todos os setores</option>
+            {setores.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
           </select>
         </Field>
         <Field label="Descrição">
