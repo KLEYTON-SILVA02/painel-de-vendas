@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { MobileRankingBoard } from '../../components/collaborator/MobileRankingBoard';
-import { BALCAO_SETOR, computeBioSummary, groupBioRows } from '../../lib/business/bio';
+import { computeBioSummaryAllSectors, groupBioRows } from '../../lib/business/bio';
 import { classifyBio, type BioGroupKey } from '../../lib/business/classification';
 import type { BioWeights, Collaborator } from '../../lib/business/types';
 import { fmtDateShortBR } from '../../lib/format';
@@ -32,17 +32,13 @@ export function CollaboratorBioPage() {
   const salesData = sales ?? [];
   const collaboratorsData = collaborators ?? [];
   const bioWeightsData = (storeSettings?.bio_weights ?? {}) as unknown as BioWeights;
-  const setoresElegiveisData = bioCategoryType?.setores_elegiveis ?? [];
   // groupBioRows builds a fresh object every call — memoized so the
   // useMemo below doesn't recompute on every render just because this
   // reference changed underneath it.
   const bioGroups = useMemo(() => groupBioRows(bioGroupRows), [bioGroupRows]);
   const ranking = useMemo(
-    () =>
-      computeBioSummary(salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, bioFilter, setoresElegiveisData).filter(
-        (r) => r.itens > 0,
-      ),
-    [salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, bioFilter, setoresElegiveisData],
+    () => computeBioSummaryAllSectors(salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, bioFilter),
+    [salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, bioFilter],
   );
   const byMatricula = useMemo(() => {
     const map = new Map<string, Collaborator>();
@@ -71,7 +67,6 @@ export function CollaboratorBioPage() {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
-  const balcaoCount = collaborators.filter((c) => c.setor === BALCAO_SETOR).length;
   const totalPontos = ranking.reduce((a, r) => a + r.pontos, 0);
   const totalItens = ranking.reduce((a, r) => a + r.itens, 0);
 
@@ -107,11 +102,11 @@ export function CollaboratorBioPage() {
 
       <div className="mv2-card">
         <div className="mv2-card-title" style={{ color: '#14ff00' }}>
-          🧪 BIOSINTÉTICA — Ranking Balcão
+          🧪 BIOSINTÉTICA — Ranking
         </div>
-        {balcaoCount === 0 ? (
+        {ranking.length === 0 ? (
           <div style={{ fontSize: 10, color: 'var(--mv2-texto-2)', padding: '8px 0', textAlign: 'center' }}>
-            Nenhum colaborador cadastrado no setor Balcão.
+            Nenhuma venda de Biosintética no período ainda.
           </div>
         ) : (
           <MobileRankingBoard
