@@ -111,7 +111,7 @@ function RankFilterBar({ dynamics, singleLine }: { dynamics: Dynamic[]; singleLi
         <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
           {activeDynamics.map((d) => (
             <SubtabButton key={d.id} active={rankFilter === `DIN:${d.id}`} onClick={() => setRankFilter(`DIN:${d.id}`)}>
-              🎯 DINÂMICA
+              🎯 {d.marca || 'DINÂMICA'}
             </SubtabButton>
           ))}
         </div>

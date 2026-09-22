@@ -12,6 +12,7 @@ import {
   computeDinamicaVendas,
   dinamicaMetaTotal,
   dinamicaUnidadeLabel,
+  DYNAMIC_BRANDS,
   dynamicSetorOptions,
   dynamicStatus,
   metaFor,
@@ -223,6 +224,7 @@ function MobileNewDynamicForm({
     produtos: string[];
     participantes: string[];
     setor_alvo: Dynamic['setorAlvo'];
+    marca: string | null;
     meta_modo: Dynamic['metaModo'];
     metas_individuais: Record<string, number>;
     categorias_produtos: Json;
@@ -237,6 +239,7 @@ function MobileNewDynamicForm({
   const [dataInicio, setDataInicio] = useState(today);
   const [dataFim, setDataFim] = useState(today);
   const [setorAlvo, setSetorAlvo] = useState<Dynamic['setorAlvo']>('ambos');
+  const [marca, setMarca] = useState('');
   const [metrica, setMetrica] = useState<'valor' | 'unidade'>('valor');
   const [medidaLabel, setMedidaLabel] = useState('');
   const [metaModo, setMetaModo] = useState<Dynamic['metaModo']>('geral');
@@ -249,6 +252,7 @@ function MobileNewDynamicForm({
   const [multiplicador, setMultiplicador] = useState({ ativo: false, valor: 0 });
   const [expanded, setExpanded] = useState(false);
   const produtosListId = useId();
+  const marcasListId = useId();
 
   function addProduto() {
     const nome = produtoInput.trim();
@@ -278,6 +282,7 @@ function MobileNewDynamicForm({
       produtos,
       participantes,
       setor_alvo: setorAlvo,
+      marca: marca.trim() || null,
       meta_modo: metaModo,
       metas_individuais: metasIndividuais,
       categorias_produtos: categoriasProdutos as unknown as Json,
@@ -287,6 +292,7 @@ function MobileNewDynamicForm({
     });
     setTitulo('');
     setSetorAlvo('ambos');
+    setMarca('');
     setMetaModo('geral');
     setMetaValor(0);
     setMetasIndividuais({});
@@ -337,6 +343,18 @@ function MobileNewDynamicForm({
           </option>
         ))}
       </select>
+
+      <input
+        list={marcasListId}
+        placeholder="Marca / Laboratório (opcional)"
+        value={marca}
+        onChange={(e) => setMarca(e.target.value)}
+      />
+      <datalist id={marcasListId}>
+        {DYNAMIC_BRANDS.map((nome) => (
+          <option key={nome} value={nome} />
+        ))}
+      </datalist>
 
       <div className="mv2-row" style={{ gap: 8 }}>
         <select style={{ flex: 1 }} value={metrica} onChange={(e) => setMetrica(e.target.value as 'valor' | 'unidade')}>
