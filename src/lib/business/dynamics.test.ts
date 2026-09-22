@@ -30,7 +30,7 @@ const sales: Sale[] = [
 
 const din: Dynamic = {
   id: 'd1', titulo: 'Semana X', descricao: '', dataInicio: '2026-08-01', dataFim: '2026-08-10',
-  metaValor: 500, metrica: 'valor', produtos: ['Produto X'], participantes: [], setorAlvo: 'ambos',
+  metaValor: 500, metrica: 'valor', produtos: ['Produto X'], participantes: [], setorAlvo: 'ambos', marca: null,
   metaModo: 'geral', metasIndividuais: {}, categoriasProdutos: [], multiplicador: { ativo: false, valor: 0 },
   medidaLabel: '',
 };

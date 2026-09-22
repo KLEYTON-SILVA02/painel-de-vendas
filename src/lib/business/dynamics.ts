@@ -4,6 +4,27 @@ import { firstName, normalize } from './normalize';
 import { normalizeMatricula } from './parsing';
 import { SETORES, VISITANTE_SETOR, type Collaborator, type Dynamic, type DynamicProductCategory, type Sale } from './types';
 
+/** Suggested marcas/laboratórios for the "Marca / Laboratório" field on a
+ * dynamic (NewDynamicForm/EditDynamicModal, desktop and mobile) — shown as
+ * a searchable combobox (<input list>), not a closed <select>: an ADM can
+ * still type a name outside this list, same UX as the "Produtos
+ * participantes" input right next to it. Kept as one flat list (not grouped
+ * by lab vs. cosmetic brand) since the picker itself doesn't distinguish
+ * them either. */
+export const DYNAMIC_BRANDS = [
+  'Aché', 'Adcos', 'Althaia', 'Apsen', 'AstraZeneca', 'Avène', 'Bayer', 'Bepantol Derma', 'Beyoung',
+  'Bioderma', 'Biolab', 'Bioage', 'Boehringer Ingelheim', 'CeraVe', 'Cetaphil', 'Cimed', 'Clarins',
+  'Clinique', 'Creamy', 'Cristália', 'Darrow', 'Dauf', 'Dermage', 'Dermatus', 'EltaMD', 'EMS',
+  'Eucerin', 'Eurofarma', 'Fisiogel', 'Garnier', 'Geolab', 'Germed Pharma', 'GSK', 'Hypera Pharma',
+  'ISDIN', 'Johnson & Johnson', 'Kenvue', 'Kérastase', 'Kiehl’s', 'Kley Hertz', 'La Roche-Posay',
+  'Lancôme', 'Libbs', 'Lilly', 'L’Oréal', 'L’Oréal Paris', 'Mantecorp Farmasa', 'Mantecorp Skincare',
+  'Maybelline New York', 'Medley', 'Merck', 'Natulab', 'Needs', 'Neo Química', 'Neostrata',
+  'Neutrogena', 'Nivea', 'Novartis', 'Novo Nordisk', 'Nupill', 'Pfizer', 'Prati-Donaduzzi',
+  'Principia', 'Profuse', 'Redken', 'Roche', 'Sallve', 'Sanofi', 'Sandoz', 'SkinCeuticals',
+  'Skinbetter Science', 'Simple Organic', 'Takeda', 'Teuto', 'Theraskin', 'Torrent', 'Uriage',
+  'União Química', 'Vichy', 'Vult', 'Zydus',
+];
+
 export interface DinamicaRankingRow {
   matricula: string;
   nome: string;

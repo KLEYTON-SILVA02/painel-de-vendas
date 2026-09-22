@@ -96,6 +96,12 @@ export interface Dynamic {
    * restriction at all. 'balcao'/'caixa' are legacy sentinels from before
    * this became free text — dynamicAllowsCollaborator still honors them. */
   setorAlvo: string;
+  /** Optional brand/laboratório name (e.g. "La Roche-Posay"), picked from a
+   * suggested list (DYNAMIC_BRANDS in dynamics.ts) but stored as free text —
+   * null/empty for a dynamic with no specific brand. When set, replaces the
+   * generic "🎯 DINÂMICA" label on the Dashboard's filter button, so two
+   * simultaneous dynamics for different brands stay distinguishable. */
+  marca: string | null;
   /** 'geral' (default): every participant is measured against the single
    * shared metaValor. 'individual': each participant has their own target
    * in metasIndividuais instead — metaValor is unused in that mode. */
