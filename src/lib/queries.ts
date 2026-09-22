@@ -507,12 +507,50 @@ export function useNotificationSchedules() {
   });
 }
 
+// PostgREST caps a single request at 1000 rows — same truncation bug fixed
+// for `sales` and `products` (see their comments), but `catalog` itself was
+// never migrated: a store whose catalog crosses 1000 rows (multilojas
+// propagation + Substâncias auto-scan + manual reclassification all insert
+// into it) silently gets only the first 1000 rows back, ordered by `nome` —
+// any row alphabetically past that cutoff (including a product an ADM just
+// reclassified in Auditoria) is invisible to classifyProductTier, so it
+// re-appears as "pendente" forever, on every refresh, no matter how many
+// times it's approved. Real production incident: caught when a store's
+// catalog reached 1078 rows and "Aplicar aos selecionados" in Auditoria
+// stopped visibly working (the inserts were landing fine — verified via
+// direct SQL — only the client's `catalog` read was truncated).
+const CATALOG_PAGE_SIZE = 1000;
+const CATALOG_MAX_PAGES = 500;
+
+/** Pages through `catalog` via keyset (cursor) pagination on `id` — same
+ * approach as fetchProductsPages, for the same reason: `id` is already
+ * uniquely indexed and needs no per-page collation work, so alphabetical
+ * order (which nothing downstream actually depends on ordering server-side
+ * for) is left to whatever consumer needs it, instead of asking Postgres to
+ * sort+paginate by `nome`. */
+async function fetchCatalogPages() {
+  const pages: Tables<'catalog'>[][] = [];
+  let cursor: string | null = null;
+  for (let iteration = 0; iteration < CATALOG_MAX_PAGES; iteration++) {
+    let query = supabase.from('catalog').select('*').order('id', { ascending: true }).limit(CATALOG_PAGE_SIZE);
+    if (cursor) query = query.gt('id', cursor);
+    // eslint-disable-next-line no-await-in-loop
+    const { data, error } = await query;
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    pages.push(data);
+    if (data.length < CATALOG_PAGE_SIZE) break;
+    cursor = data[data.length - 1].id;
+  }
+  return pages.flat();
+}
+
 export function useCatalog() {
   return useQuery({
     queryKey: ['catalog'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('catalog').select('*').order('nome');
-      if (error) throw error;
+      const data = await fetchCatalogPages();
+      data.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR') || a.id.localeCompare(b.id));
       return data;
     },
   });
