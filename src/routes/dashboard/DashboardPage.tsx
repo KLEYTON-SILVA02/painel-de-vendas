@@ -93,7 +93,7 @@ function resolveRankFilterParams(
   // already special-case 'ALL' instead of indexing goals[catFilter]).
   // DashboardPage's isDsmMode overrides every actual value derived from
   // this (ranking, meta bar, stat cards) before it reaches the screen.
-  if (rankFilter === 'DSM') return { from: dashFrom, to: dashTo, catFilter: 'ALL' as const, label: 'DSM (Desconto Só Meu)', dinamica: null };
+  if (rankFilter === 'DSM') return { from: dashFrom, to: dashTo, catFilter: 'ALL' as const, label: 'DSM', dinamica: null };
   const found = RANK_FILTERS.find((x) => x.k === rankFilter);
   // rankFilter here is one of RANK_FILTERS' keys ('ALL'|'DERM'|'GEN'|'MP') —
   // the DIN:/LEVMEL/CHIP cases were already returned above, but .startsWith()
