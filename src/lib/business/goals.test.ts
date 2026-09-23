@@ -57,6 +57,27 @@ describe('computeMetaDiariaRedistribuida', () => {
     };
     expect(computeMetaDiariaRedistribuida(goal, salesAugust, collaborators, 'mensal', now)).toBe(0);
   });
+
+  it('counts every sale toward MER regardless of grupo, same as everywhere else MER means the store total', () => {
+    // Regression for a bug where "já vendido este mês" only summed sales
+    // literally tagged grupo === 'MER', undercounting the loja's real total
+    // (which also includes DERM/GEN/MP sales) and inflating the
+    // redistributed daily goal as a result.
+    const mixedSales: Sale[] = [
+      { id: 's1', dataISO: '2026-08-01', matricula: 'M1', vendedor: 'Ana', produto: 'A', qtd: 1, valor: 300, grupo: 'MER' },
+      { id: 's2', dataISO: '2026-08-05', matricula: 'M1', vendedor: 'Ana', produto: 'B', qtd: 1, valor: 400, grupo: 'DERM' },
+      { id: 's3', dataISO: '2026-08-09', matricula: 'M1', vendedor: 'Ana', produto: 'C', qtd: 1, valor: 100, grupo: 'GEN' },
+      { id: 's4', dataISO: '2026-08-10', matricula: 'M1', vendedor: 'Ana', produto: 'D', qtd: 1, valor: 200, grupo: 'MP' },
+    ];
+    const goal: Goal = {
+      categoria: 'MER', mensal: 3100, diaria: 0, metrica: 'valor',
+      autoRedistribuir: true, superMeta: 0, superMetaAuto: false,
+    };
+    // realized through "today" (inclusive), all grupos = 300+400+100+200 = 1000
+    const daily = computeMetaDiariaRedistribuida(goal, mixedSales, collaborators, 'mensal', now);
+    expect(daily).toBeCloseTo((3100 - 1000) / 21);
+    expect(daily).toBeCloseTo(100);
+  });
 });
 
 describe('getGoal / getSuperMeta', () => {
