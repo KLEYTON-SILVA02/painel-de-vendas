@@ -1,7 +1,7 @@
 import type { BioGroupKey, CategoryKey, ClassificationInputs, GoalCategoryKey } from './business/classification';
 import { CAT_KEYS } from './business/classification';
 import { normalizeMatricula } from './business/parsing';
-import type { BioGroupGoal, Collaborator, CommissionRate, Dynamic, Goal, Sale } from './business/types';
+import type { BioGroupGoal, Collaborator, CommissionRate, DsmRecord, Dynamic, Goal, Sale } from './business/types';
 import type { SpecialListItem } from './business/summary';
 import type { Tables } from '../types/database';
 
@@ -44,6 +44,17 @@ export function mapSale(row: SaleRow): Sale {
     qtd: Number(row.qtd) || 0,
     valor: Number(row.valor) || 0,
     grupo: row.grupo as CategoryKey | null,
+  };
+}
+
+export type DsmRecordRow = Pick<Tables<'dsm_records'>, 'id' | 'collaborator_id' | 'data' | 'quantidade'>;
+
+export function mapDsmRecord(row: DsmRecordRow): DsmRecord {
+  return {
+    id: row.id,
+    collaboratorId: row.collaborator_id,
+    dataISO: row.data,
+    quantidade: Number(row.quantidade) || 0,
   };
 }
 

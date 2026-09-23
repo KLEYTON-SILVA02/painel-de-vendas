@@ -12,6 +12,17 @@ export interface Sale {
   grupo: CategoryKey | null;
 }
 
+/** DSM ("Desconto Só Meu"): uma conversão de cupom contada para um
+ * colaborador num dia — importada por planilha ou imagem (não calculada a
+ * partir de `sales`, ver 0087_dsm_records.sql). Sempre soma entre
+ * importações, nunca substitui uma anterior. */
+export interface DsmRecord {
+  id: string;
+  collaboratorId: string;
+  dataISO: string;
+  quantidade: number;
+}
+
 export interface Collaborator {
   id: string;
   matricula: string;

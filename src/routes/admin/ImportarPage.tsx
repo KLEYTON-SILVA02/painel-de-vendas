@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { PageLoading } from '../../components/PageLoading';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../auth/AuthContext';
+import { DsmImportSection } from './DsmImportSection';
 import { HelpTip } from '../../components/HelpTip';
 import { Spinner } from '../../components/Spinner';
 import { classifyProductTier } from '../../lib/business/classification';
@@ -490,6 +491,7 @@ export function ImportarPage() {
   }
 
   return (
+    <div className="flex flex-col gap-6">
     <div className="flex flex-col lg:flex-row gap-4 items-start">
       <div className="flex flex-col gap-3 flex-1 min-w-0 w-full">
       {step === 'pick' && (
@@ -758,6 +760,9 @@ export function ImportarPage() {
       </div>
 
       <ImportHistoryPanel imports={pastImports ?? []} />
+    </div>
+
+    <DsmImportSection />
     </div>
   );
 }
