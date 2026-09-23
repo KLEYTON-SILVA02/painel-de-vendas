@@ -5,7 +5,10 @@ import { monthFirstISO, monthLastISO } from '../lib/dateRange';
 // "Mercadoria Geral" button (ALL, which sums every sale) instead of the two
 // that used to disagree (ALL vs. a literal MER-tagged subset); see
 // DashboardPage's RANK_FILTERS.
-export type RankFilter = 'ALL' | 'DERM' | 'GEN' | 'MP' | 'LEVMEL' | 'CHIP' | `DIN:${string}`;
+// 'DSM' is not a sales category — selecting it swaps the ranking area over
+// to dsm_records data (see DashboardPage's isDsmMode) instead of filtering
+// `sales` like every other member here.
+export type RankFilter = 'ALL' | 'DERM' | 'GEN' | 'MP' | 'LEVMEL' | 'CHIP' | 'DSM' | `DIN:${string}`;
 
 interface DateRangeState {
   refYear: number;

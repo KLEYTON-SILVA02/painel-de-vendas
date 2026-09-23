@@ -13,8 +13,9 @@ import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { RankingModeToggle } from '../../components/ranking/RankingModeToggle';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
+import { computeDsmSummary } from '../../lib/business/dsm';
 import { computeDinamicaRanking, intersectDynamicPeriod } from '../../lib/business/dynamics';
-import { effectiveMetaGeral, getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
+import { diasRestantesNoMes, effectiveMetaGeral, getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
 import type { Dynamic } from '../../lib/business/types';
 import { catTotals, computeSummary } from '../../lib/business/summary';
 import { monthFirstISO, monthLastISO, todayISO } from '../../lib/dateRange';
@@ -22,7 +23,17 @@ import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { copyText, formatRankingText } from '../../lib/clipboard';
 import { useUpdateStoreSettings } from '../../lib/mutations';
 import { generateAllCategoryImages, generateRankingImageBlob, tryCopyImage, type MultiImageResult } from '../../lib/rankingImage';
-import { useCollaborators, useDynamics, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
+import {
+  useCategoryTypes,
+  useCollaborators,
+  useDsmRecords,
+  useDynamics,
+  useGoals,
+  useSales,
+  useSpecialLists,
+  useStore,
+  useStoreSettings,
+} from '../../lib/queries';
 import { useDateRange, type RankFilter } from '../DateRangeContext';
 
 const RANKING_CATEGORIES: { key: CategoryKey | 'LEVMEL' | 'CHIP'; titulo: string }[] = [
@@ -77,6 +88,12 @@ function resolveRankFilterParams(
   }
   if (rankFilter === 'LEVMEL') return { from: dashFrom, to: dashTo, catFilter: 'LEVMEL' as const, label: categoryLabels.LEVMEL, dinamica: null };
   if (rankFilter === 'CHIP') return { from: dashFrom, to: dashTo, catFilter: 'CHIP' as const, label: categoryLabels.CHIP, dinamica: null };
+  // DSM isn't a sales category — there's no CategoryKey for it, so this
+  // reuses 'ALL' as a safe catFilter placeholder (goals/effectiveMetaGeral
+  // already special-case 'ALL' instead of indexing goals[catFilter]).
+  // DashboardPage's isDsmMode overrides every actual value derived from
+  // this (ranking, meta bar, stat cards) before it reaches the screen.
+  if (rankFilter === 'DSM') return { from: dashFrom, to: dashTo, catFilter: 'ALL' as const, label: 'DSM (Desconto Só Meu)', dinamica: null };
   const found = RANK_FILTERS.find((x) => x.k === rankFilter);
   // rankFilter here is one of RANK_FILTERS' keys ('ALL'|'DERM'|'GEN'|'MP') —
   // the DIN:/LEVMEL/CHIP cases were already returned above, but .startsWith()
@@ -87,7 +104,19 @@ function resolveRankFilterParams(
   return { from: dashFrom, to: dashTo, catFilter: rankFilter as CategoryKey | 'ALL', label, dinamica: null };
 }
 
-function RankFilterBar({ dynamics, singleLine, hiddenCategories }: { dynamics: Dynamic[]; singleLine?: boolean; hiddenCategories: string[] }) {
+function RankFilterBar({
+  dynamics,
+  singleLine,
+  hiddenCategories,
+  dsmLabel,
+}: {
+  dynamics: Dynamic[];
+  singleLine?: boolean;
+  hiddenCategories: string[];
+  /** category_types.nome for the 'dsm' row, only when it's ativo — null
+   * hides the button, same "ocultar" rule the sidebar/DSM page follow. */
+  dsmLabel: string | null;
+}) {
   const { rankFilter, setRankFilter } = useDateRange();
   const categoryLabels = useCategoryLabelMap();
   const today = todayISO();
@@ -112,6 +141,11 @@ function RankFilterBar({ dynamics, singleLine, hiddenCategories }: { dynamics: D
             {x.k === 'DERM' ? 'DERMO' : x.k === 'ALL' ? categoryLabels.MER : (categoryLabels[x.k as keyof typeof categoryLabels] ?? x.l)}
           </SubtabButton>
         ))}
+        {dsmLabel && (
+          <SubtabButton active={rankFilter === 'DSM'} onClick={() => setRankFilter('DSM')} shrink={singleLine}>
+            🎟️ DSM
+          </SubtabButton>
+        )}
       </div>
       {activeDynamics.length > 0 && (
         <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
@@ -248,6 +282,9 @@ export function DashboardPage() {
   const { data: goals } = useGoals();
   const { data: storeSettings } = useStoreSettings();
   const { data: store } = useStore();
+  const { data: dsmRecords } = useDsmRecords();
+  const { data: categoryTypes } = useCategoryTypes();
+  const dsmCategory = categoryTypes?.find((c) => c.chave === 'dsm');
   const { data: specialLists } = useSpecialLists();
   const { data: dynamics } = useDynamics();
   const { dashFrom, dashTo, refYear, refMonth, rankFilter, modoGeral, setRankFilter } = useDateRange();
@@ -336,17 +373,47 @@ export function DashboardPage() {
     return best;
   }, [salesData]);
 
-  const rankingFiltered = useMemo(
-    () =>
-      rankFilterParams.dinamica
-        ? computeDinamicaRanking(
-            { ...rankFilterParams.dinamica, dataInicio: rankFilterParams.from, dataFim: rankFilterParams.to },
-            salesData,
-            collaboratorsData,
-          )
-        : computeSummary(salesData, collaboratorsData, rankFilterParams.from, rankFilterParams.to, rankFilterParams.catFilter, specialLists),
-    [rankFilterParams.dinamica, rankFilterParams.from, rankFilterParams.to, rankFilterParams.catFilter, salesData, collaboratorsData, specialLists],
-  );
+  // DSM não é uma categoria de vendas — não roda por computeSummary/sales
+  // nenhum. 'DSM' é tratado à parte aqui, mapeando as linhas de
+  // computeDsmSummary para o mesmo formato SummaryRow que o resto da tela
+  // já espera (valor = itens = conversões), o que deixa todo o resto do
+  // ranking (podium, ordenação, "Copiar ranking") funcionar sem duplicar
+  // lógica — só os cartões de meta/R$ (que não fazem sentido pro DSM) são
+  // sobrescritos separadamente mais abaixo (ver isDsmMode).
+  const isDsmMode = rankFilter === 'DSM';
+  const rankingFiltered = useMemo(() => {
+    if (isDsmMode) {
+      return computeDsmSummary(dsmRecords ?? [], collaboratorsData, dashFrom, dashTo).map((r) => ({
+        matricula: r.matricula,
+        nome: r.nome,
+        apelido: r.apelido,
+        foto: r.foto,
+        metaIndividual: 0,
+        qtd: { DERM: 0, GEN: 0, MP: 0, MER: 0, SEM: 0 },
+        valor: r.conversoes,
+        itens: r.conversoes,
+      }));
+    }
+    return rankFilterParams.dinamica
+      ? computeDinamicaRanking(
+          { ...rankFilterParams.dinamica, dataInicio: rankFilterParams.from, dataFim: rankFilterParams.to },
+          salesData,
+          collaboratorsData,
+        )
+      : computeSummary(salesData, collaboratorsData, rankFilterParams.from, rankFilterParams.to, rankFilterParams.catFilter, specialLists);
+  }, [
+    isDsmMode,
+    dsmRecords,
+    dashFrom,
+    dashTo,
+    rankFilterParams.dinamica,
+    rankFilterParams.from,
+    rankFilterParams.to,
+    rankFilterParams.catFilter,
+    salesData,
+    collaboratorsData,
+    specialLists,
+  ]);
 
   // "Todas as categorias" image specs — 6 computeSummary passes over the
   // full `sales` array. This used to run inline inside
@@ -378,7 +445,14 @@ export function DashboardPage() {
   const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
 
   const isUnitRanking =
-    rankFilterParams.catFilter === 'LEVMEL' || rankFilterParams.catFilter === 'CHIP' || rankFilterParams.dinamica?.metrica === 'unidade';
+    isDsmMode ||
+    rankFilterParams.catFilter === 'LEVMEL' ||
+    rankFilterParams.catFilter === 'CHIP' ||
+    rankFilterParams.dinamica?.metrica === 'unidade';
+  // "un." pra Levmel/Chip, "conv." pro DSM — mesma trilha de formatação
+  // (isUnitRanking), só troca o sufixo mostrado.
+  const unitSuffix = isDsmMode ? 'conv.' : 'un.';
+  const fmtValue = (v: number) => (isUnitRanking ? `${v} ${unitSuffix}` : fmtMoney(v));
   const rankingFilteredList = rankingFiltered.filter((r) => r.valor > 0 || r.itens > 0);
   const modeloRanking = storeSettings.modelo_ranking as 'escadinha' | 'lista';
 
@@ -399,12 +473,18 @@ export function DashboardPage() {
     ? rankingFiltered.reduce((a, r) => a + r.itens, 0)
     : rankingFiltered.reduce((a, r) => a + r.valor, 0);
   const barGoalMode = modoGeral ? 'mes' : 'dia';
-  const barMetaBase =
-    rankFilterParams.catFilter === 'ALL'
+  // DSM não tem meta cadastrada (não é uma categoria de vendas) — sem isso,
+  // catFilter cai no fallback 'ALL' (ver resolveRankFilterParams) e
+  // mostraria a Meta Geral em R$ da loja inteira ao lado de um ranking em
+  // conversões, o que não faz sentido nenhum.
+  const barMetaBase = isDsmMode
+    ? 0
+    : rankFilterParams.catFilter === 'ALL'
       ? effectiveMetaGeral(goals, barGoalMode, sales, collaborators, storeSettings.meta_geral_fallback)
       : getGoal(goals[rankFilterParams.catFilter], barGoalMode, sales, collaborators);
-  const barSuperBase =
-    rankFilterParams.catFilter === 'ALL'
+  const barSuperBase = isDsmMode
+    ? 0
+    : rankFilterParams.catFilter === 'ALL'
       ? getSuperMeta(goals.MER, barGoalMode, sales, collaborators)
       : getSuperMeta(goals[rankFilterParams.catFilter], barGoalMode, sales, collaborators);
   const atingiuBarMeta = barMetaBase > 0 && barValor >= barMetaBase;
@@ -436,6 +516,14 @@ export function DashboardPage() {
     metaExibida = barMetaBase;
     faltaValor = Math.max(0, barMetaBase - barValor);
     faltaLabel = 'Falta p/ Meta';
+  }
+  // Sem meta cadastrada pro DSM, "Meta Geral: 0"/"Falta p/ Meta: 0" não diria
+  // nada de útil — mostra em vez disso os mesmos dois números da tela
+  // própria do DSM (DsmPage.tsx): dias restantes do mês e quantos
+  // colaboradores converteram no período.
+  if (isDsmMode) {
+    metaLabel = 'Dias restantes do mês';
+    faltaLabel = 'Colaboradores participantes';
   }
   const saldo = barValor - barMetaBase;
   const itensCategoria = rankingFiltered.reduce((a, r) => a + r.itens, 0);
@@ -525,13 +613,20 @@ export function DashboardPage() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flex: '1 1 auto', minWidth: 200 }}>
               <div>
                 <div style={{ color: '#ffb700', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 700 }}>
-                  ⭐ Venda total do período
+                  ⭐ {isDsmMode ? 'Conversões DSM no período' : 'Venda total do período'}
                 </div>
-                <div style={{ fontSize: 26, textShadow: '0 0 10px rgba(0,240,255,.55)' }}>{formatChartValue(barValor, isUnitRanking)}</div>
+                <div style={{ fontSize: 26, textShadow: '0 0 10px rgba(0,240,255,.55)' }}>{fmtValue(barValor)}</div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ color: '#8b90bf', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.08em' }}>Atingim. período</div>
-                <div style={{ fontSize: 26, textShadow: '0 0 10px rgba(0,240,255,.55)', color: '#00f0ff' }}>{barPct.toFixed(0)}%</div>
+                {/* DSM não tem meta pra comparar "atingimento" — reaproveita
+                    este espaço pra mostrar quantos colaboradores converteram
+                    no período em vez de um "0%" sem sentido. */}
+                <div style={{ color: '#8b90bf', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.08em' }}>
+                  {isDsmMode ? 'Colaboradores' : 'Atingim. período'}
+                </div>
+                <div style={{ fontSize: 26, textShadow: '0 0 10px rgba(0,240,255,.55)', color: '#00f0ff' }}>
+                  {isDsmMode ? rankingFiltered.length : `${barPct.toFixed(0)}%`}
+                </div>
               </div>
             </div>
 
@@ -561,31 +656,42 @@ export function DashboardPage() {
               of clipping/scrolling. */}
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'clamp(4px, 1vw, 12px)', paddingBottom: 2 }}>
             <div style={{ flex: '1 1 auto', minWidth: 0, overflowX: 'auto' }}>
-              <RankFilterBar dynamics={dynamics} singleLine hiddenCategories={storeSettings.hidden_categories} />
+              <RankFilterBar
+                dynamics={dynamics}
+                singleLine
+                hiddenCategories={storeSettings.hidden_categories}
+                dsmLabel={dsmCategory?.ativo ? dsmCategory.nome : null}
+              />
             </div>
             <div style={{ display: 'flex', gap: 'clamp(3px, 0.5vw, 6px)', flexShrink: 0 }}>
+              {/* Copiar ranking/Gerar imagem ainda não têm uma versão pro DSM
+                  (o texto/imagem gerados assumem R$ ou "un.") — desligados
+                  aqui em vez de gerar uma saída errada; a tela própria do
+                  DSM (/dsm) também não oferece essas duas ações hoje. */}
               <button
                 onClick={handleCopyRanking}
-                title="Copiar ranking de vendas p/ WhatsApp"
+                disabled={isDsmMode}
+                title={isDsmMode ? 'Ainda não disponível para o ranking de DSM' : 'Copiar ranking de vendas p/ WhatsApp'}
                 style={{
                   ...ACTION_BUTTON_STYLE,
                   background: 'transparent',
                   border: '1px solid #212948',
                   color: '#8b90bf',
+                  opacity: isDsmMode ? 0.4 : 1,
                 }}
               >
                 {rankingCopied ? '✓ Copiado!' : '📋 Copiar ranking'}
               </button>
               <button
                 onClick={() => setImageScopeOpen(true)}
-                disabled={generatingImage}
-                title="Gerar imagem do ranking"
+                disabled={generatingImage || isDsmMode}
+                title={isDsmMode ? 'Ainda não disponível para o ranking de DSM' : 'Gerar imagem do ranking'}
                 style={{
                   ...ACTION_BUTTON_STYLE,
                   background: 'transparent',
                   border: '1px solid #ffb700',
                   color: '#ffb700',
-                  opacity: generatingImage ? 0.5 : 1,
+                  opacity: generatingImage || isDsmMode ? 0.5 : 1,
                 }}
               >
                 {generatingImage
@@ -606,7 +712,7 @@ export function DashboardPage() {
               <PodiumSplit
                 ranking={rankingFilteredList}
                 getValue={(r) => (isUnitRanking ? r.itens : r.valor)}
-                formatValue={(v) => (isUnitRanking ? `${v} un.` : fmtMoney(v))}
+                formatValue={fmtValue}
                 bgUrl={storeSettings.ranking_podium_bg_url}
                 spots={storeSettings.ranking_podium_spots as unknown as PodiumSpots | null}
               />
@@ -614,7 +720,7 @@ export function DashboardPage() {
               <PodiumStaircase
                 ranking={rankingFilteredList}
                 getValue={(r) => (isUnitRanking ? r.itens : r.valor)}
-                formatValue={(v) => (isUnitRanking ? `${v} un.` : fmtMoney(v))}
+                formatValue={fmtValue}
                 variant={modeloRanking}
               />
             )}
@@ -654,11 +760,16 @@ export function DashboardPage() {
             header (ChampionHeaderButton, in AppShell) — Evolução Diária and
             Vendas por Categoria below now both span the freed width. */}
         <div className="lg:col-start-2 lg:row-start-1 grid grid-cols-2 gap-2">
-          <StatCard label={metaLabel} value={formatChartValue(metaExibida, isUnitRanking)} color="#00f0ff" badge={atingiuBarMeta ? 'MG ✓' : undefined} />
-          <StatCard label={faltaLabel} value={formatChartValue(faltaValor, isUnitRanking)} color="#a82bff" />
+          <StatCard
+            label={metaLabel}
+            value={isDsmMode ? `${diasRestantesNoMes()} dia(s)` : formatChartValue(metaExibida, isUnitRanking)}
+            color="#00f0ff"
+            badge={!isDsmMode && atingiuBarMeta ? 'MG ✓' : undefined}
+          />
+          <StatCard label={faltaLabel} value={isDsmMode ? String(rankingFiltered.length) : formatChartValue(faltaValor, isUnitRanking)} color="#a82bff" />
           {/* Sign hidden by design (visual only) — `saldo` itself stays negative for every calculation elsewhere. */}
-          <StatCard label="Saldo" value={formatChartValue(Math.abs(saldo), isUnitRanking)} color={saldo >= 0 ? '#ffb700' : '#ff3df0'} />
-          <StatCard label="Itens Vendidos" value={`${itensCategoria} un.`} color="#14ff00" />
+          <StatCard label="Saldo" value={fmtValue(Math.abs(saldo))} color={saldo >= 0 ? '#ffb700' : '#ff3df0'} />
+          <StatCard label="Itens Vendidos" value={fmtValue(itensCategoria)} color="#14ff00" />
         </div>
 
         <div className="lg:col-start-2 lg:row-start-2">
