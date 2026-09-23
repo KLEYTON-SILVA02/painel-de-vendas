@@ -114,6 +114,10 @@ export function ImportarPage() {
   const dsmCategory = categoryTypes?.find((c) => c.chave === 'dsm');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Alterna entre a importação normal de vendas e a do DSM — pedido
+  // explícito do usuário: só um dos dois fica visível por vez, em vez de
+  // mostrar as duas seções empilhadas o tempo todo.
+  const [mode, setMode] = useState<'vendas' | 'dsm'>('vendas');
   const [step, setStep] = useState<Step>('pick');
   const [sheets, setSheets] = useState<ParsedSheet[]>([]);
   const [fileName, setFileName] = useState('');
@@ -501,6 +505,24 @@ export function ImportarPage() {
 
   return (
     <div className="flex flex-col gap-6">
+    <div className="flex gap-2">
+      <button
+        type="button"
+        onClick={() => setMode('vendas')}
+        className={`rounded-lg px-4 py-2 text-sm font-medium ${mode === 'vendas' ? 'bg-cyan-500 text-slate-950' : 'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}
+      >
+        📊 Importar Vendas
+      </button>
+      <button
+        type="button"
+        onClick={() => setMode('dsm')}
+        className={`rounded-lg px-4 py-2 text-sm font-medium ${mode === 'dsm' ? 'bg-cyan-500 text-slate-950' : 'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}
+      >
+        🎟️ Inserir DSM
+      </button>
+    </div>
+
+    {mode === 'vendas' && (
     <div className="flex flex-col lg:flex-row gap-4 items-start">
       <div className="flex flex-col gap-3 flex-1 min-w-0 w-full">
       {step === 'pick' && (
@@ -770,7 +792,10 @@ export function ImportarPage() {
 
       <ImportHistoryPanel imports={pastImports ?? []} />
     </div>
+    )}
 
+    {mode === 'dsm' && (
+    <div className="flex flex-col gap-4">
     {dsmCategory && (
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 flex items-center justify-between gap-3">
         <div>
@@ -801,6 +826,8 @@ export function ImportarPage() {
       </div>
       <DsmImportHistoryPanel imports={pastDsmImports ?? []} />
     </div>
+    </div>
+    )}
     </div>
   );
 }
