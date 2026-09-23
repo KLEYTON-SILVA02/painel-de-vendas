@@ -4,12 +4,28 @@ import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilt
 import { MultiRankingImageModal } from '../../components/ranking/MultiRankingImageModal';
 import { RankingColumnCard } from '../../components/ranking/RankingColumnCard';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
+import { computeDsmSummary } from '../../lib/business/dsm';
 import { diasRestantesNoMes, effectiveMetaGeral, getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
-import { computeColumnRanking } from '../../lib/business/ranking';
+import { computeColumnRanking, type ColumnRankingRow } from '../../lib/business/ranking';
+import type { Goal } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
-import { generateAllCategoryImages, type MultiImageResult } from '../../lib/rankingImage';
-import { useCollaborators, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
+import { generateAllCategoryImages, type CategoryImageSpec, type MultiImageResult } from '../../lib/rankingImage';
+import { useCategoryTypes, useCollaborators, useDsmRecords, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
+
+interface RankingColumnData {
+  key: string;
+  titulo: string;
+  icon: string;
+  cor: string;
+  ranking: ColumnRankingRow[];
+  isUnit: boolean;
+  metaDiaria: number;
+  /** Overrides the "un." suffix — DSM shows "conv." to match how it's
+   * labeled everywhere else in the app, same reasoning as
+   * rankingImage.ts's own unitLabel. */
+  unitLabel?: string;
+}
 
 // Ported 1:1 from legacy/index-original.html (RANKING_COLS / viewRanking()).
 const RANKING_COLS = [
@@ -28,6 +44,9 @@ export function RankingPage() {
   const { data: storeSettings } = useStoreSettings();
   const { data: specialLists } = useSpecialLists();
   const { data: store } = useStore();
+  const { data: dsmRecords } = useDsmRecords();
+  const { data: categoryTypes } = useCategoryTypes();
+  const dsmCategory = categoryTypes?.find((c) => c.chave === 'dsm');
   const { dashFrom, dashTo, refYear, refMonth, modoGeral } = useDateRange();
   const categoryLabels = useCategoryLabelMap();
   const [generatingAll, setGeneratingAll] = useState(false);
@@ -37,6 +56,7 @@ export function RankingPage() {
   const modoDia = dashFrom === dashTo;
   const mode = modoDia ? 'dia' : 'mes';
   const proration = goalProration(dashFrom, dashTo, modoGeral);
+  const hiddenCategories = storeSettings?.hidden_categories ?? [];
 
   // Safe stand-ins so the useMemo below runs unconditionally on every
   // render (same hook order regardless of loading state) — the
@@ -44,15 +64,15 @@ export function RankingPage() {
   const salesData = sales ?? [];
   const collaboratorsData = collaborators ?? [];
 
-  // 6 columns × one computeColumnRanking pass each over the full `sales`
-  // array — in "Modo Geral" (whole month) that's real work, and it used to
-  // run again from scratch (via a duplicate computeSummary call per column,
-  // see statCards below) on every render, including ones triggered by
-  // unrelated state like the "Gerando imagens…" toggle. Memoizing keeps it
-  // tied to the data/date-range actually changing.
+  // Up to 6 columns × one computeColumnRanking pass each over the full
+  // `sales` array — in "Modo Geral" (whole month) that's real work, and it
+  // used to run again from scratch (via a duplicate computeSummary call per
+  // column, see statCards below) on every render, including ones triggered
+  // by unrelated state like the "Gerando imagens…" toggle. Memoizing keeps
+  // it tied to the data/date-range actually changing.
   const columnData = useMemo(() => {
     if (!goals) return [];
-    return RANKING_COLS.map((c) => {
+    const cols: RankingColumnData[] = RANKING_COLS.filter((c) => !hiddenCategories.includes(c.key)).map((c) => {
       const isUnit = c.key === 'LEVMEL' || c.key === 'CHIP';
       // Mercadoria Geral is the store's grand total, not its own exclusive
       // bucket — its column/stat card reflect every sale regardless of
@@ -78,7 +98,37 @@ export function RankingPage() {
       const metaDiaria = getGoal(goals[c.key], 'dia', salesData, collaboratorsData);
       return { ...c, titulo: categoryLabels[c.key] ?? c.titulo, ranking, isUnit, metaDiaria };
     });
-  }, [salesData, collaboratorsData, goals, dashFrom, dashTo, mode, refYear, refMonth, specialLists, categoryLabels]);
+    // DSM não vem de `sales`/computeColumnRanking (ver dsm.ts) — entra à
+    // parte, só quando a própria loja não a ocultou (mesmo "ativo" que
+    // Sidebar/RankFilterBar já respeitam), na mesma posição em que Chip
+    // costumava ficar quando visível.
+    if (dsmCategory?.ativo) {
+      const dsmSummary = computeDsmSummary(dsmRecords ?? [], collaboratorsData, dashFrom, dashTo);
+      const dsmRanking: ColumnRankingRow[] = dsmSummary.map((r) => ({
+        matricula: r.matricula,
+        nome: r.nome,
+        apelido: r.apelido,
+        foto: r.foto,
+        metaIndividual: 0,
+        qtd: { DERM: 0, GEN: 0, MP: 0, MER: 0, SEM: 0 },
+        valor: r.conversoes,
+        itens: r.conversoes,
+        pct: null,
+      }));
+      const dsmGoal = (goals as unknown as Partial<Record<'DSM', Goal>>).DSM;
+      cols.push({
+        key: 'DSM',
+        titulo: dsmCategory.nome,
+        icon: '🎟️',
+        cor: '#00e0c0',
+        ranking: dsmRanking,
+        isUnit: true,
+        metaDiaria: getGoal(dsmGoal, 'dia', salesData, collaboratorsData),
+        unitLabel: 'conv.',
+      });
+    }
+    return cols;
+  }, [salesData, collaboratorsData, goals, dashFrom, dashTo, mode, refYear, refMonth, specialLists, categoryLabels, hiddenCategories, dsmCategory, dsmRecords]);
 
   if (!collaborators || !sales || !goals || !storeSettings || !specialLists) {
     return <PageLoading />;
@@ -92,12 +142,13 @@ export function RankingPage() {
     setGeneratingAll(true);
     setGeneratingProgress({ done: 0, total: columnData.length });
     try {
-      const specs = columnData.map((c) => ({
+      const specs: CategoryImageSpec[] = columnData.map((c) => ({
         key: c.key,
         titulo: c.titulo,
         rows: c.isUnit ? c.ranking.map((r) => ({ ...r, valor: r.itens })) : c.ranking,
         isUnit: c.isUnit,
         metaDiaria: c.metaDiaria,
+        unitLabel: c.unitLabel,
       }));
       const results = await generateAllCategoryImages(specs, dashFrom, dashTo, store?.nome_loja, (done, total) =>
         setGeneratingProgress({ done, total }),
@@ -114,7 +165,7 @@ export function RankingPage() {
     // only drops zero rows, so the sum is identical either way.
     ...columnData.map((c) => {
       const total = c.isUnit ? c.ranking.reduce((a, r) => a + r.itens, 0) : c.ranking.reduce((a, r) => a + r.valor, 0);
-      return { label: `Total ${c.titulo}`, value: c.isUnit ? `${total} un.` : fmtMoney(total), color: c.cor };
+      return { label: `Total ${c.titulo}`, value: c.isUnit ? `${total} ${c.unitLabel ?? 'un.'}` : fmtMoney(total), color: c.cor };
     }),
     {
       stack: [
@@ -141,6 +192,7 @@ export function RankingPage() {
               color={c.cor}
               ranking={c.ranking}
               isUnit={c.isUnit}
+              unitLabel={c.unitLabel}
               metaDiaria={c.metaDiaria}
               dashFrom={dashFrom}
               dashTo={dashTo}

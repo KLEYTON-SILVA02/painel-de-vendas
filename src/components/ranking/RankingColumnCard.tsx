@@ -35,6 +35,7 @@ export function RankingColumnCard({
   color,
   ranking,
   isUnit,
+  unitLabel = 'un.',
   metaDiaria,
   dashFrom,
   dashTo,
@@ -46,6 +47,9 @@ export function RankingColumnCard({
   color: string;
   ranking: ColumnRankingRow[];
   isUnit: boolean;
+  /** Overrides the "un." suffix shown next to each isUnit value — the DSM
+   * column passes "conv." to match how DSM is labeled everywhere else. */
+  unitLabel?: string;
   /** This category's daily goal, for the generated image's "Atingimento" box. */
   metaDiaria?: number;
   dashFrom: string;
@@ -72,7 +76,7 @@ export function RankingColumnCard({
     setGenerating(true);
     try {
       const rows = isUnit ? ranking.map((r) => ({ ...r, valor: r.itens })) : ranking;
-      const blob = await generateRankingImageBlob(rows, title, dashFrom, dashTo, storeName, isUnit, metaDiaria);
+      const blob = await generateRankingImageBlob(rows, title, dashFrom, dashTo, storeName, isUnit, metaDiaria, unitLabel);
       if (!blob) return;
       const copiedToClipboard = await tryCopyImage(blob);
       const url = URL.createObjectURL(blob);
@@ -154,7 +158,7 @@ export function RankingColumnCard({
                   </div>
                 </div>
                 <div style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", color: '#ffb700', flexShrink: 0, whiteSpace: 'nowrap' }}>
-                  {isUnit ? `${r.itens} un.` : r.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  {isUnit ? `${r.itens} ${unitLabel}` : r.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </div>
               </div>
             );

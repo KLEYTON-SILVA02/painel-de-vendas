@@ -16,13 +16,13 @@ import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
 import { computeDsmSummary } from '../../lib/business/dsm';
 import { computeDinamicaRanking, intersectDynamicPeriod } from '../../lib/business/dynamics';
 import { diasRestantesNoMes, effectiveMetaGeral, getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
-import type { Dynamic } from '../../lib/business/types';
+import type { Dynamic, Goal } from '../../lib/business/types';
 import { catTotals, computeSummary } from '../../lib/business/summary';
 import { monthFirstISO, monthLastISO, todayISO } from '../../lib/dateRange';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { copyText, formatRankingText } from '../../lib/clipboard';
 import { useUpdateStoreSettings } from '../../lib/mutations';
-import { generateAllCategoryImages, generateRankingImageBlob, tryCopyImage, type MultiImageResult } from '../../lib/rankingImage';
+import { generateAllCategoryImages, generateRankingImageBlob, tryCopyImage, type CategoryImageSpec, type MultiImageResult } from '../../lib/rankingImage';
 import {
   useCategoryTypes,
   useCollaborators,
@@ -422,9 +422,10 @@ export function DashboardPage() {
   // the tab for as long as those 6 synchronous passes over a large `sales`
   // array took, on top of the (now-parallelized, see rankingImage.ts) image
   // generation itself.
+  const hiddenCategories = storeSettings?.hidden_categories ?? [];
   const allCategorySpecs = useMemo(() => {
     if (!goals) return [];
-    return RANKING_CATEGORIES.map((c) => {
+    const specs: CategoryImageSpec[] = RANKING_CATEGORIES.filter((c) => !hiddenCategories.includes(c.key)).map((c) => {
       const isUnit = c.key === 'LEVMEL' || c.key === 'CHIP';
       const rowsRaw = computeSummary(salesData, collaboratorsData, dashFrom, dashTo, c.key, specialLists);
       return {
@@ -435,7 +436,23 @@ export function DashboardPage() {
         metaDiaria: getGoal(goals[c.key], 'dia', salesData, collaboratorsData),
       };
     });
-  }, [salesData, collaboratorsData, goals, dashFrom, dashTo, specialLists, categoryLabels]);
+    // DSM não é uma CategoryKey (não vem de `sales`/computeSummary — ver
+    // isDsmMode acima) então entra à parte, só quando a própria loja não a
+    // ocultou (mesmo "ativo" que Sidebar/RankFilterBar já respeitam).
+    if (dsmCategory?.ativo) {
+      const dsmRanking = computeDsmSummary(dsmRecords ?? [], collaboratorsData, dashFrom, dashTo);
+      const dsmGoal = (goals as unknown as Partial<Record<'DSM', Goal>>).DSM;
+      specs.push({
+        key: 'DSM',
+        titulo: dsmCategory.nome,
+        rows: dsmRanking.map((r) => ({ nome: r.nome, apelido: r.apelido, foto: r.foto, valor: r.conversoes })),
+        isUnit: true,
+        unitLabel: 'conv.',
+        metaDiaria: getGoal(dsmGoal, 'dia', salesData, collaboratorsData),
+      });
+    }
+    return specs;
+  }, [salesData, collaboratorsData, goals, dashFrom, dashTo, specialLists, categoryLabels, hiddenCategories, dsmCategory, dsmRecords]);
 
   if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !dynamics) {
     return <PageLoading />;
