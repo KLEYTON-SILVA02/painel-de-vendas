@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useCategoryLabelMap } from '../lib/business/categoryLabels';
-import { useCategoryTypes } from '../lib/queries';
+import { useCategoryTypes, useStoreSettings } from '../lib/queries';
 import './Sidebar.css';
 import { FunctionIcon } from './icons/FunctionIcon';
 import {
@@ -102,8 +102,15 @@ export function Sidebar({
   // /categoria-parceria/:chave screen instead of Biosintética's dedicated
   // /bio route.
   const { data: categoryTypes } = useCategoryTypes();
+  const { data: storeSettings } = useStoreSettings();
   const categoryLabels = useCategoryLabelMap();
   const { signOut } = useAuth();
+  // Categorias fixas ocultadas pelo ADM em ADM > Nomes das Categorias
+  // (store_settings.hidden_categories, 0089_hidden_categories.sql) — some o
+  // atalho aqui embaixo, mas a tela /categoria/:chave continua acessível
+  // por link direto e todo o resto (classificação, metas, comissão)
+  // continua funcionando igual.
+  const hiddenCategories = storeSettings?.hidden_categories ?? [];
   const bioCategory = (categoryTypes ?? []).find((c) => c.chave === 'biosintetica');
   // DSM (Desconto Só Meu) — mesmo padrão de rota dedicada da BIOSINTÉTICA,
   // mas com o botão de "ocultar" pedido desde a Fase 1 (ver Importar
@@ -134,7 +141,7 @@ export function Sidebar({
         {GROUPS.map((g) => (
           <div key={g}>
             <div className="sb-group-label">{g}</div>
-            {CAT_NAV.filter((c) => c.grupo === g).map((c) => (
+            {CAT_NAV.filter((c) => c.grupo === g && !hiddenCategories.includes(c.key)).map((c) => (
               <NavLink
                 key={c.key}
                 to={c.to}
@@ -147,7 +154,7 @@ export function Sidebar({
                 <span className="sb-label">{categoryLabels[c.key as keyof typeof categoryLabels] ?? c.label}</span>
               </NavLink>
             ))}
-            {g === 'Programas' && bioCategory && (
+            {g === 'Programas' && bioCategory && bioCategory.ativo && (
               <NavLink
                 to="/bio"
                 end={false}
