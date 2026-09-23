@@ -37,7 +37,17 @@ export function DsmReviewTable({ rows, collaboratorsById, onChangeRow, onRemoveR
               <tr key={r.key} className="border-b border-slate-900">
                 <td className="py-1.5 px-3">
                   {label ? (
-                    <span>{label}</span>
+                    <span>
+                      {label}
+                      {r.fonte === 'nome' && (
+                        <span
+                          className="ml-1.5 text-[10px] rounded-full bg-cyan-500/20 text-cyan-300 px-1.5 py-0.5 align-middle"
+                          title="Este colaborador não foi encontrado pelo padrão matrícula-nome — a segunda leitura achou o nome dele no texto. Confira a quantidade antes de salvar."
+                        >
+                          2ª leitura
+                        </span>
+                      )}
+                    </span>
                   ) : (
                     <span className="text-amber-400" title={r.matriculaRaw}>
                       Não cadastrado ({r.matriculaRaw || '—'})

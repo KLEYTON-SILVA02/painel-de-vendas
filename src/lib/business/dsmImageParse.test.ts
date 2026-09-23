@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildDsmReviewRowsFromImage, detectDateInText, parseDsmImageLines } from './dsmImageParse';
+import { buildDsmReviewRowsFromImage, detectDateInText, parseDsmImageLines, parseDsmImageLinesByCollaboratorName } from './dsmImageParse';
 
 describe('parseDsmImageLines', () => {
   it('parses a typical OCR line into matrícula, nome and the trailing quantidade', () => {
@@ -52,6 +52,65 @@ describe('parseDsmImageLines', () => {
       ['70209751', 166],
       ['70003335', 145],
     ]);
+  });
+});
+
+describe('parseDsmImageLinesByCollaboratorName', () => {
+  const colaboradores = [
+    { nome: 'DEIVESON RAMOS PAIVA', matricula: '70208345' },
+    { nome: 'JACOB JURANDIR DE LIMA TELES', matricula: '70003335' },
+  ];
+
+  it('finds a colaborador by nome even when the matrícula prefix is unreadable, and reads the trailing number', () => {
+    // OCR garbled the leading matrícula into noise, but the nome itself
+    // still reads fine — this is exactly the case the strict matrícula-dash
+    // pattern silently drops.
+    const text = '7O2O8_45 DEIVESON RAMOS PAIVA 1.540 56.955,35 126';
+    const rows = parseDsmImageLinesByCollaboratorName(text, colaboradores, new Set());
+    expect(rows).toEqual([
+      expect.objectContaining({ matricula: '70208345', nome: 'DEIVESON RAMOS PAIVA', quantidade: 126, matchedBy: 'nome' }),
+    ]);
+  });
+
+  it('is accent/case-insensitive when matching the registered nome against the OCR text', () => {
+    const text = 'jacob jurandir de lima teles 1.213 148.533,79 145';
+    const rows = parseDsmImageLinesByCollaboratorName(text, colaboradores, new Set());
+    expect(rows).toEqual([expect.objectContaining({ matricula: '70003335', quantidade: 145 })]);
+  });
+
+  it('skips a colaborador already resolved by the first pass', () => {
+    const text = '70208345-DEIVESON RAMOS PAIVA 1.540 56.955,35 126';
+    const alreadyMatched = new Set(['70208345']);
+    const rows = parseDsmImageLinesByCollaboratorName(text, colaboradores, alreadyMatched);
+    expect(rows).toHaveLength(0);
+  });
+
+  it('finds multiple colaboradores missed by the first pass in the same text', () => {
+    const text = ['DEIVESON RAMOS PAIVA 1.540 56.955,35 126', 'JACOB JURANDIR DE LIMA TELES 1.213 148.533,79 145'].join('\n');
+    const rows = parseDsmImageLinesByCollaboratorName(text, colaboradores, new Set());
+    expect(rows.map((r) => [r.matricula, r.quantidade])).toEqual([
+      ['70208345', 126],
+      ['70003335', 145],
+    ]);
+  });
+
+  it('returns nothing when no registered nome appears in the text', () => {
+    const rows = parseDsmImageLinesByCollaboratorName('TOTAL GERAL 11.820 804.664,39 1124', colaboradores, new Set());
+    expect(rows).toHaveLength(0);
+  });
+});
+
+describe('buildDsmReviewRowsFromImage: fonte flag', () => {
+  it('propagates matchedBy as fonte only for second-pass matches', () => {
+    const primary = parseDsmImageLines('70208345-DEIVESON RAMOS PAIVA 1.540 56.955,35 126');
+    const secondPass = parseDsmImageLinesByCollaboratorName(
+      'JACOB JURANDIR DE LIMA TELES 1.213 148.533,79 145',
+      [{ nome: 'JACOB JURANDIR DE LIMA TELES', matricula: '70003335' }],
+      new Set(),
+    );
+    const rows = buildDsmReviewRowsFromImage([...primary, ...secondPass], '2026-09-23', new Map());
+    expect(rows[0].fonte).toBeUndefined();
+    expect(rows[1].fonte).toBe('nome');
   });
 });
 

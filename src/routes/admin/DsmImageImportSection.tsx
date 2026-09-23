@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { DsmReviewTable } from '../../components/dsm/DsmReviewTable';
 import { Spinner } from '../../components/Spinner';
-import { buildDsmReviewRowsFromImage, detectDateInText, parseDsmImageLines } from '../../lib/business/dsmImageParse';
+import {
+  buildDsmReviewRowsFromImage,
+  detectDateInText,
+  parseDsmImageLines,
+  parseDsmImageLinesByCollaboratorName,
+} from '../../lib/business/dsmImageParse';
 import type { DsmReviewRow } from '../../lib/business/dsmImport';
 import { normalizeMatricula } from '../../lib/business/parsing';
 import { todayISO } from '../../lib/dateRange';
@@ -62,6 +67,11 @@ export function DsmImageImportSection() {
 
   const collaboratorsById = new Map(collaborators.map((c) => [c.id, c]));
   const collaboratorByMatricula = new Map(collaborators.map((c) => [normalizeMatricula(c.matricula), c]));
+  // Extraído à parte (em vez de usar `collaborators` direto dentro da
+  // função abaixo) porque o TypeScript não propaga o "if (!collaborators)
+  // return null" acima para dentro de function declarations aninhadas — sem
+  // isso o tipo volta a ser `Collaborator[] | undefined` lá dentro.
+  const collaboratorNames = collaborators.map((c) => ({ nome: c.nome, matricula: c.matricula }));
 
   function setImage(blob: Blob) {
     setError(null);
@@ -130,7 +140,14 @@ export function DsmImageImportSection() {
       }
       effectiveDate = dataFim;
     }
-    const matches = parseDsmImageLines(text);
+    const primaryMatches = parseDsmImageLines(text);
+    // Segunda leitura/verificação: pega colaboradores cuja linha a primeira
+    // leitura descartou (matrícula ilegível pro OCR, traço sumido, linha
+    // quebrada) mas cujo nome ainda aparece no texto — ver o comentário da
+    // função em dsmImageParse.ts.
+    const alreadyMatched = new Set(primaryMatches.map((m) => m.matricula).filter(Boolean));
+    const secondPassMatches = parseDsmImageLinesByCollaboratorName(text, collaboratorNames, alreadyMatched);
+    const matches = [...primaryMatches, ...secondPassMatches];
     if (matches.length === 0) {
       setError('Nenhuma linha de colaborador foi reconhecida neste texto. Confira o texto extraído ou tente escanear de novo.');
       return;
@@ -307,7 +324,8 @@ export function DsmImageImportSection() {
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <h3 className="font-semibold text-sm mb-1">Conferir dados de DSM antes de salvar</h3>
           <p className="text-xs text-slate-500 mb-3">
-            {rows.length} linha(s) reconhecida(s) — data{' '}
+            {rows.length} linha(s) reconhecida(s)
+            {rows.some((r) => r.fonte === 'nome') ? ` (${rows.filter((r) => r.fonte === 'nome').length} pela segunda leitura, por nome)` : ''} — data{' '}
             {dateMode === 'dia'
               ? dataISO.split('-').reverse().join('/')
               : `${dataInicio.split('-').reverse().join('/')} a ${dataFim.split('-').reverse().join('/')} (gravado em ${dataFim
