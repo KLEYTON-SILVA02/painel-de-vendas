@@ -37,6 +37,14 @@ export function DsmImageImportSection() {
   const [scanProgress, setScanProgress] = useState<number | null>(null);
   const [text, setText] = useState('');
   const [dataISO, setDataISO] = useState(todayISO());
+  // "Período": quando o print mostra um total acumulado de vários dias (ex.:
+  // relatório da semana) em vez de um único dia — grava tudo na data de FIM
+  // do período (dataInicio fica só de referência/anotação, não muda o que é
+  // salvo). Cada linha continua editável na conferência abaixo, então dá pra
+  // ajustar individualmente se algum colaborador precisar de outra data.
+  const [dateMode, setDateMode] = useState<'dia' | 'periodo'>('dia');
+  const [dataInicio, setDataInicio] = useState(todayISO());
+  const [dataFim, setDataFim] = useState(todayISO());
   const [rows, setRows] = useState<DsmReviewRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -88,8 +96,12 @@ export function DsmImageImportSection() {
     try {
       const recognized = await recognizeImageText(imageBlob, setScanProgress);
       setText(recognized);
-      const detectedDate = detectDateInText(recognized);
-      if (detectedDate) setDataISO(detectedDate);
+      // Auto-detecção de data só se aplica no modo "dia único" — em modo
+      // período o ADM já informou início/fim manualmente.
+      if (dateMode === 'dia') {
+        const detectedDate = detectDateInText(recognized);
+        if (detectedDate) setDataISO(detectedDate);
+      }
     } catch {
       setError('Não foi possível ler o texto desta imagem. Tente uma foto mais nítida, ou cole o texto manualmente abaixo.');
     } finally {
@@ -100,16 +112,30 @@ export function DsmImageImportSection() {
 
   function handleProcessText() {
     setError(null);
-    if (!dataISO) {
-      setError('Informe a data desta análise antes de processar.');
-      return;
+    let effectiveDate: string;
+    if (dateMode === 'dia') {
+      if (!dataISO) {
+        setError('Informe a data desta análise antes de processar.');
+        return;
+      }
+      effectiveDate = dataISO;
+    } else {
+      if (!dataInicio || !dataFim) {
+        setError('Informe as datas de início e fim do período antes de processar.');
+        return;
+      }
+      if (dataInicio > dataFim) {
+        setError('A data de início não pode ser depois da data de fim.');
+        return;
+      }
+      effectiveDate = dataFim;
     }
     const matches = parseDsmImageLines(text);
     if (matches.length === 0) {
       setError('Nenhuma linha de colaborador foi reconhecida neste texto. Confira o texto extraído ou tente escanear de novo.');
       return;
     }
-    setRows(buildDsmReviewRowsFromImage(matches, dataISO, collaboratorByMatricula));
+    setRows(buildDsmReviewRowsFromImage(matches, effectiveDate, collaboratorByMatricula));
     setStep('review');
   }
 
@@ -142,6 +168,9 @@ export function DsmImageImportSection() {
     clearImage();
     setText('');
     setDataISO(todayISO());
+    setDateMode('dia');
+    setDataInicio(todayISO());
+    setDataFim(todayISO());
     setRows([]);
     setResult(null);
     setError(null);
@@ -157,8 +186,47 @@ export function DsmImageImportSection() {
             imagem em si não é guardada.
           </p>
 
-          <label className="block text-xs text-slate-400 mb-1">Data desta análise</label>
-          <input type="date" value={dataISO} onChange={(e) => setDataISO(e.target.value)} className="input mb-3 max-w-[180px]" />
+          <div className="flex gap-2 mb-3">
+            <button
+              type="button"
+              onClick={() => setDateMode('dia')}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
+                dateMode === 'dia' ? 'bg-cyan-500 text-slate-950' : 'border border-slate-700 text-slate-300'
+              }`}
+            >
+              Dia único
+            </button>
+            <button
+              type="button"
+              onClick={() => setDateMode('periodo')}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
+                dateMode === 'periodo' ? 'bg-cyan-500 text-slate-950' : 'border border-slate-700 text-slate-300'
+              }`}
+            >
+              Período
+            </button>
+          </div>
+
+          {dateMode === 'dia' ? (
+            <>
+              <label className="block text-xs text-slate-400 mb-1">Data desta análise</label>
+              <input type="date" value={dataISO} onChange={(e) => setDataISO(e.target.value)} className="input mb-3 max-w-[180px]" />
+            </>
+          ) : (
+            <div className="flex flex-wrap items-end gap-3 mb-3">
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Início do período</label>
+                <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="input max-w-[180px]" />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Fim do período</label>
+                <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="input max-w-[180px]" />
+              </div>
+              <p className="text-xs text-slate-500 mb-1.5 basis-full">
+                Os dados escaneados serão gravados na data de fim do período — cada linha continua editável na conferência antes de salvar.
+              </p>
+            </div>
+          )}
 
           <input
             ref={fileInputRef}
@@ -239,8 +307,15 @@ export function DsmImageImportSection() {
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <h3 className="font-semibold text-sm mb-1">Conferir dados de DSM antes de salvar</h3>
           <p className="text-xs text-slate-500 mb-3">
-            {rows.length} linha(s) reconhecida(s) — data {dataISO.split('-').reverse().join('/')}. Corrija data ou quantidade se necessário, ou remova uma
-            linha, antes de salvar. Colaboradores não cadastrados aparecem sinalizados e não são salvos.
+            {rows.length} linha(s) reconhecida(s) — data{' '}
+            {dateMode === 'dia'
+              ? dataISO.split('-').reverse().join('/')
+              : `${dataInicio.split('-').reverse().join('/')} a ${dataFim.split('-').reverse().join('/')} (gravado em ${dataFim
+                  .split('-')
+                  .reverse()
+                  .join('/')})`}
+            . Corrija data ou quantidade se necessário, ou remova uma linha, antes de salvar. Colaboradores não cadastrados aparecem sinalizados e não são
+            salvos.
           </p>
           <DsmReviewTable rows={rows} collaboratorsById={collaboratorsById} onChangeRow={updateRow} onRemoveRow={removeRow} />
           {error && <p className="text-xs text-rose-400 mt-3">{error}</p>}
