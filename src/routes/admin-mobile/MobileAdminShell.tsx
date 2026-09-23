@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { Suspense, lazy, useState } from 'react';
 import { Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
@@ -7,7 +8,7 @@ import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { PageLoading } from '../../components/PageLoading';
 import { Sidebar } from '../../components/Sidebar';
 import { VersionFooter } from '../../components/VersionFooter';
-import { HamburgerIcon } from '../../components/icons/NavIcons';
+import { HamburgerIcon, RefreshIcon } from '../../components/icons/NavIcons';
 import { useResolvePasswordRequest } from '../../lib/mutations';
 import { useCollaborators, usePendingPasswordRequests, useStore } from '../../lib/queries';
 import { useCategorySwipeNav } from './useCategorySwipeNav';
@@ -72,16 +73,32 @@ export function MobileAdminShell() {
   const { data: collaborators } = useCollaborators();
   const { data: pendingPasswordRequests } = usePendingPasswordRequests();
   const resolvePasswordRequest = useResolvePasswordRequest();
+  const queryClient = useQueryClient();
   const location = useLocation();
   const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [pwMenuOpen, setPwMenuOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const swipeNav = useCategorySwipeNav();
 
   function handleAttendRequest(requestId: string, collaboratorId: string) {
     resolvePasswordRequest.mutate(requestId);
     setPwMenuOpen(false);
     navigate('/admin/colaboradores', { state: { openResetFor: collaboratorId } });
+  }
+
+  // Atualiza o sistema geral: reinvalida todo o cache do React Query, mesmo
+  // mecanismo do botão de refresh manual já usado em outras telas (ver
+  // App.tsx) — cada query em uso reage buscando de novo os dados mais
+  // recentes, sem precisar de um reload completo da página.
+  async function handleRefreshAll() {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await queryClient.invalidateQueries();
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   return (
@@ -150,6 +167,20 @@ export function MobileAdminShell() {
               )}
             </div>
           )}
+          {/* Atalho de refresh geral — sem ele, um ADM em campo só tinha o
+              gesto de puxar pra baixo (pull-to-refresh, quando o navegador
+              oferece) pra forçar dados novos; este botão reinvalida tudo
+              explicitamente, na mesma linha do ícone de chave pra ficar
+              junto dos outros atalhos rápidos da barra. */}
+          <button
+            className="mv2-icon-btn"
+            title="Atualizar o sistema"
+            onClick={handleRefreshAll}
+            disabled={refreshing}
+            style={{ fontSize: 14, opacity: refreshing ? 0.6 : 1 }}
+          >
+            <RefreshIcon width={15} height={15} className={refreshing ? 'mv2-spin' : undefined} />
+          </button>
           <button className="mv2-icon-btn" title="Sair" onClick={() => signOut()} style={{ fontSize: 10 }}>
             ⏻
           </button>
