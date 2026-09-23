@@ -61,8 +61,25 @@ export function tiersFor(categoria: ConquistaCategoria, generic?: GenericConquis
   return CONQUISTA_TIERS_BY_CAT[categoria as FixedConquistaCategoria] ?? [];
 }
 
+/** DSM (Desconto Só Meu) is scored the exact same way as LEVMEL/CHIP — no
+ * fixed R$/unit ladder, any day with at least one achievement counts, see
+ * computeDsmConquistas in dsm.ts — but its data lives in dsm_records, not
+ * `sales`, so it never flows through computeConquistas/computeSummary below;
+ * it only needs to be recognized here so the shared rendering helpers
+ * (isUnitConquista, conquistaTierParts/Label, the tier-filter row in
+ * ConquistasPage) treat it the same way as the two existing unit categories. */
 export function isUnitConquista(categoria: ConquistaCategoria): boolean {
-  return categoria === 'LEVMEL' || categoria === 'CHIP';
+  return categoria === 'LEVMEL' || categoria === 'CHIP' || categoria === 'DSM';
+}
+
+const UNIT_CONQUISTA_SUFFIX: Record<string, string> = { DSM: 'conv.' };
+
+/** The unit label for an isUnitConquista category's raw quantity — "un."
+ * for LEVMEL/CHIP, "conv." for DSM. Used both by conquistaTierParts (the
+ * card's own tier text) and by screens that print the achiever's plain
+ * quantity outside the card (e.g. ConquistasPage's grid caption). */
+export function unitConquistaSuffix(categoria: ConquistaCategoria): string {
+  return UNIT_CONQUISTA_SUFFIX[categoria] ?? 'un.';
 }
 
 /** LEVMEL/CHIP don't score against a fixed tier ladder like the R$
@@ -87,8 +104,13 @@ const CONQUISTA_TIER_SUFFIX: Record<FixedConquistaCategoria, string> = {
  * "1º texto" (tier) / "2º texto" (categoria) layers, which each need just
  * one half rather than the combined string. */
 export function conquistaTierParts(categoria: ConquistaCategoria, tier: number, generic?: GenericConquistaConfig): { valor: string; categoria: string } {
-  const nome = generic ? generic.nome.toUpperCase() : (CONQUISTA_TIER_SUFFIX[categoria as FixedConquistaCategoria] ?? categoria);
-  return { valor: isUnitConquista(categoria) ? `${tier}un.` : `${tier / 1000}K`, categoria: nome };
+  const nome = generic
+    ? generic.nome.toUpperCase()
+    : categoria === 'DSM'
+      ? 'DSM (DESCONTO SÓ MEU)'
+      : (CONQUISTA_TIER_SUFFIX[categoria as FixedConquistaCategoria] ?? categoria);
+  const unitSuffix = UNIT_CONQUISTA_SUFFIX[categoria] ?? 'un.';
+  return { valor: isUnitConquista(categoria) ? `${tier}${unitSuffix}` : `${tier / 1000}K`, categoria: nome };
 }
 
 /** "3K DERMOCOSMÉTICOS" / "1K MARCA PRÓPRIA" / "5un. LEVMEL" / "10un. CHIP" */

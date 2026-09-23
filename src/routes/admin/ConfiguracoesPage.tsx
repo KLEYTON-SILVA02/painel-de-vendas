@@ -5,7 +5,6 @@ import { PageLoading } from '../../components/PageLoading';
 import { ReauthModal } from '../../components/ReauthModal';
 import { useAuth } from '../../auth/AuthContext';
 import { DIA_KEYS, DIA_LABELS, type DiaKey } from '../../lib/business/horario';
-import type { BioWeights } from '../../lib/business/types';
 import type { Json } from '../../types/database';
 import { monthName } from '../../lib/format';
 import { monthFirstISO, monthLastISO } from '../../lib/dateRange';
@@ -16,7 +15,6 @@ import {
   useDeleteNotificationSchedule,
   useDeleteSpecialListProduct,
   useSetImportFieldOverride,
-  useUpdateBioWeights,
   useUpdateNotificationSchedule,
   useUpdateOwnAdminUsername,
   useUpdateStoreSettings,
@@ -25,7 +23,6 @@ import {
 import { FIELD_NAMES, type ImportField } from '../../lib/business/importMapping';
 import {
   countRowsInRange,
-  useCategoryTypes,
   useImportFieldOverrides,
   useNotificationSchedules,
   useSpecialListRows,
@@ -52,32 +49,17 @@ export function ConfiguracoesPage() {
   const { profile } = useAuth();
   const { data: rows } = useSpecialListRows();
   const { data: storeSettings } = useStoreSettings();
-  const { data: categoryTypes } = useCategoryTypes();
-  const hasBiosintetica = (categoryTypes ?? []).some((c) => c.chave === 'biosintetica');
   const addProduct = useAddSpecialListProduct(profile?.store_id);
   const deleteProduct = useDeleteSpecialListProduct();
-  const updateWeights = useUpdateBioWeights(profile?.store_id);
 
   const [levmelInput, setLevmelInput] = useState('');
   const [chipInput, setChipInput] = useState('');
-  const [weights, setWeights] = useState<BioWeights | null>(null);
-  const [saving, setSaving] = useState(false);
   const [levmelShown, setLevmelShown] = useState(KEYWORD_PAGE_SIZE);
   const [chipShown, setChipShown] = useState(KEYWORD_PAGE_SIZE);
 
-  if (!rows || !storeSettings || !categoryTypes) return <PageLoading />;
-  const currentWeights = weights ?? (storeSettings.bio_weights as unknown as BioWeights);
+  if (!rows || !storeSettings) return <PageLoading />;
   const levmel = rows.filter((r) => r.tipo === 'levmel');
   const chip = rows.filter((r) => r.tipo === 'chip');
-
-  async function handleSave() {
-    setSaving(true);
-    try {
-      await updateWeights.mutateAsync(currentWeights);
-    } finally {
-      setSaving(false);
-    }
-  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -165,33 +147,6 @@ export function ConfiguracoesPage() {
           </div>
         </div>
       </div>
-
-      {hasBiosintetica && (
-        <>
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-            <h3 className="text-green-400 font-semibold mb-1">🧪 Pesos da BIOSINTÉTICA</h3>
-            <p className="text-xs text-slate-500 mb-3">Pontos ganhos por item vendido em cada grupo.</p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {(['G1', 'G2', 'G3', 'G4'] as const).map((g) => (
-                <div key={g}>
-                  <label className="block text-xs text-slate-400 mb-1">{g}</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={currentWeights[g]}
-                    onChange={(e) => setWeights({ ...currentWeights, [g]: Number(e.target.value) })}
-                    className="input"
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <button onClick={handleSave} disabled={saving} className="self-start rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm disabled:opacity-50">
-            {saving ? 'Salvando…' : 'Salvar configurações'}
-          </button>
-        </>
-      )}
 
       <RankingAppearanceCard />
 

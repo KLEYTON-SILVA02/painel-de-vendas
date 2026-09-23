@@ -12,14 +12,26 @@ import {
   conquistaTierParts,
   isUnitConquista,
   tiersFor,
+  unitConquistaSuffix,
   type ConquistaCategoria,
   type ConquistaRow,
   type GenericConquistaConfig,
 } from '../../lib/business/conquistas';
+import { computeDsmConquistas, computeDsmConquistasDayGallery } from '../../lib/business/dsm';
 import { BUILT_IN_TEMPLATE, renderConquistaCard, type ConquistaCardTemplate } from '../../lib/conquistaCardRender';
 import { generateConquistaImageBlob } from '../../lib/conquistaImage';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
-import { useCollaborators, useConquistaCardTemplates, useGenericConquistaConfigs, useSales, useSpecialLists, useStore } from '../../lib/queries';
+import {
+  useCategoryTypes,
+  useCollaborators,
+  useConquistaCardTemplates,
+  useDsmRecords,
+  useGenericConquistaConfigs,
+  useSales,
+  useSpecialLists,
+  useStore,
+  useStoreSettings,
+} from '../../lib/queries';
 import { tryCopyImage } from '../../lib/rankingImage';
 import { useDateRange } from '../DateRangeContext';
 
@@ -58,6 +70,8 @@ function matchesFilter(row: ConquistaRow, filter: TierFilter): boolean {
   return filter === 'ALL' || row.tier === filter;
 }
 
+const DSM_COLOR = '#00e0c0';
+
 export function ConquistasPage() {
   const { data: collaborators } = useCollaborators();
   const { data: sales } = useSales();
@@ -65,42 +79,76 @@ export function ConquistasPage() {
   const { data: store } = useStore();
   const { data: cardTemplates } = useConquistaCardTemplates();
   const { data: genericConquistas } = useGenericConquistaConfigs();
+  const { data: storeSettings } = useStoreSettings();
+  const { data: categoryTypes } = useCategoryTypes();
+  const { data: dsmRecords } = useDsmRecords();
   const { dashFrom, dashTo, setDay } = useDateRange();
   const categoryLabels = useCategoryLabelMap();
+  const hiddenCategories = storeSettings?.hidden_categories ?? [];
+  const dsmCategory = categoryTypes?.find((c) => c.chave === 'dsm');
   const categories = useMemo(() => {
-    const fixed = CONQUISTA_CATS.map((c) => ({ ...c, label: categoryLabels[c.key] ?? c.label, generic: undefined as GenericConquistaConfig | undefined }));
+    // Uma categoria oculta (as 6 fixas via hidden_categories, DSM via
+    // category_types.ativo) some também daqui — mesmo critério de
+    // visibilidade já usado no menu lateral e no filtro da tela Início,
+    // pra não deixar o ADM gerar figurinha de uma categoria que escolheu
+    // esconder do resto do sistema.
+    const fixed = CONQUISTA_CATS.filter((c) => !hiddenCategories.includes(c.key)).map((c) => ({
+      ...c,
+      label: categoryLabels[c.key] ?? c.label,
+      generic: undefined as GenericConquistaConfig | undefined,
+    }));
     const generic = (genericConquistas ?? []).map((g, i) => ({
       key: g.chave as ConquistaCategoria,
       label: g.nome,
       color: GENERIC_CAT_COLORS[i % GENERIC_CAT_COLORS.length],
       generic: g as GenericConquistaConfig | undefined,
     }));
-    return [...fixed, ...generic];
-  }, [categoryLabels, genericConquistas]);
+    const dsm =
+      dsmCategory && dsmCategory.ativo
+        ? [{ key: 'DSM' as ConquistaCategoria, label: dsmCategory.nome, color: DSM_COLOR, generic: undefined as GenericConquistaConfig | undefined }]
+        : [];
+    return [...fixed, ...generic, ...dsm];
+  }, [categoryLabels, genericConquistas, hiddenCategories, dsmCategory]);
   const [catKey, setCatKey] = useState<ConquistaCategoria>('DERM');
   const [tierFilter, setTierFilter] = useState<TierFilter>('ALL');
   const [generating, setGenerating] = useState(false);
   const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
 
   const info = categories.find((c) => c.key === catKey) ?? categories[0];
-  const generic = info.generic;
+  const generic = info?.generic;
+  const isDsm = info?.key === 'DSM';
 
   // Safe stand-ins so the useMemo calls below always run in the same order
   // (Rules of Hooks) whether or not every query has resolved yet — the
   // "Carregando…" guard comes after them, not before.
   const salesData = sales ?? [];
   const collaboratorsData = collaborators ?? [];
+  const dsmRecordsData = dsmRecords ?? [];
   const rows = useMemo(
-    () => computeConquistas(salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists, generic),
-    [salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists, generic],
+    () =>
+      isDsm
+        ? computeDsmConquistas(dsmRecordsData, collaboratorsData, dashFrom, dashTo)
+        : computeConquistas(salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists, generic),
+    [isDsm, dsmRecordsData, salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists, generic],
   );
   const dayGallery = useMemo(
-    () => computeConquistasDayGallery(salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists, generic),
-    [salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists, generic],
+    () =>
+      isDsm
+        ? computeDsmConquistasDayGallery(dsmRecordsData, collaboratorsData, dashFrom, dashTo)
+        : computeConquistasDayGallery(salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists, generic),
+    [isDsm, dsmRecordsData, salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists, generic],
   );
 
-  if (!collaborators || !sales || !specialLists) {
+  if (!collaborators || !sales || !specialLists || !storeSettings || !categoryTypes || !dsmRecords) {
     return <PageLoading />;
+  }
+
+  if (!info) {
+    return (
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 text-sm text-slate-500 text-center">
+        Nenhuma categoria visível para a Galeria de Conquistas — todas foram ocultadas em ADM → Nomes das Categorias.
+      </div>
+    );
   }
 
   const isUnit = isUnitConquista(catKey);
@@ -347,7 +395,7 @@ function ConquistaCard({
       <canvas ref={canvasRef} className="w-full h-auto block" />
       <div className="mt-1 text-xs font-bold truncate max-w-full px-2">{row.apelido || row.nome}</div>
       <div className="text-xs font-mono" style={{ color: '#14ff00' }}>
-        {isUnit ? `${row.itens} un.` : fmtMoney(row.valor)}
+        {isUnit ? `${row.itens} ${unitConquistaSuffix(categoria)}` : fmtMoney(row.valor)}
       </div>
       <button
         onClick={handleCopyCard}
