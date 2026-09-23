@@ -105,7 +105,14 @@ export function Sidebar({
   const categoryLabels = useCategoryLabelMap();
   const { signOut } = useAuth();
   const bioCategory = (categoryTypes ?? []).find((c) => c.chave === 'biosintetica');
-  const extraCategories = (categoryTypes ?? []).filter((c) => c.chave !== 'biosintetica');
+  // DSM (Desconto Só Meu) — mesmo padrão de rota dedicada da BIOSINTÉTICA,
+  // mas com o botão de "ocultar" pedido desde a Fase 1 (ver Importar
+  // Vendas): diferente de bioCategory/extraCategories acima, que ignoram
+  // `.ativo`, este item só aparece quando a própria loja optou por mantê-lo
+  // visível (o toggle mora em Importar Vendas, sempre alcançável mesmo com
+  // o item oculto daqui).
+  const dsmCategory = (categoryTypes ?? []).find((c) => c.chave === 'dsm');
+  const extraCategories = (categoryTypes ?? []).filter((c) => c.chave !== 'biosintetica' && c.chave !== 'dsm');
 
   return (
     <aside className="sidebar">
@@ -150,6 +157,18 @@ export function Sidebar({
               >
                 <FunctionIcon slot="biosintetica" fallback={LeafIcon} size={18} />
                 <span className="sb-label">{bioCategory.nome}</span>
+              </NavLink>
+            )}
+            {g === 'Programas' && dsmCategory && dsmCategory.ativo && (
+              <NavLink
+                to="/dsm"
+                end={false}
+                onClick={onNavigate}
+                style={{ '--sbc': '#ffb700' } as React.CSSProperties}
+                className={({ isActive }) => (isActive ? 'active' : '')}
+              >
+                <FunctionIcon slot="dsm" fallback={TagIcon} size={18} />
+                <span className="sb-label">{dsmCategory.nome}</span>
               </NavLink>
             )}
             {g === 'Programas' &&

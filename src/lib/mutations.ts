@@ -709,6 +709,21 @@ export function useUpdateConquistaTiers() {
   });
 }
 
+/** Toggle mostrar/ocultar do menu lateral (category_types.ativo) — hoje só
+ * usado pelo DSM (0088_dsm_category_type.sql), o primeiro category_types
+ * `sistema` a expor esse controle ao ADM; Biosintética/categorias
+ * ADM-criadas continuam sem essa opção por ora (ver Sidebar.tsx). */
+export function useUpdateCategoryTypeAtivo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ativo }: { id: string; ativo: boolean }) => {
+      const { error } = await supabase.from('category_types').update({ ativo }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['category_types'] }),
+  });
+}
+
 export function useDeleteDynamic() {
   const qc = useQueryClient();
   return useMutation({
