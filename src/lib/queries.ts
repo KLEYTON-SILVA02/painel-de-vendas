@@ -6,7 +6,7 @@ import type { GenericConquistaConfig } from './business/conquistas';
 import type { CategoryTotalRow, SpecialListItem } from './business/summary';
 import type { CardTextLayer, CardZone, ConquistaCardTemplate } from './conquistaCardRender';
 import { monthFirstISO, monthLastISO } from './dateRange';
-import { mapBioGroupGoal, mapCollaborator, mapCommissionRate, mapDynamic, mapGoal, mapSale, mapSpecialListItem, SALE_COLUMNS, type SaleRow } from './mappers';
+import { mapBioGroupGoal, mapCollaborator, mapCommissionRate, mapDsmRecord, mapDynamic, mapGoal, mapSale, mapSpecialListItem, SALE_COLUMNS, type SaleRow } from './mappers';
 import type { BulkDeletableTable } from './mutations';
 import { supabase } from './supabase';
 import type { Tables } from '../types/database';
@@ -211,6 +211,37 @@ export function useSalesImports() {
       const { data, error } = await supabase
         .from('sales_imports')
         .select('id, file_name, row_count, duplicate_count, created_at')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+/** All DSM records for the store — every row is a colaborador+dia+quantidade
+ * conversion count, always summed together (never replaced by a later
+ * import, see 0087_dsm_records.sql). Small table (one row per colaborador
+ * per day with any conversion), so fetched whole like useCollaborators. */
+export function useDsmRecords() {
+  return useQuery({
+    queryKey: ['dsm_records'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('dsm_records').select('id, collaborator_id, data, quantidade');
+      if (error) throw error;
+      return data.map(mapDsmRecord);
+    },
+  });
+}
+
+/** History panel for the DSM import (planilha/imagem) — mirrors
+ * useSalesImports. */
+export function useDsmImports() {
+  return useQuery({
+    queryKey: ['dsm_imports'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('dsm_imports')
+        .select('id, origem, file_name, row_count, duplicate_count, created_at')
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data;
