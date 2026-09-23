@@ -18,6 +18,7 @@ import { yieldToMain } from '../../lib/scheduler';
 import {
   useBrandKeywords,
   useCatalog,
+  useCategoryTypes,
   useCollaborators,
   useDsmImports,
   useExclusiveBrands,
@@ -26,6 +27,7 @@ import {
   useSales,
   useSalesImports,
 } from '../../lib/queries';
+import { useUpdateCategoryTypeAtivo } from '../../lib/mutations';
 import {
   aggregateByDate,
   compareDateAggregate,
@@ -107,6 +109,9 @@ export function ImportarPage() {
   const { data: pastDsmImports } = useDsmImports();
   const { data: collaborators } = useCollaborators();
   const { data: importFieldOverrides } = useImportFieldOverrides();
+  const { data: categoryTypes } = useCategoryTypes();
+  const updateCategoryTypeAtivo = useUpdateCategoryTypeAtivo();
+  const dsmCategory = categoryTypes?.find((c) => c.chave === 'dsm');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>('pick');
@@ -765,6 +770,29 @@ export function ImportarPage() {
 
       <ImportHistoryPanel imports={pastImports ?? []} />
     </div>
+
+    {dsmCategory && (
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 flex items-center justify-between gap-3">
+        <div>
+          <h3 className="font-semibold text-sm">DSM (Desconto Só Meu) no menu lateral</h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {dsmCategory.ativo
+              ? 'A tela de ranking do DSM está visível no menu lateral. A importação abaixo continua disponível de qualquer forma.'
+              : 'A tela de ranking do DSM está oculta do menu lateral — só a importação abaixo fica visível.'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => updateCategoryTypeAtivo.mutate({ id: dsmCategory.id, ativo: !dsmCategory.ativo })}
+          disabled={updateCategoryTypeAtivo.isPending}
+          className={`shrink-0 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-60 ${
+            dsmCategory.ativo ? 'border border-slate-700 text-slate-300' : 'bg-cyan-500 text-slate-950'
+          }`}
+        >
+          {dsmCategory.ativo ? 'Ocultar do menu' : 'Mostrar no menu'}
+        </button>
+      </div>
+    )}
 
     <div className="flex flex-col lg:flex-row gap-4 items-start">
       <div className="flex flex-col gap-4 flex-1 min-w-0 w-full">

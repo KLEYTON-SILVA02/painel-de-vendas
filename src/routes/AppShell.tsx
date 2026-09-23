@@ -40,6 +40,7 @@ const MobileAdminShell = lazy(() => import('./admin-mobile/MobileAdminShell').th
 // becomes its own chunk, fetched only when that route is actually visited.
 const AdminLandingPage = lazy(() => import('./admin/AdminLandingPage').then((m) => ({ default: m.AdminLandingPage })));
 const BioPage = lazy(() => import('./bio/BioPage').then((m) => ({ default: m.BioPage })));
+const DsmPage = lazy(() => import('./dsm/DsmPage').then((m) => ({ default: m.DsmPage })));
 const CategoryPage = lazy(() => import('./category/CategoryPage').then((m) => ({ default: m.CategoryPage })));
 const ConquistasPage = lazy(() => import('./conquistas/ConquistasPage').then((m) => ({ default: m.ConquistasPage })));
 const TutoriaisPage = lazy(() => import('./admin/TutoriaisPage').then((m) => ({ default: m.TutoriaisPage })));
@@ -85,6 +86,7 @@ const PAGE_TITLES: Record<string, { label: string; color: string; categoryKey?: 
   '/categoria/LEVMEL': { label: '🍯 Levmel', color: '#ffb700', categoryKey: 'LEVMEL' },
   '/categoria/CHIP': { label: '🔴 Chip', color: '#00e5ff', categoryKey: 'CHIP' },
   '/bio': { label: '🧪 BIOSINTÉTICA — Ranking Balcão', color: '#14ff00' },
+  '/dsm': { label: '🎟️ DSM — Desconto Só Meu', color: '#ffb700' },
   '/dinamicas': { label: '🎯 Dinâmicas Comerciais', color: '#a82bff' },
 };
 // Emoji prefixes above stay fixed; only the name after the emoji is
@@ -266,6 +268,7 @@ export function AppShell() {
             <Route path="/metas" element={<MetasPage />} />
             <Route path="/dinamicas" element={<DinamicasPage />} />
             <Route path="/bio" element={<BioPage />} />
+            <Route path="/dsm" element={<DsmPage />} />
             <Route path="/conquistas" element={<ConquistasPage />} />
             <Route path="/conquistas/figurinhas" element={<GaleriaFigurinhasPage />} />
             <Route path="/tutoriais" element={<TutoriaisPage />} />
