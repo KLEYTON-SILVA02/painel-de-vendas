@@ -1543,6 +1543,7 @@ export type Database = {
           catalog_group_scan_last_date: string | null
           cor_destaque: string
           feriados_datas: string[]
+          hidden_categories: string[]
           horario: Json
           meta_geral_fallback: number
           modelo_ranking: string
@@ -1561,6 +1562,7 @@ export type Database = {
           catalog_group_scan_last_date?: string | null
           cor_destaque?: string
           feriados_datas?: string[]
+          hidden_categories?: string[]
           horario?: Json
           meta_geral_fallback?: number
           modelo_ranking?: string
@@ -1579,6 +1581,7 @@ export type Database = {
           catalog_group_scan_last_date?: string | null
           cor_destaque?: string
           feriados_datas?: string[]
+          hidden_categories?: string[]
           horario?: Json
           meta_geral_fallback?: number
           modelo_ranking?: string

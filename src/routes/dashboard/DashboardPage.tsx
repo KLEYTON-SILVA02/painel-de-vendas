@@ -87,17 +87,23 @@ function resolveRankFilterParams(
   return { from: dashFrom, to: dashTo, catFilter: rankFilter as CategoryKey | 'ALL', label, dinamica: null };
 }
 
-function RankFilterBar({ dynamics, singleLine }: { dynamics: Dynamic[]; singleLine?: boolean }) {
+function RankFilterBar({ dynamics, singleLine, hiddenCategories }: { dynamics: Dynamic[]; singleLine?: boolean; hiddenCategories: string[] }) {
   const { rankFilter, setRankFilter } = useDateRange();
   const categoryLabels = useCategoryLabelMap();
   const today = todayISO();
   const activeDynamics = dynamics.filter((d) => d.dataFim >= today);
+  // 'ALL' shows the store's "Mercadoria Geral" label/total (see the comment
+  // above RANK_FILTERS) — hiding MER hides this button too, per ADM
+  // Nomes das Categorias (store_settings.hidden_categories).
+  const visibleFilters = [...RANK_FILTERS, { k: 'LEVMEL' as RankFilter, l: 'Levmel' }, { k: 'CHIP' as RankFilter, l: 'Chip' }].filter(
+    (x) => !hiddenCategories.includes(x.k === 'ALL' ? 'MER' : x.k),
+  );
 
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(3px, 0.5vw, 6px)', marginBottom: 6, flexWrap: singleLine ? 'nowrap' : 'wrap' }}>
         <HelpTip helpKey="dashboard.filtro_categoria" fallback="Escolha uma categoria para ver só as vendas dela na tela e no ranking." />
-        {[...RANK_FILTERS, { k: 'LEVMEL' as RankFilter, l: 'Levmel' }, { k: 'CHIP' as RankFilter, l: 'Chip' }].map((x) => (
+        {visibleFilters.map((x) => (
           <SubtabButton key={x.k} active={rankFilter === x.k} onClick={() => setRankFilter(x.k)} shrink={singleLine}>
             {/* Abreviação só para este filtro da tela Início — o rótulo completo
                 (customizável em ADM > Nomes das Categorias) continua em todo o
@@ -250,11 +256,21 @@ export function DashboardPage() {
   // rankFilter lives in DateRangeContext, shared with RankingPage — sem
   // isso, escolher uma categoria lá (ou aqui, numa visita anterior) deixava
   // a Tela Início sempre "presa" naquela categoria da próxima vez que fosse
-  // aberta. Volta sempre para Mercadoria Geral ao entrar/retornar aqui.
+  // aberta. Volta sempre para Mercadoria Geral ao entrar/retornar aqui —
+  // a menos que a própria loja tenha ocultado essa categoria (ADM > Nomes
+  // das Categorias), caso em que não haveria botão nenhum destacado; nesse
+  // caso cai para a primeira categoria ainda visível.
   useEffect(() => {
-    setRankFilter('ALL');
+    if (storeSettings?.hidden_categories.includes('MER')) {
+      const fallback = ([...RANK_FILTERS.slice(1), { k: 'LEVMEL' as RankFilter }, { k: 'CHIP' as RankFilter }] as { k: RankFilter }[]).find(
+        (x) => !storeSettings.hidden_categories.includes(x.k as string),
+      );
+      setRankFilter(fallback?.k ?? 'ALL');
+    } else {
+      setRankFilter('ALL');
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [storeSettings?.hidden_categories]);
 
   // Safe stand-ins for the useMemo calls below, so their hook call order
   // never depends on whether every query has resolved yet — the
@@ -545,7 +561,7 @@ export function DashboardPage() {
               of clipping/scrolling. */}
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'clamp(4px, 1vw, 12px)', paddingBottom: 2 }}>
             <div style={{ flex: '1 1 auto', minWidth: 0, overflowX: 'auto' }}>
-              <RankFilterBar dynamics={dynamics} singleLine />
+              <RankFilterBar dynamics={dynamics} singleLine hiddenCategories={storeSettings.hidden_categories} />
             </div>
             <div style={{ display: 'flex', gap: 'clamp(3px, 0.5vw, 6px)', flexShrink: 0 }}>
               <button
