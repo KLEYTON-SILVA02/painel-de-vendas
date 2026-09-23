@@ -619,6 +619,96 @@ export type Database = {
           },
         ]
       }
+      dsm_imports: {
+        Row: {
+          created_at: string
+          duplicate_count: number
+          file_name: string | null
+          id: string
+          origem: string
+          row_count: number
+          store_id: string
+        }
+        Insert: {
+          created_at?: string
+          duplicate_count?: number
+          file_name?: string | null
+          id?: string
+          origem: string
+          row_count?: number
+          store_id: string
+        }
+        Update: {
+          created_at?: string
+          duplicate_count?: number
+          file_name?: string | null
+          id?: string
+          origem?: string
+          row_count?: number
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dsm_imports_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dsm_records: {
+        Row: {
+          collaborator_id: string
+          created_at: string
+          data: string
+          id: string
+          import_id: string | null
+          quantidade: number
+          store_id: string
+        }
+        Insert: {
+          collaborator_id: string
+          created_at?: string
+          data: string
+          id?: string
+          import_id?: string | null
+          quantidade: number
+          store_id: string
+        }
+        Update: {
+          collaborator_id?: string
+          created_at?: string
+          data?: string
+          id?: string
+          import_id?: string | null
+          quantidade?: number
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dsm_records_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dsm_records_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "dsm_imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dsm_records_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dynamics: {
         Row: {
           categorias_produtos: Json
