@@ -7,10 +7,19 @@
 //
 // Formato de cada linha esperado (mesmo do relatório usado na Fase 2):
 // "<matrícula>-<NOME>  <número de vendas>  <valor R$>  <número de clientes>"
-// — o número de clientes é sempre o último token numérico da linha (a
-// coluna mais à direita no relatório original), então a extração pega
-// sempre o ÚLTIMO número da linha como quantidade, funcione a linha com
-// 1, 2 ou 3 números à direita do nome.
+// — a quantidade salva é sempre a coluna com o título "Número de Clientes"
+// no relatório original, não simplesmente "o último número da linha": o
+// mesmo relatório às vezes também mostra "Número de Clientes(%)" logo em
+// seguida (mesma ressalva já documentada em dsmImport.ts/QUANTIDADE_TERMS
+// pro caminho de planilha), e se a extração pegasse cegamente o último
+// número, uma % que aparecesse depois do total de clientes viraria a
+// quantidade salva por engano. Como o texto de OCR não tem coluna de
+// verdade, splitNameAndTrailingNumber distingue pelo FORMATO: "Número de
+// Clientes" é sempre um inteiro simples (sem vírgula decimal, sem "%"),
+// enquanto "Valor" e qualquer "Clientes(%)" sempre carregam vírgula
+// decimal (e a % pode ou não sobreviver ao OCR) — então pega o último
+// token, da direita pra esquerda, com cara de inteiro, pulando qualquer
+// vírgula/"%" que venha depois dele.
 import type { DsmReviewRow } from './dsmImport';
 import { normalize } from './normalize';
 import { normalizeMatricula } from './parsing';
@@ -32,29 +41,42 @@ export interface DsmImageLineMatch {
   matchedBy?: 'nome';
 }
 
+// Um token de CONTAGEM ("Vendas" ou "Número de Clientes") é sempre um
+// inteiro simples — só dígitos e opcionalmente pontos de milhar ("1.540"),
+// nunca vírgula decimal. "Valor" (R$) e "Número de Clientes(%)" sempre
+// carregam vírgula decimal, com ou sem o símbolo "%" (o OCR às vezes perde
+// o "%" mas quase nunca inventa uma vírgula) — então é essa vírgula que
+// distingue de forma confiável uma contagem de um valor monetário/percentual.
+const COUNT_TOKEN = /^\d[\d.]*$/;
+// Aceita um "%" opcional colado no fim do token só pra não quebrar a
+// detecção de onde termina a linha de texto e começa a sequência de números.
+const NUMERIC_TOKEN = /^[\d.,]+%?$/;
+
 /** Splits the trailing run of whitespace-separated numeric tokens off the
- * end of `text` (a name possibly followed by "vendas  valor  clientes") —
- * returns the leading non-numeric part (the name) and the LAST numeric
- * token found (quantidade), stripped of thousands separators. Returns
- * quantidade: null when the line has no trailing number at all (still
- * shown in the review table, just excluded from saving until the ADM
- * fills it in manually — same "don't guess" rule as everywhere else in
- * DSM). */
+ * end of `text` (a name possibly followed by "vendas  valor  clientes" and
+ * sometimes a trailing "clientes(%)" too) — returns the leading non-numeric
+ * part (the name) and the quantidade, picked as the rightmost token in that
+ * run that looks like "Número de Clientes" specifically (a plain integer),
+ * skipping over any decimal/percentage column that comes after it. Returns
+ * quantidade: null when no trailing token looks like a plausible count at
+ * all (still shown in the review table, just excluded from saving until
+ * the ADM fills it in manually — same "don't guess" rule as everywhere else
+ * in DSM). */
 function splitNameAndTrailingNumber(text: string): { nome: string; quantidade: number | null } {
   const tokens = text.trim().split(/\s+/);
   // Walks backward to find where the trailing run of numeric-looking
-  // tokens *starts* (there can be several — vendas, valor, clientes) —
-  // quantidade always comes from the very last token specifically (the
-  // rightmost column), not from wherever the run happens to start.
+  // tokens *starts* (there can be several — vendas, valor, clientes, and
+  // sometimes clientes%).
   let numericRunStart = tokens.length;
   for (let i = tokens.length - 1; i >= 0; i--) {
-    if (/^[\d.,]+$/.test(tokens[i])) numericRunStart = i;
+    if (NUMERIC_TOKEN.test(tokens[i])) numericRunStart = i;
     else break;
   }
   if (numericRunStart === tokens.length) return { nome: text.trim(), quantidade: null };
   const nome = tokens.slice(0, numericRunStart).join(' ').trim();
-  const digitsOnly = tokens[tokens.length - 1].replace(/\D/g, '');
-  const quantidade = digitsOnly ? parseInt(digitsOnly, 10) : null;
+  const numericTokens = tokens.slice(numericRunStart);
+  const countToken = [...numericTokens].reverse().find((t) => COUNT_TOKEN.test(t));
+  const quantidade = countToken ? parseInt(countToken.replace(/\D/g, ''), 10) : null;
   return { nome, quantidade };
 }
 
@@ -89,8 +111,10 @@ export function parseDsmImageLines(text: string): DsmImageLineMatch[] {
 
 /** Segunda leitura/verificação do mesmo texto de OCR — em vez de exigir o
  * formato rígido "<matrícula>-<NOME>" da primeira leitura, procura por cada
- * colaborador já cadastrado (pelo nome) em qualquer lugar do texto, e lê só
- * o último número da mesma linha como quantidade de clientes atendidos.
+ * colaborador já cadastrado (pelo nome) em qualquer lugar do texto, e lê a
+ * quantidade de clientes atendidos da mesma linha com a mesma regra de
+ * splitNameAndTrailingNumber (a coluna "Número de Clientes", nunca "Valor"
+ * nem um eventual "Número de Clientes(%)" que apareça depois dela).
  * Existe porque os dígitos da matrícula são a parte que o OCR mais erra
  * (um dígito trocado, o traço sumindo, a linha quebrada em duas) — quando
  * isso acontece, a primeira leitura descarta a linha inteira mesmo com o

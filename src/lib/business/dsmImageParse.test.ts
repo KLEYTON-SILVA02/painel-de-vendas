@@ -37,6 +37,18 @@ describe('parseDsmImageLines', () => {
     expect(row).toMatchObject({ matricula: '70208345', nome: 'DEIVESON RAMOS PAIVA', quantidade: null });
   });
 
+  it('picks the plain-integer "Número de Clientes" column, not a trailing "Número de Clientes(%)" column', () => {
+    // O relatório às vezes mostra a % logo depois da contagem real — pegar
+    // "o último número da linha" pegaria essa % por engano.
+    const [row] = parseDsmImageLines('70208345-DEIVESON RAMOS PAIVA 1.540 56.955,35 126 18,50%');
+    expect(row.quantidade).toBe(126);
+  });
+
+  it('still picks the correct column when the OCR drops the "%" symbol but keeps the decimal comma', () => {
+    const [row] = parseDsmImageLines('70208345-DEIVESON RAMOS PAIVA 1.540 56.955,35 126 18,50');
+    expect(row.quantidade).toBe(126);
+  });
+
   it('parses several real-shaped lines from the same report at once', () => {
     const text = [
       'Loja Matrícula - Nome funcionário Data',
@@ -92,6 +104,12 @@ describe('parseDsmImageLinesByCollaboratorName', () => {
       ['70208345', 126],
       ['70003335', 145],
     ]);
+  });
+
+  it('also skips a trailing "Número de Clientes(%)" column when matching by nome', () => {
+    const text = 'DEIVESON RAMOS PAIVA 1.540 56.955,35 126 18,50%';
+    const rows = parseDsmImageLinesByCollaboratorName(text, colaboradores, new Set());
+    expect(rows[0].quantidade).toBe(126);
   });
 
   it('returns nothing when no registered nome appears in the text', () => {
