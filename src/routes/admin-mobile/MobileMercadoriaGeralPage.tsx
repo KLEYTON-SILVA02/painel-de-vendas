@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
+import { useMobileCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { diasRestantesNoMes, getGoalFromTotals, getSuperMetaFromTotals, goalProration } from '../../lib/business/goals';
 import { summaryFromCategoryTotals } from '../../lib/business/summary';
 import type { Collaborator } from '../../lib/business/types';
@@ -25,7 +25,7 @@ const ACCENT = '#f26122'; // laranja — mesma cor de mv2-cat-mercgeral
 // per-vendedor bar on this specific screen — that's covered by the
 // collaborator-facing "Comissões" mobile screen instead.
 export function MobileMercadoriaGeralPage() {
-  const categoryLabels = useCategoryLabelMap();
+  const categoryLabels = useMobileCategoryLabelMap();
   const title = categoryLabels.MER;
   const { data: collaborators } = useCollaborators();
   const { data: goals } = useGoals();
