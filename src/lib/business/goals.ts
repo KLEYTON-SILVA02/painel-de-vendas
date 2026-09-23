@@ -57,7 +57,14 @@ export function computeMetaDiariaRedistribuida(
 
   const monthFirst = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
   const hojeISO = now.toISOString().slice(0, 10);
-  const rows = computeSummary(sales, collaborators, monthFirst, hojeISO, g.categoria);
+  // Mercadoria Geral (MER) is the store's grand total, not its own
+  // exclusive grupo (same convention every other correct caller already
+  // follows — effectiveMetaGeral, the Ranking columns, RankFilterBar's
+  // 'ALL'). Passing 'MER' straight through as catFilter here undercounted
+  // "já vendido este mês" to only sales tagged literally MER, inflating the
+  // redistributed daily meta for any loja that also has DERM/GEN/MP sales.
+  const catFilter = g.categoria === 'MER' ? 'ALL' : g.categoria;
+  const rows = computeSummary(sales, collaborators, monthFirst, hojeISO, catFilter);
   const realizado =
     g.metrica === 'unidade'
       ? rows.reduce((a, r) => a + r.itens, 0)
@@ -82,7 +89,10 @@ export function computeMetaDiariaRedistribuidaFromTotals(
   const metaAlvo = Number(g[campo]) || 0;
   if (metaAlvo <= 0) return 0;
 
-  const rows = summaryFromCategoryTotals(monthToDateRows, collaborators, g.categoria as CategoryKey);
+  // Same 'MER' → 'ALL' mapping as computeMetaDiariaRedistribuida — see its
+  // comment for why.
+  const catFilter = (g.categoria === 'MER' ? 'ALL' : g.categoria) as CategoryKey | 'ALL';
+  const rows = summaryFromCategoryTotals(monthToDateRows, collaborators, catFilter);
   const realizado = g.metrica === 'unidade' ? rows.reduce((a, r) => a + r.itens, 0) : rows.reduce((a, r) => a + r.valor, 0);
   const restante = Math.max(0, metaAlvo - realizado);
   const diasRestantes = Math.max(1, diasRestantesNoMes(now));
