@@ -4,14 +4,24 @@ import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
 import { computeChampionStars, type ChampionStar, type ChampionStarCategory } from '../../lib/business/champion';
-import { effectiveMetaGeral, getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
-import { catTotals, computeSummary } from '../../lib/business/summary';
+import { effectiveMetaGeralFromTotals, getGoalFromTotals, getSuperMetaFromTotals, goalProration } from '../../lib/business/goals';
+import { computeSummary, summaryFromCategoryTotals, sumCategoryTotals } from '../../lib/business/summary';
 import type { SummaryRow } from '../../lib/business/types';
 import { generateChampionCardBlob } from '../../lib/championImage';
-import { monthFirstISO, monthLastISO } from '../../lib/dateRange';
+import { monthFirstISO, monthLastISO, todayISO } from '../../lib/dateRange';
 import { fmtMoney, monthName } from '../../lib/format';
 import { tryCopyImage } from '../../lib/rankingImage';
-import { useCollaborators, useDynamics, useGenericConquistaConfigs, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
+import {
+  useCollaborators,
+  useDynamics,
+  useGenericConquistaConfigs,
+  useGoals,
+  useMobileCategoryTotals,
+  useSalesInRange,
+  useSpecialLists,
+  useStore,
+  useStoreSettings,
+} from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { GoalGauge } from './GoalGauge';
 import { MobileDateFilter } from './MobileDateFilter';
@@ -21,7 +31,6 @@ const CAT_COLOR: Record<CategoryKey, string> = { DERM: '#b84c9c', GEN: '#698b46'
 export function MobileInicioPage() {
   const CAT_LABEL = useCategoryLabelMap();
   const { data: collaborators } = useCollaborators();
-  const { data: sales } = useSales();
   const { data: goals } = useGoals();
   const { data: storeSettings } = useStoreSettings();
   const { data: specialLists } = useSpecialLists();
@@ -33,15 +42,6 @@ export function MobileInicioPage() {
     () => (genericConquistas ?? []).map((g) => ({ key: g.chave, label: g.nome, generic: g })),
     [genericConquistas],
   );
-
-  // Safe stand-ins so the useMemo calls below always run in the same order
-  // (Rules of Hooks) whether or not every query has resolved yet — the
-  // "Carregando…" guard comes after them, not before. Mobile CPUs feel the
-  // cost of these full `sales` scans much more than desktop does, so
-  // keeping them out of every unrelated render (a toast, a modal) matters
-  // more here, not less.
-  const salesData = sales ?? [];
-  const collaboratorsData = collaborators ?? [];
 
   const modoDia = dashFrom === dashTo;
   const mode = modoDia ? 'dia' : 'mes';
@@ -55,9 +55,35 @@ export function MobileInicioPage() {
   const isUnitChampionCat = rankFilter === 'LEVMEL' || rankFilter === 'CHIP';
   const championCatFilter = rankFilter === 'ALL' || rankFilter.startsWith('DIN:') ? undefined : (rankFilter as CategoryKey | 'LEVMEL' | 'CHIP');
 
+  // Plano de Ação Tartaruga: this used to be a single unconditional
+  // useSales() — the store's ENTIRE sales history, downloaded on every cold
+  // app open since Início is the default landing route. Replaced with two
+  // much smaller fetches: aggregated per-collaborator/per-categoria totals
+  // for the selected range (ranking, gauges — mobile_category_totals RPC,
+  // server-side aggregation), and item-level sales only for the champion
+  // card's own [campeaoFrom, campeaoTo] window (a single day or the
+  // reference month, never the full history) — that window still needs raw
+  // sales because computeChampionStars scores each day individually
+  // (best single day within range), which an already-summed total can't do.
+  const { data: categoryTotals } = useMobileCategoryTotals(dashFrom, dashTo);
+  const { data: campeaoSales } = useSalesInRange(campeaoFrom, campeaoTo);
+  // getGoalFromTotals/getSuperMetaFromTotals/effectiveMetaGeralFromTotals
+  // only need month-to-date totals for the auto-redistribute daily-goal
+  // path — fetched only when at least one of the goals shown here actually
+  // uses it, same conditional pattern as MobileRankingPage.
+  const needsMonthToDate = mode === 'dia' && (CAT_KEYS.some((k) => goals?.[k]?.autoRedistribuir) || !!goals?.MER?.superMetaAuto);
+  const now = new Date();
+  const { data: monthToDateTotals } = useMobileCategoryTotals(monthFirstISO(now.getFullYear(), now.getMonth()), todayISO(), needsMonthToDate);
+
+  // Safe stand-ins so the useMemo calls below always run in the same order
+  // (Rules of Hooks) whether or not every query has resolved yet — the
+  // "Carregando…" guard comes after them, not before.
+  const collaboratorsData = collaborators ?? [];
+  const campeaoSalesData = campeaoSales ?? [];
+
   const ranking = useMemo(
-    () => computeSummary(salesData, collaboratorsData, dashFrom, dashTo, undefined, specialLists),
-    [salesData, collaboratorsData, dashFrom, dashTo, specialLists],
+    () => summaryFromCategoryTotals(categoryTotals ?? [], collaboratorsData, 'ALL'),
+    [categoryTotals, collaboratorsData],
   );
   const totalValor = ranking.reduce((a, r) => a + r.valor, 0);
   const totalItens = ranking.reduce((a, r) => a + r.itens, 0);
@@ -66,15 +92,15 @@ export function MobileInicioPage() {
   const gaugeData = useMemo(() => {
     if (!goals) return [];
     return CAT_KEYS.map((k) => {
-      const t = k === 'MER' ? { valor: totalValor, qtd: totalItens } : catTotals(salesData, dashFrom, dashTo, k);
-      const goal = getGoal(goals[k], mode, salesData, collaboratorsData, proration);
+      const t = k === 'MER' ? { valor: totalValor, qtd: totalItens } : sumCategoryTotals(categoryTotals ?? [], k);
+      const goal = getGoalFromTotals(goals[k], mode, monthToDateTotals ?? [], collaboratorsData, proration);
       return { key: k, valor: t.valor, goal };
     });
-  }, [salesData, collaboratorsData, goals, dashFrom, dashTo, mode, proration, totalValor, totalItens]);
+  }, [categoryTotals, collaboratorsData, goals, mode, proration, totalValor, totalItens, monthToDateTotals]);
 
   const campeaoSource = useMemo(
-    () => computeSummary(salesData, collaboratorsData, campeaoFrom, campeaoTo, championCatFilter, specialLists),
-    [salesData, collaboratorsData, campeaoFrom, campeaoTo, championCatFilter, specialLists],
+    () => computeSummary(campeaoSalesData, collaboratorsData, campeaoFrom, campeaoTo, championCatFilter, specialLists),
+    [campeaoSalesData, collaboratorsData, campeaoFrom, campeaoTo, championCatFilter, specialLists],
   );
   const campeao =
     campeaoSource.length && (isUnitChampionCat ? campeaoSource[0].itens > 0 : campeaoSource[0].valor > 0) ? campeaoSource[0] : null;
@@ -82,17 +108,26 @@ export function MobileInicioPage() {
   const campeaoStars = useMemo(
     () =>
       campeaoMatricula
-        ? computeChampionStars(campeaoMatricula, salesData, collaboratorsData, specialLists, campeaoFrom, campeaoTo, extraStarCategories)
+        ? computeChampionStars(campeaoMatricula, campeaoSalesData, collaboratorsData, specialLists, campeaoFrom, campeaoTo, extraStarCategories)
         : null,
-    [campeaoMatricula, salesData, collaboratorsData, specialLists, campeaoFrom, campeaoTo, extraStarCategories],
+    [campeaoMatricula, campeaoSalesData, collaboratorsData, specialLists, campeaoFrom, campeaoTo, extraStarCategories],
   );
 
-  if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !dynamics) {
+  if (
+    !collaborators ||
+    !categoryTotals ||
+    !campeaoSales ||
+    !goals ||
+    !storeSettings ||
+    !specialLists ||
+    !dynamics ||
+    (needsMonthToDate && !monthToDateTotals)
+  ) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
-  const metaGeral = effectiveMetaGeral(goals, mode, sales, collaborators, storeSettings.meta_geral_fallback, proration);
-  const metaSuper = getSuperMeta(goals.MER, mode, sales, collaborators, proration);
+  const metaGeral = effectiveMetaGeralFromTotals(goals, mode, monthToDateTotals ?? [], collaborators, storeSettings.meta_geral_fallback, proration);
+  const metaSuper = getSuperMetaFromTotals(goals.MER, mode, monthToDateTotals ?? [], collaborators, proration);
   const atingiuMeta = metaGeral > 0 && totalValor >= metaGeral;
   const saldo = totalValor - metaGeral;
   const pct = metaGeral > 0 ? Math.min(999, (totalValor / metaGeral) * 100) : 0;

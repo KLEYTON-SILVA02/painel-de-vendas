@@ -4,10 +4,12 @@ import {
   computeMetaDiariaRedistribuida,
   diasRestantesNoMes,
   effectiveMetaGeral,
+  effectiveMetaGeralFromTotals,
   getGoal,
   getSuperMeta,
   goalProration,
 } from './goals';
+import type { CategoryTotalRow } from './summary';
 import type { Collaborator, Goal, Sale } from './types';
 
 const collaborators: Collaborator[] = [
@@ -152,5 +154,40 @@ describe('effectiveMetaGeral', () => {
     const goals = {} as Record<'DERM' | 'GEN' | 'MP' | 'MER', Goal | undefined>;
     const proration = { periodDays: 5, monthDays: 31 };
     expect(effectiveMetaGeral(goals, 'mes', salesAugust, collaborators, 43000, proration, now)).toBeCloseTo((43000 * 5) / 31);
+  });
+});
+
+describe('effectiveMetaGeralFromTotals', () => {
+  // MER maps to the 'ALL' catch-all bucket (same convention as the RPC
+  // itself and computeMetaDiariaRedistribuidaFromTotals's own doc comment)
+  // — a categoria: 'MER' row here would never be read by these MER-goal
+  // assertions.
+  const monthToDateRows: CategoryTotalRow[] = [
+    { matricula: 'M1', categoria: 'ALL', valorTotal: 1000, itensTotal: 4 },
+  ];
+
+  it('prioritizes the MER goal over the fallback, same as the sales-based version', () => {
+    const goals = {
+      MER: { categoria: 'MER', mensal: 3100, diaria: 0, metrica: 'valor', autoRedistribuir: false, superMeta: 0, superMetaAuto: false } as Goal,
+    } as Record<'DERM' | 'GEN' | 'MP' | 'MER', Goal | undefined>;
+    expect(effectiveMetaGeralFromTotals(goals, 'mes', monthToDateRows, collaborators, 43000, undefined, now)).toBe(3100);
+  });
+
+  it('falls back to metaGeralFallback in month mode when MER goal is unset', () => {
+    const goals = {} as Record<'DERM' | 'GEN' | 'MP' | 'MER', Goal | undefined>;
+    expect(effectiveMetaGeralFromTotals(goals, 'mes', monthToDateRows, collaborators, 43000, undefined, now)).toBe(43000);
+  });
+
+  it('falls back to 0 (not the fallback) in day mode when MER goal is unset', () => {
+    const goals = {} as Record<'DERM' | 'GEN' | 'MP' | 'MER', Goal | undefined>;
+    expect(effectiveMetaGeralFromTotals(goals, 'dia', monthToDateRows, collaborators, 43000, undefined, now)).toBe(0);
+  });
+
+  it('redistributes the MER daily goal from month-to-date totals when autoRedistribuir is on', () => {
+    const goals = {
+      MER: { categoria: 'MER', mensal: 3100, diaria: 0, metrica: 'valor', autoRedistribuir: true, superMeta: 0, superMetaAuto: false } as Goal,
+    } as Record<'DERM' | 'GEN' | 'MP' | 'MER', Goal | undefined>;
+    // Aug 10 2026 noon -> 21 dias restantes (same as the sales-based suite above).
+    expect(effectiveMetaGeralFromTotals(goals, 'dia', monthToDateRows, collaborators, 43000, undefined, now)).toBeCloseTo((3100 - 1000) / 21);
   });
 });

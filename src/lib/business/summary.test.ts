@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { catTotals, computeSummary, computeVendorExtract, daysSince, lastSaleDateFor, matchesSpecialList } from './summary';
+import { catTotals, computeSummary, computeVendorExtract, daysSince, lastSaleDateFor, matchesSpecialList, sumCategoryTotals, type CategoryTotalRow } from './summary';
 import type { Collaborator, Sale } from './types';
 
 const collaborators: Collaborator[] = [
@@ -70,6 +70,35 @@ describe('computeSummary', () => {
 describe('catTotals', () => {
   it('sums qty/value for a single category', () => {
     expect(catTotals(sales, null, null, 'MER')).toEqual({ qtd: 3, valor: 65 });
+  });
+});
+
+describe('sumCategoryTotals', () => {
+  const rows: CategoryTotalRow[] = [
+    { matricula: 'M1', categoria: 'DERM', valorTotal: 100, itensTotal: 2 },
+    { matricula: 'M1', categoria: 'ALL', valorTotal: 150, itensTotal: 3 },
+    { matricula: 'M2', categoria: 'DERM', valorTotal: 200, itensTotal: 4 },
+    { matricula: 'M2', categoria: 'ALL', valorTotal: 200, itensTotal: 4 },
+  ];
+
+  it('sums every matricula for a categoria when no matricula filter is given', () => {
+    expect(sumCategoryTotals(rows, 'DERM')).toEqual({ valor: 300, qtd: 6 });
+  });
+
+  it('scopes the sum to a single matricula when given', () => {
+    expect(sumCategoryTotals(rows, 'ALL', 'M1')).toEqual({ valor: 150, qtd: 3 });
+  });
+
+  it('normalizes the matricula before comparing, same as computeSummary', () => {
+    expect(sumCategoryTotals(rows, 'DERM', '01')).toEqual({ valor: 0, qtd: 0 });
+    expect(sumCategoryTotals([{ matricula: '070', categoria: 'DERM', valorTotal: 50, itensTotal: 1 }], 'DERM', '70')).toEqual({
+      valor: 50,
+      qtd: 1,
+    });
+  });
+
+  it('returns zero for a categoria with no matching rows', () => {
+    expect(sumCategoryTotals(rows, 'MER')).toEqual({ valor: 0, qtd: 0 });
   });
 });
 
