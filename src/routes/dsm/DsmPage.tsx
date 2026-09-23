@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
-import { PodiumSplit } from '../../components/ranking/PodiumSplit';
+import { PodiumSplit, type PodiumSpots } from '../../components/ranking/PodiumSplit';
 import { computeDsmSummary } from '../../lib/business/dsm';
 import { diasRestantesNoMes } from '../../lib/business/goals';
 import { useCollaborators, useDsmRecords, useStoreSettings } from '../../lib/queries';
@@ -59,7 +59,13 @@ export function DsmPage() {
         {ranking.length === 0 ? (
           <div className="text-sm text-slate-500 py-4 text-center">Nenhuma conversão de DSM registrada neste período.</div>
         ) : (
-          <PodiumSplit ranking={ranking} getValue={(r) => r.conversoes} formatValue={(v) => `${v} conv.`} />
+          <PodiumSplit
+            ranking={ranking}
+            getValue={(r) => r.conversoes}
+            formatValue={(v) => `${v} conv.`}
+            bgUrl={storeSettings.ranking_podium_bg_url}
+            spots={storeSettings.ranking_podium_spots as unknown as PodiumSpots | null}
+          />
         )}
       </div>
     </div>

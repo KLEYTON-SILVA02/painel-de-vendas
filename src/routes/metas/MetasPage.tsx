@@ -63,7 +63,7 @@ export function MetasPage() {
           onClick={() => setTab('unidade')}
           className={`rounded-lg px-3 py-1.5 text-sm ${tab === 'unidade' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
         >
-          Levmel / Chip
+          Sub-categorias
         </button>
         <button
           onClick={() => setTab('comissoes')}
@@ -79,7 +79,7 @@ export function MetasPage() {
               : tab === 'individuais'
                 ? 'Define uma meta própria para um colaborador específico, além da meta geral da categoria.'
                 : tab === 'unidade'
-                  ? 'Meta Mensal e Meta Diária de Levmel/Chip, em unidades (não em R$).'
+                  ? 'Meta Mensal e Meta Diária de Levmel/Chip/DSM, em unidades (não em R$).'
                   : 'Percentual de comissão pago por categoria, usado no detalhamento e nos extratos impressos.'
           }
         />
@@ -299,32 +299,45 @@ function MetasPorCategoria() {
 // here instead of joining the CAT_KEYS table above: just Meta Mensal / Meta
 // Diária in unidades, no super meta / redistribuição automática. Reuses the
 // same `goals` table/mutation as the categories above (see useUpdateGoal).
+// DSM não é um GoalCategoryKey "de verdade" (GOAL_UNIT_KEYS/CategoryKey são
+// usados por várias telas — Record<GoalCategoryKey,...> em categoryLabels.ts,
+// NomesCategoriasPage, etc. — onde DSM já tem seu próprio mecanismo de nome/
+// visibilidade via category_types, não via category_labels). Em vez de
+// alargar esse tipo compartilhado só para caber a meta de DSM aqui, a chave
+// usada localmente nesta aba é o tipo mais largo abaixo, com um cast pontual
+// na hora de gravar (goals.categoria já aceita 'DSM' desde a migration 0090).
+type SubCategoriaGoalKey = (typeof GOAL_UNIT_KEYS)[number] | 'DSM';
+const SUB_CATEGORIA_LABELS: Record<'DSM', string> = { DSM: 'DSM (Desconto Só Meu)' };
+
 function MetasUnidade() {
   const categoryLabels = useCategoryLabelMap();
   const { profile } = useAuth();
   const { data: goals } = useGoals();
   const updateGoal = useUpdateGoal(profile?.store_id);
-  const [edits, setEdits] = useState<Partial<Record<(typeof GOAL_UNIT_KEYS)[number], { mensal: number; diaria: number }>>>({});
+  const [edits, setEdits] = useState<Partial<Record<SubCategoriaGoalKey, { mensal: number; diaria: number }>>>({});
   const [saving, setSaving] = useState(false);
 
   if (!goals) return <PageLoading />;
 
-  function fieldValue(k: (typeof GOAL_UNIT_KEYS)[number], field: 'mensal' | 'diaria'): number {
+  const goalsByKey = goals as unknown as Partial<Record<SubCategoriaGoalKey, { mensal: number; diaria: number }>>;
+
+  function fieldValue(k: SubCategoriaGoalKey, field: 'mensal' | 'diaria'): number {
     const edit = edits[k]?.[field];
     if (edit !== undefined) return edit;
-    return goals![k]?.[field] ?? 0;
+    return goalsByKey[k]?.[field] ?? 0;
   }
-  function setField(k: (typeof GOAL_UNIT_KEYS)[number], field: 'mensal' | 'diaria', value: number) {
+  function setField(k: SubCategoriaGoalKey, field: 'mensal' | 'diaria', value: number) {
     setEdits((prev) => ({ ...prev, [k]: { mensal: fieldValue(k, 'mensal'), diaria: fieldValue(k, 'diaria'), [field]: value } }));
   }
 
   async function handleSave() {
     setSaving(true);
     try {
-      for (const k of GOAL_UNIT_KEYS) {
+      const keys: SubCategoriaGoalKey[] = [...GOAL_UNIT_KEYS, 'DSM'];
+      for (const k of keys) {
         const patch = edits[k];
         if (!patch) continue;
-        await updateGoal.mutateAsync({ categoria: k, patch: { mensal: patch.mensal, diaria: patch.diaria, metrica: 'unidade' } });
+        await updateGoal.mutateAsync({ categoria: k as GoalCategoryKey, patch: { mensal: patch.mensal, diaria: patch.diaria, metrica: 'unidade' } });
       }
       setEdits({});
     } finally {
@@ -335,15 +348,15 @@ function MetasUnidade() {
   return (
     <div className="flex flex-col gap-3">
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <h3 className="font-semibold mb-1">Metas — Levmel / Chip</h3>
+        <h3 className="font-semibold mb-1">Metas — Sub-categorias</h3>
         <p className="text-xs text-slate-500 mb-4">
-          Meta Mensal e Meta Diária independentes para Levmel e Chip, em unidades. Usadas nos cards, rankings e no
-          cálculo de estrelas do card de campeão.
+          Meta Mensal e Meta Diária independentes para Levmel, Chip e DSM, em unidades (para DSM, em conversões).
+          Usadas nos cards, rankings e no cálculo de estrelas do card de campeão.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {GOAL_UNIT_KEYS.map((k) => (
+          {[...GOAL_UNIT_KEYS, 'DSM' as const].map((k) => (
             <div key={k} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-              <div className="font-semibold text-sm mb-2">{categoryLabels[k]}</div>
+              <div className="font-semibold text-sm mb-2">{k === 'DSM' ? SUB_CATEGORIA_LABELS.DSM : categoryLabels[k]}</div>
               <label className="block text-xs text-slate-400 mb-1">Meta Mensal (un.)</label>
               <input
                 type="number"
