@@ -3,10 +3,14 @@ import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import type { CategoryKey, GoalCategoryKey } from '../../lib/business/classification';
 import { getGoal, getSuperMeta } from '../../lib/business/goals';
 import { matchesSpecialList, type SpecialListItem } from '../../lib/business/summary';
-import type { Collaborator, Goal, Sale } from '../../lib/business/types';
+import type { Collaborator, DsmRecord, Goal, Sale } from '../../lib/business/types';
 import { fmtMoney } from '../../lib/format';
 
-export type ChartCategoryKey = CategoryKey | 'LEVMEL' | 'CHIP';
+// Chip replaced by DSM here (per user request) — this chart keeps a fixed
+// single tab per category (not a per-store hidden/ativo toggle like the
+// Ranking screens), so unlike RankFilterBar's "hide Chip, add DSM as an
+// extra tab" this is a direct 1:1 swap of the old Chip slot.
+export type ChartCategoryKey = CategoryKey | 'LEVMEL' | 'DSM';
 
 export const CHART_CATEGORIES: { key: ChartCategoryKey; titulo: string; color: string }[] = [
   { key: 'MER', titulo: 'Mercadoria Geral', color: '#ff6a00' },
@@ -14,7 +18,7 @@ export const CHART_CATEGORIES: { key: ChartCategoryKey; titulo: string; color: s
   { key: 'GEN', titulo: 'Genéricos', color: '#14ff00' },
   { key: 'MP', titulo: 'Marcas Exclusivas', color: '#a82bff' },
   { key: 'LEVMEL', titulo: 'Levmel', color: '#ffb700' },
-  { key: 'CHIP', titulo: 'Chip', color: '#00e5ff' },
+  { key: 'DSM', titulo: 'DSM', color: '#00e0c0' },
 ];
 
 export interface DailyPoint {
@@ -25,27 +29,31 @@ export interface DailyPoint {
   hitSuper: boolean;
 }
 
-/** LEVMEL/CHIP goals and rankings are tracked in units sold, not R$ (same
- * convention as everywhere else those two categories appear — ranking
+/** LEVMEL/DSM goals and rankings are tracked in units/conversões, not R$
+ * (same convention as everywhere else those categories appear — ranking
  * podiums, category gauges), so this chart's day totals, axis, and tooltip
  * all switch to unit counts for them instead of currency. */
 export function isUnitChartCategory(catKey: ChartCategoryKey): boolean {
-  return catKey === 'LEVMEL' || catKey === 'CHIP';
+  return catKey === 'LEVMEL' || catKey === 'DSM';
 }
 
-export function formatChartValue(value: number, isUnit: boolean): string {
-  return isUnit ? `${value} un.` : fmtMoney(value);
+export function formatChartValue(value: number, isUnit: boolean, unitLabel = 'un.'): string {
+  return isUnit ? `${value} ${unitLabel}` : fmtMoney(value);
 }
 
 /** Buckets `salesData` by day for the reference month (monthFirst..monthLast)
  * and one category — MER counts every sale (store total, same convention as
- * everywhere else this category is treated as "all sales"), LEVMEL/CHIP
- * match by product-name keyword (matchesSpecialList, they're not a `grupo`
- * value) and sum quantity sold instead of R$, the rest by `grupo`. Every
- * calendar day gets a point even with no sales (valor 0), so the x-axis
- * never skips a day. */
+ * everywhere else this category is treated as "all sales"), LEVMEL matches
+ * by product-name keyword (matchesSpecialList, it's not a `grupo` value) and
+ * sums quantity sold instead of R$, the rest by `grupo`. DSM doesn't come
+ * from `sales` at all (see dsm.ts) — it buckets `dsmRecords` by day instead,
+ * summing `quantidade` for collaborators that still exist (same filter
+ * computeDsmSummary already applies). Every calendar day gets a point even
+ * with no sales (valor 0), so the x-axis never skips a day. */
 function computeDailyPoints(
   salesData: Sale[],
+  dsmRecords: DsmRecord[],
+  collaboratorsData: Collaborator[],
   catKey: ChartCategoryKey,
   monthFirst: string,
   monthLast: string,
@@ -54,15 +62,24 @@ function computeDailyPoints(
   superMetaDiaria: number,
 ): DailyPoint[] {
   const isUnit = isUnitChartCategory(catKey);
-  const list = isUnit ? (catKey === 'LEVMEL' ? specialLists?.levmel : specialLists?.chip) : undefined;
   const byDay = new Map<string, number>();
-  salesData.forEach((s) => {
-    if (!s.dataISO || s.dataISO < monthFirst || s.dataISO > monthLast) return;
-    const matches = catKey === 'MER' ? true : isUnit ? matchesSpecialList(s.produto, list) : s.grupo === catKey;
-    if (!matches) return;
-    const amount = isUnit ? Number(s.qtd) || 0 : Number(s.valor) || 0;
-    byDay.set(s.dataISO, (byDay.get(s.dataISO) ?? 0) + amount);
-  });
+  if (catKey === 'DSM') {
+    const collaboratorIds = new Set(collaboratorsData.map((c) => c.id));
+    dsmRecords.forEach((r) => {
+      if (!r.dataISO || r.dataISO < monthFirst || r.dataISO > monthLast) return;
+      if (!collaboratorIds.has(r.collaboratorId)) return;
+      byDay.set(r.dataISO, (byDay.get(r.dataISO) ?? 0) + r.quantidade);
+    });
+  } else {
+    const list = isUnit ? specialLists?.levmel : undefined;
+    salesData.forEach((s) => {
+      if (!s.dataISO || s.dataISO < monthFirst || s.dataISO > monthLast) return;
+      const matches = catKey === 'MER' ? true : isUnit ? matchesSpecialList(s.produto, list) : s.grupo === catKey;
+      if (!matches) return;
+      const amount = isUnit ? Number(s.qtd) || 0 : Number(s.valor) || 0;
+      byDay.set(s.dataISO, (byDay.get(s.dataISO) ?? 0) + amount);
+    });
+  }
 
   const totalDays = Number(monthLast.slice(8, 10));
   const yearMonthPrefix = monthFirst.slice(0, 8);
@@ -100,6 +117,24 @@ interface DailyEvolutionChartProps {
   specialLists: { levmel: SpecialListItem[]; chip: SpecialListItem[] } | undefined;
   monthFirst: string;
   monthLast: string;
+  dsmRecords: DsmRecord[];
+  /** category_types.nome for the 'dsm' row — overrides CHART_CATEGORIES'
+   * default "DSM" titulo the same way every other DSM tab in the app
+   * respects a store's own rename, falling back to "DSM" when not set. */
+  dsmLabel?: string;
+}
+
+/** DSM isn't a GoalCategoryKey (that union stays scoped to the 6 fixed
+ * sales categories — see MetasPage.tsx/MobileDsmPage.tsx's own note on
+ * this), so its goal is read the same way: a local cast, not a widened
+ * shared type. */
+function goalFor(goals: Record<GoalCategoryKey, Goal | undefined>, catKey: ChartCategoryKey): Goal | undefined {
+  if (catKey === 'DSM') return (goals as unknown as Partial<Record<'DSM', Goal>>).DSM;
+  return goals[catKey];
+}
+
+function unitLabelFor(catKey: ChartCategoryKey): string {
+  return catKey === 'DSM' ? 'conv.' : 'un.';
 }
 
 // Shared by the desktop (vertical bars) and mobile (horizontal bars) chart
@@ -109,30 +144,32 @@ interface DailyEvolutionChartProps {
 // Meta Geral in the middle, its daily Super Meta at the top — so the same
 // bar height always means the same progress toward that day's targets,
 // whichever category tab is active. A category with no Super Meta
-// configured (LEVMEL/CHIP typically don't use one) falls back to 1.5× its
+// configured (LEVMEL/DSM typically don't use one) falls back to 1.5× its
 // daily meta as headroom; with neither goal configured, falls back to the
 // old observed-max heuristic so the chart still reads sensibly.
-export function useDailyEvolutionChart({ salesData, collaboratorsData, goals, specialLists, monthFirst, monthLast }: DailyEvolutionChartProps) {
+export function useDailyEvolutionChart({ salesData, collaboratorsData, goals, specialLists, monthFirst, monthLast, dsmRecords, dsmLabel }: DailyEvolutionChartProps) {
   const [catKey, setCatKey] = useState<ChartCategoryKey>('MER');
   const categoryLabels = useCategoryLabelMap();
   const categories = useMemo(
-    () => CHART_CATEGORIES.map((c) => ({ ...c, titulo: categoryLabels[c.key] ?? c.titulo })),
-    [categoryLabels],
+    () => CHART_CATEGORIES.map((c) => (c.key === 'DSM' ? { ...c, titulo: dsmLabel ?? c.titulo } : { ...c, titulo: categoryLabels[c.key] ?? c.titulo })),
+    [categoryLabels, dsmLabel],
   );
   const active = categories.find((c) => c.key === catKey)!;
   const isUnit = isUnitChartCategory(catKey);
+  const unitLabel = unitLabelFor(catKey);
 
+  const goalAtual = goalFor(goals, catKey);
   const metaDiaria = useMemo(
-    () => getGoal(goals[catKey], 'dia', salesData, collaboratorsData),
-    [goals, catKey, salesData, collaboratorsData],
+    () => getGoal(goalAtual, 'dia', salesData, collaboratorsData),
+    [goalAtual, salesData, collaboratorsData],
   );
   const superMetaDiaria = useMemo(
-    () => getSuperMeta(goals[catKey], 'dia', salesData, collaboratorsData),
-    [goals, catKey, salesData, collaboratorsData],
+    () => getSuperMeta(goalAtual, 'dia', salesData, collaboratorsData),
+    [goalAtual, salesData, collaboratorsData],
   );
   const points = useMemo(
-    () => computeDailyPoints(salesData, catKey, monthFirst, monthLast, specialLists, metaDiaria, superMetaDiaria),
-    [salesData, catKey, monthFirst, monthLast, specialLists, metaDiaria, superMetaDiaria],
+    () => computeDailyPoints(salesData, dsmRecords, collaboratorsData, catKey, monthFirst, monthLast, specialLists, metaDiaria, superMetaDiaria),
+    [salesData, dsmRecords, collaboratorsData, catKey, monthFirst, monthLast, specialLists, metaDiaria, superMetaDiaria],
   );
   const { axisTop, axisMid } = useMemo(() => {
     if (superMetaDiaria > 0) {
@@ -145,11 +182,11 @@ export function useDailyEvolutionChart({ salesData, collaboratorsData, goals, sp
     return { axisTop: fallback, axisMid: fallback / 2 };
   }, [metaDiaria, superMetaDiaria, points]);
 
-  return { catKey, setCatKey, active, isUnit, points, axisTop, axisMid, categories };
+  return { catKey, setCatKey, active, isUnit, unitLabel, points, axisTop, axisMid, categories };
 }
 
 export function DailyEvolutionChart(props: DailyEvolutionChartProps) {
-  const { catKey, setCatKey, active, isUnit, points, axisTop, axisMid, categories } = useDailyEvolutionChart(props);
+  const { catKey, setCatKey, active, isUnit, unitLabel, points, axisTop, axisMid, categories } = useDailyEvolutionChart(props);
   const CHART_H = 170;
 
   return (
@@ -194,9 +231,9 @@ export function DailyEvolutionChart(props: DailyEvolutionChartProps) {
         {/* Y-axis: 3 marks (0, meta diária, super meta diária) against the
             active category's own goals — see useDailyEvolutionChart above. */}
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: CHART_H, fontSize: 9, color: '#8b90bf', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0, textAlign: 'right', paddingBottom: 18 }}>
-          <span>{formatChartValue(axisTop, isUnit)}</span>
-          <span>{formatChartValue(axisMid, isUnit)}</span>
-          <span>{formatChartValue(0, isUnit)}</span>
+          <span>{formatChartValue(axisTop, isUnit, unitLabel)}</span>
+          <span>{formatChartValue(axisMid, isUnit, unitLabel)}</span>
+          <span>{formatChartValue(0, isUnit, unitLabel)}</span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, flex: 1, minWidth: points.length * 16 }}>
@@ -210,7 +247,7 @@ export function DailyEvolutionChart(props: DailyEvolutionChartProps) {
             return (
               <div key={p.dateISO} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, minWidth: 14 }}>
                 <div
-                  title={`Realizado no dia: ${formatChartValue(p.valor, isUnit)}`}
+                  title={`Realizado no dia: ${formatChartValue(p.valor, isUnit, unitLabel)}`}
                   style={{ position: 'relative', width: '100%', height: CHART_H, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', cursor: 'default' }}
                 >
                   {(showMeta || showSuper) && (

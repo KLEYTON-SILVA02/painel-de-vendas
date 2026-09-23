@@ -83,6 +83,16 @@ export function unitConquistaSuffix(categoria: ConquistaCategoria): string {
   return UNIT_CONQUISTA_SUFFIX[categoria] ?? 'un.';
 }
 
+/** Same quantity as unitConquistaSuffix, but spelled out for the caption
+ * printed below the card (outside the canvas, next to the achiever's name)
+ * — DSM shows "3 conversões" there instead of the compact "3 c" that stays
+ * on the card itself (the card has no room for the full word). LEVMEL/CHIP
+ * keep their existing "un." caption, unchanged. */
+export function unitConquistaCaptionText(categoria: ConquistaCategoria, itens: number): string {
+  if (categoria === 'DSM') return `${itens} ${itens === 1 ? 'conversão' : 'conversões'}`;
+  return `${itens} ${unitConquistaSuffix(categoria)}`;
+}
+
 /** LEVMEL/CHIP don't score against a fixed tier ladder like the R$
  * categories — every unit sold that day is itself the achievement (1un.,
  * 2un., 3un., ...), so any sale at all counts. CHIP additionally caps at

@@ -12,7 +12,7 @@ import {
   conquistaTierParts,
   isUnitConquista,
   tiersFor,
-  unitConquistaSuffix,
+  unitConquistaCaptionText,
   type ConquistaCategoria,
   type ConquistaRow,
   type GenericConquistaConfig,
@@ -395,7 +395,7 @@ function ConquistaCard({
       <canvas ref={canvasRef} className="w-full h-auto block" />
       <div className="mt-1 text-xs font-bold truncate max-w-full px-2">{row.apelido || row.nome}</div>
       <div className="text-xs font-mono" style={{ color: '#14ff00' }}>
-        {isUnit ? `${row.itens} ${unitConquistaSuffix(categoria)}` : fmtMoney(row.valor)}
+        {isUnit ? unitConquistaCaptionText(categoria, row.itens) : fmtMoney(row.valor)}
       </div>
       <button
         onClick={handleCopyCard}

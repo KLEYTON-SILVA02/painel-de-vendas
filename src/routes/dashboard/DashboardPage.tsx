@@ -757,6 +757,8 @@ export function DashboardPage() {
             specialLists={specialLists}
             monthFirst={monthFirst}
             monthLast={monthLast}
+            dsmRecords={dsmRecords ?? []}
+            dsmLabel={dsmCategory?.nome}
           />
         </div>
 
