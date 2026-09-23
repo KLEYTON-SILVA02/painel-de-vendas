@@ -1,5 +1,13 @@
 # Notas para o Claude neste repositório
 
+## Estilo de comunicação (instrução permanente do usuário)
+
+A partir desta sessão: toda resposta em chat — em qualquer projeto, não só
+este — deve traduzir a parte técnica/analítica para linguagem simples e
+direta, evitando jargão sem explicar. Vale pra explicações, análises e
+planejamentos; não muda nada em código/nomes técnicos reais (esses
+continuam em português técnico normal).
+
 ## Publicação / Deploy
 
 - Este projeto está conectado a três deploys automáticos a partir de `main`: **Vercel** e dois sites Netlify (`gestaodevendasks`, `painel-de-vendas-kms`).
