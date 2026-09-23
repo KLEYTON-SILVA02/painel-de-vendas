@@ -108,7 +108,7 @@ export function conquistaTierParts(categoria: ConquistaCategoria, tier: number, 
   const nome = generic
     ? generic.nome.toUpperCase()
     : categoria === 'DSM'
-      ? 'DSM (DESCONTO SÓ MEU)'
+      ? 'DSM'
       : (CONQUISTA_TIER_SUFFIX[categoria as FixedConquistaCategoria] ?? categoria);
   const unitSuffix = UNIT_CONQUISTA_SUFFIX[categoria] ?? 'un.';
   // LEVMEL/CHIP keep the tight "5un." convention already used everywhere

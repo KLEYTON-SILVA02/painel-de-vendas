@@ -86,7 +86,7 @@ const PAGE_TITLES: Record<string, { label: string; color: string; categoryKey?: 
   '/categoria/LEVMEL': { label: '🍯 Levmel', color: '#ffb700', categoryKey: 'LEVMEL' },
   '/categoria/CHIP': { label: '🔴 Chip', color: '#00e5ff', categoryKey: 'CHIP' },
   '/bio': { label: '🧪 BIOSINTÉTICA — Ranking Balcão', color: '#14ff00' },
-  '/dsm': { label: '🎟️ DSM — Desconto Só Meu', color: '#ffb700' },
+  '/dsm': { label: '🎟️ DSM', color: '#ffb700' },
   '/dinamicas': { label: '🎯 Dinâmicas Comerciais', color: '#a82bff' },
 };
 // Emoji prefixes above stay fixed; only the name after the emoji is

@@ -53,7 +53,7 @@ export function DsmPage() {
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <p className="text-xs text-slate-500 mb-3">
-          Ranking de conversões do cupom DSM (Desconto Só Meu) — cada cliente convertido por um colaborador conta um ponto. Importe novos dados em
+          Ranking de conversões do cupom DSM — cada cliente convertido por um colaborador conta um ponto. Importe novos dados em
           Importar Vendas.
         </p>
         {ranking.length === 0 ? (

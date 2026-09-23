@@ -307,7 +307,7 @@ function MetasPorCategoria() {
 // usada localmente nesta aba é o tipo mais largo abaixo, com um cast pontual
 // na hora de gravar (goals.categoria já aceita 'DSM' desde a migration 0090).
 type SubCategoriaGoalKey = (typeof GOAL_UNIT_KEYS)[number] | 'DSM';
-const SUB_CATEGORIA_LABELS: Record<'DSM', string> = { DSM: 'DSM (Desconto Só Meu)' };
+const SUB_CATEGORIA_LABELS: Record<'DSM', string> = { DSM: 'DSM' };
 
 function MetasUnidade() {
   const categoryLabels = useCategoryLabelMap();
