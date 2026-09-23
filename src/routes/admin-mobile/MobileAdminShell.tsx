@@ -1,32 +1,15 @@
 import { Suspense, lazy, useState } from 'react';
-import { NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { BackButton } from '../../components/BackButton';
 import { ConquistaCelebrationHost } from '../../components/ConquistaCelebration';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
-import { FunctionIcon } from '../../components/icons/FunctionIcon';
 import { PageLoading } from '../../components/PageLoading';
 import { Sidebar } from '../../components/Sidebar';
 import { VersionFooter } from '../../components/VersionFooter';
-import {
-  BagIcon,
-  CpuIcon,
-  DropletIcon,
-  HamburgerIcon,
-  HexagonIcon,
-  HomeIcon,
-  LeafIcon,
-  MedalIcon,
-  PillIcon,
-  SettingsIcon,
-  TagIcon,
-  TargetIcon,
-  TrophyIcon,
-} from '../../components/icons/NavIcons';
-import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
-import type { GoalCategoryKey } from '../../lib/business/classification';
+import { HamburgerIcon } from '../../components/icons/NavIcons';
 import { useResolvePasswordRequest } from '../../lib/mutations';
-import { useCategoryTypes, useCollaborators, usePendingPasswordRequests, useStore } from '../../lib/queries';
+import { useCollaborators, usePendingPasswordRequests, useStore } from '../../lib/queries';
 
 // Every screen below is lazy-loaded: this shell previously imported all of
 // them (plus every desktop /admin/* maintenance page) statically at the top
@@ -65,54 +48,16 @@ const MobileLevmelPage = lazy(() => import('./MobileLevmelPage').then((m) => ({ 
 const MobileMercadoriaGeralPage = lazy(() => import('./MobileMercadoriaGeralPage').then((m) => ({ default: m.MobileMercadoriaGeralPage })));
 const MobileRankingPage = lazy(() => import('./MobileRankingPage').then((m) => ({ default: m.MobileRankingPage })));
 
-// Mobile v2 admin shell: the spec's sticky topbar + horizontal category
-// icon menu, replacing the desktop Sidebar below the 1024px breakpoint
-// (see useIsMobileV2 / AppShell.tsx). Each screen migrates from its
-// existing desktop component to a dedicated mv2-styled one as it's
-// redesigned — until then the route falls back to the desktop page so
-// navigation always works, just not yet in the new visual style.
-// BIOSINTÉTICA's icon is inserted conditionally in the component body below
-// (only when this store has a category_types row for it) instead of being
-// listed here — same reasoning as Sidebar.tsx's desktop menu: it's not
-// seeded for new stores, so an unconditional entry would be a dead icon for
-// every store that never created it.
-const CATEGORIES_BEFORE_BIO = [
-  { to: '/', end: true, cls: 'mv2-cat-inicio', Icon: HomeIcon, label: 'Início', slot: 'inicio' },
-  { to: '/ranking', end: false, cls: 'mv2-cat-ranking', Icon: TrophyIcon, label: 'Ranking', slot: 'ranking' },
-  { to: '/categoria/DERM', end: false, cls: 'mv2-cat-dermo', Icon: DropletIcon, label: 'Dermo', slot: 'dermo' },
-  { to: '/categoria/GEN', end: false, cls: 'mv2-cat-generico', Icon: PillIcon, label: 'Gen/Sim', slot: 'generico' },
-  { to: '/categoria/MP', end: false, cls: 'mv2-cat-exclusiva', Icon: TagIcon, label: 'Marcas Excl.', slot: 'marcas_exclusivas' },
-  { to: '/categoria/MER', end: false, cls: 'mv2-cat-mercgeral', Icon: BagIcon, label: 'Merc. Geral', slot: 'mercadoria_geral' },
-  { to: '/categoria/LEVMEL', end: false, cls: 'mv2-cat-levmel', Icon: HexagonIcon, label: 'Levmel', slot: 'levmel' },
-  { to: '/categoria/CHIP', end: false, cls: 'mv2-cat-chip', Icon: CpuIcon, label: 'Chip', slot: 'chip' },
-] as const;
-
-const BIO_CATEGORY = { to: '/bio', end: false, cls: 'mv2-cat-biosintetica', Icon: LeafIcon, label: 'Biosintética', slot: 'biosintetica' } as const;
-
-// DSM (Desconto Só Meu) — same "own dedicated route, not the generic
-// category-parceria template" pattern as Biosintética above (see the
-// desktop Sidebar.tsx's own dsmCategory handling). Inserted conditionally
-// in the component body below (only when this store's category_types row
-// for DSM is ativo=true), same reasoning as BIO_CATEGORY.
-const DSM_CATEGORY = { to: '/dsm', end: false, cls: 'mv2-cat-biosintetica', Icon: TagIcon, label: 'DSM', slot: 'dsm' } as const;
-
-// Maps a nav item's icon slot to its store-overridable category label key,
-// for the 6 fixed-category items only — other slots (inicio, ranking,
-// dinamicas, adm, biosintetica) keep their fixed `label` above.
-const SLOT_TO_CATEGORY_LABEL_KEY: Partial<Record<string, GoalCategoryKey>> = {
-  dermo: 'DERM',
-  generico: 'GEN',
-  marcas_exclusivas: 'MP',
-  mercadoria_geral: 'MER',
-  levmel: 'LEVMEL',
-  chip: 'CHIP',
-};
-
-const CATEGORIES_AFTER_BIO = [
-  { to: '/dinamicas', end: false, cls: 'mv2-cat-dinamicas', Icon: TargetIcon, label: 'Dinâmicas', slot: 'dinamicas' },
-  { to: '/conquistas', end: false, cls: 'mv2-cat-conquistas', Icon: MedalIcon, label: 'Conquistas', slot: 'conquistas' },
-  { to: '/admin', end: false, cls: 'mv2-cat-adm', Icon: SettingsIcon, label: 'ADM', slot: 'adm' },
-] as const;
+// Mobile v2 admin shell: sticky topbar + slide-out drawer, replacing the
+// desktop Sidebar below the 1024px breakpoint (see useIsMobileV2 /
+// AppShell.tsx). Every category/function nav item used to also duplicate
+// itself as a horizontal icon grid below the topbar — removed per request:
+// those buttons now live only inside the drawer (the same desktop Sidebar,
+// reused below as a slide-out — see the <Sidebar> usage below), reached via
+// the hamburger button. Each screen migrates from its existing desktop
+// component to a dedicated mv2-styled one as it's redesigned — until then
+// the route falls back to the desktop page so navigation always works, just
+// not yet in the new visual style.
 
 // xlsx is a large parsing library — only the Importar screen needs it (same
 // lazy-chunk rationale as the desktop shell).
@@ -121,7 +66,6 @@ const ImportarPage = lazy(() => import('../admin/ImportarPage').then((m) => ({ d
 export function MobileAdminShell() {
   const { signOut } = useAuth();
   const { data: store } = useStore();
-  const { data: categoryTypes } = useCategoryTypes();
   const { data: collaborators } = useCollaborators();
   const { data: pendingPasswordRequests } = usePendingPasswordRequests();
   const resolvePasswordRequest = useResolvePasswordRequest();
@@ -129,39 +73,6 @@ export function MobileAdminShell() {
   const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [pwMenuOpen, setPwMenuOpen] = useState(false);
-  const categoryLabels = useCategoryLabelMap();
-  const hasBio = (categoryTypes ?? []).some((c) => c.chave === 'biosintetica');
-  const dsmCategory = (categoryTypes ?? []).find((c) => c.chave === 'dsm');
-  // ADM-created generic categories beyond Biosintética/DSM (Gerenciar
-  // Categorias) — same /categoria-parceria/:chave route the desktop
-  // Sidebar already links to. They don't go through the function_icons
-  // slot system (no slot exists per arbitrary category), so they carry
-  // their own `iconeUrl` straight from category_types.icone_url instead,
-  // rendered below in place of <FunctionIcon> when present. DSM is
-  // excluded here the same way Biosintética already was — it gets its own
-  // dedicated route/screen (DSM_CATEGORY below) instead of the generic
-  // template, which reads bio_groups/sales and would show nothing useful
-  // for DSM's dsm_records-backed data.
-  const extraCategories = (categoryTypes ?? []).filter((c) => c.chave !== 'biosintetica' && c.chave !== 'dsm');
-  const extraCategoryItems = extraCategories.map((c) => ({
-    to: `/categoria-parceria/${c.chave}`,
-    end: false,
-    cls: 'mv2-cat-biosintetica',
-    Icon: TagIcon,
-    label: c.nome,
-    slot: '',
-    iconeUrl: c.icone_url as string | null | undefined,
-  }));
-  const categories = [
-    ...CATEGORIES_BEFORE_BIO,
-    ...(hasBio ? [BIO_CATEGORY] : []),
-    ...(dsmCategory && dsmCategory.ativo ? [{ ...DSM_CATEGORY, label: dsmCategory.nome }] : []),
-    ...extraCategoryItems,
-    ...CATEGORIES_AFTER_BIO,
-  ].map((c) => {
-    const labelKey = SLOT_TO_CATEGORY_LABEL_KEY[c.slot as keyof typeof SLOT_TO_CATEGORY_LABEL_KEY];
-    return { ...c, label: labelKey ? categoryLabels[labelKey] : c.label, iconeUrl: 'iconeUrl' in c ? c.iconeUrl : undefined };
-  });
 
   function handleAttendRequest(requestId: string, collaboratorId: string) {
     resolvePasswordRequest.mutate(requestId);
@@ -200,68 +111,51 @@ export function MobileAdminShell() {
             🛍️ {store?.nome_loja || 'Gestão de Vendas'}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* Relocated from the (now-removed) category icon grid, where it
+              lived as a badge on the ADM icon — that grid is gone (categories
+              now live only in the drawer), so this is the only remaining
+              on-screen hint of a pending request. */}
+          {!!pendingPasswordRequests?.length && (
+            <div className="mv2-collab-menu-wrap">
+              <button
+                className="mv2-icon-btn"
+                title="Solicitações de nova senha"
+                onClick={() => setPwMenuOpen((v) => !v)}
+                style={{ position: 'relative', fontSize: 14 }}
+              >
+                🔑
+                <span className="mv2-cat-badge" style={{ position: 'absolute', top: -6, right: -8 }}>
+                  {pendingPasswordRequests.length}
+                </span>
+              </button>
+              {pwMenuOpen && (
+                <>
+                  <div className="mv2-collab-menu-backdrop" onClick={() => setPwMenuOpen(false)} />
+                  <div className="mv2-collab-menu" style={{ minWidth: 220, right: 0, left: 'auto' }}>
+                    {pendingPasswordRequests.map((req) => {
+                      const c = collaborators?.find((col) => col.id === req.collaborator_id);
+                      return (
+                        <button key={req.id} onClick={() => handleAttendRequest(req.id, req.collaborator_id)}>
+                          🔑 {c?.apelido || c?.nome || 'Colaborador'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           <button className="mv2-icon-btn" title="Sair" onClick={() => signOut()} style={{ fontSize: 10 }}>
             ⏻
           </button>
         </div>
       </header>
 
-      <nav className="mv2-category-menu">
-        {categories.map((c) => (
-          <div key={c.to} className="mv2-cat-icon-wrap">
-            <NavLink to={c.to} end={c.end} title={c.label} className={({ isActive }) => `mv2-cat-icon ${c.cls} ${isActive ? 'active' : ''}`}>
-              {c.iconeUrl ? (
-                <img src={c.iconeUrl} alt="" width={29} height={29} style={{ objectFit: 'contain' }} />
-              ) : (
-                <FunctionIcon slot={c.slot} fallback={c.Icon} size={29} />
-              )}
-            </NavLink>
-            {/* The key-shaped password-request shortcut used to live in the
-                topbar (removed per mobile ADM redesign — the topbar now
-                shows only the store name); relocated here as a badge on the
-                ADM icon since that's this shell's only other ADM-only nav
-                item, so pending requests stay visible without the topbar. */}
-            {c.slot === 'adm' && !!pendingPasswordRequests?.length && (
-              <button
-                className="mv2-cat-badge"
-                title="Solicitações de nova senha"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setPwMenuOpen((v) => !v);
-                }}
-              >
-                {pendingPasswordRequests.length}
-              </button>
-            )}
-          </div>
-        ))}
-        {pwMenuOpen && (
-          <>
-            <div className="mv2-collab-menu-backdrop" onClick={() => setPwMenuOpen(false)} />
-            <div className="mv2-collab-menu" style={{ minWidth: 220, right: 10, left: 'auto' }}>
-              {!pendingPasswordRequests || pendingPasswordRequests.length === 0 ? (
-                <div style={{ padding: 10, fontSize: 11, color: 'var(--mv2-texto-2)' }}>Nenhuma solicitação pendente.</div>
-              ) : (
-                pendingPasswordRequests.map((req) => {
-                  const c = collaborators?.find((col) => col.id === req.collaborator_id);
-                  return (
-                    <button key={req.id} onClick={() => handleAttendRequest(req.id, req.collaborator_id)}>
-                      🔑 {c?.apelido || c?.nome || 'Colaborador'}
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </>
-        )}
-      </nav>
-
       <main style={{ paddingBottom: 24 }}>
         {/* Keyed by pathname — a crash in one screen recovers by tapping any
-            other topbar/category-menu item instead of needing a full
-            reload, same reasoning as the desktop AppShell. */}
+            other drawer item instead of needing a full reload, same
+            reasoning as the desktop AppShell. */}
         <ErrorBoundary key={location.pathname}>
         <Suspense fallback={<PageLoading />}>
           <Routes>
