@@ -50,6 +50,7 @@ export function NomesCategoriasPage() {
 
   const hiddenCategories = storeSettings.hidden_categories;
   const bioCategory = categoryTypes?.find((c) => c.chave === 'biosintetica');
+  const dsmCategory = categoryTypes?.find((c) => c.chave === 'dsm');
 
   function toggleHidden(key: string) {
     const next = hiddenCategories.includes(key) ? hiddenCategories.filter((k) => k !== key) : [...hiddenCategories, key];
@@ -147,6 +148,29 @@ export function NomesCategoriasPage() {
             }`}
           >
             {bioCategory.ativo ? 'Ocultar do menu' : 'Mostrar no menu'}
+          </button>
+        </div>
+      )}
+
+      {dsmCategory && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="font-semibold text-sm">{dsmCategory.nome} no menu lateral</h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {dsmCategory.ativo
+                ? 'A tela de ranking do DSM está visível no menu lateral e nos filtros da tela Início. A importação em Importar Vendas continua disponível de qualquer forma.'
+                : 'A tela de ranking do DSM está oculta do menu lateral e dos filtros da tela Início — a importação em Importar Vendas continua disponível.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => updateCategoryTypeAtivo.mutate({ id: dsmCategory.id, ativo: !dsmCategory.ativo })}
+            disabled={updateCategoryTypeAtivo.isPending}
+            className={`shrink-0 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-60 ${
+              dsmCategory.ativo ? 'border border-slate-700 text-slate-300' : 'bg-cyan-500 text-slate-950'
+            }`}
+          >
+            {dsmCategory.ativo ? 'Ocultar do menu' : 'Mostrar no menu'}
           </button>
         </div>
       )}

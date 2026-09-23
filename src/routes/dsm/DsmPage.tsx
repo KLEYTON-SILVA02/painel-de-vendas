@@ -10,8 +10,8 @@ import { useDateRange } from '../DateRangeContext';
 /** DSM Fase 4: tela própria, no menu lateral (mesmo padrão de rota dedicada
  * de BIOSINTÉTICA, ver BioPage.tsx) — ranking de conversões do cupom DSM
  * (Desconto Só Meu) por colaborador, calculado sobre dsm_records (não
- * sales). O "ocultar" pedido desde a Fase 1 vive em Importar Vendas (toggle
- * sobre category_types.ativo), não aqui — ver Sidebar.tsx. */
+ * sales). O "ocultar" vive em ADM → Nomes das Categorias (toggle sobre
+ * category_types.ativo), não aqui — ver NomesCategoriasPage.tsx. */
 export function DsmPage() {
   const { data: collaborators } = useCollaborators();
   const { data: dsmRecords } = useDsmRecords();
