@@ -21,8 +21,9 @@ const DIRECTION_LOCK_THRESHOLD = 8;
 
 /** Finds the nearest scrollable-on-its-own-axis ancestor (up to `root`) —
  * a swipe that starts inside one (e.g. the "Lista de vendas" table's own
- * horizontal-scroll wrapper, see MobileSellerDetail.tsx's overflowX:'auto')
- * must scroll that element instead of triggering category navigation. */
+ * horizontal-scroll wrapper, see MobileSellerDetail.tsx's overflowX:'auto',
+ * or MetricsFilterBar's day-of-month strip) must scroll that element while
+ * it still has room to, instead of triggering category navigation. */
 function findHorizontalScrollAncestor(node: HTMLElement | null, root: HTMLElement): HTMLElement | null {
   let el = node;
   while (el && el !== root) {
@@ -33,6 +34,21 @@ function findHorizontalScrollAncestor(node: HTMLElement | null, root: HTMLElemen
     el = el.parentElement;
   }
   return null;
+}
+
+/** True when `el` still has room to scroll further in the direction the
+ * finger is dragging (dx < 0 drags content further right into view, so
+ * checks room to the right; dx > 0 checks room to the left). Used so an
+ * inner horizontal scroller (day-of-month strip, sales table) only "wins"
+ * the gesture while it can actually still scroll that way — once it's
+ * already at that edge (very often true immediately, e.g. a table that
+ * hasn't been scrolled yet has no room left to reveal earlier columns),
+ * the drag falls through to category navigation instead of silently doing
+ * nothing, which is what made swipe feel broken on screens dominated by
+ * one of these scrollers. */
+export function hasHorizontalScrollRoom(el: HTMLElement, dx: number): boolean {
+  if (dx < 0) return el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+  return el.scrollLeft > 1;
 }
 
 /** Swipe-left/right navigation between the store's sales category screens —
@@ -55,7 +71,7 @@ export function useCategorySwipeNav() {
   const { data: storeSettings } = useStoreSettings();
   const location = useLocation();
   const navigate = useNavigate();
-  const touchRef = useRef<{ x: number; y: number; locked: 'h' | 'v' | null; skip: boolean } | null>(null);
+  const touchRef = useRef<{ x: number; y: number; locked: 'h' | 'v' | null; scrollEl: HTMLElement | null; bail: boolean } | null>(null);
 
   const routes = useMemo(() => {
     const hidden = storeSettings?.hidden_categories ?? [];
@@ -78,24 +94,33 @@ export function useCategorySwipeNav() {
       return;
     }
     const t = e.touches[0];
-    const scrollable = findHorizontalScrollAncestor(e.target as HTMLElement, e.currentTarget);
-    touchRef.current = { x: t.clientX, y: t.clientY, locked: null, skip: !!scrollable };
+    const scrollEl = findHorizontalScrollAncestor(e.target as HTMLElement, e.currentTarget);
+    touchRef.current = { x: t.clientX, y: t.clientY, locked: null, scrollEl, bail: false };
   }
 
   function onTouchMove(e: TouchEvent<HTMLElement>) {
     const st = touchRef.current;
-    if (!st || st.skip || st.locked || e.touches.length > 1) return;
+    if (!st || st.bail || st.locked || e.touches.length > 1) return;
     const t = e.touches[0];
     const dx = t.clientX - st.x;
     const dy = t.clientY - st.y;
     if (Math.abs(dx) < DIRECTION_LOCK_THRESHOLD && Math.abs(dy) < DIRECTION_LOCK_THRESHOLD) return;
-    st.locked = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+    const direction = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+    // An inner scroller (day-of-month strip, sales table) only claims the
+    // gesture while it still has room to scroll that way — see
+    // hasHorizontalScrollRoom. Once it's at that edge, the drag falls
+    // through to category navigation below instead of being silently eaten.
+    if (direction === 'h' && st.scrollEl && hasHorizontalScrollRoom(st.scrollEl, dx)) {
+      st.bail = true;
+      return;
+    }
+    st.locked = direction;
   }
 
   function onTouchEnd(e: TouchEvent<HTMLElement>) {
     const st = touchRef.current;
     touchRef.current = null;
-    if (!st || st.skip || st.locked !== 'h' || currentIndex === -1) return;
+    if (!st || st.bail || st.locked !== 'h' || currentIndex === -1) return;
     const t = e.changedTouches[0];
     const dx = t.clientX - st.x;
     if (Math.abs(dx) < SWIPE_DISTANCE_THRESHOLD) return;
