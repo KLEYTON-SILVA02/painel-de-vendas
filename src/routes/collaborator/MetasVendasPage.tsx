@@ -1,13 +1,12 @@
-import { useMemo } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
-import { diasRestantesNoMes, effectiveMetaGeral, getSuperMeta, goalProration } from '../../lib/business/goals';
-import { catTotals, computeSummary } from '../../lib/business/summary';
+import { diasRestantesNoMes, effectiveMetaGeralFromTotals, getSuperMetaFromTotals, goalProration } from '../../lib/business/goals';
+import { summaryFromCategoryTotals, sumCategoryTotals } from '../../lib/business/summary';
 import { monthFirstISO, todayISO } from '../../lib/dateRange';
 import { fmtMoney } from '../../lib/format';
 import { useIndividualGoals } from '../../lib/mutations';
-import { useCollaborators, useGoals, useSales, useStoreSettings } from '../../lib/queries';
+import { useCollaborators, useGoals, useMobileCategoryTotals, useStoreSettings } from '../../lib/queries';
 import { MobileDateFilter } from '../admin-mobile/MobileDateFilter';
 import { useDateRange } from '../DateRangeContext';
 
@@ -22,11 +21,18 @@ const CAT_COLOR: Record<CategoryKey, string> = {
 // metrics, then the same shape for the collaborator's own individual goals,
 // then their sales extract. Distinct from CollaboratorRankingPage (which is
 // about standing vs peers, not goal tracking).
+//
+// Plano de Ação Tartaruga: this used to call useSales() unconditionally —
+// the store's entire sales history — on every cold open, since this is the
+// collaborator's default landing route. Every number here (store-wide and
+// "my own") is a plain sum per collaborator/categoria within a date range,
+// which mobile_category_totals() already computes server-side — so unlike
+// Tela Início's card do campeão (needs day-by-day detail), this screen
+// never needs a single item-level sale row.
 export function MetasVendasPage() {
   const { profile } = useAuth();
   const categoryLabels = useCategoryLabelMap();
   const { data: collaborators } = useCollaborators();
-  const { data: sales } = useSales();
   const { data: goals } = useGoals();
   const { data: storeSettings } = useStoreSettings();
   const { dashFrom, dashTo, modoGeral } = useDateRange();
@@ -37,43 +43,38 @@ export function MetasVendasPage() {
 
   const me = collaborators?.find((c) => c.id === profile?.collaborator_id);
 
-  // Safe stand-ins so the useMemo calls below always run in the same order
-  // (Rules of Hooks) whether or not every query has resolved yet — the
-  // "Carregando…" guard comes after them, not before. This is the
-  // collaborator's own landing screen, almost always opened on a phone, so
-  // the cost of a full `sales` scan on every unrelated render (a tab
-  // switch, a toast) is exactly the kind of thing that reads as "freezing"
-  // on weaker mobile CPUs.
-  const salesData = sales ?? [];
-  const collaboratorsData = collaborators ?? [];
-
   const modoDia = dashFrom === dashTo;
   const mode = modoDia ? 'dia' : 'mes';
   const proration = goalProration(dashFrom, dashTo, modoGeral);
   const dias = diasRestantesNoMes();
+  const now = new Date();
+  const monthFirstStr = monthFirstISO(now.getFullYear(), now.getMonth());
+  const todayISOStr = todayISO();
 
-  // ---- Store-wide metrics ----
-  const storeRanking = useMemo(
-    () => computeSummary(salesData, collaboratorsData, dashFrom, dashTo),
-    [salesData, collaboratorsData, dashFrom, dashTo],
-  );
-  const storeValor = storeRanking.reduce((a, r) => a + r.valor, 0);
-  const storeItens = storeRanking.reduce((a, r) => a + r.itens, 0);
+  const { data: categoryTotals } = useMobileCategoryTotals(dashFrom, dashTo);
+  // Always needed (not gated behind autoRedistribuir like Tela Início) —
+  // both the store's meta diária redistribution AND every row's "Vendido
+  // este mês"/"Meta diária" column below read from this month-to-date
+  // window regardless of goal settings.
+  const { data: monthToDateTotals } = useMobileCategoryTotals(monthFirstStr, todayISOStr);
 
-  const meMatricula = me?.matricula;
-  const mySales = useMemo(() => salesData.filter((s) => !meMatricula || s.matricula === meMatricula), [salesData, meMatricula]);
-
-  if (!collaborators || !sales || !goals || !storeSettings || !dermGoals || !genGoals || !mpGoals || !merGoals) {
+  if (!collaborators || !categoryTotals || !monthToDateTotals || !goals || !storeSettings || !dermGoals || !genGoals || !mpGoals || !merGoals) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
-  const storeMeta = effectiveMetaGeral(goals, mode, sales, collaborators, storeSettings.meta_geral_fallback, proration);
-  const storeSuper = getSuperMeta(goals.MER, mode, sales, collaborators, proration);
+  // ---- Store-wide metrics ----
+  const storeRanking = summaryFromCategoryTotals(categoryTotals, collaborators, 'ALL');
+  const storeValor = storeRanking.reduce((a, r) => a + r.valor, 0);
+  const storeItens = storeRanking.reduce((a, r) => a + r.itens, 0);
+
+  const storeMeta = effectiveMetaGeralFromTotals(goals, mode, monthToDateTotals, collaborators, storeSettings.meta_geral_fallback, proration);
+  const storeSuper = getSuperMetaFromTotals(goals.MER, mode, monthToDateTotals, collaborators, proration);
   const storeSaldo = storeValor - storeMeta;
   const storeAtingimento = storeMeta > 0 ? Math.min(999, (storeValor / storeMeta) * 100) : null;
   const storeFalta = Math.max(0, (storeSuper > storeMeta ? storeSuper : storeMeta) - storeValor);
 
   // ---- Individual metrics: aggregate across categories where I participate ----
+  const meMatricula = me?.matricula;
   const goalsByCategoria: Record<CategoryKey, typeof dermGoals> = { DERM: dermGoals, GEN: genGoals, MP: mpGoals, MER: merGoals };
   let myValor = 0;
   let myItens = 0;
@@ -81,7 +82,7 @@ export function MetasVendasPage() {
   let mySuper = 0;
   CAT_KEYS.forEach((k) => {
     const row = goalsByCategoria[k]?.find((r) => r.collaborator_id === me?.id);
-    const t = catTotals(mySales, dashFrom, dashTo, k);
+    const t = sumCategoryTotals(categoryTotals, k, meMatricula);
     myValor += t.valor;
     myItens += t.qtd;
     if (row?.participa) {
@@ -92,16 +93,6 @@ export function MetasVendasPage() {
   const mySaldo = myValor - myMeta;
   const myAtingimento = myMeta > 0 ? Math.min(999, (myValor / myMeta) * 100) : null;
   const myFalta = Math.max(0, (mySuper > myMeta ? mySuper : myMeta) - myValor);
-
-  // ---- Meta diária individual: (meta mensal - já vendido este mês) / dias
-  // restantes no mês — mesma fórmula de computeMetaDiariaRedistribuida, mas
-  // calculada aqui direto (em vez de reusar aquela função) porque ela
-  // filtra vendas pelo `grupo` literal da categoria, e MER nesta tela é meu
-  // total geral (todas as categorias), não um grupo específico — mesma
-  // convenção já usada acima para a coluna "Vendido".
-  const now = new Date();
-  const monthFirstStr = monthFirstISO(now.getFullYear(), now.getMonth());
-  const todayISOStr = todayISO();
 
   return (
     <div>
@@ -159,15 +150,10 @@ export function MetasVendasPage() {
               // got tagged MER (myValor is already my sum across every
               // category, computed above). The other rows keep their normal
               // exclusive per-category total.
-              const t = k === 'MER' ? { valor: myValor, qtd: myItens } : catTotals(mySales, dashFrom, dashTo, k);
+              const t = k === 'MER' ? { valor: myValor, qtd: myItens } : sumCategoryTotals(categoryTotals, k, meMatricula);
               const metaIndividual = row?.participa ? Number(row.valor_meta) || 0 : 0;
               const pct = metaIndividual > 0 ? Math.min(999, (t.valor / metaIndividual) * 100) : null;
-              const realizadoMes =
-                k === 'MER'
-                  ? mySales
-                      .filter((s) => !s.dataISO || (s.dataISO >= monthFirstStr && s.dataISO <= todayISOStr))
-                      .reduce((a, s) => a + (Number(s.valor) || 0), 0)
-                  : catTotals(mySales, monthFirstStr, todayISOStr, k).valor;
+              const realizadoMes = sumCategoryTotals(monthToDateTotals, k === 'MER' ? 'ALL' : k, meMatricula).valor;
               const metaDiaria = metaIndividual > 0 ? Math.max(0, metaIndividual - realizadoMes) / Math.max(1, dias) : 0;
               return (
                 <tr key={k}>

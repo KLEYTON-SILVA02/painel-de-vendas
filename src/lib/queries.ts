@@ -175,6 +175,20 @@ export function useCurrentMonthSales() {
   });
 }
 
+/** Same date-ranged fetch as useCurrentMonthSales(), for an arbitrary
+ * [fromISO, toISO] window instead of always "this calendar month" — for a
+ * caller that needs actual item-level sales (not just the aggregated
+ * mobile_category_totals() rows) but only within a bounded window it
+ * already knows, e.g. Tela Início's card do campeão, which needs day-by-day
+ * detail (computeChampionStars) for just the day or the reference month
+ * currently selected, never the store's full history. */
+export function useSalesInRange(fromISO: string, toISO: string) {
+  return useQuery({
+    queryKey: ['sales', 'range', fromISO, toISO],
+    queryFn: async () => (await fetchSalesPages({ fromISO, toISO })).map(mapSale),
+  });
+}
+
 /** Per-(matricula, categoria) totals for a date range, from the
  * `mobile_category_totals()` RPC (supabase/migrations/0060) — the mobile
  * category/ranking/Mercadoria Geral screens use this instead of `useSales()`

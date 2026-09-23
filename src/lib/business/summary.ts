@@ -213,6 +213,24 @@ export function summaryFromCategoryTotals(
   return Object.values(map).sort((a, b) => b.valor - a.valor);
 }
 
+/** Mobile-performance counterpart to catTotals(): sums a `CategoryTotalRow[]`
+ * (mobile_category_totals RPC rows, already scoped to the date range server-
+ * side) down to a single {valor, qtd} for one categoria — optionally scoped
+ * further to a single matricula (e.g. "my own totals" on a collaborator
+ * screen), same as catTotals() but from pre-aggregated rows instead of a raw
+ * Sale[] scan. */
+export function sumCategoryTotals(rows: CategoryTotalRow[], categoria: string, matricula?: string): { valor: number; qtd: number } {
+  const target = matricula ? normalizeMatricula(matricula) : null;
+  return rows.reduce(
+    (acc, r) => {
+      if (r.categoria !== categoria) return acc;
+      if (target && normalizeMatricula(r.matricula) !== target) return acc;
+      return { valor: acc.valor + r.valorTotal, qtd: acc.qtd + r.itensTotal };
+    },
+    { valor: 0, qtd: 0 },
+  );
+}
+
 /** Total quantity/value sold for a single category within a date range. */
 export function catTotals(sales: Sale[], fromDate: string | null, toDate: string | null, key: CategoryKey) {
   let qtd = 0;

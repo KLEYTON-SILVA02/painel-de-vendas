@@ -187,3 +187,20 @@ export function effectiveMetaGeral(
   const base = Number(metaGeralFallback) || 0;
   return proration ? base * (proration.periodDays / proration.monthDays) : base;
 }
+
+/** Mobile-performance counterpart to effectiveMetaGeral() — see getGoalFromTotals. */
+export function effectiveMetaGeralFromTotals(
+  goals: Record<CategoryKey, Goal | undefined>,
+  mode: GoalMode,
+  monthToDateRows: CategoryTotalRow[],
+  collaborators: Collaborator[],
+  metaGeralFallback: number,
+  proration?: GoalProration,
+  now = new Date(),
+): number {
+  const merGoal = getGoalFromTotals(goals.MER, mode, monthToDateRows, collaborators, proration, now);
+  if (merGoal > 0) return merGoal;
+  if (mode === 'dia') return 0;
+  const base = Number(metaGeralFallback) || 0;
+  return proration ? base * (proration.periodDays / proration.monthDays) : base;
+}
