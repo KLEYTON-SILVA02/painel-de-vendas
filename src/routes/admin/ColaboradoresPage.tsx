@@ -313,7 +313,7 @@ export function ColaboradoresPage() {
                           ✕
                         </button>
                         {c.foto ? (
-                          <img src={c.foto} alt="" className="w-16 h-16 rounded-full object-cover" />
+                          <img src={c.foto} alt="" loading="lazy" className="w-16 h-16 rounded-full object-cover" />
                         ) : (
                           <div className="w-16 h-16 rounded-full bg-slate-700" />
                         )}

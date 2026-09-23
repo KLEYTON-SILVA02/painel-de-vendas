@@ -146,7 +146,7 @@ export function PodiumStaircase<T extends StaircaseRow>({
                     flexShrink: 0,
                   }}
                 >
-                  {r.foto && <img src={r.foto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                  {r.foto && <img src={r.foto} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
                 </div>
                 <div
                   style={{
@@ -285,7 +285,7 @@ export function PodiumStaircase<T extends StaircaseRow>({
                   overflow: 'hidden',
                 }}
               >
-                {r.foto && <img src={r.foto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                {r.foto && <img src={r.foto} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
               </div>
               <div
                 style={{
@@ -340,7 +340,7 @@ export function PodiumStaircase<T extends StaircaseRow>({
 
 function Avatar({ foto, size, border }: { foto: string | null; size: number; border: string }) {
   return foto ? (
-    <img src={foto} alt="" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', border, flexShrink: 0 }} />
+    <img src={foto} alt="" loading="lazy" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', border, flexShrink: 0 }} />
   ) : (
     <div style={{ width: size, height: size, borderRadius: '50%', background: '#0b0e1d', border, flexShrink: 0 }} />
   );

@@ -119,6 +119,7 @@ export function RankingColumnCard({
                   <img
                     src={r.foto}
                     alt=""
+                    loading="lazy"
                     style={{
                       width: 26,
                       height: 26,

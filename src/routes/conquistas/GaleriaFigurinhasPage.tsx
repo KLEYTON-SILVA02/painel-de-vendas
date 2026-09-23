@@ -200,7 +200,7 @@ export function GaleriaFigurinhasPage() {
                 }}
               >
                 {c.foto ? (
-                  <img src={c.foto} alt="" className="w-12 h-12 rounded-full object-cover" />
+                  <img src={c.foto} alt="" loading="lazy" className="w-12 h-12 rounded-full object-cover" />
                 ) : (
                   <div className="w-12 h-12 rounded-full bg-slate-700" />
                 )}
