@@ -55,6 +55,7 @@ const GaleriaFigurinhasPage = lazy(() => import('../conquistas/GaleriaFigurinhas
 const MetasPage = lazy(() => import('../metas/MetasPage').then((m) => ({ default: m.MetasPage })));
 const MobileBioPage = lazy(() => import('./MobileBioPage').then((m) => ({ default: m.MobileBioPage })));
 const MobileDinamicasPage = lazy(() => import('./MobileDinamicasPage').then((m) => ({ default: m.MobileDinamicasPage })));
+const MobileDsmPage = lazy(() => import('./MobileDsmPage').then((m) => ({ default: m.MobileDsmPage })));
 const MobileDermoPage = lazy(() => import('./MobileDermoPage').then((m) => ({ default: m.MobileDermoPage })));
 const MobileExclusivasPage = lazy(() => import('./MobileExclusivasPage').then((m) => ({ default: m.MobileExclusivasPage })));
 const MobileGenericosPage = lazy(() => import('./MobileGenericosPage').then((m) => ({ default: m.MobileGenericosPage })));
@@ -87,6 +88,13 @@ const CATEGORIES_BEFORE_BIO = [
 ] as const;
 
 const BIO_CATEGORY = { to: '/bio', end: false, cls: 'mv2-cat-biosintetica', Icon: LeafIcon, label: 'Biosintética', slot: 'biosintetica' } as const;
+
+// DSM (Desconto Só Meu) — same "own dedicated route, not the generic
+// category-parceria template" pattern as Biosintética above (see the
+// desktop Sidebar.tsx's own dsmCategory handling). Inserted conditionally
+// in the component body below (only when this store's category_types row
+// for DSM is ativo=true), same reasoning as BIO_CATEGORY.
+const DSM_CATEGORY = { to: '/dsm', end: false, cls: 'mv2-cat-biosintetica', Icon: TagIcon, label: 'DSM', slot: 'dsm' } as const;
 
 // Maps a nav item's icon slot to its store-overridable category label key,
 // for the 6 fixed-category items only — other slots (inicio, ranking,
@@ -123,13 +131,18 @@ export function MobileAdminShell() {
   const [pwMenuOpen, setPwMenuOpen] = useState(false);
   const categoryLabels = useCategoryLabelMap();
   const hasBio = (categoryTypes ?? []).some((c) => c.chave === 'biosintetica');
-  // ADM-created generic categories beyond Biosintética (Gerenciar Categorias)
-  // — same /categoria-parceria/:chave route the desktop Sidebar already
-  // links to. They don't go through the function_icons slot system (no
-  // slot exists per arbitrary category), so they carry their own
-  // `iconeUrl` straight from category_types.icone_url instead, rendered
-  // below in place of <FunctionIcon> when present.
-  const extraCategories = (categoryTypes ?? []).filter((c) => c.chave !== 'biosintetica');
+  const dsmCategory = (categoryTypes ?? []).find((c) => c.chave === 'dsm');
+  // ADM-created generic categories beyond Biosintética/DSM (Gerenciar
+  // Categorias) — same /categoria-parceria/:chave route the desktop
+  // Sidebar already links to. They don't go through the function_icons
+  // slot system (no slot exists per arbitrary category), so they carry
+  // their own `iconeUrl` straight from category_types.icone_url instead,
+  // rendered below in place of <FunctionIcon> when present. DSM is
+  // excluded here the same way Biosintética already was — it gets its own
+  // dedicated route/screen (DSM_CATEGORY below) instead of the generic
+  // template, which reads bio_groups/sales and would show nothing useful
+  // for DSM's dsm_records-backed data.
+  const extraCategories = (categoryTypes ?? []).filter((c) => c.chave !== 'biosintetica' && c.chave !== 'dsm');
   const extraCategoryItems = extraCategories.map((c) => ({
     to: `/categoria-parceria/${c.chave}`,
     end: false,
@@ -142,6 +155,7 @@ export function MobileAdminShell() {
   const categories = [
     ...CATEGORIES_BEFORE_BIO,
     ...(hasBio ? [BIO_CATEGORY] : []),
+    ...(dsmCategory && dsmCategory.ativo ? [{ ...DSM_CATEGORY, label: dsmCategory.nome }] : []),
     ...extraCategoryItems,
     ...CATEGORIES_AFTER_BIO,
   ].map((c) => {
@@ -262,6 +276,7 @@ export function MobileAdminShell() {
             <Route path="/metas" element={<MetasPage />} />
             <Route path="/dinamicas" element={<MobileDinamicasPage />} />
             <Route path="/bio" element={<MobileBioPage />} />
+            <Route path="/dsm" element={<MobileDsmPage />} />
             <Route path="/conquistas" element={<ConquistasPage />} />
             <Route path="/conquistas/figurinhas" element={<GaleriaFigurinhasPage />} />
             <Route path="/categoria-parceria/:chave" element={<CategoryTypePage />} />

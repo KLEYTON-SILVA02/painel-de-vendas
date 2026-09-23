@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
-import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
+import { useMobileCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { getGoalFromTotals } from '../../lib/business/goals';
 import { summaryFromCategoryTotals } from '../../lib/business/summary';
 import { copyText, formatRankingText } from '../../lib/clipboard';
@@ -25,7 +25,7 @@ export function MobileRankingPage() {
   const { data: goals } = useGoals();
   const { data: store } = useStore();
   const { dashFrom, dashTo } = useDateRange();
-  const categoryLabels = useCategoryLabelMap();
+  const categoryLabels = useMobileCategoryLabelMap();
   // MER's chip is the store's grand-total bucket (every sale, regardless of
   // category — see the `catKey === 'MER' ? 'ALL' : catKey` mapping below),
   // the same merged "Todas" filter Desktop's RankFilterBar already exposes

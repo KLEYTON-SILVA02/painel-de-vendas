@@ -45,3 +45,28 @@ export function useCategoryLabelMap(): Record<GoalCategoryKey, string> {
   });
   return map;
 }
+
+/** Mobile-only shortened fallbacks for the 4 fixed categories whose default
+ * name is long enough to overflow the compact mv2 chips/titles (LEVMEL/CHIP
+ * are already short, so they're untouched) — "Dermocosméticos" → "Dermo.",
+ * "Genéricos" → "GEN", "Marcas Exclusivas" → "M.P", "Mercadoria Geral" →
+ * "MERC". An ADM's own rename (Nomes das Categorias) always wins over this,
+ * exactly like useCategoryLabelMap — this only replaces the built-in
+ * default, so a store that renamed a category still sees its own choice on
+ * mobile, just possibly needing to pick something short itself. */
+const MOBILE_SHORT_DEFAULT_LABELS: Partial<Record<GoalCategoryKey, string>> = {
+  DERM: 'Dermo.',
+  GEN: 'GEN',
+  MP: 'M.P',
+  MER: 'MERC',
+};
+
+export function useMobileCategoryLabelMap(): Record<GoalCategoryKey, string> {
+  const { data: overrides } = useCategoryLabels();
+  const map = { ...DEFAULT_CATEGORY_LABELS, ...MOBILE_SHORT_DEFAULT_LABELS };
+  CATEGORY_LABEL_KEYS.forEach((key) => {
+    const override = overrides?.[key];
+    if (override) map[key] = override;
+  });
+  return map;
+}

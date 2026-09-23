@@ -726,6 +726,13 @@
   color: #fff;
   margin: 0 0 12px;
   background: linear-gradient(90deg, #000 0%, var(--mv2-accent, var(--mv2-ciano)) 100%);
+  /* A long category name (a store's own custom rename, or a fixed default
+     that didn't get a mobile-short fallback) used to wrap and burst this
+     bar's fixed height instead of staying inside it — truncate with an
+     ellipsis instead, same fixed-height contract every other screen relies on. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .mv2-screen-title.mv2-ranking {
   --mv2-accent: var(--mv2-dourado);
@@ -1406,6 +1413,11 @@
   border: 1px solid var(--mv2-chip-color, var(--mv2-ciano));
   color: var(--mv2-chip-color, var(--mv2-ciano));
   background: transparent;
+  /* A long category name used to wrap onto a second line inside the pill
+     instead of just taking more horizontal space (the row already wraps
+     whole chips via flex-wrap on .mv2-chip-row) — this keeps each chip a
+     single line, however long its label. */
+  white-space: nowrap;
 }
 .mv2-chip.active {
   color: #04101c;

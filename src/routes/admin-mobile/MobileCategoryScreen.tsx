@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
+import { useMobileCategoryLabelMap } from '../../lib/business/categoryLabels';
 import type { CategoryKey } from '../../lib/business/classification';
 import { getGoalFromTotals, getSuperMetaFromTotals, goalProration } from '../../lib/business/goals';
 import { summaryFromCategoryTotals } from '../../lib/business/summary';
@@ -26,7 +26,7 @@ export function MobileCategoryScreen({
   titleClass: string;
   accent: string;
 }) {
-  const categoryLabels = useCategoryLabelMap();
+  const categoryLabels = useMobileCategoryLabelMap();
   const title = categoryLabels[catKey] ?? defaultTitle;
   const { data: collaborators } = useCollaborators();
   const { data: goals } = useGoals();
