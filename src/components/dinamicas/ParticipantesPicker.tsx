@@ -39,7 +39,7 @@ export function ParticipantesPicker({
             <label className="flex items-center gap-1.5 cursor-pointer flex-1 min-w-0">
               <input type="checkbox" checked={checked} onChange={() => onToggle(c.matricula)} className="flex-shrink-0" />
               {c.foto ? (
-                <img src={c.foto} alt="" className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
+                <img src={c.foto} alt="" loading="lazy" className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
               ) : (
                 <div className="w-6 h-6 rounded-full bg-slate-700 flex-shrink-0" />
               )}

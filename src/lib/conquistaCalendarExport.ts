@@ -1,4 +1,3 @@
-import { jsPDF } from 'jspdf';
 import { renderConquistaCalendar, type ConquistaCalendarData } from './conquistaCalendarImage';
 
 // The canvas from renderConquistaCalendar already contains everything the
@@ -16,6 +15,12 @@ export async function generateConquistaCalendarJpgBlob(data: ConquistaCalendarDa
 // day cells that have an achievement) so a black-and-white office printer
 // doesn't have to lay down a near-solid dark block for every page.
 export async function generateConquistaCalendarPdfBlob(data: ConquistaCalendarData): Promise<Blob> {
+  // Dynamically imported (instead of a top-level import) so jsPDF — a
+  // ~300KB library needed only by this one PDF-export button — doesn't ride
+  // along in Galeria de Conquistas' chunk for every ADM who never clicks it;
+  // generateConquistaCalendarJpgBlob above (the far more common share/copy
+  // path) never touches it.
+  const { jsPDF } = await import('jspdf');
   const canvas = await renderConquistaCalendar(data, 'print');
   const imgData = canvas.toDataURL('image/jpeg', 0.92);
 

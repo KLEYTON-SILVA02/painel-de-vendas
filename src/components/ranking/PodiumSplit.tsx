@@ -193,7 +193,7 @@ function PodiumPhoto<T extends StaircaseRow>({ rank, row, spots }: { rank: 0 | 1
         background: '#e5e7eb',
       }}
     >
-      {row.foto && <img src={row.foto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+      {row.foto && <img src={row.foto} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
     </div>
   );
 }
@@ -332,7 +332,7 @@ function PillColumn<T extends StaircaseRow>({
               {slot.pos}
             </span>
             <span style={{ width: 26, height: 26, borderRadius: '50%', border: '2px solid #8A2BE2', background: '#0b0e1d', overflow: 'hidden', flexShrink: 0 }}>
-              {slot.row.foto && <img src={slot.row.foto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+              {slot.row.foto && <img src={slot.row.foto} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
             </span>
             <span
               style={{

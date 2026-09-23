@@ -12,10 +12,32 @@
     <meta name="apple-mobile-web-app-title" content="Gestão de Vendas" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Loaded non-blocking (preload + swap to `media="all"` on load): this
+         stylesheet pulls 10 font families (8 of them used only inside the
+         Galeria de Conquistas card-template editor and card renderer, see
+         CardConquistaPage.tsx/conquistaCardRender.ts) — as a normal
+         render-blocking <link rel="stylesheet"> it delayed first paint on
+         every single page load, including collaborator/mobile screens that
+         never touch a single one of those fonts. `display=swap` already
+         means no invisible text either way, so deferring costs nothing
+         visually and the <noscript> fallback keeps it working with JS off. -->
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800&family=Poppins:wght@600;700;800&family=Montserrat:wght@700;900&family=Oswald:wght@600;700&family=Bebas+Neue&family=Anton&family=Russo+One&family=Playfair+Display:wght@700;900&family=Pacifico&family=Bangers&display=swap"
+    />
     <link
       href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800&family=Poppins:wght@600;700;800&family=Montserrat:wght@700;900&family=Oswald:wght@600;700&family=Bebas+Neue&family=Anton&family=Russo+One&family=Playfair+Display:wght@700;900&family=Pacifico&family=Bangers&display=swap"
       rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
     />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800&family=Poppins:wght@600;700;800&family=Montserrat:wght@700;900&family=Oswald:wght@600;700&family=Bebas+Neue&family=Anton&family=Russo+One&family=Playfair+Display:wght@700;900&family=Pacifico&family=Bangers&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
     <title>Painel de Gestão de Vendas</title>
   </head>
   <body>

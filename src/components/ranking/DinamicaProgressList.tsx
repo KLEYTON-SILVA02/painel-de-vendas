@@ -69,7 +69,7 @@ export function DinamicaProgressList({
                 {i + 1}
               </div>
               {r.foto ? (
-                <img src={r.foto} alt="" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', border: '2px solid #00f0ff', flexShrink: 0 }} />
+                <img src={r.foto} alt="" loading="lazy" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', border: '2px solid #00f0ff', flexShrink: 0 }} />
               ) : (
                 <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1c2340', border: '2px solid #00f0ff', flexShrink: 0 }} />
               )}
@@ -161,7 +161,7 @@ function DinamicaColaboradorProdutosModal({
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2 min-w-0">
             {row.foto ? (
-              <img src={row.foto} alt="" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }} />
+              <img src={row.foto} alt="" loading="lazy" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }} />
             ) : (
               <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1c2340' }} />
             )}
