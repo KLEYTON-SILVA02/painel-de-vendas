@@ -72,12 +72,13 @@ export function isUnitConquista(categoria: ConquistaCategoria): boolean {
   return categoria === 'LEVMEL' || categoria === 'CHIP' || categoria === 'DSM';
 }
 
-const UNIT_CONQUISTA_SUFFIX: Record<string, string> = { DSM: 'conv.' };
+const UNIT_CONQUISTA_SUFFIX: Record<string, string> = { DSM: 'c' };
 
 /** The unit label for an isUnitConquista category's raw quantity — "un."
- * for LEVMEL/CHIP, "conv." for DSM. Used both by conquistaTierParts (the
- * card's own tier text) and by screens that print the achiever's plain
- * quantity outside the card (e.g. ConquistasPage's grid caption). */
+ * for LEVMEL/CHIP, "c" for DSM (e.g. "4 c" — conversões do DSM). Used both
+ * by conquistaTierParts (the card's own tier text) and by screens that
+ * print the achiever's plain quantity outside the card (e.g. ConquistasPage's
+ * grid caption, which already puts a space of its own before this suffix). */
 export function unitConquistaSuffix(categoria: ConquistaCategoria): string {
   return UNIT_CONQUISTA_SUFFIX[categoria] ?? 'un.';
 }
@@ -110,7 +111,11 @@ export function conquistaTierParts(categoria: ConquistaCategoria, tier: number, 
       ? 'DSM (DESCONTO SÓ MEU)'
       : (CONQUISTA_TIER_SUFFIX[categoria as FixedConquistaCategoria] ?? categoria);
   const unitSuffix = UNIT_CONQUISTA_SUFFIX[categoria] ?? 'un.';
-  return { valor: isUnitConquista(categoria) ? `${tier}${unitSuffix}` : `${tier / 1000}K`, categoria: nome };
+  // LEVMEL/CHIP keep the tight "5un." convention already used everywhere
+  // for them; DSM's "c" suffix reads as a unit letter, not a word, so it
+  // gets its own space — "4 c", matching the requested card format.
+  const unitValue = categoria === 'DSM' ? `${tier} ${unitSuffix}` : `${tier}${unitSuffix}`;
+  return { valor: isUnitConquista(categoria) ? unitValue : `${tier / 1000}K`, categoria: nome };
 }
 
 /** "3K DERMOCOSMÉTICOS" / "1K MARCA PRÓPRIA" / "5un. LEVMEL" / "10un. CHIP" */
