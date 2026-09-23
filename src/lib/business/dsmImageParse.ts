@@ -12,6 +12,7 @@
 // sempre o ÚLTIMO número da linha como quantidade, funcione a linha com
 // 1, 2 ou 3 números à direita do nome.
 import type { DsmReviewRow } from './dsmImport';
+import { normalize } from './normalize';
 import { normalizeMatricula } from './parsing';
 
 const FOOTER_LINE_PATTERN = /\b(sub)?tota(l|is)\b/i;
@@ -24,6 +25,11 @@ export interface DsmImageLineMatch {
   matricula: string;
   nome: string;
   quantidade: number | null;
+  /** Set only by the second-pass name search (parseDsmImageLinesByCollaboratorName)
+   * — absent for a line matched the normal way, so the review table can
+   * flag these for extra scrutiny (matched by nome, not by the stricter
+   * matrícula-dash pattern). */
+  matchedBy?: 'nome';
 }
 
 /** Splits the trailing run of whitespace-separated numeric tokens off the
@@ -81,6 +87,46 @@ export function parseDsmImageLines(text: string): DsmImageLineMatch[] {
   return out;
 }
 
+/** Segunda leitura/verificação do mesmo texto de OCR — em vez de exigir o
+ * formato rígido "<matrícula>-<NOME>" da primeira leitura, procura por cada
+ * colaborador já cadastrado (pelo nome) em qualquer lugar do texto, e lê só
+ * o último número da mesma linha como quantidade de clientes atendidos.
+ * Existe porque os dígitos da matrícula são a parte que o OCR mais erra
+ * (um dígito trocado, o traço sumindo, a linha quebrada em duas) — quando
+ * isso acontece, a primeira leitura descarta a linha inteira mesmo com o
+ * nome perfeitamente legível, que é exatamente o bug relatado de
+ * colaborador "ficando de fora" mesmo estando no texto extraído. Só
+ * retorna colaboradores cuja matrícula ainda não está em `alreadyMatched`
+ * (a primeira leitura), então nunca duplica uma linha que já deu certo. */
+export function parseDsmImageLinesByCollaboratorName(
+  text: string,
+  colaboradores: { nome: string; matricula: string }[],
+  alreadyMatched: Set<string>,
+): DsmImageLineMatch[] {
+  const out: DsmImageLineMatch[] = [];
+  const foundThisPass = new Set<string>();
+  const lines = text.split(/\r?\n/);
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || FOOTER_LINE_PATTERN.test(line)) continue;
+    const normalizedLine = normalize(line);
+    for (const colaborador of colaboradores) {
+      const nomeTrim = colaborador.nome.trim();
+      const matricula = normalizeMatricula(colaborador.matricula);
+      if (!nomeTrim || !matricula || alreadyMatched.has(matricula) || foundThisPass.has(matricula)) continue;
+      const normalizedNome = normalize(nomeTrim);
+      const idx = normalizedLine.indexOf(normalizedNome);
+      if (idx === -1) continue;
+      const remainder = normalizedLine.slice(idx + normalizedNome.length).replace(/^[\s\-–—]+/, '');
+      const { quantidade } = splitNameAndTrailingNumber(remainder);
+      out.push({ lineRaw: line, matriculaRaw: colaborador.matricula, matricula, nome: nomeTrim, quantidade, matchedBy: 'nome' });
+      foundThisPass.add(matricula);
+      break;
+    }
+  }
+  return out;
+}
+
 const DATE_IN_TEXT = /(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})/;
 
 /** Best-effort search for a DD/MM/AAAA-shaped date anywhere in OCR text —
@@ -127,5 +173,6 @@ export function buildDsmReviewRowsFromImage(
     collaboratorId: m.matricula ? (collaboratorByMatricula.get(m.matricula)?.id ?? null) : null,
     dataISO,
     quantidade: m.quantidade ?? 0,
+    fonte: m.matchedBy,
   }));
 }

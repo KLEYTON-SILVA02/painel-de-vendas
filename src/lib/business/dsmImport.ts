@@ -143,6 +143,12 @@ export interface DsmReviewRow {
   collaboratorId: string | null;
   dataISO: string | null;
   quantidade: number;
+  /** 'nome' quando a linha só foi encontrada pela segunda leitura por nome
+   * (ver parseDsmImageLinesByCollaboratorName) — ausente/undefined para a
+   * planilha e para a primeira leitura por matrícula-traço da imagem. Só
+   * usado para sinalizar a linha na tela de conferência, pede mais atenção
+   * do ADM antes de salvar. */
+  fonte?: 'nome';
 }
 
 export function buildDsmReviewRows(parsed: DsmParsedRow[], collaboratorByMatricula: Map<string, { id: string }>): DsmReviewRow[] {
