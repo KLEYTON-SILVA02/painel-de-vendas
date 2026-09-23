@@ -54,10 +54,15 @@ export async function generateRankingImageBlob(
    * extra "Atingimento" box shows what % of it the image's own total
    * represents — the same total already drawn in the "TOTAL VENDIDO" box. */
   metaDiaria?: number,
+  /** Overrides the "un." suffix shown next to each isUnit value — DSM's
+   * bulk-image spec passes "conv." here to match the "conv." wording used
+   * everywhere else DSM appears, instead of reading like a LEVMEL/CHIP unit
+   * count. */
+  unitLabel = 'un.',
 ): Promise<Blob | null> {
   const ranking = rankingIn.filter((r) => r.valor > 0).slice(0, 10);
   const totalValor = ranking.reduce((a, r) => a + r.valor, 0);
-  const fmtValue = (v: number) => (isUnit ? `${Math.round(v)} un.` : fmtMoney(v));
+  const fmtValue = (v: number) => (isUnit ? `${Math.round(v)} ${unitLabel}` : fmtMoney(v));
   const pctAtingimento = metaDiaria && metaDiaria > 0 ? Math.min(999, (totalValor / metaDiaria) * 100) : null;
 
   const W = 1000;
@@ -224,6 +229,9 @@ export interface CategoryImageSpec {
   /** Same as generateRankingImageBlob's `metaDiaria` — that category's own
    * daily goal, so each generated image gets its own "Atingimento" box. */
   metaDiaria?: number;
+  /** Same as generateRankingImageBlob's `unitLabel` — defaults to "un." when
+   * omitted. */
+  unitLabel?: string;
 }
 
 export interface MultiImageResult {
@@ -259,7 +267,7 @@ export async function generateAllCategoryImages(
   let done = 0;
   const settled = await Promise.all(
     specs.map(async (spec) => {
-      const blob = await generateRankingImageBlob(spec.rows, spec.titulo, fromDate, toDate, storeName, spec.isUnit, spec.metaDiaria);
+      const blob = await generateRankingImageBlob(spec.rows, spec.titulo, fromDate, toDate, storeName, spec.isUnit, spec.metaDiaria, spec.unitLabel);
       onProgress?.(++done, specs.length);
       if (!blob) return null;
       return { key: spec.key, title: spec.titulo, url: URL.createObjectURL(blob), filename: `ranking-${spec.key.toLowerCase()}.png` };
