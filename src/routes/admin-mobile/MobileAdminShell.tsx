@@ -10,6 +10,7 @@ import { VersionFooter } from '../../components/VersionFooter';
 import { HamburgerIcon } from '../../components/icons/NavIcons';
 import { useResolvePasswordRequest } from '../../lib/mutations';
 import { useCollaborators, usePendingPasswordRequests, useStore } from '../../lib/queries';
+import { useCategorySwipeNav } from './useCategorySwipeNav';
 
 // Every screen below is lazy-loaded: this shell previously imported all of
 // them (plus every desktop /admin/* maintenance page) statically at the top
@@ -57,7 +58,9 @@ const MobileRankingPage = lazy(() => import('./MobileRankingPage').then((m) => (
 // the hamburger button. Each screen migrates from its existing desktop
 // component to a dedicated mv2-styled one as it's redesigned — until then
 // the route falls back to the desktop page so navigation always works, just
-// not yet in the new visual style.
+// not yet in the new visual style. Since the category buttons no longer sit
+// in easy reach, <main> also wires up useCategorySwipeNav so a horizontal
+// drag switches between category screens without opening the drawer.
 
 // xlsx is a large parsing library — only the Importar screen needs it (same
 // lazy-chunk rationale as the desktop shell).
@@ -73,6 +76,7 @@ export function MobileAdminShell() {
   const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [pwMenuOpen, setPwMenuOpen] = useState(false);
+  const swipeNav = useCategorySwipeNav();
 
   function handleAttendRequest(requestId: string, collaboratorId: string) {
     resolvePasswordRequest.mutate(requestId);
@@ -152,7 +156,12 @@ export function MobileAdminShell() {
         </div>
       </header>
 
-      <main style={{ paddingBottom: 24 }}>
+      <main
+        style={{ paddingBottom: 24 }}
+        onTouchStart={swipeNav.onTouchStart}
+        onTouchMove={swipeNav.onTouchMove}
+        onTouchEnd={swipeNav.onTouchEnd}
+      >
         {/* Keyed by pathname — a crash in one screen recovers by tapping any
             other drawer item instead of needing a full reload, same
             reasoning as the desktop AppShell. */}
