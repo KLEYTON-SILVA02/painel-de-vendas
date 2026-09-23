@@ -59,3 +59,56 @@ export async function insertDsmRecordsInBatches(rows: DsmInsertRow[]): Promise<n
   }
   return inserted;
 }
+
+export interface DsmReviewRowLike {
+  collaboratorId: string | null;
+  dataISO: string | null;
+  quantidade: number;
+}
+
+export interface SaveDsmReviewResult {
+  count: number;
+  duplicateCount: number;
+  unregisteredCount: number;
+}
+
+/** Shared "salvar" step for both DSM import flows (planilha e imagem):
+ * filters out rows with no matched colaborador or no date (never saved,
+ * only counted as `unregisteredCount`), skips exact duplicates of a row
+ * already in `existingRecords` or repeated within this same batch, then
+ * records the import event and writes what's left. Kept origem-agnostic
+ * (the caller passes 'planilha' or 'imagem') since the dedup/save logic
+ * itself doesn't differ between the two sources. */
+export async function saveDsmReview(
+  storeId: string,
+  origem: 'planilha' | 'imagem',
+  fileName: string | null,
+  rows: DsmReviewRowLike[],
+  existingRecords: { collaboratorId: string; dataISO: string; quantidade: number }[],
+): Promise<SaveDsmReviewResult> {
+  const existingKeys = new Set(existingRecords.map((r) => dsmRecordKey(r)));
+  const candidates = rows.filter((r): r is DsmReviewRowLike & { collaboratorId: string; dataISO: string } => !!r.collaboratorId && !!r.dataISO);
+  const unregisteredCount = rows.length - candidates.length;
+  let duplicateCount = 0;
+  const seen = new Set<string>();
+  const toInsert = candidates.filter((r) => {
+    const key = dsmRecordKey({ collaboratorId: r.collaboratorId, dataISO: r.dataISO, quantidade: r.quantidade });
+    if (existingKeys.has(key) || seen.has(key)) {
+      duplicateCount++;
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+
+  const importRow = await recordDsmImport(storeId, origem, fileName, toInsert.length, duplicateCount);
+  const insertRows = toInsert.map((r) => ({
+    store_id: storeId,
+    collaborator_id: r.collaboratorId,
+    data: r.dataISO,
+    quantidade: r.quantidade,
+    import_id: importRow.id,
+  }));
+  const count = await insertDsmRecordsInBatches(insertRows);
+  return { count, duplicateCount, unregisteredCount };
+}

@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom';
 import { PageLoading } from '../../components/PageLoading';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../auth/AuthContext';
+import { DsmImageImportSection } from './DsmImageImportSection';
 import { DsmImportSection } from './DsmImportSection';
+import { DsmImportHistoryPanel } from '../../components/dsm/DsmImportHistoryPanel';
 import { HelpTip } from '../../components/HelpTip';
 import { Spinner } from '../../components/Spinner';
 import { classifyProductTier } from '../../lib/business/classification';
@@ -17,6 +19,7 @@ import {
   useBrandKeywords,
   useCatalog,
   useCollaborators,
+  useDsmImports,
   useExclusiveBrands,
   useImportFieldOverrides,
   useProducts,
@@ -101,6 +104,7 @@ export function ImportarPage() {
   const { data: exclusiveBrands } = useExclusiveBrands();
   const { data: existingSales, refetch: refetchSales } = useSales();
   const { data: pastImports } = useSalesImports();
+  const { data: pastDsmImports } = useDsmImports();
   const { data: collaborators } = useCollaborators();
   const { data: importFieldOverrides } = useImportFieldOverrides();
 
@@ -762,7 +766,13 @@ export function ImportarPage() {
       <ImportHistoryPanel imports={pastImports ?? []} />
     </div>
 
-    <DsmImportSection />
+    <div className="flex flex-col lg:flex-row gap-4 items-start">
+      <div className="flex flex-col gap-4 flex-1 min-w-0 w-full">
+        <DsmImportSection />
+        <DsmImageImportSection />
+      </div>
+      <DsmImportHistoryPanel imports={pastDsmImports ?? []} />
+    </div>
     </div>
   );
 }

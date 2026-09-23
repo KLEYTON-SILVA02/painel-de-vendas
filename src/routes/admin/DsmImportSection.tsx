@@ -14,9 +14,9 @@ import {
 } from '../../lib/business/dsmImport';
 import { parseOdsTable } from '../../lib/business/odsTable';
 import { normalizeMatricula } from '../../lib/business/parsing';
-import { dsmRecordKey, insertDsmRecordsInBatches, recordDsmImport, translateDbError } from '../../lib/dsmRecordsImport';
+import { saveDsmReview, translateDbError } from '../../lib/dsmRecordsImport';
 import { readOdsContentXml } from '../../lib/odsZip';
-import { useCollaborators, useDsmImports, useDsmRecords } from '../../lib/queries';
+import { useCollaborators, useDsmRecords } from '../../lib/queries';
 
 const MAX_SIZE = 50 * 1024 * 1024;
 
@@ -31,7 +31,6 @@ export function DsmImportSection() {
   const { profile } = useAuth();
   const { data: collaborators } = useCollaborators();
   const { data: existingRecords, refetch: refetchDsmRecords } = useDsmRecords();
-  const { data: pastImports } = useDsmImports();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState<Step>('pick');
@@ -123,33 +122,8 @@ export function DsmImportSection() {
       // stale cached snapshot would be blind to DSM rows saved since the
       // review screen was opened.
       const { data: freshRecords } = await refetchDsmRecords();
-      const existingKeys = new Set(
-        (freshRecords ?? existingRecords ?? []).map((r) => dsmRecordKey({ collaboratorId: r.collaboratorId, dataISO: r.dataISO, quantidade: r.quantidade })),
-      );
-      const candidates = rows.filter((r): r is DsmReviewRow & { collaboratorId: string; dataISO: string } => !!r.collaboratorId && !!r.dataISO);
-      const unregisteredCount = rows.length - candidates.length;
-      let duplicateCount = 0;
-      const seen = new Set<string>();
-      const toInsert = candidates.filter((r) => {
-        const key = dsmRecordKey({ collaboratorId: r.collaboratorId, dataISO: r.dataISO, quantidade: r.quantidade });
-        if (existingKeys.has(key) || seen.has(key)) {
-          duplicateCount++;
-          return false;
-        }
-        seen.add(key);
-        return true;
-      });
-
-      const importRow = await recordDsmImport(profile.store_id, 'planilha', fileName, toInsert.length, duplicateCount);
-      const insertRows = toInsert.map((r) => ({
-        store_id: profile.store_id!,
-        collaborator_id: r.collaboratorId,
-        data: r.dataISO,
-        quantidade: r.quantidade,
-        import_id: importRow.id,
-      }));
-      const insertedCount = await insertDsmRecordsInBatches(insertRows);
-      setResult({ count: insertedCount, duplicateCount, unregisteredCount });
+      const result = await saveDsmReview(profile.store_id, 'planilha', fileName, rows, freshRecords ?? existingRecords ?? []);
+      setResult(result);
       setStep('done');
     } catch (err) {
       setError(translateDbError(err));
@@ -168,8 +142,7 @@ export function DsmImportSection() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4 items-start">
-      <div className="flex flex-col gap-3 flex-1 min-w-0 w-full">
+    <div className="flex flex-col gap-3">
         {step === 'pick' && (
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
             <h3 className="font-semibold text-sm mb-1">Importar planilha de DSM</h3>
@@ -232,37 +205,6 @@ export function DsmImportSection() {
             </button>
           </div>
         )}
-      </div>
-
-      <DsmImportHistoryPanel imports={pastImports ?? []} />
-    </div>
-  );
-}
-
-function DsmImportHistoryPanel({
-  imports,
-}: {
-  imports: { id: string; origem: string; file_name: string | null; row_count: number; duplicate_count: number; created_at: string }[];
-}) {
-  if (imports.length === 0) return null;
-  return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 w-full lg:w-80 lg:shrink-0 lg:sticky lg:top-4">
-      <h3 className="font-semibold mb-1 text-sm">DSM já importados</h3>
-      <p className="text-xs text-slate-500 mb-3">Histórico de importações de DSM desta loja, mais recente primeiro.</p>
-      <div className="flex flex-col gap-2 max-h-[70vh] overflow-y-auto">
-        {imports.map((imp) => (
-          <div key={imp.id} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-            <div className="text-xs font-medium text-slate-200 truncate" title={imp.file_name ?? ''}>
-              {imp.file_name || (imp.origem === 'imagem' ? 'Imagem colada' : 'Planilha')}
-            </div>
-            <div className="text-[11px] text-slate-500 mt-0.5">{new Date(imp.created_at).toLocaleString('pt-BR')}</div>
-            <div className="text-[11px] text-cyan-400 mt-1">
-              {imp.row_count} registro(s)
-              {imp.duplicate_count ? ` · ${imp.duplicate_count} duplicado(s) ignorado(s)` : ''}
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
