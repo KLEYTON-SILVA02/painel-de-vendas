@@ -25,16 +25,17 @@ import {
 import { useDateRange } from '../DateRangeContext';
 import { GoalGauge } from './GoalGauge';
 import { MobileDateFilter } from './MobileDateFilter';
+import { MobileLoadError } from './MobileLoadError';
 
 const CAT_COLOR: Record<CategoryKey, string> = { DERM: '#b84c9c', GEN: '#698b46', MP: '#813c97', MER: '#f26122' };
 
 export function MobileInicioPage() {
   const CAT_LABEL = useCategoryLabelMap();
-  const { data: collaborators } = useCollaborators();
-  const { data: goals } = useGoals();
-  const { data: storeSettings } = useStoreSettings();
-  const { data: specialLists } = useSpecialLists();
-  const { data: dynamics } = useDynamics();
+  const { data: collaborators, isError: collaboratorsError } = useCollaborators();
+  const { data: goals, isError: goalsError } = useGoals();
+  const { data: storeSettings, isError: storeSettingsError } = useStoreSettings();
+  const { data: specialLists, isError: specialListsError } = useSpecialLists();
+  const { data: dynamics, isError: dynamicsError } = useDynamics();
   const { data: store } = useStore();
   const { data: genericConquistas } = useGenericConquistaConfigs();
   const { dashFrom, dashTo, refYear, refMonth, rankFilter, modoGeral } = useDateRange();
@@ -65,15 +66,19 @@ export function MobileInicioPage() {
   // reference month, never the full history) — that window still needs raw
   // sales because computeChampionStars scores each day individually
   // (best single day within range), which an already-summed total can't do.
-  const { data: categoryTotals } = useMobileCategoryTotals(dashFrom, dashTo);
-  const { data: campeaoSales } = useSalesInRange(campeaoFrom, campeaoTo);
+  const { data: categoryTotals, isError: categoryTotalsError } = useMobileCategoryTotals(dashFrom, dashTo);
+  const { data: campeaoSales, isError: campeaoSalesError } = useSalesInRange(campeaoFrom, campeaoTo);
   // getGoalFromTotals/getSuperMetaFromTotals/effectiveMetaGeralFromTotals
   // only need month-to-date totals for the auto-redistribute daily-goal
   // path — fetched only when at least one of the goals shown here actually
   // uses it, same conditional pattern as MobileRankingPage.
   const needsMonthToDate = mode === 'dia' && (CAT_KEYS.some((k) => goals?.[k]?.autoRedistribuir) || !!goals?.MER?.superMetaAuto);
   const now = new Date();
-  const { data: monthToDateTotals } = useMobileCategoryTotals(monthFirstISO(now.getFullYear(), now.getMonth()), todayISO(), needsMonthToDate);
+  const { data: monthToDateTotals, isError: monthToDateTotalsError } = useMobileCategoryTotals(
+    monthFirstISO(now.getFullYear(), now.getMonth()),
+    todayISO(),
+    needsMonthToDate,
+  );
 
   // Safe stand-ins so the useMemo calls below always run in the same order
   // (Rules of Hooks) whether or not every query has resolved yet — the
@@ -112,6 +117,23 @@ export function MobileInicioPage() {
         : null,
     [campeaoMatricula, campeaoSalesData, collaboratorsData, specialLists, campeaoFrom, campeaoTo, extraStarCategories],
   );
+
+  // Checked BEFORE the "still missing" guard below — see MobileLoadError's
+  // own comment for why: a query that already gave up leaves `data`
+  // undefined forever too, which used to be indistinguishable from "still
+  // loading".
+  if (
+    collaboratorsError ||
+    goalsError ||
+    storeSettingsError ||
+    specialListsError ||
+    dynamicsError ||
+    categoryTotalsError ||
+    campeaoSalesError ||
+    (needsMonthToDate && monthToDateTotalsError)
+  ) {
+    return <MobileLoadError />;
+  }
 
   if (
     !collaborators ||

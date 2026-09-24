@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react';
+import { PageError } from '../../components/PageError';
 import { PageLoading } from '../../components/PageLoading';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
 import { PodiumSplit, type PodiumSpots } from '../../components/ranking/PodiumSplit';
@@ -13,9 +14,9 @@ import { useDateRange } from '../DateRangeContext';
  * sales). O "ocultar" vive em ADM → Nomes das Categorias (toggle sobre
  * category_types.ativo), não aqui — ver NomesCategoriasPage.tsx. */
 export function DsmPage() {
-  const { data: collaborators } = useCollaborators();
-  const { data: dsmRecords } = useDsmRecords();
-  const { data: storeSettings } = useStoreSettings();
+  const { data: collaborators, isError: collaboratorsError } = useCollaborators();
+  const { data: dsmRecords, isError: dsmRecordsError } = useDsmRecords();
+  const { data: storeSettings, isError: storeSettingsError } = useStoreSettings();
   const { dashFrom, dashTo, setModoGeral } = useDateRange();
 
   // Mesma decisão de BIOSINTÉTICA: abre sempre em Modo Geral (mês inteiro),
@@ -30,6 +31,13 @@ export function DsmPage() {
     () => computeDsmSummary(recordsData, collaboratorsData, dashFrom, dashTo),
     [recordsData, collaboratorsData, dashFrom, dashTo],
   );
+
+  // Checked BEFORE the "still missing" guard below — see PageError's own
+  // comment for why: a query that already gave up leaves `data` undefined
+  // forever too, which used to be indistinguishable from "still loading".
+  if (collaboratorsError || dsmRecordsError || storeSettingsError) {
+    return <PageError />;
+  }
 
   if (!collaborators || !dsmRecords || !storeSettings) {
     return <PageLoading />;

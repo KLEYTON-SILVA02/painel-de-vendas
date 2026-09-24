@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { PageError } from '../../components/PageError';
 import { PageLoading } from '../../components/PageLoading';
 import { HelpTip } from '../../components/HelpTip';
 import { useAuth } from '../../auth/AuthContext';
@@ -277,16 +278,16 @@ export function DashboardPage() {
   const [rankingImageModal, setRankingImageModal] = useState<{ url: string; copied: boolean } | null>(null);
   const [multiImages, setMultiImages] = useState<MultiImageResult[] | null>(null);
   const [bestDayExpanded, setBestDayExpanded] = useState(false);
-  const { data: collaborators } = useCollaborators();
-  const { data: sales } = useSales();
-  const { data: goals } = useGoals();
-  const { data: storeSettings } = useStoreSettings();
+  const { data: collaborators, isError: collaboratorsError } = useCollaborators();
+  const { data: sales, isError: salesError } = useSales();
+  const { data: goals, isError: goalsError } = useGoals();
+  const { data: storeSettings, isError: storeSettingsError } = useStoreSettings();
   const { data: store } = useStore();
   const { data: dsmRecords } = useDsmRecords();
   const { data: categoryTypes } = useCategoryTypes();
   const dsmCategory = categoryTypes?.find((c) => c.chave === 'dsm');
-  const { data: specialLists } = useSpecialLists();
-  const { data: dynamics } = useDynamics();
+  const { data: specialLists, isError: specialListsError } = useSpecialLists();
+  const { data: dynamics, isError: dynamicsError } = useDynamics();
   const { dashFrom, dashTo, refYear, refMonth, rankFilter, modoGeral, setRankFilter } = useDateRange();
   const updateStoreSettings = useUpdateStoreSettings(profile?.store_id);
 
@@ -453,6 +454,13 @@ export function DashboardPage() {
     }
     return specs;
   }, [salesData, collaboratorsData, goals, dashFrom, dashTo, specialLists, categoryLabels, hiddenCategories, dsmCategory, dsmRecords]);
+
+  // Checked BEFORE the "still missing" guard below — see PageError's own
+  // comment for why: a query that already gave up leaves `data` undefined
+  // forever too, which used to be indistinguishable from "still loading".
+  if (collaboratorsError || salesError || goalsError || storeSettingsError || specialListsError || dynamicsError) {
+    return <PageError />;
+  }
 
   if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !dynamics) {
     return <PageLoading />;
