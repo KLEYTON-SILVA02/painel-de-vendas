@@ -17,6 +17,13 @@ function isChunkLoadError(error: unknown): boolean {
 
 interface State {
   error: Error | null;
+  /** True once a chunk-load error has already triggered one auto-reload
+   * this mount and it happened AGAIN — i.e. the auto-recovery attempt
+   * itself didn't land on a fresh build (a second deploy shipped before the
+   * reload could stabilize, common during a burst of same-day releases).
+   * Without this, the static "Atualizando…" placeholder below renders
+   * forever with no way out, since no further auto-reload is scheduled. */
+  chunkReloadExhausted: boolean;
 }
 
 /** Without this, ANY uncaught render error anywhere in the tree — a chunk
@@ -26,9 +33,9 @@ interface State {
  * is what reads to a user as "the whole system froze" over a single
  * broken feature. This catches it and offers a way back instead. */
 export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
-  state: State = { error: null };
+  state: State = { error: null, chunkReloadExhausted: false };
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Pick<State, 'error'> {
     return { error };
   }
 
@@ -60,6 +67,13 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
         window.location.reload();
         return;
       }
+      // Second chunk-load error without a successful mount in between (e.g.
+      // another deploy shipped before the first auto-reload could land on a
+      // stable build — expected during a burst of same-day releases). No
+      // further auto-reload is scheduled, so the render below must offer a
+      // manual way out instead of the silent "Atualizando…" placeholder,
+      // which would otherwise sit there forever looking like a frozen app.
+      this.setState({ chunkReloadExhausted: true });
     }
     console.error('Uncaught error rendering the app:', error);
     // A stale-chunk reload above is a known, self-healing case — not worth a
@@ -73,9 +87,27 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
   render() {
     if (this.state.error) {
       if (isChunkLoadError(this.state.error)) {
-        // Auto-reload already fired in componentDidCatch (or isn't
-        // possible) — show a brief, calm placeholder either way instead
-        // of a blank tab while that reload lands.
+        if (this.state.chunkReloadExhausted) {
+          return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-100 p-6">
+              <div className="max-w-sm w-full rounded-2xl border border-slate-800 bg-slate-900/60 p-6 text-center">
+                <h2 className="text-base font-semibold mb-2">Nova versão disponível</h2>
+                <p className="text-sm text-slate-400 mb-4">
+                  O sistema foi atualizado enquanto esta tela estava aberta. Toque abaixo para carregar a versão mais
+                  recente.
+                </p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm"
+                >
+                  Atualizar agora
+                </button>
+              </div>
+            </div>
+          );
+        }
+        // Auto-reload already fired in componentDidCatch — show a brief,
+        // calm placeholder while it lands instead of a blank tab.
         return (
           <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-400 text-sm p-6">
             Atualizando o aplicativo…
