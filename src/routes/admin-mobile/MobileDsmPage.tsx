@@ -6,6 +6,7 @@ import { todayISO } from '../../lib/dateRange';
 import { useCategoryTypes, useCollaborators, useDsmRecords, useGoals } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { MobileDateFilter } from './MobileDateFilter';
+import { MobileLoadError } from './MobileLoadError';
 
 const ACCENT = '#00e0c0';
 
@@ -16,9 +17,9 @@ const ACCENT = '#00e0c0';
 // Copiar/Gerar imagem (same reasoning as the desktop screen: those
 // generators hardcode R$/"un." formatting with no DSM-aware path yet).
 export function MobileDsmPage() {
-  const { data: collaborators } = useCollaborators();
-  const { data: dsmRecords } = useDsmRecords();
-  const { data: goals } = useGoals();
+  const { data: collaborators, isError: collaboratorsError } = useCollaborators();
+  const { data: dsmRecords, isError: dsmRecordsError } = useDsmRecords();
+  const { data: goals, isError: goalsError } = useGoals();
   const { data: categoryTypes } = useCategoryTypes();
   const { dashFrom, dashTo } = useDateRange();
 
@@ -36,6 +37,15 @@ export function MobileDsmPage() {
     () => computeDsmSummary(recordsData, collaboratorsData, today, today),
     [recordsData, collaboratorsData, today],
   );
+
+  // Checked BEFORE the "still missing" guard below: a query that already
+  // gave up (network blip, a transient session hiccup) leaves its `data`
+  // permanently undefined too, which the old guard couldn't tell apart from
+  // "still loading" — this screen would sit on "Carregando…" forever
+  // instead of ever recovering. See MobileLoadError for the recovery path.
+  if (collaboratorsError || dsmRecordsError || goalsError) {
+    return <MobileLoadError />;
+  }
 
   if (!collaborators || !dsmRecords || !goals) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;

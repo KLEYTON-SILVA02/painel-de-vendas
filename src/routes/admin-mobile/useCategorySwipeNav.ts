@@ -56,16 +56,19 @@ export function hasHorizontalScrollRoom(el: HTMLElement, dx: number): boolean {
  * drawer-only menu (see MobileAdminShell.tsx), so switching categories no
  * longer needs opening the drawer every time.
  *
- * The swipeable set mirrors exactly what the desktop Sidebar's own
- * "Categorias" + "Programas" category items already are: the 6 categorias
- * fixas (respecting store_settings.hidden_categories, same as the drawer),
- * then Biosintética, DSM (only when ativo — same "ocultar" rule as
- * everywhere else DSM appears) and any ADM-created categorias extras, in
- * that order. Início, Ranking, Dinâmicas, Conquistas and ADM are
- * deliberately excluded — they aren't "categorias", the user's own word for
- * this feature's scope. No preventDefault/native-scroll hijacking anywhere:
- * this only ever *reads* the touch path and navigates on touchend, so it
- * can never break a screen's existing vertical scrolling. */
+ * The swipeable set is Início (the landing screen) followed by exactly what
+ * the desktop Sidebar's own "Categorias" + "Programas" category items
+ * already are: the 6 categorias fixas (respecting
+ * store_settings.hidden_categories, same as the drawer), then Biosintética,
+ * DSM (only when ativo — same "ocultar" rule as everywhere else DSM
+ * appears) and any ADM-created categorias extras, in that order. Início was
+ * added so swiping from the app's own landing screen flows straight into
+ * the first category instead of dead-ending there; Ranking, Dinâmicas,
+ * Conquistas and ADM stay excluded — they aren't "categorias", the user's
+ * own word for this feature's scope. No preventDefault/native-scroll
+ * hijacking anywhere: this only ever *reads* the touch path and navigates
+ * on touchend, so it can never break a screen's existing vertical
+ * scrolling. */
 export function useCategorySwipeNav() {
   const { data: categoryTypes } = useCategoryTypes();
   const { data: storeSettings } = useStoreSettings();
@@ -79,6 +82,7 @@ export function useCategorySwipeNav() {
     const dsmCategory = (categoryTypes ?? []).find((c) => c.chave === 'dsm');
     const extraCategories = (categoryTypes ?? []).filter((c) => c.chave !== 'biosintetica' && c.chave !== 'dsm');
     return [
+      '/',
       ...FIXED_CATEGORY_ROUTES.filter((c) => !hidden.includes(c.key)).map((c) => c.to),
       ...(bioCategory ? ['/bio'] : []),
       ...(dsmCategory && dsmCategory.ativo ? ['/dsm'] : []),
