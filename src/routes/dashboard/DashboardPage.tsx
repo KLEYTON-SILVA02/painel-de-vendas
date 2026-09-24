@@ -16,9 +16,15 @@ import { RankingModeToggle } from '../../components/ranking/RankingModeToggle';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
 import { computeDsmSummary } from '../../lib/business/dsm';
 import { computeDinamicaRanking, intersectDynamicPeriod } from '../../lib/business/dynamics';
-import { diasRestantesNoMes, effectiveMetaGeral, getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
+import {
+  diasRestantesNoMes,
+  effectiveMetaGeralFromTotals,
+  getGoalFromTotals,
+  getSuperMetaFromTotals,
+  goalProration,
+} from '../../lib/business/goals';
 import type { Dynamic, Goal } from '../../lib/business/types';
-import { catTotals, computeSummary } from '../../lib/business/summary';
+import { summaryFromCategoryTotals, sumCategoryTotals } from '../../lib/business/summary';
 import { monthFirstISO, monthLastISO, todayISO } from '../../lib/dateRange';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { copyText, formatRankingText } from '../../lib/clipboard';
@@ -30,6 +36,7 @@ import {
   useDsmRecords,
   useDynamics,
   useGoals,
+  useMobileCategoryTotals,
   useSales,
   useSpecialLists,
   useStore,
@@ -291,6 +298,26 @@ export function DashboardPage() {
   const { dashFrom, dashTo, refYear, refMonth, rankFilter, modoGeral, setRankFilter } = useDateRange();
   const updateStoreSettings = useUpdateStoreSettings(profile?.store_id);
 
+  // Plano de Ação Tartaruga (Desktop): categoria/colaborador totals — the
+  // ranking, the "Vendas por Categoria" gauges, the meta/falta/saldo cards
+  // and the "Gerar imagem" specs — used to be computeSummary()/catTotals()
+  // full passes over the whole `sales` array, redone on every render this
+  // page re-renders for (opening a modal, the "copiado" toast, a filter
+  // click). They now read from the same pre-aggregated
+  // mobile_category_totals() rows the mobile app already uses (see
+  // migrations 0093/0094) — same reasoning, same source of truth, just
+  // reused here instead of client-side scanning. `salesData` stays in use
+  // below for the pieces that genuinely need item-level detail: the "Melhor
+  // Dia de Vendas" card, the Evolução Diária chart, and a Dinâmica-filtered
+  // ranking (dynamics match products by their own rules, not a fixed
+  // categoria the rollup knows about).
+  const { data: categoryTotals, isError: categoryTotalsError } = useMobileCategoryTotals(dashFrom, dashTo);
+  const now = new Date();
+  const { data: monthToDateTotals, isError: monthToDateTotalsError } = useMobileCategoryTotals(
+    monthFirstISO(now.getFullYear(), now.getMonth()),
+    todayISO(),
+  );
+
   // rankFilter lives in DateRangeContext, shared with RankingPage — sem
   // isso, escolher uma categoria lá (ou aqui, numa visita anterior) deixava
   // a Tela Início sempre "presa" naquela categoria da próxima vez que fosse
@@ -326,30 +353,24 @@ export function DashboardPage() {
   const monthLast = monthLastISO(refYear, refMonth);
   const rankFilterParams = resolveRankFilterParams(rankFilter, dashFrom, dashTo, dynamics ?? [], categoryLabels);
 
-  // Each of these walks the full `sales` array (up to 3 months of history
-  // per REGRA 2's retention window) — in "Modo Geral" (whole month) that's
-  // real work, and this component re-renders on unrelated state changes
-  // (opening a modal, the "copiado" toast, image generation). Memoizing
-  // keeps that work tied to the data/date-range actually changing instead
-  // of redone on every render.
-  const ranking = useMemo(
-    () => computeSummary(salesData, collaboratorsData, dashFrom, dashTo),
-    [salesData, collaboratorsData, dashFrom, dashTo],
-  );
-  const totalValor = ranking.reduce((a, r) => a + r.valor, 0);
-  const totalItens = ranking.reduce((a, r) => a + r.itens, 0);
+  // Store-wide grand total (Mercadoria Geral) for the selected dashFrom/
+  // dashTo range — a single sum over the already-aggregated rows instead of
+  // a full computeSummary() pass over every sale.
+  const totalAll = sumCategoryTotals(categoryTotals ?? [], 'ALL');
+  const totalValor = totalAll.valor;
+  const totalItens = totalAll.qtd;
 
-  // "Vendas por Categoria" gauges — 3 catTotals() full-array passes (MER
-  // reuses totalValor/totalItens above instead of a 4th) plus a getGoal()
-  // per category.
+  // "Vendas por Categoria" gauges — 3 sumCategoryTotals() lookups (MER
+  // reuses totalAll above instead of a 4th) plus a getGoalFromTotals() per
+  // category.
   const gaugeData = useMemo(() => {
     if (!goals) return [];
     return CAT_KEYS.map((k) => {
-      const t = k === 'MER' ? { valor: totalValor, qtd: totalItens } : catTotals(salesData, dashFrom, dashTo, k);
-      const goal = getGoal(goals[k], mode, salesData, collaboratorsData, proration);
+      const t = k === 'MER' ? { valor: totalValor, qtd: totalItens } : sumCategoryTotals(categoryTotals ?? [], k);
+      const goal = getGoalFromTotals(goals[k], mode, monthToDateTotals ?? [], collaboratorsData, proration);
       return { key: k, valor: t.valor, goal };
     });
-  }, [salesData, collaboratorsData, goals, dashFrom, dashTo, mode, proration, totalValor, totalItens]);
+  }, [categoryTotals, collaboratorsData, goals, mode, proration, totalValor, totalItens, monthToDateTotals]);
 
   // "Melhor Dia de Vendas" always tracks the real current month (like the
   // achievement-celebration check), regardless of which month the date
@@ -395,13 +416,20 @@ export function DashboardPage() {
         itens: r.conversoes,
       }));
     }
+    // A Dinâmica matches products by its own rules (keyword/product list),
+    // not a fixed categoria the totals rollup knows about — still needs
+    // item-level sales. Every other case (the 6 fixed categories, 'ALL',
+    // Levmel, Chip) reads the same pre-aggregated rows the gauges above use
+    // — rankFilterParams.from/to always equal dashFrom/dashTo whenever it
+    // isn't a Dinâmica (see resolveRankFilterParams), so categoryTotals
+    // (already fetched for that exact range) is exactly right here too.
     return rankFilterParams.dinamica
       ? computeDinamicaRanking(
           { ...rankFilterParams.dinamica, dataInicio: rankFilterParams.from, dataFim: rankFilterParams.to },
           salesData,
           collaboratorsData,
         )
-      : computeSummary(salesData, collaboratorsData, rankFilterParams.from, rankFilterParams.to, rankFilterParams.catFilter, specialLists);
+      : summaryFromCategoryTotals(categoryTotals ?? [], collaboratorsData, rankFilterParams.catFilter);
   }, [
     isDsmMode,
     dsmRecords,
@@ -411,33 +439,32 @@ export function DashboardPage() {
     rankFilterParams.from,
     rankFilterParams.to,
     rankFilterParams.catFilter,
+    categoryTotals,
     salesData,
     collaboratorsData,
-    specialLists,
   ]);
 
-  // "Todas as categorias" image specs — 6 computeSummary passes over the
-  // full `sales` array. This used to run inline inside
-  // handleGenerateAllImages on every click instead of being memoized like
-  // every other full-array pass on this page, so clicking the button froze
-  // the tab for as long as those 6 synchronous passes over a large `sales`
-  // array took, on top of the (now-parallelized, see rankingImage.ts) image
-  // generation itself.
+  // "Todas as categorias" image specs — 6 summaryFromCategoryTotals()
+  // lookups over the already-aggregated rows instead of 6 computeSummary()
+  // passes over the full `sales` array (this used to run inline inside
+  // handleGenerateAllImages on every click, freezing the tab for as long as
+  // those passes took, on top of the (now-parallelized, see
+  // rankingImage.ts) image generation itself — memoized either way).
   const hiddenCategories = storeSettings?.hidden_categories ?? [];
   const allCategorySpecs = useMemo(() => {
     if (!goals) return [];
     const specs: CategoryImageSpec[] = RANKING_CATEGORIES.filter((c) => !hiddenCategories.includes(c.key)).map((c) => {
       const isUnit = c.key === 'LEVMEL' || c.key === 'CHIP';
-      const rowsRaw = computeSummary(salesData, collaboratorsData, dashFrom, dashTo, c.key, specialLists);
+      const rowsRaw = summaryFromCategoryTotals(categoryTotals ?? [], collaboratorsData, c.key);
       return {
         key: c.key,
         titulo: categoryLabels[c.key] ?? c.titulo,
         rows: isUnit ? rowsRaw.map((r) => ({ ...r, valor: r.itens })) : rowsRaw,
         isUnit,
-        metaDiaria: getGoal(goals[c.key], 'dia', salesData, collaboratorsData),
+        metaDiaria: getGoalFromTotals(goals[c.key], 'dia', monthToDateTotals ?? [], collaboratorsData),
       };
     });
-    // DSM não é uma CategoryKey (não vem de `sales`/computeSummary — ver
+    // DSM não é uma CategoryKey (não vem de `sales`/categoryTotals — ver
     // isDsmMode acima) então entra à parte, só quando a própria loja não a
     // ocultou (mesmo "ativo" que Sidebar/RankFilterBar já respeitam).
     if (dsmCategory?.ativo) {
@@ -449,20 +476,29 @@ export function DashboardPage() {
         rows: dsmRanking.map((r) => ({ nome: r.nome, apelido: r.apelido, foto: r.foto, valor: r.conversoes })),
         isUnit: true,
         unitLabel: 'conv.',
-        metaDiaria: getGoal(dsmGoal, 'dia', salesData, collaboratorsData),
+        metaDiaria: getGoalFromTotals(dsmGoal, 'dia', monthToDateTotals ?? [], collaboratorsData),
       });
     }
     return specs;
-  }, [salesData, collaboratorsData, goals, dashFrom, dashTo, specialLists, categoryLabels, hiddenCategories, dsmCategory, dsmRecords]);
+  }, [categoryTotals, collaboratorsData, goals, dashFrom, dashTo, categoryLabels, hiddenCategories, dsmCategory, dsmRecords, monthToDateTotals]);
 
   // Checked BEFORE the "still missing" guard below — see PageError's own
   // comment for why: a query that already gave up leaves `data` undefined
   // forever too, which used to be indistinguishable from "still loading".
-  if (collaboratorsError || salesError || goalsError || storeSettingsError || specialListsError || dynamicsError) {
+  if (
+    collaboratorsError ||
+    salesError ||
+    goalsError ||
+    storeSettingsError ||
+    specialListsError ||
+    dynamicsError ||
+    categoryTotalsError ||
+    monthToDateTotalsError
+  ) {
     return <PageError />;
   }
 
-  if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !dynamics) {
+  if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !dynamics || !categoryTotals || !monthToDateTotals) {
     return <PageLoading />;
   }
 
@@ -505,13 +541,13 @@ export function DashboardPage() {
   const barMetaBase = isDsmMode
     ? 0
     : rankFilterParams.catFilter === 'ALL'
-      ? effectiveMetaGeral(goals, barGoalMode, sales, collaborators, storeSettings.meta_geral_fallback)
-      : getGoal(goals[rankFilterParams.catFilter], barGoalMode, sales, collaborators);
+      ? effectiveMetaGeralFromTotals(goals, barGoalMode, monthToDateTotals, collaborators, storeSettings.meta_geral_fallback)
+      : getGoalFromTotals(goals[rankFilterParams.catFilter], barGoalMode, monthToDateTotals, collaborators);
   const barSuperBase = isDsmMode
     ? 0
     : rankFilterParams.catFilter === 'ALL'
-      ? getSuperMeta(goals.MER, barGoalMode, sales, collaborators)
-      : getSuperMeta(goals[rankFilterParams.catFilter], barGoalMode, sales, collaborators);
+      ? getSuperMetaFromTotals(goals.MER, barGoalMode, monthToDateTotals, collaborators)
+      : getSuperMetaFromTotals(goals[rankFilterParams.catFilter], barGoalMode, monthToDateTotals, collaborators);
   const atingiuBarMeta = barMetaBase > 0 && barValor >= barMetaBase;
   let barPct: number;
   let barMarker: number | null = null;
@@ -569,8 +605,8 @@ export function DashboardPage() {
       // (same one "Meta Diária" at the top of this page already tracks).
       const metaDiariaValor =
         rankFilterParams.catFilter === 'ALL'
-          ? effectiveMetaGeral(goals!, 'dia', sales!, collaborators!, storeSettings!.meta_geral_fallback)
-          : getGoal(goals![rankFilterParams.catFilter], 'dia', sales!, collaborators!);
+          ? effectiveMetaGeralFromTotals(goals!, 'dia', monthToDateTotals ?? [], collaborators!, storeSettings!.meta_geral_fallback)
+          : getGoalFromTotals(goals![rankFilterParams.catFilter], 'dia', monthToDateTotals ?? [], collaborators!);
       const blob = await generateRankingImageBlob(
         rows,
         rankFilterParams.label,
