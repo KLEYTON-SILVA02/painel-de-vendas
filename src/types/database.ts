@@ -1448,6 +1448,41 @@ export type Database = {
           },
         ]
       }
+      sales_category_totals_daily: {
+        Row: {
+          categoria: string
+          data_iso: string
+          itens_total: number
+          matricula: string
+          store_id: string
+          valor_total: number
+        }
+        Insert: {
+          categoria: string
+          data_iso: string
+          itens_total?: number
+          matricula: string
+          store_id: string
+          valor_total?: number
+        }
+        Update: {
+          categoria?: string
+          data_iso?: string
+          itens_total?: number
+          matricula?: string
+          store_id?: string
+          valor_total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_category_totals_daily_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sales_imports: {
         Row: {
           created_at: string
