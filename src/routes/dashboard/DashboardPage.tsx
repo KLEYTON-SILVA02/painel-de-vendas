@@ -455,7 +455,14 @@ export function DashboardPage() {
     if (!goals) return [];
     const specs: CategoryImageSpec[] = RANKING_CATEGORIES.filter((c) => !hiddenCategories.includes(c.key)).map((c) => {
       const isUnit = c.key === 'LEVMEL' || c.key === 'CHIP';
-      const rowsRaw = summaryFromCategoryTotals(categoryTotals ?? [], collaboratorsData, c.key);
+      // Mercadoria Geral is the store's grand total, not its own exclusive
+      // bucket (sale.grupo === 'MER' is only the classification's leftover
+      // fallback) — same `'MER' ? 'ALL' : ...` convention already used for
+      // the gauges above, CategoryPage, RankingPage and everywhere else MER
+      // means "every sale". This spec list skipped it, so the generated
+      // image for Mercadoria Geral undercounted whenever the loja also had
+      // DERM/GEN/MP sales.
+      const rowsRaw = summaryFromCategoryTotals(categoryTotals ?? [], collaboratorsData, c.key === 'MER' ? 'ALL' : c.key);
       return {
         key: c.key,
         titulo: categoryLabels[c.key] ?? c.titulo,
