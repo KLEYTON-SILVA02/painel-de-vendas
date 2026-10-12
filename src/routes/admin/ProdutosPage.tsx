@@ -824,7 +824,7 @@ function ClassificadosTab() {
   const [busca, setBusca] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkCategoria, setBulkCategoria] = useState<CategoryKey>('DERM');
-  const [ordem, setOrdem] = useState<'ocorrencias' | 'alfabetica'>('ocorrencias');
+  const [ordem, setOrdem] = useState<'ocorrencias' | 'alfabetica' | 'valor'>('ocorrencias');
   const [page, setPage] = useState(0);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -872,7 +872,11 @@ function ClassificadosTab() {
   }
 
   let list = classifiedProducts.slice().sort((a, b) =>
-    ordem === 'alfabetica' ? a.produto.localeCompare(b.produto, 'pt-BR') : b.ocorrencias - a.ocorrencias,
+    ordem === 'alfabetica'
+      ? a.produto.localeCompare(b.produto, 'pt-BR')
+      : ordem === 'valor'
+        ? b.valor - a.valor
+        : b.ocorrencias - a.ocorrencias,
   );
   if (filtro !== 'ALL') list = list.filter((p) => p.categoria === filtro);
   const buscaNormalizada = normalize(busca.trim());
@@ -1076,16 +1080,19 @@ function ClassificadosTab() {
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <div className="text-xs text-slate-500">{list.length} produto(s)</div>
-            <button
-              onClick={() => {
-                setOrdem((o) => (o === 'alfabetica' ? 'ocorrencias' : 'alfabetica'));
+            <select
+              value={ordem}
+              onChange={(e) => {
+                setOrdem(e.target.value as 'ocorrencias' | 'alfabetica' | 'valor');
                 setPage(0);
               }}
-              className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300"
-              title="Alternar ordenação"
+              className="input"
+              title="Ordenar por"
             >
-              {ordem === 'alfabetica' ? 'A-Z ▾' : 'Mais vendidos ▾'}
-            </button>
+              <option value="ocorrencias">Mais vendidos</option>
+              <option value="valor">Maior valor (R$)</option>
+              <option value="alfabetica">A-Z</option>
+            </select>
           </div>
           <div className="flex gap-2">
             <select value={bulkCategoria} onChange={(e) => setBulkCategoria(e.target.value as CategoryKey)} className="input">
