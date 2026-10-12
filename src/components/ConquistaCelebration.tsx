@@ -1,14 +1,35 @@
-import { useEffect, useRef, useState } from 'react';
-import { useCategoryLabelMap } from '../lib/business/categoryLabels';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { celebrationKey, pickNewCelebration, type CelebrationCandidate } from '../lib/business/conquistaCelebration';
-import { computeConquistas, conquistaTierLabel, isUnitConquista, type ConquistaCategoria } from '../lib/business/conquistas';
+import { computeConquistas, conquistaTierParts, isUnitConquista, type ConquistaCategoria, type GenericConquistaConfig } from '../lib/business/conquistas';
+import { BUILT_IN_TEMPLATE, renderConquistaCard, type ConquistaCardTemplate } from '../lib/conquistaCardRender';
 import { monthFirstISO, monthLastISO } from '../lib/dateRange';
 import { fmtMoney } from '../lib/format';
-import { useCollaborators, useCurrentMonthSales, useGenericConquistaConfigs, useSpecialLists } from '../lib/queries';
+import { useCollaborators, useConquistaCardTemplates, useCurrentMonthSales, useGenericConquistaConfigs, useSpecialLists, useStore } from '../lib/queries';
 
 const CONQUISTA_CATS: ConquistaCategoria[] = ['DERM', 'MP', 'GEN', 'LEVMEL', 'CHIP'];
 const SEEN_KEY = 'conquistas_celebration_seen_v1';
 const AUTO_CLOSE_MS = 30000;
+
+// Same per-category colors as the Galeria de Conquistas screen itself
+// (ConquistasPage.tsx's CONQUISTA_CATS/GENERIC_CAT_COLORS) — this overlay
+// renders the achiever's card through the exact same engine
+// (renderConquistaCard) as that gallery, using the ADM's own active
+// template, so the color fed into it has to match or the card would look
+// like a different, unconfigured template.
+const FIXED_CAT_COLORS: Record<string, string> = {
+  DERM: '#ff3df0',
+  MP: '#a82bff',
+  GEN: '#14ff00',
+  LEVMEL: '#ffb700',
+  CHIP: '#00e5ff',
+};
+const GENERIC_CAT_COLORS = ['#00c2ff', '#ff8a00', '#7bffb0', '#ff5c8a', '#c9a0ff'];
+
+function conquistaCategoryColor(categoria: string, genericConquistas: GenericConquistaConfig[]): string {
+  if (FIXED_CAT_COLORS[categoria]) return FIXED_CAT_COLORS[categoria];
+  const idx = genericConquistas.findIndex((g) => g.chave === categoria);
+  return GENERIC_CAT_COLORS[(idx < 0 ? 0 : idx) % GENERIC_CAT_COLORS.length];
+}
 
 function loadSeen(): Set<string> {
   try {
@@ -85,8 +106,12 @@ export function ConquistaCelebrationHost() {
 }
 
 function ConquistaCelebrationOverlay({ candidate, onClose }: { candidate: CelebrationCandidate; onClose: () => void }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const CAT_LABEL = useCategoryLabelMap();
+  const confettiCanvasRef = useRef<HTMLCanvasElement>(null);
+  const cardCanvasRef = useRef<HTMLCanvasElement>(null);
+  const { data: cardTemplates } = useConquistaCardTemplates();
+  const { data: store } = useStore();
+  const { data: genericConquistas } = useGenericConquistaConfigs();
+  const activeTemplate: ConquistaCardTemplate = useMemo(() => cardTemplates?.find((t) => t.isDefault) ?? BUILT_IN_TEMPLATE, [cardTemplates]);
 
   useEffect(() => {
     const timer = setTimeout(onClose, AUTO_CLOSE_MS);
@@ -95,7 +120,7 @@ function ConquistaCelebrationOverlay({ candidate, onClose }: { candidate: Celebr
   }, [candidate.key]);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
+    const canvas = confettiCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -147,12 +172,40 @@ function ConquistaCelebrationOverlay({ candidate, onClose }: { candidate: Celebr
   }, []);
 
   const { row, categoria, generic } = candidate;
-  const tierText = `🏆 ${conquistaTierLabel(categoria, row.tier, generic)}`;
   const isUnit = isUnitConquista(categoria);
+  const { valor: valorText, categoria: categoriaText } = conquistaTierParts(categoria, row.tier, generic);
+  const color = conquistaCategoryColor(categoria, genericConquistas ?? []);
+
+  // Renders through the exact same engine (renderConquistaCard) and active
+  // template as the Galeria de Conquistas grid — this popup used to draw its
+  // own generic circular-photo box instead of the ADM's configured card, so
+  // the "figurinha" shown here and the one in the gallery looked like two
+  // different products.
+  useEffect(() => {
+    let active = true;
+    renderConquistaCard(activeTemplate, {
+      photoUrl: row.foto,
+      logoUrl: store?.logo_url ?? null,
+      tierText: `${valorText} ${categoriaText}`,
+      valorText,
+      categoriaText,
+      color,
+    }).then((rendered) => {
+      if (!active) return;
+      const target = cardCanvasRef.current;
+      if (!target) return;
+      target.width = rendered.width;
+      target.height = rendered.height;
+      target.getContext('2d')?.drawImage(rendered, 0, 0);
+    });
+    return () => {
+      active = false;
+    };
+  }, [activeTemplate, row.foto, store?.logo_url, valorText, categoriaText, color]);
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center">
-      <canvas ref={canvasRef} className="absolute inset-0" style={{ pointerEvents: 'none' }} />
+      <canvas ref={confettiCanvasRef} className="absolute inset-0" style={{ pointerEvents: 'none' }} />
       <div
         className="relative rounded-3xl p-6 flex flex-col items-center text-center gap-2 shadow-2xl"
         style={{
@@ -169,16 +222,8 @@ function ConquistaCelebrationOverlay({ candidate, onClose }: { candidate: Celebr
         <div className="text-xs uppercase tracking-wide font-bold" style={{ color: '#ffb700' }}>
           🎉 Nova conquista!
         </div>
-        {row.foto ? (
-          <img src={row.foto} alt="" className="w-20 h-20 rounded-full object-cover border-2" style={{ borderColor: '#ffb700' }} />
-        ) : (
-          <div className="w-20 h-20 rounded-full bg-slate-700 border-2" style={{ borderColor: '#ffb700' }} />
-        )}
+        <canvas ref={cardCanvasRef} style={{ width: 170, height: 'auto', borderRadius: 14, boxShadow: `0 0 24px -6px ${color}80` }} />
         <div className="text-lg font-bold">{row.apelido || row.nome}</div>
-        <div className="text-xs text-slate-400">{generic?.nome ?? CAT_LABEL[categoria as keyof typeof CAT_LABEL] ?? categoria}</div>
-        <div className="text-sm font-bold" style={{ color: '#ffb700' }}>
-          {tierText}
-        </div>
         <div className="font-mono text-sm" style={{ color: '#14ff00' }}>
           {isUnit ? `${row.itens} un.` : fmtMoney(row.valor)}
         </div>
