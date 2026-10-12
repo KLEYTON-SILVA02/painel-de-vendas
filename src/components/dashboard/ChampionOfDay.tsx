@@ -5,11 +5,11 @@ import { computeChampionStars, type ChampionStar, type ChampionStarCategory } fr
 import type { CategoryKey } from '../../lib/business/classification';
 import { computeSummary } from '../../lib/business/summary';
 import type { SummaryRow } from '../../lib/business/types';
-import { generateChampionCardBlob } from '../../lib/championImage';
+import { BUILT_IN_TEMPLATE, renderConquistaCard, type ConquistaCardTemplate } from '../../lib/conquistaCardRender';
 import { monthFirstISO, monthLastISO } from '../../lib/dateRange';
 import { fmtMoney, monthName } from '../../lib/format';
 import { tryCopyImage } from '../../lib/rankingImage';
-import { useCollaborators, useGenericConquistaConfigs, useSales, useSpecialLists, useStore } from '../../lib/queries';
+import { useCollaborators, useConquistaCardTemplates, useGenericConquistaConfigs, useSales, useSpecialLists, useStore } from '../../lib/queries';
 import { useDateRange } from '../../routes/DateRangeContext';
 import { RankingImageModal } from '../ranking/RankingImageModal';
 
@@ -23,7 +23,9 @@ function useChampionOfDay() {
   const { data: specialLists } = useSpecialLists();
   const { data: store } = useStore();
   const { data: genericConquistas } = useGenericConquistaConfigs();
+  const { data: cardTemplates } = useConquistaCardTemplates();
   const { dashFrom, dashTo, refYear, refMonth, rankFilter } = useDateRange();
+  const activeTemplate: ConquistaCardTemplate = useMemo(() => cardTemplates?.find((t) => t.isDefault) ?? BUILT_IN_TEMPLATE, [cardTemplates]);
   const categoryLabels = useCategoryLabelMap();
   const extraStarCategories: ChampionStarCategory[] = useMemo(
     () => (genericConquistas ?? []).map((g) => ({ key: g.chave, label: g.nome, generic: g })),
@@ -62,7 +64,7 @@ function useChampionOfDay() {
   const campeaoBase = modoDia ? `Campeão do dia — ${dashFrom.split('-').reverse().join('/')}` : `Campeão — ${monthName(refMonth)}/${refYear}`;
   const campeaoLabel = championCatFilter ? `${campeaoBase} · ${categoryLabels[championCatFilter]}` : campeaoBase;
 
-  return { campeao, campeaoLabel, campeaoStars, storeName: store?.nome_loja };
+  return { campeao, campeaoLabel, campeaoStars, storeName: store?.nome_loja, storeLogoUrl: store?.logo_url ?? null, activeTemplate };
 }
 
 // Small yellow-bordered trophy button living in AppShell's top header, next
@@ -71,7 +73,7 @@ function useChampionOfDay() {
 // period/filter (no sales yet → no button).
 export function ChampionHeaderButton() {
   const [open, setOpen] = useState(false);
-  const { campeao, campeaoLabel, campeaoStars, storeName } = useChampionOfDay();
+  const { campeao, campeaoLabel, campeaoStars, storeLogoUrl, activeTemplate } = useChampionOfDay();
 
   if (!campeao) return null;
 
@@ -101,7 +103,8 @@ export function ChampionHeaderButton() {
           campeao={campeao}
           campeaoLabel={campeaoLabel}
           campeaoStars={campeaoStars}
-          storeName={storeName}
+          storeLogoUrl={storeLogoUrl}
+          activeTemplate={activeTemplate}
           onClose={() => setOpen(false)}
         />
       )}
@@ -120,22 +123,52 @@ function ChampionCelebrationModal({
   campeao,
   campeaoLabel,
   campeaoStars,
-  storeName,
+  storeLogoUrl,
+  activeTemplate,
   onClose,
 }: {
   campeao: SummaryRow;
   campeaoLabel: string;
   campeaoStars: ChampionStar[] | null;
-  storeName: string | undefined;
+  storeLogoUrl: string | null;
+  activeTemplate: ConquistaCardTemplate;
   onClose: () => void;
 }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const confettiCanvasRef = useRef<HTMLCanvasElement>(null);
+  const cardCanvasRef = useRef<HTMLCanvasElement>(null);
   const categoryLabels = useCategoryLabelMap();
   const [generating, setGenerating] = useState(false);
   const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
 
+  // Same card engine/template as the Galeria de Conquistas grid (see
+  // ConquistaCelebration.tsx's identical comment) — the champion card isn't
+  // tied to a conquista tier, so its two text zones just carry a fixed
+  // "👑 CAMPEÃO" banner instead of a tier/categoria pair; the date, value
+  // and stars stay as plain text below, same as before.
   useEffect(() => {
-    const canvas = canvasRef.current;
+    let active = true;
+    renderConquistaCard(activeTemplate, {
+      photoUrl: campeao.foto,
+      logoUrl: storeLogoUrl,
+      tierText: '👑 CAMPEÃO',
+      valorText: '👑',
+      categoriaText: 'CAMPEÃO',
+      color: '#ffb700',
+    }).then((rendered) => {
+      if (!active) return;
+      const target = cardCanvasRef.current;
+      if (!target) return;
+      target.width = rendered.width;
+      target.height = rendered.height;
+      target.getContext('2d')?.drawImage(rendered, 0, 0);
+    });
+    return () => {
+      active = false;
+    };
+  }, [activeTemplate, campeao.foto, storeLogoUrl]);
+
+  useEffect(() => {
+    const canvas = confettiCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -189,15 +222,9 @@ function ChampionCelebrationModal({
   async function handleGenerateImage() {
     setGenerating(true);
     try {
-      const blob = await generateChampionCardBlob({
-        nome: campeao.apelido || campeao.nome,
-        label: campeaoLabel,
-        valorLabel: fmtMoney(campeao.valor),
-        itensLabel: `${campeao.itens} it.`,
-        foto: campeao.foto,
-        stars: campeaoStars ?? [],
-        storeName,
-      });
+      const canvas = cardCanvasRef.current;
+      if (!canvas) return;
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), 'image/png'));
       if (!blob) return;
       const wasCopied = await tryCopyImage(blob);
       setImageModal({ url: URL.createObjectURL(blob), copied: wasCopied });
@@ -208,7 +235,7 @@ function ChampionCelebrationModal({
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center">
-      <canvas ref={canvasRef} className="absolute inset-0" style={{ pointerEvents: 'none' }} />
+      <canvas ref={confettiCanvasRef} className="absolute inset-0" style={{ pointerEvents: 'none' }} />
       <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,.6)' }} onClick={onClose} />
       <div
         className="relative rounded-3xl p-6 flex flex-col items-center text-center gap-2 shadow-2xl"
@@ -225,11 +252,7 @@ function ChampionCelebrationModal({
         <div className="text-xs uppercase tracking-wide font-bold" style={{ color: '#ffb700' }}>
           👑 {campeaoLabel}
         </div>
-        {campeao.foto ? (
-          <img src={campeao.foto} alt="" className="w-20 h-20 rounded-full object-cover border-2" style={{ borderColor: '#ffb700' }} />
-        ) : (
-          <div className="w-20 h-20 rounded-full bg-slate-700 border-2" style={{ borderColor: '#ffb700' }} />
-        )}
+        <canvas ref={cardCanvasRef} style={{ width: 170, height: 'auto', borderRadius: 14, boxShadow: '0 0 24px -6px #ffb70080' }} />
         <div className="text-lg font-bold">{campeao.apelido || campeao.nome}</div>
         <div className="font-mono text-sm" style={{ color: '#14ff00' }}>
           {fmtMoney(campeao.valor)} · {campeao.itens} it.
