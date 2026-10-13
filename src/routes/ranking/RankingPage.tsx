@@ -9,7 +9,7 @@ import { diasRestantesNoMes, effectiveMetaGeral, getGoal, getSuperMeta, goalPror
 import { computeColumnRanking, type ColumnRankingRow } from '../../lib/business/ranking';
 import { VISITANTE_SETOR, type Goal } from '../../lib/business/types';
 import { monthName, fmtDateBR, fmtMoney } from '../../lib/format';
-import { buildMonthExtract, buildMonthExtractHtml, openPrintPreview } from '../../lib/printExtract';
+import { accumulateMonthExtract, buildMonthExtract, buildMonthExtractHtml, openPrintPreview } from '../../lib/printExtract';
 import { generateAllCategoryImages, type CategoryImageSpec, type MultiImageResult } from '../../lib/rankingImage';
 import { useCategoryTypes, useCollaborators, useDsmRecords, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
@@ -60,6 +60,11 @@ export function RankingPage() {
   // critério do ADM em vez de ser sempre as 6 fixas).
   const [extratoMatricula, setExtratoMatricula] = useState('');
   const [extratoCategorias, setExtratoCategorias] = useState<Set<string>>(new Set(RANKING_COLS.map((c) => c.key)));
+  // 'dia' (padrão) = cada dia mostra só o que foi vendido naquele dia.
+  // 'acumulado' = cada dia mostra a soma progressiva até ali (dia 2 =
+  // dia1+dia2, dia 3 = dia1+dia2+dia3, ...), até o último dia com venda no
+  // mês — ver accumulateMonthExtract.
+  const [extratoModo, setExtratoModo] = useState<'dia' | 'acumulado'>('dia');
 
   const modoDia = dashFrom === dashTo;
   const mode = modoDia ? 'dia' : 'mes';
@@ -172,12 +177,14 @@ export function RankingPage() {
     const colaborador = collaborators!.find((c) => c.matricula === extratoMatricula);
     const nomeColaborador = colaborador?.apelido || colaborador?.nome || extratoMatricula;
     const salesColaborador = sales!.filter((s) => s.matricula === extratoMatricula);
-    const categorias = buildMonthExtract(salesColaborador, refYear, refMonth + 1, specialLists!, categoryLabels).filter((c) =>
+    const categoriasBase = buildMonthExtract(salesColaborador, refYear, refMonth + 1, specialLists!, categoryLabels).filter((c) =>
       extratoCategorias.has(c.key),
     );
+    const isAcumulado = extratoModo === 'acumulado';
+    const categorias = isAcumulado ? accumulateMonthExtract(categoriasBase) : categoriasBase;
     const monthLabel = `${monthName(refMonth)}/${refYear}`;
-    const html = buildMonthExtractHtml(categorias, monthLabel, store?.nome_loja, nomeColaborador);
-    openPrintPreview(`Extrato — ${nomeColaborador} — ${monthLabel}`, html);
+    const html = buildMonthExtractHtml(categorias, monthLabel, store?.nome_loja, nomeColaborador, isAcumulado ? 'Acumulado' : 'Valor');
+    openPrintPreview(`Extrato ${isAcumulado ? '(acumulado) ' : ''}— ${nomeColaborador} — ${monthLabel}`, html);
   }
 
   const statCards: MfbStatCard[] = [
@@ -278,6 +285,39 @@ export function RankingPage() {
               </button>
             );
           })}
+        </div>
+        <div className="mb-3">
+          <label className="block text-xs text-slate-400 mb-1">Modo de exibição dos dias</label>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                { key: 'dia' as const, label: '📅 Dias individuais', title: 'Cada dia mostra só o que foi vendido naquele dia.' },
+                {
+                  key: 'acumulado' as const,
+                  label: '📈 Dias acumulados',
+                  title: 'Cada dia mostra a soma progressiva até ali (dia 1 + dia 2 + ... até o dia).',
+                },
+              ] as const
+            ).map((m) => (
+              <button
+                key={m.key}
+                onClick={() => setExtratoModo(m.key)}
+                title={m.title}
+                style={{
+                  background: extratoModo === m.key ? '#ffb700' : 'transparent',
+                  border: '1px solid #ffb700',
+                  color: extratoModo === m.key ? '#231a02' : '#ffb700',
+                  padding: '6px 12px',
+                  borderRadius: 10,
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: 700,
+                }}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
         </div>
         <button
           onClick={handlePrintColaboradorExtract}
