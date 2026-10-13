@@ -131,11 +131,36 @@ export function buildMonthExtract(
   });
 }
 
+/** "Dias acumulados" mode for the per-collaborator extract (RankingPage): day
+ * N's printed value becomes the running sum of every day up to and
+ * including N, instead of just that day's own total — dia 1 stays as is,
+ * dia 2 passa a ser dia1+dia2, dia 3 vira dia1+dia2+dia3, e assim até o
+ * último dia com venda no mês. `total` is left untouched (it's already the
+ * month's grand total, same value either way — it's only the per-day column
+ * that changes meaning). Pure transform over `buildMonthExtract`'s own
+ * output, so both print modes share the exact same category/day data. */
+export function accumulateMonthExtract(categories: MonthExtractCategory[]): MonthExtractCategory[] {
+  return categories.map((c) => {
+    let running = 0;
+    const days = c.days.map((d) => {
+      running += d.value;
+      return { dataISO: d.dataISO, value: running };
+    });
+    return { ...c, days };
+  });
+}
+
 export function buildMonthExtractHtml(
   categories: MonthExtractCategory[],
   periodLabel: string,
   storeName?: string | null,
   collaboratorName?: string | null,
+  // "Valor" (padrão, dias individuais) ou "Acumulado" quando os dados já
+  // passaram por accumulateMonthExtract — só muda o cabeçalho da coluna,
+  // pra deixar claro no papel o que cada número representa (sem isso, o
+  // extrato acumulado pareceria ter vendas crescendo de forma suspeita, dia
+  // após dia, em vez de ficar óbvio que é uma soma progressiva).
+  valueColumnLabel: string = 'Valor',
 ): string {
   const fmt = (v: number, isUnit: boolean) => (isUnit ? `${v} un.` : fmtMoney(v));
   const sections = categories.length
@@ -145,7 +170,7 @@ export function buildMonthExtractHtml(
             .map((d) => `<tr><td>${fmtDateBR(d.dataISO)}</td><td style="text-align:right">${fmt(d.value, c.isUnit)}</td></tr>`)
             .join('');
           const table = c.days.length
-            ? `<table><thead><tr><th>Dia</th><th style="text-align:right">Valor</th></tr></thead><tbody>${rows}</tbody></table>`
+            ? `<table><thead><tr><th>Dia</th><th style="text-align:right">${escapeHtml(valueColumnLabel)}</th></tr></thead><tbody>${rows}</tbody></table>`
             : `<div class="empty">Nenhuma venda no período.</div>`;
           return `<h2>${escapeHtml(c.label)}</h2><div class="cat-total">Total do mês: ${fmt(c.total, c.isUnit)}</div>${table}`;
         })
