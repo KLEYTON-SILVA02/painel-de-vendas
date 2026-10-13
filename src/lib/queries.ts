@@ -182,9 +182,10 @@ export function useCurrentMonthSales() {
  * already knows, e.g. Tela Início's card do campeão, which needs day-by-day
  * detail (computeChampionStars) for just the day or the reference month
  * currently selected, never the store's full history. */
-export function useSalesInRange(fromISO: string, toISO: string) {
+export function useSalesInRange(fromISO: string, toISO: string, enabled = true) {
   return useQuery({
     queryKey: ['sales', 'range', fromISO, toISO],
+    enabled,
     queryFn: async () => (await fetchSalesPages({ fromISO, toISO })).map(mapSale),
   });
 }
