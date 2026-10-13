@@ -7,8 +7,9 @@ import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { computeDsmSummary } from '../../lib/business/dsm';
 import { diasRestantesNoMes, effectiveMetaGeral, getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
 import { computeColumnRanking, type ColumnRankingRow } from '../../lib/business/ranking';
-import type { Goal } from '../../lib/business/types';
-import { fmtDateBR, fmtMoney } from '../../lib/format';
+import { VISITANTE_SETOR, type Goal } from '../../lib/business/types';
+import { monthName, fmtDateBR, fmtMoney } from '../../lib/format';
+import { buildMonthExtract, buildMonthExtractHtml, openPrintPreview } from '../../lib/printExtract';
 import { generateAllCategoryImages, type CategoryImageSpec, type MultiImageResult } from '../../lib/rankingImage';
 import { useCategoryTypes, useCollaborators, useDsmRecords, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
@@ -52,6 +53,13 @@ export function RankingPage() {
   const [generatingAll, setGeneratingAll] = useState(false);
   const [generatingProgress, setGeneratingProgress] = useState({ done: 0, total: 0 });
   const [multiImages, setMultiImages] = useState<MultiImageResult[] | null>(null);
+  // Extrato por colaborador: ADM escolhe um colaborador + quais categorias
+  // marcar, e imprime o detalhamento dia a dia do mês (mesmo motor de
+  // "Imprimir extrato do mês" do SidebarCalendarCard, só que as vendas já
+  // chegam pré-filtradas para a matrícula escolhida e as categorias ficam a
+  // critério do ADM em vez de ser sempre as 6 fixas).
+  const [extratoMatricula, setExtratoMatricula] = useState('');
+  const [extratoCategorias, setExtratoCategorias] = useState<Set<string>>(new Set(RANKING_COLS.map((c) => c.key)));
 
   const modoDia = dashFrom === dashTo;
   const mode = modoDia ? 'dia' : 'mes';
@@ -159,6 +167,19 @@ export function RankingPage() {
     }
   }
 
+  function handlePrintColaboradorExtract() {
+    if (!extratoMatricula) return;
+    const colaborador = collaborators!.find((c) => c.matricula === extratoMatricula);
+    const nomeColaborador = colaborador?.apelido || colaborador?.nome || extratoMatricula;
+    const salesColaborador = sales!.filter((s) => s.matricula === extratoMatricula);
+    const categorias = buildMonthExtract(salesColaborador, refYear, refMonth + 1, specialLists!, categoryLabels).filter((c) =>
+      extratoCategorias.has(c.key),
+    );
+    const monthLabel = `${monthName(refMonth)}/${refYear}`;
+    const html = buildMonthExtractHtml(categorias, monthLabel, store?.nome_loja, nomeColaborador);
+    openPrintPreview(`Extrato — ${nomeColaborador} — ${monthLabel}`, html);
+  }
+
   const statCards: MfbStatCard[] = [
     // Reuses columnData's already-computed ranking instead of a second
     // computeSummary pass per category — computeColumnRanking's `list`
@@ -206,6 +227,66 @@ export function RankingPage() {
             Gerando imagens de todas as categorias… ({generatingProgress.done}/{generatingProgress.total})
           </div>
         )}
+      </div>
+
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+        <h3 className="text-sm font-semibold text-slate-300 mb-1">🖨️ Extrato por Colaborador</h3>
+        <p className="text-xs text-slate-500 mb-3">
+          Escolha um colaborador e marque as categorias — a impressão mostra só os valores dele, dia a dia de venda,
+          no mês selecionado em "Período rápido".
+        </p>
+        <div className="mb-3">
+          <label className="block text-xs text-slate-400 mb-1">Colaborador</label>
+          <select value={extratoMatricula} onChange={(e) => setExtratoMatricula(e.target.value)} className="input !w-auto">
+            <option value="">Selecione…</option>
+            {collaborators
+              .filter((c) => c.setor !== VISITANTE_SETOR)
+              .map((c) => (
+                <option key={c.id} value={c.matricula}>
+                  {c.apelido || c.nome}
+                </option>
+              ))}
+          </select>
+        </div>
+        <div className="flex flex-wrap gap-2 mb-3">
+          {RANKING_COLS.filter((c) => !hiddenCategories.includes(c.key)).map((c) => {
+            const checked = extratoCategorias.has(c.key);
+            return (
+              <button
+                key={c.key}
+                onClick={() =>
+                  setExtratoCategorias((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(c.key)) next.delete(c.key);
+                    else next.add(c.key);
+                    return next;
+                  })
+                }
+                style={{
+                  background: checked ? c.cor : 'transparent',
+                  border: `1px solid ${c.cor}`,
+                  color: checked ? '#0b0e1d' : c.cor,
+                  padding: '6px 12px',
+                  borderRadius: 10,
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: 700,
+                }}
+              >
+                {checked ? '✓ ' : ''}
+                {categoryLabels[c.key] ?? c.titulo}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          onClick={handlePrintColaboradorExtract}
+          disabled={!extratoMatricula || extratoCategorias.size === 0}
+          className="rounded-lg border px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
+          style={{ borderColor: '#ffb700', color: '#ffb700' }}
+        >
+          🖨️ Preparar impressão
+        </button>
       </div>
 
       {multiImages && (

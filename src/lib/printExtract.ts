@@ -131,20 +131,29 @@ export function buildMonthExtract(
   });
 }
 
-export function buildMonthExtractHtml(categories: MonthExtractCategory[], periodLabel: string, storeName?: string | null): string {
+export function buildMonthExtractHtml(
+  categories: MonthExtractCategory[],
+  periodLabel: string,
+  storeName?: string | null,
+  collaboratorName?: string | null,
+): string {
   const fmt = (v: number, isUnit: boolean) => (isUnit ? `${v} un.` : fmtMoney(v));
-  const sections = categories
-    .map((c) => {
-      const rows = c.days
-        .map((d) => `<tr><td>${fmtDateBR(d.dataISO)}</td><td style="text-align:right">${fmt(d.value, c.isUnit)}</td></tr>`)
-        .join('');
-      const table = c.days.length
-        ? `<table><thead><tr><th>Dia</th><th style="text-align:right">Valor</th></tr></thead><tbody>${rows}</tbody></table>`
-        : `<div class="empty">Nenhuma venda no período.</div>`;
-      return `<h2>${escapeHtml(c.label)}</h2><div class="cat-total">Total do mês: ${fmt(c.total, c.isUnit)}</div>${table}`;
-    })
-    .join('');
-  return `<h1>Extrato do Mês${storeName ? ` — ${escapeHtml(storeName)}` : ''}</h1><div class="meta">Período: ${escapeHtml(periodLabel)}</div>${sections}`;
+  const sections = categories.length
+    ? categories
+        .map((c) => {
+          const rows = c.days
+            .map((d) => `<tr><td>${fmtDateBR(d.dataISO)}</td><td style="text-align:right">${fmt(d.value, c.isUnit)}</td></tr>`)
+            .join('');
+          const table = c.days.length
+            ? `<table><thead><tr><th>Dia</th><th style="text-align:right">Valor</th></tr></thead><tbody>${rows}</tbody></table>`
+            : `<div class="empty">Nenhuma venda no período.</div>`;
+          return `<h2>${escapeHtml(c.label)}</h2><div class="cat-total">Total do mês: ${fmt(c.total, c.isUnit)}</div>${table}`;
+        })
+        .join('')
+    : `<div class="empty">Nenhuma categoria selecionada.</div>`;
+  return `<h1>Extrato do Mês${storeName ? ` — ${escapeHtml(storeName)}` : ''}</h1><div class="meta">Período: ${escapeHtml(periodLabel)}${
+    collaboratorName ? `<br />Colaborador: ${escapeHtml(collaboratorName)}` : ''
+  }</div>${sections}`;
 }
 
 /** Extrato de vendas de uma categoria específica, já filtrado por colaborador
