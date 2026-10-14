@@ -180,7 +180,7 @@ export function MobileRankingPage() {
         Total período: {fmtMoney(totalValor)} · {totalItens} un.
       </div>
 
-      <div style={{ margin: '14px 18px 0' }}>
+      <div style={{ margin: extratoOpen ? '14px 18px 24px' : '14px 18px 0' }}>
         <div
           role="button"
           tabIndex={0}

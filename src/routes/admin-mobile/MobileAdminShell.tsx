@@ -188,7 +188,7 @@ export function MobileAdminShell() {
       </header>
 
       <main
-        style={{ paddingBottom: 24 }}
+        style={{ paddingBottom: 'calc(24px + env(safe-area-inset-bottom, 0px))' }}
         onTouchStart={swipeNav.onTouchStart}
         onTouchMove={swipeNav.onTouchMove}
         onTouchEnd={swipeNav.onTouchEnd}
