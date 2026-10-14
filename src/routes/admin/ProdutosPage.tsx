@@ -15,6 +15,7 @@ import {
 import { normalize } from '../../lib/business/normalize';
 import { buildClassificationInputs } from '../../lib/mappers';
 import { fmtMoney } from '../../lib/format';
+import { isMobileDevice } from '../../lib/whatsapp';
 import {
   useBulkInsertGenericSubstances,
   useBulkInsertProducts,
@@ -583,6 +584,7 @@ function ExportImportCard({
   const CAT_LABEL = useCategoryLabelMap();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [fileName, setFileName] = useState('');
   const [reading, setReading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
@@ -593,13 +595,39 @@ function ExportImportCard({
 
   async function handleExport() {
     setExporting(true);
+    setExportError(null);
     try {
       const XLSX = await import('xlsx');
       const rows = produtosVisiveis.map((p) => ({ Produto: p.produto, Categoria: CAT_LABEL[p.categoria] }));
       const ws = XLSX.utils.json_to_sheet(rows, { header: ['Produto', 'Categoria'] });
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Classificados');
-      XLSX.writeFile(wb, `classificados-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      const filename = `classificados-${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+      // XLSX.writeFile's browser path relies on an <a download> click, which
+      // mobile contexts (iOS Safari in standalone/PWA mode, an in-app
+      // WebView) often ignore with no error and no visible effect — exactly
+      // the "não consigo exportar" symptom, since the old code also had no
+      // catch to surface it. Same device-share fallback already proven for
+      // file delivery on mobile elsewhere in the app (shareImageToWhatsApp,
+      // src/lib/whatsapp.ts): hand the generated file to the OS share sheet,
+      // which works in those same contexts.
+      if (isMobileDevice()) {
+        const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
+        const file = new File([buffer], filename, {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        });
+        const nav = navigator as Navigator & { canShare?: (data: { files: File[] }) => boolean };
+        if (nav.share && (!nav.canShare || nav.canShare({ files: [file] }))) {
+          await nav.share({ files: [file] });
+          return;
+        }
+      }
+      XLSX.writeFile(wb, filename);
+    } catch (err) {
+      if ((err as Error)?.name !== 'AbortError') {
+        setExportError('Não foi possível exportar a planilha neste dispositivo. Tente novamente.');
+      }
     } finally {
       setExporting(false);
     }
@@ -728,6 +756,8 @@ function ExportImportCard({
         </button>
         {fileName && !reading && <span className="text-xs text-slate-500">{fileName}</span>}
       </div>
+
+      {exportError && <p className="text-xs text-rose-400 mb-2">{exportError}</p>}
 
       {importError && <p className="text-xs text-rose-400 mb-2">{importError}</p>}
 
