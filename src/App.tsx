@@ -71,10 +71,33 @@ function Root() {
 }
 
 function AuthedRoot() {
-  const { session, loading } = useAuth();
+  const { session, loading, bootError, retryBoot, signOut } = useAuth();
 
   if (loading) {
     return <PageLoading fullScreen />;
+  }
+
+  // getSession() (or its token refresh) failed or timed out — on an
+  // unstable connection this used to leave `loading` true forever, so the
+  // user just saw a spinner with no way out. This offers a retry (re-runs
+  // the whole bootstrap) and a way to fall back to a clean login instead.
+  if (bootError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-100 p-6">
+        <div className="max-w-sm w-full rounded-2xl border border-slate-800 bg-slate-900/60 p-6 text-center">
+          <h2 className="text-base font-semibold mb-2">Não foi possível conectar</h2>
+          <p className="text-sm text-slate-400 mb-4">Verifique sua internet e tente de novo.</p>
+          <div className="flex gap-2">
+            <button onClick={retryBoot} className="flex-1 rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm">
+              Tentar novamente
+            </button>
+            <button onClick={signOut} className="flex-1 rounded-lg border border-slate-700 text-slate-300 px-4 py-2 text-sm">
+              Sair
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return session ? <AppShell /> : <LoginPage />;
