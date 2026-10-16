@@ -9,7 +9,7 @@ import { BUILT_IN_TEMPLATE, renderConquistaCard, type ConquistaCardTemplate } fr
 import { monthFirstISO, monthLastISO } from '../../lib/dateRange';
 import { fmtMoney, monthName } from '../../lib/format';
 import { tryCopyImage } from '../../lib/rankingImage';
-import { useCollaborators, useConquistaCardTemplates, useGenericConquistaConfigs, useSales, useSpecialLists, useStore } from '../../lib/queries';
+import { useCollaborators, useConquistaCardTemplates, useGenericConquistaConfigs, useSalesInRange, useSpecialLists, useStore } from '../../lib/queries';
 import { useDateRange } from '../../routes/DateRangeContext';
 import { RankingImageModal } from '../ranking/RankingImageModal';
 
@@ -18,7 +18,6 @@ import { RankingImageModal } from '../ranking/RankingImageModal';
 // ChampionHeaderButton can render it from AppShell's top bar, on every admin
 // screen, without depending on DashboardPage being mounted.
 function useChampionOfDay() {
-  const { data: sales } = useSales();
   const { data: collaborators } = useCollaborators();
   const { data: specialLists } = useSpecialLists();
   const { data: store } = useStore();
@@ -32,13 +31,19 @@ function useChampionOfDay() {
     [genericConquistas],
   );
 
-  const salesData = sales ?? [];
-  const collaboratorsData = collaborators ?? [];
   const modoDia = dashFrom === dashTo;
   const monthFirst = monthFirstISO(refYear, refMonth);
   const monthLast = monthLastISO(refYear, refMonth);
   const campeaoFrom = modoDia ? dashFrom : monthFirst;
   const campeaoTo = modoDia ? dashTo : monthLast;
+  // Bounded to the single day or reference month this hook actually looks
+  // at — mounted from AppShell's header on every single admin screen (see
+  // the comment below), so useSales()'s full history here meant every page
+  // load, everywhere, paid for downloading the store's entire sales table
+  // just to maybe show a trophy button.
+  const { data: sales } = useSalesInRange(campeaoFrom, campeaoTo);
+  const salesData = sales ?? [];
+  const collaboratorsData = collaborators ?? [];
   const isUnitChampionCat = rankFilter === 'LEVMEL' || rankFilter === 'CHIP';
   const championCatFilter = rankFilter === 'ALL' || rankFilter.startsWith('DIN:') ? undefined : (rankFilter as CategoryKey | 'LEVMEL' | 'CHIP');
 
