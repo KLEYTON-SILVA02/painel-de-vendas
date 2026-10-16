@@ -98,7 +98,7 @@ function pageTitleLabel(entry: { label: string; categoryKey?: GoalCategoryKey },
 }
 
 export function AppShell() {
-  const { profile } = useAuth();
+  const { profile, profileError, refreshProfile } = useAuth();
   // Acesso Construtor (Fase 2): autenticado, mas sem profile ainda, é o
   // estado normal de quem está na allow-list platform_builders e ainda não
   // escolheu uma loja — só dispara essa checagem extra nesse caso raro,
@@ -122,6 +122,28 @@ export function AppShell() {
   });
 
   if (!profile) {
+    // A genuinely failed/timed-out profile fetch (flaky connection, a slow
+    // or erroring request) is NOT the same state as "no profile yet" (a
+    // fresh Acesso Construtor signup, or a brand new login that just
+    // hasn't resolved) — the old code treated every !profile the same way,
+    // so a real failure sat on "Preparando sua conta…" forever with no way
+    // out. This offers a retry instead.
+    if (profileError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-100 p-6">
+          <div className="max-w-sm w-full rounded-2xl border border-slate-800 bg-slate-900/60 p-6 text-center">
+            <h2 className="text-base font-semibold mb-2">Não foi possível carregar sua conta</h2>
+            <p className="text-sm text-slate-400 mb-4">Verifique sua internet e tente de novo.</p>
+            <button
+              onClick={() => refreshProfile()}
+              className="rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        </div>
+      );
+    }
     if (isPlatformBuilder) {
       return (
         <Suspense fallback={<PageLoading fullScreen />}>
