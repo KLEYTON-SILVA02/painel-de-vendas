@@ -8,7 +8,7 @@ import { renderConquistaCalendar } from '../../lib/conquistaCalendarImage';
 import { monthFirstISO, monthLastISO } from '../../lib/dateRange';
 import { tryCopyImage } from '../../lib/rankingImage';
 import { shareImageToWhatsApp } from '../../lib/whatsapp';
-import { useCollaborators, useSales, useSpecialLists, useStore } from '../../lib/queries';
+import { useCollaborators, useSalesInRange, useSpecialLists, useStore } from '../../lib/queries';
 
 const MONTH_NAMES_FULL = [
   'JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO',
@@ -24,7 +24,6 @@ const MONTH_NAMES_FULL = [
 // on-screen preview IS the export canvas, not a separate HTML rendering.
 export function GaleriaFigurinhasPage() {
   const { data: collaborators } = useCollaborators();
-  const { data: sales } = useSales();
   const { data: specialLists } = useSpecialLists();
   const { data: store } = useStore();
   const now = new Date();
@@ -32,6 +31,11 @@ export function GaleriaFigurinhasPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mes, setMes] = useState(now.getMonth());
   const [ano] = useState(now.getFullYear());
+  // Bounded to the browsed month instead of useSales()'s full history —
+  // computeCollaboratorDayAchievements only ever looks at [fromDate, toDate].
+  const fromDate = monthFirstISO(ano, mes);
+  const toDate = monthLastISO(ano, mes);
+  const { data: sales } = useSalesInRange(fromDate, toDate);
   const [copyState, setCopyState] = useState<'idle' | 'copying' | 'copied' | 'failed'>('idle');
   const [whatsappState, setWhatsappState] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
   const [downloadingPdf, setDownloadingPdf] = useState(false);
@@ -48,8 +52,6 @@ export function GaleriaFigurinhasPage() {
   }, [collaboratorsData, search]);
   const selected = collaboratorsData.find((c) => c.id === selectedId) ?? null;
 
-  const fromDate = monthFirstISO(ano, mes);
-  const toDate = monthLastISO(ano, mes);
   const achievements = useMemo(
     () => (selected ? computeCollaboratorDayAchievements(salesData, collaboratorsData, selected.matricula, fromDate, toDate, specialLists) : []),
     [selected, salesData, collaboratorsData, fromDate, toDate, specialLists],

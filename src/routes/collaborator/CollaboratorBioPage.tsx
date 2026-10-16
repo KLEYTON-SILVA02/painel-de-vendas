@@ -4,7 +4,7 @@ import { computeBioSummaryAllSectors, groupBioRows } from '../../lib/business/bi
 import { classifyBio, type BioGroupKey } from '../../lib/business/classification';
 import type { BioWeights, Collaborator } from '../../lib/business/types';
 import { fmtDateShortBR } from '../../lib/format';
-import { useBioGroups, useCategoryTypes, useCollaborators, useSales, useStoreSettings } from '../../lib/queries';
+import { useBioGroups, useCategoryTypes, useCollaborators, useSalesInRange, useStoreSettings } from '../../lib/queries';
 import { MobileDateFilter } from '../admin-mobile/MobileDateFilter';
 import { MobileSalesListLockedNotice, resolveVendorName } from '../admin-mobile/MobileSellerDetail';
 import { useDateRange } from '../DateRangeContext';
@@ -18,12 +18,14 @@ const BIO_GROUP_KEYS: BioGroupKey[] = ['G1', 'G2', 'G3', 'G4'];
 // points instead of R$ (matches admin BioPage's ranking logic).
 export function CollaboratorBioPage() {
   const { data: collaborators } = useCollaborators();
-  const { data: sales } = useSales();
   const { data: storeSettings } = useStoreSettings();
   const { data: categoryTypes } = useCategoryTypes();
   const bioCategoryType = categoryTypes?.find((c) => c.chave === 'biosintetica');
   const { data: bioGroupRows } = useBioGroups(bioCategoryType?.id);
   const { dashFrom, dashTo, salesListEnabled, toggleSalesListEnabled } = useDateRange();
+  // Bounded to the selected period instead of useSales()'s full history —
+  // every use of `sales` on this screen is already filtered to dashFrom..dashTo.
+  const { data: sales } = useSalesInRange(dashFrom, dashTo);
   const [bioFilter, setBioFilter] = useState<BioGroupKey | 'ALL'>('ALL');
 
   // Safe stand-ins so the useMemo calls below always run in the same order
