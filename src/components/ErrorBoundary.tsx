@@ -2,6 +2,9 @@ import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { reportCaughtRenderError } from '../lib/reportClientError';
 
 const CHUNK_RELOAD_KEY = 'gv_chunk_reload_attempted';
+// How long a mount has to stay error-free before the one-shot reload guard
+// below is reset — see componentDidMount.
+const STABLE_MOUNT_MS = 5000;
 
 /** A dynamic import() (every lazy-loaded route in this app) rejects with
  * one of these messages when the browser fetches a JS chunk that no
@@ -34,26 +37,41 @@ interface State {
  * broken feature. This catches it and offers a way back instead. */
 export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
   state: State = { error: null, chunkReloadExhausted: false };
+  private stableMountTimer: ReturnType<typeof setTimeout> | null = null;
 
   static getDerivedStateFromError(error: Error): Pick<State, 'error'> {
     return { error };
   }
 
-  // Mounting here only happens once per real page load — i.e. once the
-  // browser has successfully fetched and run the CURRENT (non-stale) entry
-  // bundle. That proves any earlier stale-chunk incident is behind us, so
-  // the one-shot auto-reload budget below is reset for whatever the *next*
-  // deploy brings, instead of never firing again for the rest of this tab's
-  // lifetime (sessionStorage persists across reloads until the tab closes).
+  // Mounting here only proves the entry bundle (this component) loaded
+  // fine — it says nothing about a lazy route chunk reached moments later,
+  // which can still be the broken one. Clearing the reload guard right on
+  // mount (the previous behavior) let a PERSISTENTLY broken chunk re-arm
+  // the guard every single time: mount clears it, the lazy import rejects
+  // again almost immediately, and since it's "never been tried" again it
+  // reloads again — forever, instead of the one retry this guard is meant
+  // to allow. So the guard is only reset once this mount has stayed
+  // error-free for a few seconds — long enough for that rejection to have
+  // already surfaced if it was going to.
   componentDidMount() {
-    try {
-      sessionStorage.removeItem(CHUNK_RELOAD_KEY);
-    } catch {
-      // sessionStorage unavailable (private mode) — nothing to reset.
-    }
+    this.stableMountTimer = setTimeout(() => {
+      try {
+        sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+      } catch {
+        // sessionStorage unavailable (private mode) — nothing to reset.
+      }
+    }, STABLE_MOUNT_MS);
+  }
+
+  componentWillUnmount() {
+    if (this.stableMountTimer) clearTimeout(this.stableMountTimer);
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    if (this.stableMountTimer) {
+      clearTimeout(this.stableMountTimer);
+      this.stableMountTimer = null;
+    }
     if (isChunkLoadError(error)) {
       let alreadyTried = false;
       try {
