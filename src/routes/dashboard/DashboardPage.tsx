@@ -37,7 +37,7 @@ import {
   useDynamics,
   useGoals,
   useMobileCategoryTotals,
-  useSales,
+  useSalesInRange,
   useSpecialLists,
   useStore,
   useStoreSettings,
@@ -286,7 +286,6 @@ export function DashboardPage() {
   const [multiImages, setMultiImages] = useState<MultiImageResult[] | null>(null);
   const [bestDayExpanded, setBestDayExpanded] = useState(false);
   const { data: collaborators, isError: collaboratorsError } = useCollaborators();
-  const { data: sales, isError: salesError } = useSales();
   const { data: goals, isError: goalsError } = useGoals();
   const { data: storeSettings, isError: storeSettingsError } = useStoreSettings();
   const { data: store } = useStore();
@@ -313,10 +312,24 @@ export function DashboardPage() {
   // categoria the rollup knows about).
   const { data: categoryTotals, isError: categoryTotalsError } = useMobileCategoryTotals(dashFrom, dashTo);
   const now = new Date();
-  const { data: monthToDateTotals, isError: monthToDateTotalsError } = useMobileCategoryTotals(
-    monthFirstISO(now.getFullYear(), now.getMonth()),
-    todayISO(),
-  );
+  const currentMonthFirst = monthFirstISO(now.getFullYear(), now.getMonth());
+  const currentMonthLast = monthLastISO(now.getFullYear(), now.getMonth());
+  const { data: monthToDateTotals, isError: monthToDateTotalsError } = useMobileCategoryTotals(currentMonthFirst, todayISO());
+
+  // Only the 3 pieces below still need item-level sales instead of
+  // pre-aggregated totals (see the comment above categoryTotals): "Melhor
+  // Dia de Vendas" (scans the real current month), the Evolução Diária
+  // chart (scans whichever month the date picker is browsing), and a
+  // Dinâmica-filtered ranking (its own period, intersected with dashFrom/
+  // dashTo). Instead of useSales()'s full multi-month history, this fetches
+  // only the union of those three windows — in the common case (today,
+  // current month, no custom range) that's a single month, not the whole
+  // retained history, and it never grows with it.
+  const monthFirst = monthFirstISO(refYear, refMonth);
+  const monthLast = monthLastISO(refYear, refMonth);
+  const salesRangeFrom = [currentMonthFirst, monthFirst, dashFrom].sort()[0];
+  const salesRangeTo = [currentMonthLast, monthLast, dashTo].sort().at(-1)!;
+  const { data: sales } = useSalesInRange(salesRangeFrom, salesRangeTo);
 
   // rankFilter lives in DateRangeContext, shared with RankingPage — sem
   // isso, escolher uma categoria lá (ou aqui, numa visita anterior) deixava
@@ -349,8 +362,6 @@ export function DashboardPage() {
   const modoDia = dashFrom === dashTo;
   const mode = modoDia ? 'dia' : 'mes';
   const proration = useMemo(() => goalProration(dashFrom, dashTo, modoGeral), [dashFrom, dashTo, modoGeral]);
-  const monthFirst = monthFirstISO(refYear, refMonth);
-  const monthLast = monthLastISO(refYear, refMonth);
   const rankFilterParams = resolveRankFilterParams(rankFilter, dashFrom, dashTo, dynamics ?? [], categoryLabels);
 
   // Store-wide grand total (Mercadoria Geral) for the selected dashFrom/
@@ -492,20 +503,17 @@ export function DashboardPage() {
   // Checked BEFORE the "still missing" guard below — see PageError's own
   // comment for why: a query that already gave up leaves `data` undefined
   // forever too, which used to be indistinguishable from "still loading".
-  if (
-    collaboratorsError ||
-    salesError ||
-    goalsError ||
-    storeSettingsError ||
-    specialListsError ||
-    dynamicsError ||
-    categoryTotalsError ||
-    monthToDateTotalsError
-  ) {
+  // `sales` deliberately isn't part of either check: it only backs 3 of
+  // this page's many sections (see the comment above its fetch) — those 3
+  // already fall back to an empty array (`salesData` below) while it's
+  // still loading or if it errors, instead of holding up everything else
+  // (the totals-based cards, which never depended on it) behind a full
+  // network round trip.
+  if (collaboratorsError || goalsError || storeSettingsError || specialListsError || dynamicsError || categoryTotalsError || monthToDateTotalsError) {
     return <PageError />;
   }
 
-  if (!collaborators || !sales || !goals || !storeSettings || !specialLists || !dynamics || !categoryTotals || !monthToDateTotals) {
+  if (!collaborators || !goals || !storeSettings || !specialLists || !dynamics || !categoryTotals || !monthToDateTotals) {
     return <PageLoading />;
   }
 

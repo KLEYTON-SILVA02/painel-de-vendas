@@ -13,14 +13,14 @@ import { CATEGORY_COLOR, CATEGORY_EMOJI, useCategoryLabelMap } from '../../lib/b
 import type { CategoryKey } from '../../lib/business/classification';
 import { copyText, formatRankingText } from '../../lib/clipboard';
 import { diasRestantesNoMes, getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
-import { todayISO } from '../../lib/dateRange';
+import { monthFirstISO, todayISO } from '../../lib/dateRange';
 import { computeSummary, computeVendorExtract } from '../../lib/business/summary';
 import { VISITANTE_SETOR, type CommissionRate, type SummaryRow } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { buildCategoryExtractHtml, openPrintPreview } from '../../lib/printExtract';
 import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
 import { useReclassifyProdutos, useUpdateStoreSettings } from '../../lib/mutations';
-import { useCatalog, useCollaborators, useCommissionRates, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
+import { useCatalog, useCollaborators, useCommissionRates, useGoals, useSales, useSalesInRange, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 
 export type PageCategoryKey = CategoryKey | 'LEVMEL' | 'CHIP';
@@ -39,7 +39,6 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   const { profile } = useAuth();
   const categoryLabels = useCategoryLabelMap();
   const { data: collaborators } = useCollaborators();
-  const { data: sales } = useSales();
   const { data: goals } = useGoals();
   const { data: storeSettings } = useStoreSettings();
   const { data: specialLists } = useSpecialLists();
@@ -47,12 +46,27 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   const { data: commissionRates } = useCommissionRates();
   const { data: catalog } = useCatalog();
   const { dashFrom, dashTo, modoGeral, salesListEnabled, toggleSalesListEnabled } = useDateRange();
+  // Bounded instead of useSales()'s full history: the selected period
+  // (ranking, the sales table, the vendor extract) union the real current
+  // month-to-date (getGoal/getSuperMeta's own auto-redistribute lookup,
+  // computeMetaDiariaRedistribuida, always scans monthFirst(now)..today
+  // regardless of which period is selected here).
+  const now = new Date();
+  const currentMonthFirst = monthFirstISO(now.getFullYear(), now.getMonth());
+  const salesRangeFrom = [currentMonthFirst, dashFrom].sort()[0];
+  const salesRangeTo = [todayISO(), dashTo].sort().at(-1)!;
+  const { data: sales } = useSalesInRange(salesRangeFrom, salesRangeTo);
+  // Reclassificar produtos (abaixo) retroage sobre "todo o histórico do
+  // produto" quando o De/Até fica em branco (o padrão) — isso é maior que
+  // o período limitado acima, então só busca o histórico completo quando o
+  // ADM de fato abre o modo de reclassificação, nunca ao entrar na tela.
+  const [reclassifyMode, setReclassifyMode] = useState(false);
+  const { data: allSalesForReclassify, isFetching: loadingAllSalesForReclassify } = useSales(reclassifyMode);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [extractMatricula, setExtractMatricula] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [imageModal, setImageModal] = useState<{ url: string; copied: boolean } | null>(null);
-  const [reclassifyMode, setReclassifyMode] = useState(false);
   const [selectedProdutos, setSelectedProdutos] = useState<Set<string>>(new Set());
   const [bulkCat, setBulkCat] = useState<CategoryKey>('DERM');
   const [reclassifyFrom, setReclassifyFrom] = useState('');
@@ -267,11 +281,12 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
     });
   }
   async function applyReclassify() {
+    if (!allSalesForReclassify) return;
     await reclassify.mutateAsync({
       produtos: Array.from(selectedProdutos),
       categoria: bulkCat,
       catalog: catalog!,
-      sales: sales!,
+      sales: allSalesForReclassify,
       dateRange: { from: reclassifyFrom || undefined, to: reclassifyTo || undefined },
     });
     setSelectedProdutos(new Set());
@@ -369,7 +384,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
                   categoria={bulkCat}
                   onCategoriaChange={setBulkCat}
                   onApply={applyReclassify}
-                  applying={reclassify.isPending}
+                  applying={reclassify.isPending || loadingAllSalesForReclassify}
                   dateFrom={reclassifyFrom}
                   dateTo={reclassifyTo}
                   onDateFromChange={setReclassifyFrom}

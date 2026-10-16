@@ -5,7 +5,7 @@ import type { CategoryKey } from '../../lib/business/classification';
 import { catTotals } from '../../lib/business/summary';
 import type { Sale } from '../../lib/business/types';
 import { fmtDateShortBR, fmtMoney } from '../../lib/format';
-import { useCollaborators, useCommissionRates, useSales } from '../../lib/queries';
+import { useCollaborators, useCommissionRates, useSalesInRange } from '../../lib/queries';
 import { MobileDateFilter } from '../admin-mobile/MobileDateFilter';
 import { MobileSalesListLockedNotice } from '../admin-mobile/MobileSellerDetail';
 import { useDateRange } from '../DateRangeContext';
@@ -27,9 +27,11 @@ export function CollaboratorComissoesPage() {
   const categoryLabels = useCategoryLabelMap();
   const { profile } = useAuth();
   const { data: collaborators } = useCollaborators();
-  const { data: sales } = useSales();
   const { data: commissionRates } = useCommissionRates();
   const { dashFrom, dashTo, salesListEnabled, toggleSalesListEnabled } = useDateRange();
+  // Bounded to the selected period instead of useSales()'s full history —
+  // every use of `sales` on this screen is already filtered to dashFrom..dashTo.
+  const { data: sales } = useSalesInRange(dashFrom, dashTo);
   const [openCat, setOpenCat] = useState<Record<CategoryKey, boolean>>({ MER: false, DERM: false, GEN: false, MP: false });
 
   const me = collaborators?.find((c) => c.id === profile?.collaborator_id);

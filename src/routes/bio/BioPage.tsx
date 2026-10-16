@@ -12,7 +12,7 @@ import { diasRestantesNoMes } from '../../lib/business/goals';
 import type { BioGroupGoal, BioGroupsProducts, BioWeights } from '../../lib/business/types';
 import { fmtDateBR } from '../../lib/format';
 import { useAddBioProduct, useBulkInsertBioProducts, useDeleteBioProduct, useUpdateBioGroupGoal, useUpdateBioWeights } from '../../lib/mutations';
-import { useBioGroupGoals, useBioGroups, useCategoryTypes, useCollaborators, useSales, useStoreSettings } from '../../lib/queries';
+import { useBioGroupGoals, useBioGroups, useCategoryTypes, useCollaborators, useSalesInRange, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 
 const BIO_GROUP_KEYS: BioGroupKey[] = ['G1', 'G2', 'G3', 'G4'];
@@ -21,13 +21,16 @@ const GRUPO_LABELS: Record<BioGroupKey, string> = { G1: 'Grupo 1', G2: 'Grupo 2'
 export function BioPage() {
   const { profile } = useAuth();
   const { data: collaborators } = useCollaborators();
-  const { data: sales } = useSales();
+  const { dashFrom, dashTo, setModoGeral, salesListEnabled, toggleSalesListEnabled } = useDateRange();
+  // Bounded to the selected period instead of useSales()'s full history —
+  // every use of `sales` on this screen (ranking, the sales table,
+  // demonstrativo) is already filtered down to dashFrom..dashTo.
+  const { data: sales } = useSalesInRange(dashFrom, dashTo);
   const { data: storeSettings } = useStoreSettings();
   const { data: categoryTypes } = useCategoryTypes();
   const bioCategoryType = categoryTypes?.find((c) => c.chave === 'biosintetica');
   const { data: bioGroupRows } = useBioGroups(bioCategoryType?.id);
   const { data: groupGoals } = useBioGroupGoals(bioCategoryType?.id);
-  const { dashFrom, dashTo, setModoGeral, salesListEnabled, toggleSalesListEnabled } = useDateRange();
   const [view, setView] = useState<'ranking' | 'grupos' | 'pontos'>('ranking');
   const [bioFilter, setBioFilter] = useState<BioGroupKey | 'ALL'>('ALL');
 

@@ -8,10 +8,11 @@ import { computeDsmSummary } from '../../lib/business/dsm';
 import { diasRestantesNoMes, effectiveMetaGeral, getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
 import { computeColumnRanking, type ColumnRankingRow } from '../../lib/business/ranking';
 import { VISITANTE_SETOR, type Goal } from '../../lib/business/types';
+import { monthFirstISO, monthLastISO, todayISO } from '../../lib/dateRange';
 import { monthName, fmtDateBR, fmtMoney } from '../../lib/format';
 import { accumulateMonthExtract, buildMonthExtract, buildMonthExtractHtml, openPrintPreview } from '../../lib/printExtract';
 import { generateAllCategoryImages, type CategoryImageSpec, type MultiImageResult } from '../../lib/rankingImage';
-import { useCategoryTypes, useCollaborators, useDsmRecords, useGoals, useSales, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
+import { useCategoryTypes, useCollaborators, useDsmRecords, useGoals, useSalesInRange, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 
 interface RankingColumnData {
@@ -40,7 +41,6 @@ const RANKING_COLS = [
 
 export function RankingPage() {
   const { data: collaborators } = useCollaborators();
-  const { data: sales } = useSales();
   const { data: goals } = useGoals();
   const { data: storeSettings } = useStoreSettings();
   const { data: specialLists } = useSpecialLists();
@@ -49,6 +49,19 @@ export function RankingPage() {
   const { data: categoryTypes } = useCategoryTypes();
   const dsmCategory = categoryTypes?.find((c) => c.chave === 'dsm');
   const { dashFrom, dashTo, refYear, refMonth, modoGeral } = useDateRange();
+  // Bounded instead of useSales()'s full history: the selected period
+  // (columnData) union the real current month-to-date (getGoal/getSuperMeta/
+  // effectiveMetaGeral's auto-redistribute lookup, always scans
+  // monthFirst(now)..today) union the browsed reference month (the
+  // "Extrato por Colaborador" print always covers the whole refMonth, even
+  // when dashFrom/dashTo is narrowed to a single day).
+  const now = new Date();
+  const currentMonthFirst = monthFirstISO(now.getFullYear(), now.getMonth());
+  const refMonthFirst = monthFirstISO(refYear, refMonth);
+  const refMonthLast = monthLastISO(refYear, refMonth);
+  const salesRangeFrom = [currentMonthFirst, refMonthFirst, dashFrom].sort()[0];
+  const salesRangeTo = [todayISO(), refMonthLast, dashTo].sort().at(-1)!;
+  const { data: sales } = useSalesInRange(salesRangeFrom, salesRangeTo);
   const categoryLabels = useCategoryLabelMap();
   const [generatingAll, setGeneratingAll] = useState(false);
   const [generatingProgress, setGeneratingProgress] = useState({ done: 0, total: 0 });

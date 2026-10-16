@@ -15,7 +15,7 @@ import { diasRestantesNoMes } from '../../lib/business/goals';
 import type { BioGroupGoal, BioWeights } from '../../lib/business/types';
 import { fmtDateBR } from '../../lib/format';
 import { useAddBioProduct, useBulkInsertBioProducts, useDeleteBioProduct, useUpdateBioGroupGoal, useUpdateConquistaTiers, useUpdateStoreSettings } from '../../lib/mutations';
-import { useBioGroupGoals, useBioGroups, useCategoryTypes, useCollaborators, useSales, useStoreSettings } from '../../lib/queries';
+import { useBioGroupGoals, useBioGroups, useCategoryTypes, useCollaborators, useSalesInRange, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 
 /** Generic screen for any ADM-created partnership category (Gerenciar
@@ -32,7 +32,6 @@ export function CategoryTypePage() {
   const { chave } = useParams<{ chave: string }>();
   const { profile } = useAuth();
   const { data: collaborators } = useCollaborators();
-  const { data: sales } = useSales();
   const { data: categoryTypes } = useCategoryTypes();
   const { data: storeSettings } = useStoreSettings();
   const updateStoreSettings = useUpdateStoreSettings(profile?.store_id);
@@ -40,6 +39,10 @@ export function CategoryTypePage() {
   const { data: bioGroupRows } = useBioGroups(categoryType?.id);
   const { data: groupGoals } = useBioGroupGoals(categoryType?.id);
   const { dashFrom, dashTo, salesListEnabled, toggleSalesListEnabled } = useDateRange();
+  // Bounded to the selected period instead of useSales()'s full history —
+  // every use of `sales` on this screen (demonstrativo, ranking,
+  // foraDoSetor, the sales table) is already filtered to dashFrom..dashTo.
+  const { data: sales } = useSalesInRange(dashFrom, dashTo);
   const [view, setView] = useState<'ranking' | 'grupos' | 'pontos' | 'conquistas'>('ranking');
   const [groupFilter, setGroupFilter] = useState<string>('ALL');
   const [foraOpen, setForaOpen] = useState(false);

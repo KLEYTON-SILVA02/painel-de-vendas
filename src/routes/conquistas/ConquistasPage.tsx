@@ -27,7 +27,7 @@ import {
   useConquistaCardTemplates,
   useDsmRecords,
   useGenericConquistaConfigs,
-  useSales,
+  useSalesInRange,
   useSpecialLists,
   useStore,
   useStoreSettings,
@@ -74,7 +74,6 @@ const DSM_COLOR = '#00e0c0';
 
 export function ConquistasPage() {
   const { data: collaborators } = useCollaborators();
-  const { data: sales } = useSales();
   const { data: specialLists } = useSpecialLists();
   const { data: store } = useStore();
   const { data: cardTemplates } = useConquistaCardTemplates();
@@ -83,6 +82,10 @@ export function ConquistasPage() {
   const { data: categoryTypes } = useCategoryTypes();
   const { data: dsmRecords } = useDsmRecords();
   const { dashFrom, dashTo, setDay } = useDateRange();
+  // Bounded to the selected period instead of useSales()'s full history —
+  // computeConquistas/computeConquistasDayGallery are both called with
+  // dashFrom/dashTo only.
+  const { data: sales } = useSalesInRange(dashFrom, dashTo);
   const categoryLabels = useCategoryLabelMap();
   const hiddenCategories = storeSettings?.hidden_categories ?? [];
   const dsmCategory = categoryTypes?.find((c) => c.chave === 'dsm');

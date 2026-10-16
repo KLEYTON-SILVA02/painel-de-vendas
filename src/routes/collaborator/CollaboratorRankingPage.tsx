@@ -3,8 +3,9 @@ import { MobileRankingBoard } from '../../components/collaborator/MobileRankingB
 import type { CategoryKey } from '../../lib/business/classification';
 import { getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
 import { computeSummary } from '../../lib/business/summary';
+import { monthFirstISO, todayISO } from '../../lib/dateRange';
 import { fmtMoney } from '../../lib/format';
-import { useCollaborators, useGoals, useSales, useSpecialLists } from '../../lib/queries';
+import { useCollaborators, useGoals, useSalesInRange, useSpecialLists } from '../../lib/queries';
 import { MobileDateFilter } from '../admin-mobile/MobileDateFilter';
 import { useDateRange } from '../DateRangeContext';
 
@@ -33,11 +34,18 @@ const RANK_CHIPS: RankCatKey[] = ['ALL', 'DERM', 'GEN', 'MP', 'MER', 'LEVMEL', '
 
 export function CollaboratorRankingPage() {
   const { data: collaborators } = useCollaborators();
-  const { data: sales } = useSales();
   const { data: goals } = useGoals();
   const { data: specialLists } = useSpecialLists();
   const { dashFrom, dashTo, modoGeral } = useDateRange();
   const [catKey, setCatKey] = useState<RankCatKey>('ALL');
+  // Bounded instead of useSales()'s full history: the selected period
+  // (ranking) union the real current month-to-date (getGoal/getSuperMeta's
+  // own auto-redistribute lookup always scans monthFirst(now)..today).
+  const now = new Date();
+  const currentMonthFirst = monthFirstISO(now.getFullYear(), now.getMonth());
+  const salesRangeFrom = [currentMonthFirst, dashFrom].sort()[0];
+  const salesRangeTo = [todayISO(), dashTo].sort().at(-1)!;
+  const { data: sales } = useSalesInRange(salesRangeFrom, salesRangeTo);
 
   // Safe stand-ins so the useMemo below always runs in the same order
   // (Rules of Hooks) whether or not every query has resolved yet — the

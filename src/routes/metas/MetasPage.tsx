@@ -10,9 +10,10 @@ import { distributeIndividualGoalsAuto } from '../../lib/business/individualGoal
 import { computeSummary } from '../../lib/business/summary';
 import type { Goal } from '../../lib/business/types';
 import { VISITANTE_SETOR } from '../../lib/business/types';
+import { monthFirstISO, todayISO } from '../../lib/dateRange';
 import { fmtMoney } from '../../lib/format';
 import { useIndividualGoals, useUpdateCommissionRate, useUpdateGoal, useUpsertIndividualGoal } from '../../lib/mutations';
-import { useCollaborators, useCommissionRates, useGoals, useSales } from '../../lib/queries';
+import { useCollaborators, useCommissionRates, useGoals, useSalesInRange } from '../../lib/queries';
 
 // One editor per commission slot — Mercadoria Geral/Dermo/Genéricos keep a
 // single slot (1), Marcas Exclusivas registers 3 independent commissions.
@@ -101,33 +102,35 @@ function MetasPorCategoria() {
   const categoryLabels = useCategoryLabelMap();
   const { profile } = useAuth();
   const { data: goals } = useGoals();
-  const { data: sales } = useSales();
+  // computeMetaDiariaRedistribuida's own realizado-this-month lookup only
+  // ever needs monthFirst(now)..today, not useSales()'s full history —
+  // bounded here the same way for both this preview and the hook below.
+  const now = new Date();
+  const monthFirst = monthFirstISO(now.getFullYear(), now.getMonth());
+  const hojeISO = todayISO();
+  const { data: sales } = useSalesInRange(monthFirst, hojeISO);
   const { data: collaborators } = useCollaborators();
   const updateGoal = useUpdateGoal(profile?.store_id);
   const [edits, setEdits] = useState<Partial<Record<CategoryKey, GoalEdit>>>({});
   const [saving, setSaving] = useState(false);
 
-  // computeMetaDiariaRedistribuida's own O(sales) computeSummary() pass —
-  // one full scan of the store's entire sales history — used to run
-  // straight in the render body below, up to 2× per category (Meta Geral +
-  // Super Meta), so up to 8 full scans on *every keystroke* typed into any
-  // field on this screen (any edit re-renders all 4 category rows). The
-  // only part that actually depends on the live-edited target value is a
-  // cheap subtraction; "realizado this month" only depends on
+  // computeMetaDiariaRedistribuida's own O(sales) computeSummary() pass used
+  // to run straight in the render body below, up to 2× per category (Meta
+  // Geral + Super Meta), so up to 8 full scans on *every keystroke* typed
+  // into any field on this screen (any edit re-renders all 4 category
+  // rows). The only part that actually depends on the live-edited target
+  // value is a cheap subtraction; "realizado this month" only depends on
   // sales/collaborators/metrica, so it's computed here once instead.
   const salesData = sales ?? [];
   const collaboratorsData = collaborators ?? [];
   const realizadoPorCategoria = useMemo(() => {
-    const now = new Date();
-    const monthFirst = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-    const hojeISO = now.toISOString().slice(0, 10);
     const result = {} as Record<CategoryKey, { valor: number; itens: number }>;
     CAT_KEYS.forEach((k) => {
       const rows = computeSummary(salesData, collaboratorsData, monthFirst, hojeISO, k);
       result[k] = { valor: rows.reduce((a, r) => a + r.valor, 0), itens: rows.reduce((a, r) => a + r.itens, 0) };
     });
     return result;
-  }, [salesData, collaboratorsData]);
+  }, [salesData, collaboratorsData, monthFirst, hojeISO]);
 
   if (!goals || !sales || !collaborators) return <PageLoading />;
   const goalsSafe = withGoalDefaults(goals);
@@ -390,7 +393,11 @@ function MetasIndividuais() {
   const categoryLabels = useCategoryLabelMap();
   const { profile } = useAuth();
   const { data: goals } = useGoals();
-  const { data: sales } = useSales();
+  // distributeIndividualGoalsAuto's own computeMetaDiariaRedistribuida call
+  // only ever needs monthFirst(now)..today — same bounded window as
+  // MetasPorCategoria above, instead of useSales()'s full history.
+  const now = new Date();
+  const { data: sales } = useSalesInRange(monthFirstISO(now.getFullYear(), now.getMonth()), todayISO());
   const { data: collaboratorsRaw } = useCollaborators();
   const [catKey, setCatKey] = useState<CategoryKey>('DERM');
   const [alvo, setAlvo] = useState<'meta' | 'super'>('meta');

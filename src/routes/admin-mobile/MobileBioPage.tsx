@@ -10,7 +10,7 @@ import { copyText, formatRankingText } from '../../lib/clipboard';
 import { fmtDateShortBR } from '../../lib/format';
 import { useAddBioProduct, useBulkInsertBioProducts, useDeleteBioProduct, useUpdateBioGroupGoal, useUpdateBioWeights } from '../../lib/mutations';
 import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
-import { useBioGroupGoals, useBioGroups, useCategoryTypes, useCollaborators, useSales, useStoreSettings } from '../../lib/queries';
+import { useBioGroupGoals, useBioGroups, useCategoryTypes, useCollaborators, useSalesInRange, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { MobileDateFilter } from './MobileDateFilter';
 import { MobileSalesListLockedNotice, resolveVendorName } from './MobileSellerDetail';
@@ -22,13 +22,15 @@ const GROUP_COLORS: Record<BioGroupKey, string> = { G1: '#00b6da', G2: '#a82bff'
 export function MobileBioPage() {
   const { profile } = useAuth();
   const { data: collaborators } = useCollaborators();
-  const { data: sales } = useSales();
   const { data: storeSettings } = useStoreSettings();
   const { data: categoryTypes } = useCategoryTypes();
   const bioCategoryType = categoryTypes?.find((c) => c.chave === 'biosintetica');
   const { data: bioGroupRows } = useBioGroups(bioCategoryType?.id);
   const { data: groupGoals } = useBioGroupGoals(bioCategoryType?.id);
   const { dashFrom, dashTo, setModoGeral, salesListEnabled, toggleSalesListEnabled } = useDateRange();
+  // Bounded to the selected period instead of useSales()'s full history —
+  // every use of `sales` on this screen is already filtered to dashFrom..dashTo.
+  const { data: sales } = useSalesInRange(dashFrom, dashTo);
   const [view, setView] = useState<'ranking' | 'grupos' | 'pontos'>('ranking');
   const [groupFilter, setGroupFilter] = useState<BioGroupKey | 'ALL'>('ALL');
   const [generating, setGenerating] = useState(false);

@@ -34,9 +34,10 @@ export function useCollaborators() {
 
 const SALES_PAGE_SIZE = 1000;
 // Headroom for the keyset loop below — 500 pages of 1000 rows = 500k sales,
-// well past this store's current ~33k and years of growth at its current
-// rate. Purely a safety net against an unexpected always-full-page response
-// looping forever, same role the old doubling-batch cap played.
+// well past this store's current ~75k (and growing ~30k/month) and years of
+// growth at its current rate. Purely a safety net against an unexpected
+// always-full-page response looping forever, same role the old
+// doubling-batch cap played.
 const SALES_MAX_PAGES = 500;
 
 /** Pages through `sales` via keyset (cursor) pagination on `id` — each page
