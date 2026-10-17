@@ -3,8 +3,15 @@ import { HelpTip } from './HelpTip';
 import { useCategoryLabelMap } from '../lib/business/categoryLabels';
 import { todayISO } from '../lib/dateRange';
 import { fmtDateBR } from '../lib/format';
-import { buildDayExtract, buildMonthExtract, buildMonthExtractHtml, openPrintPreview } from '../lib/printExtract';
-import { useSales, useSpecialLists, useStore } from '../lib/queries';
+import {
+  buildDayExtract,
+  buildDayExtractByCollaborator,
+  buildDayExtractByCollaboratorHtml,
+  buildMonthExtract,
+  buildMonthExtractHtml,
+  openPrintPreview,
+} from '../lib/printExtract';
+import { useCollaborators, useSales, useSpecialLists, useStore } from '../lib/queries';
 import { useDateRange } from '../routes/DateRangeContext';
 
 // Ported 1:1 from legacy/index-original.html — renderCalendarCard(). Distinct
@@ -36,14 +43,20 @@ export function SidebarCalendarCard() {
   const categoryLabels = useCategoryLabelMap();
   const { data: store } = useStore();
   const { data: specialLists } = useSpecialLists();
-  // Fetching starts only when the ADM clica em um dos botões de impressão —
-  // shares the `['sales']` cache key with Dashboard/Ranking/Category (see
-  // useSales), so when one of those is already mounted (as on the Tela
-  // Inicial, where this card normally lives) the data is already there and
-  // the print opens instantly; elsewhere (e.g. Galeria de Conquistas, which
-  // also renders this card) it triggers a one-off fetch instead of always
-  // pulling the whole sales history just for having this card on screen.
-  const [printMode, setPrintMode] = useState<'none' | 'month' | 'day'>('none');
+  const { data: collaborators } = useCollaborators();
+  // Fetching starts only when a impressão de fato é confirmada (incluindo a
+  // escolha no popup do extrato do dia) — shares the `['sales']` cache key
+  // with Dashboard/Ranking/Category (see useSales), so when one of those is
+  // already mounted (as on the Tela Inicial, where this card normally
+  // lives) the data is already there and the print opens instantly;
+  // elsewhere (e.g. Galeria de Conquistas, which also renders this card) it
+  // triggers a one-off fetch instead of always pulling the whole sales
+  // history just for having this card on screen.
+  const [printMode, setPrintMode] = useState<'none' | 'month' | 'day-geral' | 'day-colaborador'>('none');
+  // Popup que pergunta, ao clicar em "Imprimir extrato do dia", se é pra
+  // somar por categoria (loja inteira) ou detalhar por colaborador — ver
+  // os dois botões dentro dele, mais abaixo.
+  const [dayChoiceOpen, setDayChoiceOpen] = useState(false);
   const { data: sales, isFetching: salesFetching } = useSales(printMode !== 'none');
   // "Imprimir extrato do dia" só faz sentido com um único dia escolhido no
   // calendário (não em "Modo Geral" nem com um intervalo de "Busca período")
@@ -52,12 +65,17 @@ export function SidebarCalendarCard() {
 
   useEffect(() => {
     if (printMode === 'none' || !sales || !specialLists) return;
-    if (printMode === 'day' && diaSelecionado) {
+    if (printMode === 'day-geral' && diaSelecionado) {
       const dayLabel = fmtDateBR(diaSelecionado);
       const categories = buildDayExtract(sales, diaSelecionado, specialLists, categoryLabels);
       const html = buildMonthExtractHtml(categories, dayLabel, store?.nome_loja, null, 'Valor', 'Extrato do Dia', 'Total do dia', false);
       openPrintPreview(`Extrato do Dia — ${dayLabel}`, html);
-    } else {
+    } else if (printMode === 'day-colaborador' && diaSelecionado && collaborators) {
+      const dayLabel = fmtDateBR(diaSelecionado);
+      const data = buildDayExtractByCollaborator(sales, collaborators, diaSelecionado, specialLists, categoryLabels);
+      const html = buildDayExtractByCollaboratorHtml(data, dayLabel, store?.nome_loja);
+      openPrintPreview(`Extrato do Dia por Colaborador — ${dayLabel}`, html);
+    } else if (printMode === 'month') {
       const monthLabel = `${MESES_ABREV[refMonth]}/${refYear}`;
       const categories = buildMonthExtract(sales, refYear, refMonth + 1, specialLists, categoryLabels);
       const html = buildMonthExtractHtml(categories, monthLabel, store?.nome_loja);
@@ -65,7 +83,7 @@ export function SidebarCalendarCard() {
     }
     setPrintMode('none');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [printMode, sales, specialLists]);
+  }, [printMode, sales, specialLists, collaborators]);
 
   const firstDow = new Date(refYear, refMonth, 1).getDay();
   const daysInMonth = new Date(refYear, refMonth + 1, 0).getDate();
@@ -257,9 +275,9 @@ export function SidebarCalendarCard() {
       </button>
 
       <button
-        onClick={() => setPrintMode('day')}
+        onClick={() => setDayChoiceOpen(true)}
         disabled={!diaSelecionado || (printMode !== 'none' && salesFetching)}
-        title={diaSelecionado ? 'Abre uma aba com o extrato de vendas do dia selecionado pronto para impressão' : 'Selecione um único dia no calendário acima (fora do Modo Geral) para habilitar'}
+        title={diaSelecionado ? 'Escolhe como imprimir o extrato de vendas do dia selecionado' : 'Selecione um único dia no calendário acima (fora do Modo Geral) para habilitar'}
         style={{
           width: '100%',
           marginTop: 6,
@@ -276,11 +294,57 @@ export function SidebarCalendarCard() {
           fontWeight: 700,
           textTransform: 'uppercase',
           cursor: diaSelecionado ? 'pointer' : 'not-allowed',
-          opacity: !diaSelecionado ? 0.4 : printMode === 'day' && salesFetching ? 0.6 : 1,
+          opacity: !diaSelecionado ? 0.4 : printMode.startsWith('day') && salesFetching ? 0.6 : 1,
         }}
       >
-        🖨️ {printMode === 'day' && salesFetching ? 'Gerando...' : `Imprimir extrato do dia${diaSelecionado ? ` (${fmtDateBR(diaSelecionado)})` : ''}`}
+        🖨️ {printMode.startsWith('day') && salesFetching ? 'Gerando...' : `Imprimir extrato do dia${diaSelecionado ? ` (${fmtDateBR(diaSelecionado)})` : ''}`}
       </button>
+
+      {dayChoiceOpen && diaSelecionado && (
+        <div
+          className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50"
+          onClick={() => setDayChoiceOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-semibold text-sm text-slate-200">🖨️ Extrato do dia {fmtDateBR(diaSelecionado)}</h3>
+              <button onClick={() => setDayChoiceOpen(false)} className="text-slate-400 hover:text-slate-200">
+                ✕
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mb-4">Como você quer imprimir?</p>
+            <button
+              onClick={() => {
+                setDayChoiceOpen(false);
+                setPrintMode('day-geral');
+              }}
+              className="w-full mb-2 rounded-lg border px-3 py-2 text-left text-sm font-semibold"
+              style={{ borderColor: NEON_CYAN, color: NEON_CYAN }}
+            >
+              📦 Só os totais por categoria
+              <div className="text-xs font-normal mt-0.5" style={{ color: '#8b90bf' }}>
+                Soma geral da loja, por categoria — sem separar por colaborador.
+              </div>
+            </button>
+            <button
+              onClick={() => {
+                setDayChoiceOpen(false);
+                setPrintMode('day-colaborador');
+              }}
+              className="w-full rounded-lg border px-3 py-2 text-left text-sm font-semibold"
+              style={{ borderColor: NEON_CYAN, color: NEON_CYAN }}
+            >
+              🧑‍🤝‍🧑 Detalhado por colaborador
+              <div className="text-xs font-normal mt-0.5" style={{ color: '#8b90bf' }}>
+                Uma linha por colaborador, com o valor de cada categoria.
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
