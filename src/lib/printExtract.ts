@@ -86,25 +86,22 @@ export interface MonthExtractCategory {
   days: { dataISO: string; value: number }[];
 }
 
-/** Totais gerais + detalhamento dia a dia do mês, para cada uma das 6
- * categorias fixas. MER (Mercadoria Geral) é o total geral da loja — reflete
- * toda venda, não só as com `grupo === 'MER'` — mesma convenção já usada em
- * CategoryPage (`summaryFilter = catKey === 'MER' ? 'ALL' : catKey`).
- * LEVMEL/CHIP não são `sale.grupo`, são casadas por palavra-chave (special_lists),
- * por isso usam qtd (unidades) em vez de valor (R$), respeitando a métrica de
- * unidades dessas categorias. */
-export function buildMonthExtract(
+/** Soma por categoria (+ detalhamento dia a dia) de todo `sale.dataISO` entre
+ * `from` e `to` (inclusive, ambos YYYY-MM-DD) — motor comum de
+ * `buildMonthExtract`/`buildDayExtract`, que só diferem no intervalo. MER
+ * (Mercadoria Geral) é o total geral da loja — reflete toda venda, não só as
+ * com `grupo === 'MER'` — mesma convenção já usada em CategoryPage
+ * (`summaryFilter = catKey === 'MER' ? 'ALL' : catKey`). LEVMEL/CHIP não são
+ * `sale.grupo`, são casadas por palavra-chave (special_lists), por isso usam
+ * qtd (unidades) em vez de valor (R$), respeitando a métrica de unidades
+ * dessas categorias. */
+function buildExtractForRange(
   sales: Sale[],
-  year: number,
-  month: number, // 1-indexed
+  from: string,
+  to: string,
   specialLists: { levmel: SpecialListItem[]; chip: SpecialListItem[] },
   categoryLabels: Record<string, string>,
 ): MonthExtractCategory[] {
-  const mm = String(month).padStart(2, '0');
-  const from = `${year}-${mm}-01`;
-  const lastDay = new Date(year, month, 0).getDate();
-  const to = `${year}-${mm}-${String(lastDay).padStart(2, '0')}`;
-
   const defs: MonthExtractCategoryDef[] = [
     { key: 'MER', isUnit: false, match: () => true },
     { key: 'MP', isUnit: false, match: (s) => s.grupo === 'MP' },
@@ -129,6 +126,33 @@ export function buildMonthExtract(
       .sort((a, b) => a.dataISO.localeCompare(b.dataISO));
     return { key, label: categoryLabels[key] ?? key, isUnit, total, days };
   });
+}
+
+export function buildMonthExtract(
+  sales: Sale[],
+  year: number,
+  month: number, // 1-indexed
+  specialLists: { levmel: SpecialListItem[]; chip: SpecialListItem[] },
+  categoryLabels: Record<string, string>,
+): MonthExtractCategory[] {
+  const mm = String(month).padStart(2, '0');
+  const from = `${year}-${mm}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const to = `${year}-${mm}-${String(lastDay).padStart(2, '0')}`;
+  return buildExtractForRange(sales, from, to, specialLists, categoryLabels);
+}
+
+/** Mesmo motor de `buildMonthExtract`, só que para um único dia — cada
+ * categoria sai com no máximo uma entrada em `days` (o próprio `dateISO`,
+ * sempre igual a `total`), já que não há "dia a dia" para detalhar dentro de
+ * um só dia. */
+export function buildDayExtract(
+  sales: Sale[],
+  dateISO: string,
+  specialLists: { levmel: SpecialListItem[]; chip: SpecialListItem[] },
+  categoryLabels: Record<string, string>,
+): MonthExtractCategory[] {
+  return buildExtractForRange(sales, dateISO, dateISO, specialLists, categoryLabels);
 }
 
 /** "Dias acumulados" mode for the per-collaborator extract (RankingPage): day
@@ -161,22 +185,33 @@ export function buildMonthExtractHtml(
   // extrato acumulado pareceria ter vendas crescendo de forma suspeita, dia
   // após dia, em vez de ficar óbvio que é uma soma progressiva).
   valueColumnLabel: string = 'Valor',
+  // Extrato de um único dia (buildDayExtract) não tem "dia a dia" pra
+  // detalhar — a tabela ficaria com uma linha só, redundante com o próprio
+  // total da categoria — então usa título/rótulo diferentes e pula a
+  // tabela, mostrando só o total por categoria.
+  heading: string = 'Extrato do Mês',
+  totalLabel: string = 'Total do mês',
+  showDayTable: boolean = true,
 ): string {
   const fmt = (v: number, isUnit: boolean) => (isUnit ? `${v} un.` : fmtMoney(v));
   const sections = categories.length
     ? categories
         .map((c) => {
+          const total = `<div class="cat-total">${escapeHtml(totalLabel)}: ${fmt(c.total, c.isUnit)}</div>`;
+          if (!showDayTable) {
+            return `<h2>${escapeHtml(c.label)}</h2>${total}`;
+          }
           const rows = c.days
             .map((d) => `<tr><td>${fmtDateBR(d.dataISO)}</td><td style="text-align:right">${fmt(d.value, c.isUnit)}</td></tr>`)
             .join('');
           const table = c.days.length
             ? `<table><thead><tr><th>Dia</th><th style="text-align:right">${escapeHtml(valueColumnLabel)}</th></tr></thead><tbody>${rows}</tbody></table>`
             : `<div class="empty">Nenhuma venda no período.</div>`;
-          return `<h2>${escapeHtml(c.label)}</h2><div class="cat-total">Total do mês: ${fmt(c.total, c.isUnit)}</div>${table}`;
+          return `<h2>${escapeHtml(c.label)}</h2>${total}${table}`;
         })
         .join('')
     : `<div class="empty">Nenhuma categoria selecionada.</div>`;
-  return `<h1>Extrato do Mês${storeName ? ` — ${escapeHtml(storeName)}` : ''}</h1><div class="meta">Período: ${escapeHtml(periodLabel)}${
+  return `<h1>${escapeHtml(heading)}${storeName ? ` — ${escapeHtml(storeName)}` : ''}</h1><div class="meta">Período: ${escapeHtml(periodLabel)}${
     collaboratorName ? `<br />Colaborador: ${escapeHtml(collaboratorName)}` : ''
   }</div>${sections}`;
 }

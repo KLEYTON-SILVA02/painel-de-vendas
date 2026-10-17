@@ -2,7 +2,8 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { HelpTip } from './HelpTip';
 import { useCategoryLabelMap } from '../lib/business/categoryLabels';
 import { todayISO } from '../lib/dateRange';
-import { buildMonthExtract, buildMonthExtractHtml, openPrintPreview } from '../lib/printExtract';
+import { fmtDateBR } from '../lib/format';
+import { buildDayExtract, buildMonthExtract, buildMonthExtractHtml, openPrintPreview } from '../lib/printExtract';
 import { useSales, useSpecialLists, useStore } from '../lib/queries';
 import { useDateRange } from '../routes/DateRangeContext';
 
@@ -35,25 +36,36 @@ export function SidebarCalendarCard() {
   const categoryLabels = useCategoryLabelMap();
   const { data: store } = useStore();
   const { data: specialLists } = useSpecialLists();
-  // Fetching starts only when the ADM clicks "Imprimir extrato do mês" —
+  // Fetching starts only when the ADM clica em um dos botões de impressão —
   // shares the `['sales']` cache key with Dashboard/Ranking/Category (see
   // useSales), so when one of those is already mounted (as on the Tela
   // Inicial, where this card normally lives) the data is already there and
   // the print opens instantly; elsewhere (e.g. Galeria de Conquistas, which
   // also renders this card) it triggers a one-off fetch instead of always
   // pulling the whole sales history just for having this card on screen.
-  const [printRequested, setPrintRequested] = useState(false);
-  const { data: sales, isFetching: salesFetching } = useSales(printRequested);
+  const [printMode, setPrintMode] = useState<'none' | 'month' | 'day'>('none');
+  const { data: sales, isFetching: salesFetching } = useSales(printMode !== 'none');
+  // "Imprimir extrato do dia" só faz sentido com um único dia escolhido no
+  // calendário (não em "Modo Geral" nem com um intervalo de "Busca período")
+  // — mesma condição de "um dia selecionado" usada em RankingPage (modoDia).
+  const diaSelecionado = !modoGeral && dashFrom === dashTo ? dashFrom : null;
 
   useEffect(() => {
-    if (!printRequested || !sales || !specialLists) return;
-    const monthLabel = `${MESES_ABREV[refMonth]}/${refYear}`;
-    const categories = buildMonthExtract(sales, refYear, refMonth + 1, specialLists, categoryLabels);
-    const html = buildMonthExtractHtml(categories, monthLabel, store?.nome_loja);
-    openPrintPreview(`Extrato do Mês — ${monthLabel}`, html);
-    setPrintRequested(false);
+    if (printMode === 'none' || !sales || !specialLists) return;
+    if (printMode === 'day' && diaSelecionado) {
+      const dayLabel = fmtDateBR(diaSelecionado);
+      const categories = buildDayExtract(sales, diaSelecionado, specialLists, categoryLabels);
+      const html = buildMonthExtractHtml(categories, dayLabel, store?.nome_loja, null, 'Valor', 'Extrato do Dia', 'Total do dia', false);
+      openPrintPreview(`Extrato do Dia — ${dayLabel}`, html);
+    } else {
+      const monthLabel = `${MESES_ABREV[refMonth]}/${refYear}`;
+      const categories = buildMonthExtract(sales, refYear, refMonth + 1, specialLists, categoryLabels);
+      const html = buildMonthExtractHtml(categories, monthLabel, store?.nome_loja);
+      openPrintPreview(`Extrato do Mês — ${monthLabel}`, html);
+    }
+    setPrintMode('none');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [printRequested, sales, specialLists]);
+  }, [printMode, sales, specialLists]);
 
   const firstDow = new Date(refYear, refMonth, 1).getDay();
   const daysInMonth = new Date(refYear, refMonth + 1, 0).getDate();
@@ -219,8 +231,8 @@ export function SidebarCalendarCard() {
       </button>
 
       <button
-        onClick={() => setPrintRequested(true)}
-        disabled={printRequested && salesFetching}
+        onClick={() => setPrintMode('month')}
+        disabled={printMode !== 'none' && salesFetching}
         title="Abre uma aba com o extrato de vendas do mês pronto para impressão"
         style={{
           width: '100%',
@@ -238,10 +250,36 @@ export function SidebarCalendarCard() {
           fontWeight: 700,
           textTransform: 'uppercase',
           cursor: 'pointer',
-          opacity: printRequested && salesFetching ? 0.6 : 1,
+          opacity: printMode === 'month' && salesFetching ? 0.6 : 1,
         }}
       >
-        🖨️ {printRequested && salesFetching ? 'Gerando...' : 'Imprimir extrato do mês'}
+        🖨️ {printMode === 'month' && salesFetching ? 'Gerando...' : 'Imprimir extrato do mês'}
+      </button>
+
+      <button
+        onClick={() => setPrintMode('day')}
+        disabled={!diaSelecionado || (printMode !== 'none' && salesFetching)}
+        title={diaSelecionado ? 'Abre uma aba com o extrato de vendas do dia selecionado pronto para impressão' : 'Selecione um único dia no calendário acima (fora do Modo Geral) para habilitar'}
+        style={{
+          width: '100%',
+          marginTop: 6,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 6,
+          background: '#0b0e1d',
+          color: NEON_CYAN,
+          border: `1px solid ${NEON_CYAN}`,
+          borderRadius: 999,
+          padding: 6,
+          fontSize: 9.5,
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          cursor: diaSelecionado ? 'pointer' : 'not-allowed',
+          opacity: !diaSelecionado ? 0.4 : printMode === 'day' && salesFetching ? 0.6 : 1,
+        }}
+      >
+        🖨️ {printMode === 'day' && salesFetching ? 'Gerando...' : `Imprimir extrato do dia${diaSelecionado ? ` (${fmtDateBR(diaSelecionado)})` : ''}`}
       </button>
     </div>
   );
