@@ -28,6 +28,17 @@
             android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- Builds the visible push notification itself (BigTextStyle) instead
+             of letting Android auto-display the FCM payload with its default
+             truncated style — see VendasMessagingService for why. -->
+        <service
+            android:name=".VendasMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
     </application>
 
     <!-- Permissions -->

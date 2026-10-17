@@ -120,13 +120,24 @@ Deno.serve(async () => {
   for (const notification of pending) {
     const deviceTokens = tokensByCollaborator.get(notification.collaborator_id) ?? [];
     for (const token of deviceTokens) {
+      // "data" em vez de "notification": uma mensagem "notification" é
+      // exibida automaticamente pelo próprio Android quando o app não está
+      // em primeiro plano — usando o estilo padrão do sistema, que corta o
+      // corpo em 1-2 linhas e nunca chama o código do app. É exatamente por
+      // isso que o usuário só via Mercadoria Geral/Marcas Exclusivas: essas
+      // eram as duas primeiras linhas visíveis antes do corte, mesmo com o
+      // texto completo já correto (ver migrations 0098/0099). Uma mensagem
+      // "data" sempre aciona VendasMessagingService.onMessageReceived no
+      // Android — com o app aberto, minimizado ou fechado — que monta a
+      // notificação com BigTextStyle, mostrando o corpo inteiro.
       const res = await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: {
             token,
-            notification: { title: notification.title, body: notification.body },
+            data: { title: notification.title, body: notification.body },
+            android: { priority: 'high' },
           },
         }),
       });
