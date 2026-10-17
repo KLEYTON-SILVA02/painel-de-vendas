@@ -22,7 +22,13 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 }
 
-const PRINT_STYLES = `
+// `pageSize` vai direto no `@page` — "auto" (padrão, usado pelos extratos já
+// existentes) deixa o tamanho a critério do navegador/driver da impressora;
+// um valor fixo como "72mm 297mm" (extrato do dia por colaborador, formato
+// vertical do papel térmico informado pelo usuário) fixa a largura real do
+// rolo, em vez de depender do que o driver decidir sozinho.
+function printStyles(pageSize: string): string {
+  return `
   /* Margem fixa e igual nos 4 lados — garante que a área impressa fique
      centralizada no papel (nem mais para a direita, nem mais para a
      esquerda), em vez de ficar sujeita à margem padrão de cada navegador/
@@ -30,7 +36,7 @@ const PRINT_STYLES = `
      vez do padrão usual do navegador (~10mm), para sobrar mais espaço
      horizontal às colunas da tabela — importante em impressoras térmicas de
      80mm, onde essa sobra faz diferença real. */
-  @page { size: auto; margin: 6mm; }
+  @page { size: ${pageSize}; margin: 6mm; }
   * { box-sizing: border-box; }
   body { margin: 0; padding: 6px; font-family: 'Courier New', monospace; color: #000; background: #fff; font-size: 12px; }
   h1 { font-size: 16px; margin: 0 0 4px; }
@@ -46,12 +52,13 @@ const PRINT_STYLES = `
   .no-print button { margin-top: 8px; padding: 6px 14px; font-weight: bold; border: 1.5px solid #000; background: #000; color: #fff; border-radius: 4px; cursor: pointer; }
   @media print { .no-print { display: none; } }
 `;
+}
 
 /** Abre uma aba nova (mesma origem, sem CSP) com o extrato pronto para
  * impressão e um botão manual de "Imprimir" — o navegador pode bloquear o
  * `window.print()` automático fora de um gesto do usuário, então é o clique
  * nesse botão (ou Ctrl+P) que dispara a impressão de fato. */
-export function openPrintPreview(title: string, bodyHtml: string) {
+export function openPrintPreview(title: string, bodyHtml: string, pageSize: string = 'auto') {
   const win = window.open('', '_blank');
   if (!win) return;
   win.document.write(`<!DOCTYPE html>
@@ -59,7 +66,7 @@ export function openPrintPreview(title: string, bodyHtml: string) {
 <head>
 <meta charset="UTF-8" />
 <title>${escapeHtml(title)}</title>
-<style>${PRINT_STYLES}</style>
+<style>${printStyles(pageSize)}</style>
 </head>
 <body>
   <div class="no-print">
@@ -158,71 +165,63 @@ export function buildDayExtract(
   return buildExtractForRange(sales, dateISO, dateISO, specialLists, categoryLabels);
 }
 
-export interface DayExtractByCollaboratorRow {
-  matricula: string;
-  nome: string;
-  values: Record<string, number>; // por categoria (mesmas 6 chaves fixas)
+export interface DayExtractByCollaboratorCategory {
+  key: string;
+  label: string;
+  isUnit: boolean;
+  total: number;
+  rows: { matricula: string; nome: string; value: number }[]; // só quem vendeu nessa categoria, maior valor primeiro
 }
 
-export interface DayExtractByCollaborator {
-  categories: { key: string; label: string; isUnit: boolean }[];
-  rows: DayExtractByCollaboratorRow[];
-}
-
-/** Mesmas 6 categorias fixas de buildDayExtract, mas quebradas por
- * colaborador em vez de somadas na loja inteira — uma linha por colaborador
- * que vendeu algo no dia (sem seedar colaboradores sem venda, pra não lotar
- * o papel com linhas zeradas), ordenadas por nome. */
+/** Mesmas 6 categorias fixas de buildDayExtract, mas cada uma trazendo quem
+ * vendeu naquela categoria naquele dia (em vez de só o total da loja) — uma
+ * seção por categoria, com os colaboradores dela embaixo, formato vertical
+ * de coluna única (nome + valor) em vez de uma tabela larga colaborador ×
+ * categoria, pra caber no papel estreito de impressora térmica. Colaborador
+ * sem venda naquela categoria nem aparece, pra não lotar o papel. */
 export function buildDayExtractByCollaborator(
   sales: Sale[],
   collaborators: { matricula: string; nome: string; apelido?: string | null }[],
   dateISO: string,
   specialLists: { levmel: SpecialListItem[]; chip: SpecialListItem[] },
   categoryLabels: Record<string, string>,
-): DayExtractByCollaborator {
+): DayExtractByCollaboratorCategory[] {
   const defs = categoryDefs(specialLists);
-  const byMatricula = new Map<string, Record<string, number>>();
-  for (const s of sales) {
-    if (s.dataISO !== dateISO) continue;
-    let values = byMatricula.get(s.matricula);
-    if (!values) {
-      values = {};
-      byMatricula.set(s.matricula, values);
-    }
-    for (const { key, isUnit, match } of defs) {
-      if (!match(s)) continue;
-      const value = isUnit ? Number(s.qtd) || 0 : Number(s.valor) || 0;
-      values[key] = (values[key] ?? 0) + value;
-    }
-  }
-
   const nameByMatricula = new Map(collaborators.map((c) => [c.matricula, c.apelido || c.nome]));
-  const rows = Array.from(byMatricula.entries())
-    .map(([matricula, values]) => ({ matricula, nome: nameByMatricula.get(matricula) ?? matricula, values }))
-    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-  const categories = defs.map(({ key, isUnit }) => ({ key, label: categoryLabels[key] ?? key, isUnit }));
-  return { categories, rows };
+
+  return defs.map(({ key, isUnit, match }) => {
+    const byMatricula = new Map<string, number>();
+    for (const s of sales) {
+      if (s.dataISO !== dateISO || !match(s)) continue;
+      const value = isUnit ? Number(s.qtd) || 0 : Number(s.valor) || 0;
+      byMatricula.set(s.matricula, (byMatricula.get(s.matricula) ?? 0) + value);
+    }
+    const rows = Array.from(byMatricula.entries())
+      .map(([matricula, value]) => ({ matricula, nome: nameByMatricula.get(matricula) ?? matricula, value }))
+      .sort((a, b) => b.value - a.value || a.nome.localeCompare(b.nome, 'pt-BR'));
+    const total = rows.reduce((a, r) => a + r.value, 0);
+    return { key, label: categoryLabels[key] ?? key, isUnit, total, rows };
+  });
 }
 
-export function buildDayExtractByCollaboratorHtml(data: DayExtractByCollaborator, dayLabel: string, storeName?: string | null): string {
+export function buildDayExtractByCollaboratorHtml(
+  categories: DayExtractByCollaboratorCategory[],
+  dayLabel: string,
+  storeName?: string | null,
+): string {
   const fmt = (v: number, isUnit: boolean) => (isUnit ? `${v} un.` : fmtMoney(v));
-  const headerCells = data.categories.map((c) => `<th style="text-align:right">${escapeHtml(c.label)}</th>`).join('');
-  const bodyRows = data.rows
-    .map((r) => {
-      const cells = data.categories.map((c) => `<td style="text-align:right">${fmt(r.values[c.key] ?? 0, c.isUnit)}</td>`).join('');
-      return `<tr><td>${escapeHtml(r.nome)}</td>${cells}</tr>`;
-    })
-    .join('');
-  const totalCells = data.categories
+  const sections = categories
     .map((c) => {
-      const sum = data.rows.reduce((a, r) => a + (r.values[c.key] ?? 0), 0);
-      return `<td style="text-align:right">${fmt(sum, c.isUnit)}</td>`;
+      const total = `<div class="cat-total">Total do dia: ${fmt(c.total, c.isUnit)}</div>`;
+      const table = c.rows.length
+        ? `<table><thead><tr><th>Colaborador</th><th style="text-align:right">${c.isUnit ? 'Qtd' : 'Valor'}</th></tr></thead><tbody>${c.rows
+            .map((r) => `<tr><td>${escapeHtml(r.nome)}</td><td style="text-align:right">${fmt(r.value, c.isUnit)}</td></tr>`)
+            .join('')}</tbody></table>`
+        : `<div class="empty">Nenhuma venda nesta categoria.</div>`;
+      return `<h2>${escapeHtml(c.label)}</h2>${total}${table}`;
     })
     .join('');
-  const table = data.rows.length
-    ? `<table><thead><tr><th>Colaborador</th>${headerCells}</tr></thead><tbody>${bodyRows}<tr class="total-row"><td>Total do dia</td>${totalCells}</tr></tbody></table>`
-    : `<div class="empty">Nenhuma venda no período.</div>`;
-  return `<h1>Extrato do Dia por Colaborador${storeName ? ` — ${escapeHtml(storeName)}` : ''}</h1><div class="meta">Período: ${escapeHtml(dayLabel)}</div>${table}`;
+  return `<h1>Extrato do Dia por Colaborador${storeName ? ` — ${escapeHtml(storeName)}` : ''}</h1><div class="meta">Período: ${escapeHtml(dayLabel)}</div>${sections}`;
 }
 
 /** "Dias acumulados" mode for the per-collaborator extract (RankingPage): day

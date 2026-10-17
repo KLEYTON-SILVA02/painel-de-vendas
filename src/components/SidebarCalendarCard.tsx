@@ -74,7 +74,11 @@ export function SidebarCalendarCard() {
       const dayLabel = fmtDateBR(diaSelecionado);
       const data = buildDayExtractByCollaborator(sales, collaborators, diaSelecionado, specialLists, categoryLabels);
       const html = buildDayExtractByCollaboratorHtml(data, dayLabel, store?.nome_loja);
-      openPrintPreview(`Extrato do Dia por Colaborador — ${dayLabel}`, html);
+      // Formato vertical, largura fixa de 72mm (modelo de impressora
+      // térmica informado pelo usuário) — a tabela de uma coluna só
+      // (Colaborador + Valor) por categoria já foi desenhada pra caber
+      // nessa largura, em vez da tabela larga colaborador × categoria.
+      openPrintPreview(`Extrato do Dia por Colaborador — ${dayLabel}`, html, '72mm 297mm');
     } else if (printMode === 'month') {
       const monthLabel = `${MESES_ABREV[refMonth]}/${refYear}`;
       const categories = buildMonthExtract(sales, refYear, refMonth + 1, specialLists, categoryLabels);
