@@ -86,23 +86,15 @@ export interface MonthExtractCategory {
   days: { dataISO: string; value: number }[];
 }
 
-/** Soma por categoria (+ detalhamento dia a dia) de todo `sale.dataISO` entre
- * `from` e `to` (inclusive, ambos YYYY-MM-DD) — motor comum de
- * `buildMonthExtract`/`buildDayExtract`, que só diferem no intervalo. MER
+/** As mesmas 6 categorias fixas usadas em todo extrato impresso. MER
  * (Mercadoria Geral) é o total geral da loja — reflete toda venda, não só as
  * com `grupo === 'MER'` — mesma convenção já usada em CategoryPage
  * (`summaryFilter = catKey === 'MER' ? 'ALL' : catKey`). LEVMEL/CHIP não são
  * `sale.grupo`, são casadas por palavra-chave (special_lists), por isso usam
  * qtd (unidades) em vez de valor (R$), respeitando a métrica de unidades
  * dessas categorias. */
-function buildExtractForRange(
-  sales: Sale[],
-  from: string,
-  to: string,
-  specialLists: { levmel: SpecialListItem[]; chip: SpecialListItem[] },
-  categoryLabels: Record<string, string>,
-): MonthExtractCategory[] {
-  const defs: MonthExtractCategoryDef[] = [
+function categoryDefs(specialLists: { levmel: SpecialListItem[]; chip: SpecialListItem[] }): MonthExtractCategoryDef[] {
+  return [
     { key: 'MER', isUnit: false, match: () => true },
     { key: 'MP', isUnit: false, match: (s) => s.grupo === 'MP' },
     { key: 'DERM', isUnit: false, match: (s) => s.grupo === 'DERM' },
@@ -110,8 +102,19 @@ function buildExtractForRange(
     { key: 'LEVMEL', isUnit: true, match: (s) => matchesSpecialList(s.produto, specialLists.levmel) },
     { key: 'CHIP', isUnit: true, match: (s) => matchesSpecialList(s.produto, specialLists.chip) },
   ];
+}
 
-  return defs.map(({ key, isUnit, match }) => {
+/** Soma por categoria (+ detalhamento dia a dia) de todo `sale.dataISO` entre
+ * `from` e `to` (inclusive, ambos YYYY-MM-DD) — motor comum de
+ * `buildMonthExtract`/`buildDayExtract`, que só diferem no intervalo. */
+function buildExtractForRange(
+  sales: Sale[],
+  from: string,
+  to: string,
+  specialLists: { levmel: SpecialListItem[]; chip: SpecialListItem[] },
+  categoryLabels: Record<string, string>,
+): MonthExtractCategory[] {
+  return categoryDefs(specialLists).map(({ key, isUnit, match }) => {
     const byDay = new Map<string, number>();
     let total = 0;
     for (const s of sales) {
@@ -153,6 +156,73 @@ export function buildDayExtract(
   categoryLabels: Record<string, string>,
 ): MonthExtractCategory[] {
   return buildExtractForRange(sales, dateISO, dateISO, specialLists, categoryLabels);
+}
+
+export interface DayExtractByCollaboratorRow {
+  matricula: string;
+  nome: string;
+  values: Record<string, number>; // por categoria (mesmas 6 chaves fixas)
+}
+
+export interface DayExtractByCollaborator {
+  categories: { key: string; label: string; isUnit: boolean }[];
+  rows: DayExtractByCollaboratorRow[];
+}
+
+/** Mesmas 6 categorias fixas de buildDayExtract, mas quebradas por
+ * colaborador em vez de somadas na loja inteira — uma linha por colaborador
+ * que vendeu algo no dia (sem seedar colaboradores sem venda, pra não lotar
+ * o papel com linhas zeradas), ordenadas por nome. */
+export function buildDayExtractByCollaborator(
+  sales: Sale[],
+  collaborators: { matricula: string; nome: string; apelido?: string | null }[],
+  dateISO: string,
+  specialLists: { levmel: SpecialListItem[]; chip: SpecialListItem[] },
+  categoryLabels: Record<string, string>,
+): DayExtractByCollaborator {
+  const defs = categoryDefs(specialLists);
+  const byMatricula = new Map<string, Record<string, number>>();
+  for (const s of sales) {
+    if (s.dataISO !== dateISO) continue;
+    let values = byMatricula.get(s.matricula);
+    if (!values) {
+      values = {};
+      byMatricula.set(s.matricula, values);
+    }
+    for (const { key, isUnit, match } of defs) {
+      if (!match(s)) continue;
+      const value = isUnit ? Number(s.qtd) || 0 : Number(s.valor) || 0;
+      values[key] = (values[key] ?? 0) + value;
+    }
+  }
+
+  const nameByMatricula = new Map(collaborators.map((c) => [c.matricula, c.apelido || c.nome]));
+  const rows = Array.from(byMatricula.entries())
+    .map(([matricula, values]) => ({ matricula, nome: nameByMatricula.get(matricula) ?? matricula, values }))
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  const categories = defs.map(({ key, isUnit }) => ({ key, label: categoryLabels[key] ?? key, isUnit }));
+  return { categories, rows };
+}
+
+export function buildDayExtractByCollaboratorHtml(data: DayExtractByCollaborator, dayLabel: string, storeName?: string | null): string {
+  const fmt = (v: number, isUnit: boolean) => (isUnit ? `${v} un.` : fmtMoney(v));
+  const headerCells = data.categories.map((c) => `<th style="text-align:right">${escapeHtml(c.label)}</th>`).join('');
+  const bodyRows = data.rows
+    .map((r) => {
+      const cells = data.categories.map((c) => `<td style="text-align:right">${fmt(r.values[c.key] ?? 0, c.isUnit)}</td>`).join('');
+      return `<tr><td>${escapeHtml(r.nome)}</td>${cells}</tr>`;
+    })
+    .join('');
+  const totalCells = data.categories
+    .map((c) => {
+      const sum = data.rows.reduce((a, r) => a + (r.values[c.key] ?? 0), 0);
+      return `<td style="text-align:right">${fmt(sum, c.isUnit)}</td>`;
+    })
+    .join('');
+  const table = data.rows.length
+    ? `<table><thead><tr><th>Colaborador</th>${headerCells}</tr></thead><tbody>${bodyRows}<tr class="total-row"><td>Total do dia</td>${totalCells}</tr></tbody></table>`
+    : `<div class="empty">Nenhuma venda no período.</div>`;
+  return `<h1>Extrato do Dia por Colaborador${storeName ? ` — ${escapeHtml(storeName)}` : ''}</h1><div class="meta">Período: ${escapeHtml(dayLabel)}</div>${table}`;
 }
 
 /** "Dias acumulados" mode for the per-collaborator extract (RankingPage): day
