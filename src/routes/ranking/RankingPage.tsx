@@ -268,8 +268,14 @@ export function RankingPage() {
               ))}
           </select>
         </div>
-        <div className="flex flex-wrap gap-2 mb-3">
-          {RANKING_COLS.filter((c) => !hiddenCategories.includes(c.key)).map((c) => {
+        {/* Todas as categorias do sistema ficam disponíveis aqui, mesmo uma
+            que a loja tenha ocultado do resto do app (ADM > Nomes das
+            Categorias) — esse extrato é uma ferramenta à parte, não a
+            navegação normal, então não segue aquele filtro. Largura igual
+            pros 6 botões, ocupando a linha de ponta a ponta (grid em vez de
+            flex-wrap) em vez de cada um só do tamanho do próprio texto. */}
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${RANKING_COLS.length}, 1fr)`, gap: 8, marginBottom: 12 }}>
+          {RANKING_COLS.map((c) => {
             const checked = extratoCategorias.has(c.key);
             return (
               <button
@@ -286,11 +292,14 @@ export function RankingPage() {
                   background: checked ? c.cor : 'transparent',
                   border: `1px solid ${c.cor}`,
                   color: checked ? '#0b0e1d' : c.cor,
-                  padding: '6px 12px',
+                  padding: '6px 4px',
                   borderRadius: 10,
                   cursor: 'pointer',
                   fontSize: 12,
                   fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
                 }}
               >
                 {checked ? '✓ ' : ''}
@@ -301,7 +310,11 @@ export function RankingPage() {
         </div>
         <div className="mb-3">
           <label className="block text-xs text-slate-400 mb-1">Modo de exibição dos dias</label>
-          <div className="flex flex-wrap gap-2">
+          {/* Mesma ideia da linha de categorias acima: Dias individuais/
+              acumulados e Preparar impressão lado a lado, largura igual,
+              ocupando a linha inteira — em vez de "Preparar impressão"
+              ficar numa linha própria embaixo. */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
             {(
               [
                 { key: 'dia' as const, label: '📅 Dias individuais', title: 'Cada dia mostra só o que foi vendido naquele dia.' },
@@ -320,26 +333,29 @@ export function RankingPage() {
                   background: extratoModo === m.key ? '#ffb700' : 'transparent',
                   border: '1px solid #ffb700',
                   color: extratoModo === m.key ? '#231a02' : '#ffb700',
-                  padding: '6px 12px',
+                  padding: '6px 4px',
                   borderRadius: 10,
                   cursor: 'pointer',
                   fontSize: 12,
                   fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
                 }}
               >
                 {m.label}
               </button>
             ))}
+            <button
+              onClick={handlePrintColaboradorExtract}
+              disabled={!extratoMatricula || extratoCategorias.size === 0}
+              className="rounded-lg border text-sm font-semibold disabled:opacity-50"
+              style={{ borderColor: '#ffb700', color: '#ffb700', padding: '6px 4px' }}
+            >
+              🖨️ Preparar impressão
+            </button>
           </div>
         </div>
-        <button
-          onClick={handlePrintColaboradorExtract}
-          disabled={!extratoMatricula || extratoCategorias.size === 0}
-          className="rounded-lg border px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
-          style={{ borderColor: '#ffb700', color: '#ffb700' }}
-        >
-          🖨️ Preparar impressão
-        </button>
       </div>
 
       {multiImages && (
