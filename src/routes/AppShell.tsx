@@ -10,6 +10,7 @@ import { BirthdayCelebrationHost } from '../components/BirthdayCelebration';
 import { ConquistaCelebrationHost } from '../components/ConquistaCelebration';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { HamburgerIcon, MedalIcon } from '../components/icons/NavIcons';
+import { ImportProgressBadge } from '../components/ImportProgressBadge';
 import { NotificationBell } from '../components/NotificationBell';
 import { PageLoading } from '../components/PageLoading';
 import { Sidebar } from '../components/Sidebar';
@@ -246,6 +247,7 @@ export function AppShell() {
                 )}
               </div>
               <div className="flex items-center gap-2 justify-self-end">
+                <ImportProgressBadge />
                 <ChampionHeaderButton />
                 <Link
                   to="/conquistas"

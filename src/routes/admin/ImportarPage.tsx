@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PageLoading } from '../../components/PageLoading';
@@ -6,6 +7,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { DsmImageImportSection } from './DsmImageImportSection';
 import { DsmImportSection } from './DsmImportSection';
 import { DsmImportHistoryPanel } from '../../components/dsm/DsmImportHistoryPanel';
+import { CircularGauge } from '../../components/CircularGauge';
 import { HelpTip } from '../../components/HelpTip';
 import { Spinner } from '../../components/Spinner';
 import { classifyProductTier } from '../../lib/business/classification';
@@ -14,6 +16,7 @@ import { firstName, normalize } from '../../lib/business/normalize';
 import { dateFromCell, idFromCell, normalizeMatricula, parseNumeroBR } from '../../lib/business/parsing';
 import { buildClassificationInputs } from '../../lib/mappers';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
+import { setImportProgress } from '../../lib/importProgress';
 import { yieldToMain } from '../../lib/scheduler';
 import {
   useBrandKeywords,
@@ -98,6 +101,7 @@ interface AnalysisOptions {
 
 export function ImportarPage() {
   const { profile } = useAuth();
+  const queryClient = useQueryClient();
   const { data: catalog } = useCatalog();
   const { data: products } = useProducts();
   const { data: brandKeywords } = useBrandKeywords();
@@ -137,6 +141,12 @@ export function ImportarPage() {
   >(null);
   const [analysisOptions, setAnalysisOptions] = useState<AnalysisOptions>({ produtos: true, vendedores: true, listaVendas: true });
   const [summary, setSummary] = useState<SheetSummary | null>(null);
+  // Progresso numérico da gravação (passo "Gravando vendas…" de
+  // handleConfirm) — só pra desenhar o anel de progresso nesta tela
+  // enquanto ela está montada; sobrevive à navegação separadamente via
+  // setImportProgress (lib/importProgress.ts), que é o que alimenta a
+  // barrinha do topo quando o ADM sai desta tela no meio da gravação.
+  const [writeProgress, setWriteProgress] = useState<{ inserted: number; total: number } | null>(null);
 
   if (!catalog || !products || !brandKeywords || !exclusiveBrands) {
     return <PageLoading />;
@@ -429,8 +439,14 @@ export function ImportarPage() {
       });
 
       setProgress(`Gravando vendas… 0/${rows.length}`);
+      if (rows.length > 0) {
+        setWriteProgress({ inserted: 0, total: rows.length });
+        setImportProgress({ phase: 'writing', inserted: 0, total: rows.length });
+      }
       const { insertedCount, rejected } = await insertSalesInBatches(rows, (inserted, total) => {
         setProgress(`Gravando vendas… ${inserted}/${total}`);
+        setWriteProgress({ inserted, total });
+        setImportProgress({ phase: 'writing', inserted, total });
         updateSalesImportProgress(importRow.id, { insertedRows: inserted });
       });
       const processingMs = Math.round(performance.now() - startedAt);
@@ -461,12 +477,33 @@ export function ImportarPage() {
         replacedDates: replaceDates,
         rejected,
       });
-      refetchSales();
+      // "Disponível para visualização" não é só a última linha gravada — o
+      // resto do sistema (Dashboard, Ranking, Categoria) lê de outras
+      // queries próprias (useSalesInRange/useMobileCategoryTotals), com
+      // staleTime de 2min (ver App.tsx), que não se dariam conta sozinhas
+      // de que novos dados chegaram a tempo. invalidateQueries({queryKey:
+      // ['sales']}) já cobre toda query cuja chave começa com 'sales'
+      // (inclui 'sales'/'range'/'month', ver useSales/useSalesInRange em
+      // queries.ts) — só falta mobile_category_totals (RPC agregada) e o
+      // próprio histórico/resumo mensal desta tela à parte. Só marca a
+      // importação como concluída (some a barrinha do topo) depois que
+      // essas buscas realmente terminam, não assim que são apenas
+      // disparadas — senão a barrinha sumiria antes dos dados existirem de
+      // verdade no cache.
+      setImportProgress({ phase: 'finalizing', inserted: insertedCount, total: rows.length });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['sales'] }),
+        queryClient.invalidateQueries({ queryKey: ['mobile_category_totals'] }),
+        queryClient.invalidateQueries({ queryKey: ['sales_month_totals'] }),
+        queryClient.invalidateQueries({ queryKey: ['sales_imports'] }),
+      ]);
     } catch (err) {
       setError(translateDbError(err));
       setStep('verify');
     } finally {
       setProgress(null);
+      setWriteProgress(null);
+      setImportProgress(null);
     }
   }
 
@@ -718,10 +755,27 @@ export function ImportarPage() {
       {step === 'done' && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           {progress && (
-            <p className="text-sm text-cyan-400 flex items-center gap-2">
-              <Spinner size={16} color={NEON_CYAN} />
-              {progress}
-            </p>
+            <>
+              {writeProgress ? (
+                <div className="flex flex-col items-center gap-2 py-2">
+                  <div style={{ width: 96, height: 96 }}>
+                    <CircularGauge
+                      pct={writeProgress.total > 0 ? Math.round((writeProgress.inserted / writeProgress.total) * 100) : 0}
+                      color={NEON_CYAN}
+                      trackColor="#212948"
+                      strokeWidth={9}
+                      label={`${writeProgress.total > 0 ? Math.round((writeProgress.inserted / writeProgress.total) * 100) : 0}%`}
+                    />
+                  </div>
+                  <p className="text-sm text-cyan-400">{progress}</p>
+                </div>
+              ) : (
+                <p className="text-sm text-cyan-400 flex items-center gap-2">
+                  <Spinner size={16} color={NEON_CYAN} />
+                  {progress}
+                </p>
+              )}
+            </>
           )}
           {confirmResult && (
             <>

@@ -5,6 +5,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { BackButton } from '../../components/BackButton';
 import { ConquistaCelebrationHost } from '../../components/ConquistaCelebration';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
+import { ImportProgressBadge } from '../../components/ImportProgressBadge';
 import { PageLoading } from '../../components/PageLoading';
 import { Sidebar } from '../../components/Sidebar';
 import { VersionFooter } from '../../components/VersionFooter';
@@ -133,6 +134,7 @@ export function MobileAdminShell() {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <ImportProgressBadge />
           {/* Relocated from the (now-removed) category icon grid, where it
               lived as a badge on the ADM icon — that grid is gone (categories
               now live only in the drawer), so this is the only remaining

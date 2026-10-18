@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import type { CategoryKey, GoalCategoryKey } from '../../lib/business/classification';
 import { getGoal, getSuperMeta } from '../../lib/business/goals';
@@ -6,11 +6,11 @@ import { matchesSpecialList, type SpecialListItem } from '../../lib/business/sum
 import type { Collaborator, DsmRecord, Goal, Sale } from '../../lib/business/types';
 import { fmtMoney } from '../../lib/format';
 
-// Chip replaced by DSM here (per user request) — this chart keeps a fixed
-// single tab per category (not a per-store hidden/ativo toggle like the
-// Ranking screens), so unlike RankFilterBar's "hide Chip, add DSM as an
-// extra tab" this is a direct 1:1 swap of the old Chip slot.
-export type ChartCategoryKey = CategoryKey | 'LEVMEL' | 'DSM';
+// Esta tela não tem mais seletor de categoria próprio — segue sempre a
+// categoria escolhida no filtro de "Ranking Geral" logo acima (ver
+// chartCategoryFromRankFilter em DashboardPage.tsx), em vez de ter seu
+// próprio conjunto de botões que podia divergir do resto da tela.
+export type ChartCategoryKey = CategoryKey | 'LEVMEL' | 'CHIP' | 'DSM';
 
 export const CHART_CATEGORIES: { key: ChartCategoryKey; titulo: string; color: string }[] = [
   { key: 'MER', titulo: 'Mercadoria Geral', color: '#ff6a00' },
@@ -18,6 +18,7 @@ export const CHART_CATEGORIES: { key: ChartCategoryKey; titulo: string; color: s
   { key: 'GEN', titulo: 'Genéricos', color: '#14ff00' },
   { key: 'MP', titulo: 'Marcas Exclusivas', color: '#a82bff' },
   { key: 'LEVMEL', titulo: 'Levmel', color: '#ffb700' },
+  { key: 'CHIP', titulo: 'Chip', color: '#00e5ff' },
   { key: 'DSM', titulo: 'DSM', color: '#00e0c0' },
 ];
 
@@ -29,12 +30,12 @@ export interface DailyPoint {
   hitSuper: boolean;
 }
 
-/** LEVMEL/DSM goals and rankings are tracked in units/conversões, not R$
+/** LEVMEL/CHIP/DSM goals and rankings are tracked in units/conversões, not R$
  * (same convention as everywhere else those categories appear — ranking
  * podiums, category gauges), so this chart's day totals, axis, and tooltip
  * all switch to unit counts for them instead of currency. */
 export function isUnitChartCategory(catKey: ChartCategoryKey): boolean {
-  return catKey === 'LEVMEL' || catKey === 'DSM';
+  return catKey === 'LEVMEL' || catKey === 'CHIP' || catKey === 'DSM';
 }
 
 export function formatChartValue(value: number, isUnit: boolean, unitLabel = 'un.'): string {
@@ -43,13 +44,13 @@ export function formatChartValue(value: number, isUnit: boolean, unitLabel = 'un
 
 /** Buckets `salesData` by day for the reference month (monthFirst..monthLast)
  * and one category — MER counts every sale (store total, same convention as
- * everywhere else this category is treated as "all sales"), LEVMEL matches
- * by product-name keyword (matchesSpecialList, it's not a `grupo` value) and
- * sums quantity sold instead of R$, the rest by `grupo`. DSM doesn't come
- * from `sales` at all (see dsm.ts) — it buckets `dsmRecords` by day instead,
- * summing `quantidade` for collaborators that still exist (same filter
- * computeDsmSummary already applies). Every calendar day gets a point even
- * with no sales (valor 0), so the x-axis never skips a day. */
+ * everywhere else this category is treated as "all sales"), LEVMEL/CHIP
+ * match by product-name keyword (matchesSpecialList, they're not a `grupo`
+ * value) and sum quantity sold instead of R$, the rest by `grupo`. DSM
+ * doesn't come from `sales` at all (see dsm.ts) — it buckets `dsmRecords` by
+ * day instead, summing `quantidade` for collaborators that still exist
+ * (same filter computeDsmSummary already applies). Every calendar day gets a
+ * point even with no sales (valor 0), so the x-axis never skips a day. */
 function computeDailyPoints(
   salesData: Sale[],
   dsmRecords: DsmRecord[],
@@ -71,7 +72,7 @@ function computeDailyPoints(
       byDay.set(r.dataISO, (byDay.get(r.dataISO) ?? 0) + r.quantidade);
     });
   } else {
-    const list = isUnit ? specialLists?.levmel : undefined;
+    const list = catKey === 'LEVMEL' ? specialLists?.levmel : catKey === 'CHIP' ? specialLists?.chip : undefined;
     salesData.forEach((s) => {
       if (!s.dataISO || s.dataISO < monthFirst || s.dataISO > monthLast) return;
       const matches = catKey === 'MER' ? true : isUnit ? matchesSpecialList(s.produto, list) : s.grupo === catKey;
@@ -111,6 +112,10 @@ function niceAxisMax(values: number[]): number {
 }
 
 interface DailyEvolutionChartProps {
+  /** Categoria ativa — vem do filtro de "Ranking Geral" do Dashboard
+   * (chartCategoryFromRankFilter), não mais de um estado próprio deste
+   * componente. */
+  catKey: ChartCategoryKey;
   salesData: Sale[];
   collaboratorsData: Collaborator[];
   goals: Record<GoalCategoryKey, Goal | undefined>;
@@ -143,12 +148,11 @@ function unitLabelFor(catKey: ChartCategoryKey): string {
 // max over the observed data: R$0,00 at the bottom, that category's daily
 // Meta Geral in the middle, its daily Super Meta at the top — so the same
 // bar height always means the same progress toward that day's targets,
-// whichever category tab is active. A category with no Super Meta
-// configured (LEVMEL/DSM typically don't use one) falls back to 1.5× its
-// daily meta as headroom; with neither goal configured, falls back to the
-// old observed-max heuristic so the chart still reads sensibly.
-export function useDailyEvolutionChart({ salesData, collaboratorsData, goals, specialLists, monthFirst, monthLast, dsmRecords, dsmLabel }: DailyEvolutionChartProps) {
-  const [catKey, setCatKey] = useState<ChartCategoryKey>('MER');
+// whichever category is active. A category with no Super Meta configured
+// (LEVMEL/CHIP/DSM typically don't use one) falls back to 1.5× its daily
+// meta as headroom; with neither goal configured, falls back to the old
+// observed-max heuristic so the chart still reads sensibly.
+export function useDailyEvolutionChart({ catKey, salesData, collaboratorsData, goals, specialLists, monthFirst, monthLast, dsmRecords, dsmLabel }: DailyEvolutionChartProps) {
   const categoryLabels = useCategoryLabelMap();
   const categories = useMemo(
     () => CHART_CATEGORIES.map((c) => (c.key === 'DSM' ? { ...c, titulo: dsmLabel ?? c.titulo } : { ...c, titulo: categoryLabels[c.key] ?? c.titulo })),
@@ -182,11 +186,11 @@ export function useDailyEvolutionChart({ salesData, collaboratorsData, goals, sp
     return { axisTop: fallback, axisMid: fallback / 2 };
   }, [metaDiaria, superMetaDiaria, points]);
 
-  return { catKey, setCatKey, active, isUnit, unitLabel, points, axisTop, axisMid, categories };
+  return { active, isUnit, unitLabel, points, axisTop, axisMid };
 }
 
 export function DailyEvolutionChart(props: DailyEvolutionChartProps) {
-  const { catKey, setCatKey, active, isUnit, unitLabel, points, axisTop, axisMid, categories } = useDailyEvolutionChart(props);
+  const { active, isUnit, unitLabel, points, axisTop, axisMid } = useDailyEvolutionChart(props);
   const CHART_H = 170;
 
   return (
@@ -195,29 +199,10 @@ export function DailyEvolutionChart(props: DailyEvolutionChartProps) {
         <h3 className="text-cyan-400 font-semibold text-sm" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
           EVOLUÇÃO DIÁRIA
         </h3>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {categories.map((c) => (
-            <button
-              key={c.key}
-              onClick={() => setCatKey(c.key)}
-              style={{
-                border: `1px solid ${c.key === catKey ? c.color : '#212948'}`,
-                background: c.key === catKey ? c.color : 'transparent',
-                color: c.key === catKey ? '#0b0e1d' : '#8b90bf',
-                borderRadius: 8,
-                padding: '4px 9px',
-                fontSize: 10,
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '.03em',
-                whiteSpace: 'nowrap',
-                cursor: 'pointer',
-              }}
-            >
-              {c.titulo}
-            </button>
-          ))}
-        </div>
+        {/* Sem botões próprios de categoria — o rótulo só indica qual
+            categoria (a mesma do filtro de "Ranking Geral" acima) este
+            gráfico está mostrando no momento. */}
+        <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: active.color }}>{active.titulo}</span>
       </div>
 
       {/* `overflowX: 'auto'` here makes the browser force overflowY to

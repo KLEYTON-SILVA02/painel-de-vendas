@@ -3,7 +3,7 @@ import { PageError } from '../../components/PageError';
 import { PageLoading } from '../../components/PageLoading';
 import { HelpTip } from '../../components/HelpTip';
 import { useAuth } from '../../auth/AuthContext';
-import { DailyEvolutionChart, formatChartValue } from '../../components/dashboard/DailyEvolutionChart';
+import { DailyEvolutionChart, formatChartValue, type ChartCategoryKey } from '../../components/dashboard/DailyEvolutionChart';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { SemicircleGauge } from '../../components/SemicircleGauge';
 import { SidebarCalendarCard } from '../../components/SidebarCalendarCard';
@@ -77,6 +77,22 @@ const RANK_FILTERS: { k: RankFilter; l: string }[] = [
   { k: 'GEN', l: 'Gen/Sim' },
   { k: 'MP', l: 'Marcas Excl.' },
 ];
+
+// EVOLUÇÃO DIÁRIA não tem mais filtro de categoria próprio — segue sempre o
+// mesmo filtro de "Ranking Geral" logo acima (rankFilter). As categorias se
+// correspondem 1:1, exceto Dinâmicas: o gráfico não tem lógica própria para
+// casar produtos pela regra de uma Dinâmica dia a dia (diferente do ranking,
+// que já tem computeDinamicaRanking para o período inteiro), então cai no
+// mesmo "Mercadoria Geral" que resolveRankFilterParams já usa quando uma
+// Dinâmica não é encontrada.
+function chartCategoryFromRankFilter(rankFilter: RankFilter): ChartCategoryKey {
+  if (rankFilter === 'ALL' || rankFilter.startsWith('DIN:')) return 'MER';
+  // .startsWith() above isn't a type guard, so TS can't narrow the
+  // template-literal DIN: member out on its own (same situation already
+  // noted in resolveRankFilterParams below) — the remaining values here are
+  // always 'DERM'|'GEN'|'MP'|'LEVMEL'|'CHIP'|'DSM', all valid ChartCategoryKeys.
+  return rankFilter as ChartCategoryKey;
+}
 
 // Ported 1:1 from legacy/index-original.html (resolveRankFilterParams()).
 function resolveRankFilterParams(
@@ -810,6 +826,7 @@ export function DashboardPage() {
             capped at the left column's ~70%. */}
         <div className="lg:col-start-1 lg:row-start-3 lg:col-span-2 min-w-0">
           <DailyEvolutionChart
+            catKey={chartCategoryFromRankFilter(rankFilter)}
             salesData={salesData}
             collaboratorsData={collaboratorsData}
             goals={goals}
