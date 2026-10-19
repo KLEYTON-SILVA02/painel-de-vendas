@@ -1027,20 +1027,30 @@ export function useExitBuilderSession() {
 }
 
 /** Ciclo de uso (migration 0100) — inicia ou renova o ciclo de uma loja:
- * sempre uma linha NOVA em `store_billing_cycles` (nunca um update), a
- * partir de hoje. `confirmed_by` é preenchido pelo próprio banco
- * (`default auth.uid()`) — só quem está em `platform_builders` consegue
- * inserir (RLS), então só o ADM CONSTRUTOR chega a chamar isto. */
+ * sempre uma linha NOVA em `store_billing_cycles` (nunca um update).
+ * `startedAt` é opcional — quando omitido, usa hoje; o ADM CONSTRUTOR pode
+ * escolher outra data de início pelo calendário na tela. `confirmed_by` é
+ * preenchido pelo próprio banco (`default auth.uid()`) — só quem está em
+ * `platform_builders` consegue inserir (RLS), então só o ADM CONSTRUTOR
+ * chega a chamar isto. */
 export function useStartOrRenewBillingCycle() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ storeId, cycleType }: { storeId: string; cycleType: BillingCycleType }) => {
-      const startedAt = todayISO();
-      const endsAt = addDaysISO(startedAt, BILLING_CYCLE_DAYS[cycleType]);
+    mutationFn: async ({
+      storeId,
+      cycleType,
+      startedAt,
+    }: {
+      storeId: string;
+      cycleType: BillingCycleType;
+      startedAt?: string;
+    }) => {
+      const resolvedStartedAt = startedAt || todayISO();
+      const endsAt = addDaysISO(resolvedStartedAt, BILLING_CYCLE_DAYS[cycleType]);
       const { error } = await supabase.from('store_billing_cycles').insert({
         store_id: storeId,
         cycle_type: cycleType,
-        started_at: startedAt,
+        started_at: resolvedStartedAt,
         ends_at: endsAt,
       });
       if (error) throw error;

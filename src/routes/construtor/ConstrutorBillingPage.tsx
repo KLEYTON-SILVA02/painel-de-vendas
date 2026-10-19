@@ -206,6 +206,10 @@ function StoreBillingRow({
 }) {
   const startOrRenew = useStartOrRenewBillingCycle();
   const [cycleType, setCycleType] = useState<BillingCycleType>('30');
+  // Data de início do ciclo, escolhida pelo calendário — por padrão hoje,
+  // mas o ADM CONSTRUTOR pode optar por outra (por exemplo, para registrar
+  // um pagamento combinado para começar a valer numa data futura).
+  const [startedAt, setStartedAt] = useState(todayISO());
 
   const remaining = store.ends_at ? daysRemaining(store.ends_at, todayISO()) : null;
   const blocked = remaining !== null && remaining < -BILLING_GRACE_DAYS;
@@ -213,7 +217,7 @@ function StoreBillingRow({
   async function handleConfirm() {
     onError('');
     try {
-      await startOrRenew.mutateAsync({ storeId: store.store_id, cycleType });
+      await startOrRenew.mutateAsync({ storeId: store.store_id, cycleType, startedAt });
       onCancelRenew();
     } catch (e) {
       onError(errorMessage(e, 'Falha ao iniciar/renovar o ciclo.'));
@@ -252,6 +256,15 @@ function StoreBillingRow({
 
       {renewing && (
         <div className="flex items-center gap-2 mt-3 flex-wrap">
+          <label className="flex items-center gap-1.5 text-xs text-slate-500">
+            Início
+            <input
+              type="date"
+              value={startedAt}
+              onChange={(e) => setStartedAt(e.target.value)}
+              className="input !w-auto"
+            />
+          </label>
           <select value={cycleType} onChange={(e) => setCycleType(e.target.value as BillingCycleType)} className="input !w-auto">
             {Object.entries(BILLING_CYCLE_LABELS).map(([key, label]) => (
               <option key={key} value={key}>
