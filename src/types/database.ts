@@ -1571,6 +1571,44 @@ export type Database = {
           },
         ]
       }
+      store_billing_cycles: {
+        Row: {
+          confirmed_by: string
+          created_at: string
+          cycle_type: string
+          ends_at: string
+          id: string
+          started_at: string
+          store_id: string
+        }
+        Insert: {
+          confirmed_by?: string
+          created_at?: string
+          cycle_type: string
+          ends_at: string
+          id?: string
+          started_at: string
+          store_id: string
+        }
+        Update: {
+          confirmed_by?: string
+          created_at?: string
+          cycle_type?: string
+          ends_at?: string
+          id?: string
+          started_at?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_billing_cycles_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       store_settings: {
         Row: {
           bio_weights: Json
@@ -1863,6 +1901,18 @@ export type Database = {
           setor: string
           store_id: string
           username: string
+        }[]
+      }
+      list_stores_billing_for_builder: {
+        Args: never
+        Returns: {
+          cycle_type: string | null
+          ends_at: string | null
+          nome_loja: string
+          numero_loja: string
+          started_at: string | null
+          status: string
+          store_id: string
         }[]
       }
       list_stores_for_builder: {

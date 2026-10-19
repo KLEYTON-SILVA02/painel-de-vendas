@@ -879,6 +879,42 @@ export function useStoresForBuilder(enabled = true) {
   });
 }
 
+/** Ciclo de uso mais recente da própria loja (migration 0100) — alimenta o
+ * ícone de contagem na Tela Inicial e o aviso de bloqueio no AppShell.
+ * RLS já restringe a `store_id = current_store_id()`, então não precisa
+ * filtro explícito aqui; `null` quando a loja nunca teve nenhum ciclo
+ * cadastrado (nunca é tratado como bloqueado nesse caso). */
+export function useStoreBillingCycle() {
+  return useQuery({
+    queryKey: ['store_billing_cycle'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('store_billing_cycles')
+        .select('cycle_type, started_at, ends_at')
+        .order('ends_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+/** Ciclo de uso de todas as lojas, para a tela cross-loja do ADM CONSTRUTOR
+ * (/construtor) — a RPC em si já barra qualquer chamador que não esteja em
+ * platform_builders (retorna vazio), mesma garantia de list_stores_for_builder. */
+export function useStoresBillingForBuilder(enabled = true) {
+  return useQuery({
+    queryKey: ['stores_billing_for_builder'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('list_stores_billing_for_builder');
+      if (error) throw error;
+      return data;
+    },
+    enabled,
+  });
+}
+
 /** On-demand row count for the "Excluir dados" danger zone (ADM >
  * Configurações) — a plain async lookup rather than a cached query hook,
  * since it's only ever used right before a destructive action to show

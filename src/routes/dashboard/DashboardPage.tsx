@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from
 import { PageError } from '../../components/PageError';
 import { PageLoading } from '../../components/PageLoading';
 import { HelpTip } from '../../components/HelpTip';
+import { BillingCycleClock } from '../../components/BillingCycleClock';
 import { useAuth } from '../../auth/AuthContext';
 import { DailyEvolutionChart, formatChartValue, type ChartCategoryKey } from '../../components/dashboard/DailyEvolutionChart';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
@@ -40,6 +41,7 @@ import {
   useSalesInRange,
   useSpecialLists,
   useStore,
+  useStoreBillingCycle,
   useStoreSettings,
 } from '../../lib/queries';
 import { useDateRange, type RankFilter } from '../DateRangeContext';
@@ -305,6 +307,7 @@ export function DashboardPage() {
   const { data: goals, isError: goalsError } = useGoals();
   const { data: storeSettings, isError: storeSettingsError } = useStoreSettings();
   const { data: store } = useStore();
+  const { data: billingCycle } = useStoreBillingCycle();
   const { data: dsmRecords } = useDsmRecords();
   const { data: categoryTypes } = useCategoryTypes();
   const dsmCategory = categoryTypes?.find((c) => c.chave === 'dsm');
@@ -725,6 +728,7 @@ export function DashboardPage() {
             <div style={{ alignSelf: 'stretch', width: 1, background: '#212948', margin: '5px 0' }} />
 
             <BestDayCard bestDay={bestDay} expanded={bestDayExpanded} onToggle={() => setBestDayExpanded((v) => !v)} />
+            {billingCycle && <BillingCycleClock cycle={billingCycle} />}
           </div>
           <div style={{ position: 'relative', height: 8, borderRadius: 5, background: '#080818', border: '1px solid #212948', overflow: 'hidden', marginTop: 8 }}>
             <div style={{ height: '100%', width: `${barPct}%`, background: 'linear-gradient(90deg,#00f0ff,#a82bff)', borderRadius: 5 }} />

@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { addDaysISO, type BillingCycleType, BILLING_CYCLE_DAYS } from './business/billingCycle';
 import type { CategoryKey, GoalCategoryKey } from './business/classification';
+import { todayISO } from './dateRange';
 import { normalize } from './business/normalize';
 import { normalizeMatricula } from './business/parsing';
 import { updateOwnCollaboratorPhoto, updateOwnCollaboratorUsername } from './collaborators';
@@ -1021,5 +1023,28 @@ export function useExitBuilderSession() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+/** Ciclo de uso (migration 0100) — inicia ou renova o ciclo de uma loja:
+ * sempre uma linha NOVA em `store_billing_cycles` (nunca um update), a
+ * partir de hoje. `confirmed_by` é preenchido pelo próprio banco
+ * (`default auth.uid()`) — só quem está em `platform_builders` consegue
+ * inserir (RLS), então só o ADM CONSTRUTOR chega a chamar isto. */
+export function useStartOrRenewBillingCycle() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ storeId, cycleType }: { storeId: string; cycleType: BillingCycleType }) => {
+      const startedAt = todayISO();
+      const endsAt = addDaysISO(startedAt, BILLING_CYCLE_DAYS[cycleType]);
+      const { error } = await supabase.from('store_billing_cycles').insert({
+        store_id: storeId,
+        cycle_type: cycleType,
+        started_at: startedAt,
+        ends_at: endsAt,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['stores_billing_for_builder'] }),
   });
 }
