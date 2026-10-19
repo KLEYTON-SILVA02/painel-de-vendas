@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Suspense, lazy, useState } from 'react';
 import { Link, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { BillingBlockedNotice } from '../components/BillingBlockedNotice';
 import { LockedStoreNotice } from '../components/LockedStoreNotice';
 import { BackButton } from '../components/BackButton';
 import { ChampionHeaderButton } from '../components/dashboard/ChampionOfDay';
@@ -20,7 +21,9 @@ import type { GoalCategoryKey } from '../lib/business/classification';
 import type { Horario } from '../lib/business/horario';
 import { supabase } from '../lib/supabase';
 import { useIsMobileV2 } from '../lib/useIsMobileV2';
-import { useIsPlatformBuilder, useStoreSettings } from '../lib/queries';
+import { isBillingBlocked } from '../lib/business/billingCycle';
+import { todayISO } from '../lib/dateRange';
+import { useIsPlatformBuilder, useStoreBillingCycle, useStoreSettings } from '../lib/queries';
 import { DateRangeProvider } from './DateRangeContext';
 import { HelpModeProvider, useHelpMode } from './HelpModeContext';
 
@@ -121,6 +124,7 @@ export function AppShell() {
     },
     enabled: !!profile,
   });
+  const billingQuery = useStoreBillingCycle();
 
   if (!profile) {
     // A genuinely failed/timed-out profile fetch (flaky connection, a slow
@@ -170,6 +174,17 @@ export function AppShell() {
   }
   if (storeQuery.data && storeQuery.data.status !== 'active') {
     return <LockedStoreNotice status={storeQuery.data.status} />;
+  }
+
+  // Ciclo de uso (migration 0100) — ver src/lib/business/billingCycle.ts.
+  // Deliberadamente fora de current_store_id()/RLS (Opção B do artefato
+  // "Ciclo de Uso e Suspensão por Loja"): um bug aqui só afeta esta
+  // checagem na entrada do app, nunca o resto do sistema.
+  if (billingQuery.isLoading) {
+    return <PageLoading fullScreen />;
+  }
+  if (isBillingBlocked(billingQuery.data, todayISO())) {
+    return <BillingBlockedNotice />;
   }
 
   // Collaborators get a wholly separate, minimal tree — not just hidden nav

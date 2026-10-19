@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { PASSWORD_HINT, PASSWORD_MIN_LENGTH, validatePassword } from '../lib/passwordPolicy';
 import { supabase } from '../lib/supabase';
 import { buildWhatsAppLink } from '../lib/whatsapp';
@@ -9,7 +9,7 @@ import whatsappQr from '../assets/brand/whatsapp-qr.jpg';
 import instagramQr from '../assets/brand/instagram-qr.jpg';
 import emailQr from '../assets/brand/email-qr.jpg';
 
-type Tab = 'admin' | 'colaborador';
+type Tab = 'admin' | 'colaborador' | 'construtor';
 type SocialModal = 'whatsapp' | 'instagram' | 'email' | null;
 
 // Device-aware: opens web.whatsapp.com on desktop (skipping the native-app
@@ -47,9 +47,12 @@ export function LoginPage() {
           <button type="button" className={tab === 'colaborador' ? 'active' : ''} onClick={() => setTab('colaborador')}>
             Colaborador
           </button>
+          <button type="button" className={tab === 'construtor' ? 'active' : ''} onClick={() => setTab('construtor')}>
+            Construtor
+          </button>
         </div>
 
-        {tab === 'admin' ? <AdminLoginForm /> : <CollaboratorLoginForm />}
+        {tab === 'admin' ? <AdminLoginForm /> : tab === 'colaborador' ? <CollaboratorLoginForm /> : <ConstrutorLoginForm />}
 
         <div className="mv2-divider">ou</div>
 
@@ -324,6 +327,72 @@ function CollaboratorLoginForm() {
 
       <button type="submit" disabled={busy} className="mv2-btn-primary">
         Entrar
+      </button>
+      <FieldError message={error} />
+    </form>
+  );
+}
+
+// Terceiro modo de login — "Construtor" (ver artefato "Ciclo de Uso e
+// Suspensão por Loja", seção sobre essa variação). Mesmo login/senha de
+// sempre (mesma lógica de identificador da aba Administrador — e-mail ou
+// usuário, resolvido via resolve_admin_email); a única diferença é que, ao
+// entrar, cai direto em /construtor em vez de na própria loja — uma rota
+// separada, gateada só por platform_builders (ver App.tsx), que nunca
+// reaproveita o fluxo de profile/store_id do resto do sistema. Erro genérico
+// tanto para credencial errada quanto para conta fora da allow-list — não
+// revela qual dos dois foi.
+function ConstrutorLoginForm() {
+  const navigate = useNavigate();
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      const trimmed = identifier.trim();
+      let loginEmail = trimmed;
+      if (!trimmed.includes('@')) {
+        const { data: resolved, error: resolveErr } = await supabase.rpc('resolve_admin_email', { p_username: trimmed });
+        if (resolveErr || !resolved) {
+          setError('Usuário/e-mail ou senha inválidos.');
+          return;
+        }
+        loginEmail = resolved;
+      }
+      const { error: signInErr } = await supabase.auth.signInWithPassword({ email: loginEmail, password });
+      if (signInErr) {
+        setError('Usuário/e-mail ou senha inválidos.');
+        return;
+      }
+      navigate('/construtor');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <label className="mv2-input-group">
+        <UserIcon />
+        <input
+          type="text"
+          required
+          placeholder="E-mail ou usuário"
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
+        />
+      </label>
+      <label className="mv2-input-group">
+        <LockIcon />
+        <input type="password" required placeholder="Senha" value={password} onChange={(e) => setPassword(e.target.value)} />
+      </label>
+      <button type="submit" disabled={busy} className="mv2-btn-primary">
+        {busy ? 'Entrando…' : 'Entrar'}
       </button>
       <FieldError message={error} />
     </form>

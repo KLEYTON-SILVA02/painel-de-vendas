@@ -1,5 +1,6 @@
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { Suspense, lazy } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { LoginPage } from './auth/LoginPage';
@@ -10,6 +11,12 @@ import { useNativeAuthRefresh } from './lib/useNativeAuthRefresh';
 import { useNativeStatusBarInset } from './lib/useNativeStatusBarInset';
 import { AppShell } from './routes/AppShell';
 import { PrivacyPolicyPage } from './routes/PrivacyPolicyPage';
+
+// Terceiro modo de login ("Construtor") — rota própria, fora do fluxo
+// normal de profile/store_id (ver ConstrutorBillingPage.tsx e o artefato
+// "Ciclo de Uso e Suspensão por Loja"). Declarada antes do catch-all `*`
+// abaixo, então é alcançada independente do estado de sessão/profile.
+const ConstrutorGate = lazy(() => import('./routes/construtor/ConstrutorBillingPage').then((m) => ({ default: m.ConstrutorGate })));
 
 // Defaults (staleTime 0, refetchOnWindowFocus true) meant every navigation
 // and every tab/app focus re-ran every mounted query in the background —
@@ -65,6 +72,14 @@ function Root() {
           o revisor da Play Store/App Store, que nunca terá uma conta de
           colaborador/ADM. */}
       <Route path="/privacidade" element={<PrivacyPolicyPage />} />
+      <Route
+        path="/construtor"
+        element={
+          <Suspense fallback={<PageLoading fullScreen />}>
+            <ConstrutorGate />
+          </Suspense>
+        }
+      />
       <Route path="*" element={<AuthedRoot />} />
     </Routes>
   );
