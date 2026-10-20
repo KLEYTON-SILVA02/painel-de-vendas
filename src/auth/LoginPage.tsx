@@ -166,6 +166,7 @@ function AdminLoginForm() {
   // it first via resolve_admin_email (migration 0066), same anti-
   // enumeration shape as resolve_collaborator_email (ambiguous match or no
   // match both return null, and the login error message never says which).
+  const navigate = useNavigate();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
@@ -193,6 +194,12 @@ function AdminLoginForm() {
         }
         const { error: err } = await supabase.auth.signInWithPassword({ email: loginEmail, password });
         if (err) setError('Usuário/e-mail ou senha inválidos.');
+        // Sempre volta pra raiz do app, mesmo que o navegador esteja parado
+        // em /construtor (ex.: de uma visita anterior à aba Construtor) —
+        // sem isso, uma conta que também está na allow-list platform_builders
+        // cairia na tela cross-loja em vez da própria loja, mesmo tendo
+        // entrado pela aba Administrador.
+        else navigate('/');
       } else {
         const policyError = validatePassword(password);
         if (policyError) {
@@ -265,6 +272,7 @@ function AdminLoginForm() {
 }
 
 function CollaboratorLoginForm() {
+  const navigate = useNavigate();
   const [matricula, setMatricula] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
@@ -293,6 +301,9 @@ function CollaboratorLoginForm() {
       }
       const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
       if (signInErr) setError('Matrícula/usuário ou senha inválidos.');
+      // Mesma razão do AdminLoginForm: sempre volta pra raiz, mesmo que o
+      // navegador esteja parado em /construtor de uma visita anterior.
+      else navigate('/');
     } finally {
       setBusy(false);
     }
