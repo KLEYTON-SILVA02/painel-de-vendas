@@ -20,7 +20,7 @@ import {
 } from '../../components/icons/NavIcons';
 import { classifyProductTier } from '../../lib/business/classification';
 import { buildClassificationInputs } from '../../lib/mappers';
-import { useBrandKeywords, useCatalog, useExclusiveBrands, useProducts, useSales } from '../../lib/queries';
+import { useBrandKeywords, useCatalog, useDistinctProductsInSales, useExclusiveBrands, useProducts } from '../../lib/queries';
 
 // Ported 1:1 from legacy/index-original.html — ADMIN_SUBS + .admin-menu-grid
 // / .admin-card-btn, later extended with Ícones (Gerenciamento de Ícones).
@@ -50,28 +50,32 @@ const ADMIN_CARDS = [
 /** Count of distinct products seen in sales that never matched a specific
  * classification rule (catalog/keyword/heuristic) — the same "Pendentes de
  * Revisão" set Auditoria already lists, surfaced here as a notification
- * badge so an admin doesn't have to go looking for it. */
+ * badge so an admin doesn't have to go looking for it.
+ *
+ * Reads `distinct_products_in_sales()` (migration 0102) instead of the full
+ * `useSales()` history: classifyProductTier() depends only on (produto,
+ * codigo), so running it once per distinct pair gives the exact same
+ * pending count as running it per sale and deduping afterward (what this
+ * used to do) — just without downloading every sale row to compute a badge
+ * number. This was by far the heaviest query on the screen every admin
+ * opens first, and a real contributor to the store's Supabase bandwidth use. */
 function usePendingClassificationCount(): number | undefined {
-  const { data: sales } = useSales();
+  const { data: distinctProducts } = useDistinctProductsInSales();
   const { data: catalog } = useCatalog();
   const { data: products } = useProducts();
   const { data: brandKeywords } = useBrandKeywords();
   const { data: exclusiveBrands } = useExclusiveBrands();
-  // classifyProductTier() over the whole sales history, just to badge one
-  // icon — memoized so landing on this screen doesn't redo that full pass
-  // every time (e.g. the header's "Atualizar" button re-renders everything
-  // that reads any query, this card grid included).
   return useMemo(() => {
-    if (!sales || !catalog || !products || !brandKeywords || !exclusiveBrands) return undefined;
+    if (!distinctProducts || !catalog || !products || !brandKeywords || !exclusiveBrands) return undefined;
     const inputs = buildClassificationInputs(catalog, products, brandKeywords, exclusiveBrands);
     const pending = new Set<string>();
-    sales.forEach((s) => {
-      if (!s.produto) return;
-      const especifico = classifyProductTier(s.produto, s.codigo, inputs, false).categoria;
-      if (!especifico) pending.add(s.produto.toLowerCase());
+    distinctProducts.forEach((p) => {
+      if (!p.produto) return;
+      const especifico = classifyProductTier(p.produto, p.codigo, inputs, false).categoria;
+      if (!especifico) pending.add(p.produto.toLowerCase());
     });
     return pending.size;
-  }, [sales, catalog, products, brandKeywords, exclusiveBrands]);
+  }, [distinctProducts, catalog, products, brandKeywords, exclusiveBrands]);
 }
 
 export function AdminLandingPage() {

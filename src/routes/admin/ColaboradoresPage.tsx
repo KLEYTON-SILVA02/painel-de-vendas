@@ -16,7 +16,7 @@ import { VISITOR_CATEGORY_OPTIONS } from '../../lib/business/visitorCategories';
 import { fmtMoney } from '../../lib/format';
 import { useBulkUpsertCollaborators, useCreateCollaborator, useDeleteCollaborators, useUpdateCollaborator } from '../../lib/mutations';
 import { PASSWORD_HINT, PASSWORD_MIN_LENGTH, validatePassword } from '../../lib/passwordPolicy';
-import { useCategoryTypes, useCollaborators, useCollaboratorsWithLogin, useSales } from '../../lib/queries';
+import { useCategoryTypes, useCollaborators, useCollaboratorsWithLogin, useLastSaleDateByCollaborator } from '../../lib/queries';
 import { uploadPhoto } from '../../lib/storage';
 import { errorMessage } from '../../lib/errors';
 
@@ -58,7 +58,7 @@ export function ColaboradoresPage() {
   const { profile } = useAuth();
   const location = useLocation();
   const { data: collaborators } = useCollaborators();
-  const { data: sales } = useSales();
+  const { data: lastSaleRows } = useLastSaleDateByCollaborator();
   const { data: withLogin } = useCollaboratorsWithLogin();
   const { data: categoryTypes } = useCategoryTypes();
   const hasBio = (categoryTypes ?? []).some((c) => c.chave === 'biosintetica');
@@ -91,24 +91,24 @@ export function ColaboradoresPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openResetFor, collaborators]);
 
-  // A per-collaborator full re-scan of `sales` (routinely tens of
-  // thousands of rows) on every render — as this used to do by calling
-  // lastSaleDateFor(sales, c.matricula) inside the .map() below — meant
-  // typing a single character in the "Novo colaborador" form (or any other
-  // state change on this screen) re-ran collaborators.length × sales.length
-  // comparisons synchronously before the next paint. Indexing once per
-  // `sales` change instead turns that into a single O(sales) pass, reused
-  // for every collaborator's card.
+  // Grouped server-side by last_sale_date_by_collaborator() (migration
+  // 0102) instead of a per-collaborator full re-scan of every sale ever
+  // made — that used to download the store's entire sales history just to
+  // show "última venda em X" per card, a real contributor to the store's
+  // Supabase bandwidth use. Still merged by normalizeMatricula() here (not
+  // in SQL) since two raw matrícula spellings can represent the same
+  // collaborator — same merge-by-max logic as before, just over one row per
+  // raw matrícula instead of one row per sale.
   const lastSaleByMatricula = useMemo(() => {
     const map = new Map<string, string>();
-    (sales ?? []).forEach((s) => {
-      if (!s.dataISO) return;
-      const key = normalizeMatricula(s.matricula);
+    (lastSaleRows ?? []).forEach((r) => {
+      if (!r.last_sale_date) return;
+      const key = normalizeMatricula(r.matricula);
       const current = map.get(key);
-      if (!current || s.dataISO > current) map.set(key, s.dataISO);
+      if (!current || r.last_sale_date > current) map.set(key, r.last_sale_date);
     });
     return map;
-  }, [sales]);
+  }, [lastSaleRows]);
 
   // Grouped by setor, in SETOR_GROUP_ORDER — each group is its own
   // collapsible section (see the .map() below) instead of one flat grid, so
@@ -125,7 +125,7 @@ export function ColaboradoresPage() {
     return [...SETOR_GROUP_ORDER, OUTROS_SETOR].filter((s) => map.has(s)).map((s) => ({ setor: s, list: map.get(s)! }));
   }, [collaborators]);
 
-  if (!collaborators || !sales || !withLogin) return <PageLoading />;
+  if (!collaborators || !lastSaleRows || !withLogin) return <PageLoading />;
 
   function handleAdd(e: FormEvent) {
     e.preventDefault();
