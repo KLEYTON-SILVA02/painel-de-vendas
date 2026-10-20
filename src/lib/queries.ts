@@ -879,6 +879,39 @@ export function useStoresForBuilder(enabled = true) {
   });
 }
 
+/** Produtos distintos (produto + codigo) entre as vendas da loja, sem o
+ * detalhe de cada venda — migration 0102, resposta à cota de banda do
+ * Supabase estourada. `classifyProductTier()` depende só de (produto,
+ * codigo), então rodar sobre pares distintos dá o resultado idêntico a
+ * rodar sobre cada venda e descartar duplicatas depois, sem baixar
+ * dezenas de milhares de linhas só pra calcular um contador. */
+export function useDistinctProductsInSales(enabled = true) {
+  return useQuery({
+    queryKey: ['distinct_products_in_sales'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('distinct_products_in_sales');
+      if (error) throw error;
+      return data;
+    },
+    enabled,
+  });
+}
+
+/** Última data de venda por matrícula — migration 0102, mesma razão da
+ * query acima: ColaboradoresPage só precisa desse resumo pra mostrar
+ * "última venda em X" por colaborador, não do histórico de vendas inteiro. */
+export function useLastSaleDateByCollaborator(enabled = true) {
+  return useQuery({
+    queryKey: ['last_sale_date_by_collaborator'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('last_sale_date_by_collaborator');
+      if (error) throw error;
+      return data;
+    },
+    enabled,
+  });
+}
+
 /** Ciclo de uso mais recente da própria loja (migration 0100) — alimenta o
  * ícone de contagem na Tela Inicial e o aviso de bloqueio no AppShell.
  * RLS já restringe a `store_id = current_store_id()`, então não precisa

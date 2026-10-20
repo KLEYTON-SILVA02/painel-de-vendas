@@ -1876,6 +1876,13 @@ export type Database = {
         Args: { p_import_id: string }
         Returns: undefined
       }
+      distinct_products_in_sales: {
+        Args: never
+        Returns: {
+          codigo: string | null
+          produto: string
+        }[]
+      }
       enter_store_as_builder: {
         Args: { p_store_id: string }
         Returns: undefined
@@ -1884,6 +1891,13 @@ export type Database = {
       format_money_brl: { Args: { v: number }; Returns: string }
       is_admin: { Args: never; Returns: boolean }
       is_platform_builder: { Args: never; Returns: boolean }
+      last_sale_date_by_collaborator: {
+        Args: never
+        Returns: {
+          last_sale_date: string | null
+          matricula: string
+        }[]
+      }
       list_store_collaborators: {
         Args: never
         Returns: {
