@@ -69,8 +69,15 @@
 }
 
 /* ---------- 1. Login card ---------- */
+/* 328px → 410px (+25%): a terceira aba "Construtor" (ver LoginPage.tsx)
+   deixou os três rótulos do seletor de perfil apertados demais na largura
+   original, a ponto de "COLABORADOR" e "CONSTRUTOR" se sobreporem visualmente
+   — largura maior dá a cada botão espaço de sobra pro texto mais longo
+   ("ADMINISTRADOR") sem precisar comprimir fonte nenhuma no desktop/browser.
+   max-width:100% continua encolhendo em telas estreitas; o ajuste específico
+   pra caber as 3 abas em celulares pequenos vem no media query abaixo. */
 .mv2-login-card {
-  width: 328px;
+  width: 410px;
   max-width: 100%;
   margin: 48px auto;
   padding: 24px 28px;
@@ -130,11 +137,33 @@
   color: var(--mv2-texto);
   font-size: 11px;
   font-weight: 600;
+  text-align: center;
+  /* Com 3 abas (Administrador/Colaborador/Construtor), um rótulo mais
+     longo do que o espaço do seu próprio botão não deve mais vazar
+     visualmente por cima do botão vizinho (era o que causava
+     "COLABORADORCONSTRUTOR" grudados) — corta (sem reticências, o rótulo
+     já é só uma palavra) em vez de sobrepor. */
+  white-space: nowrap;
+  overflow: hidden;
   cursor: pointer;
 }
 .mv2-role-toggle button.active {
   background: var(--mv2-ciano);
   color: #fff;
+}
+
+/* Celulares estreitos (≲420px): a largura do card já encolhe sozinha via
+   max-width:100% acima, mas aos 410px cheios o texto das 3 abas voltaria a
+   ficar apertado — fonte e preenchimento lateral menores aqui dão espaço de
+   sobra pro rótulo mais longo ("ADMINISTRADOR") sem cortar nem comprimir. */
+@media (max-width: 420px) {
+  .mv2-login-card {
+    padding: 24px 16px;
+  }
+  .mv2-role-toggle button {
+    font-size: 9.5px;
+    padding: 8px 2px;
+  }
 }
 
 /* ---------- 4. Campos de formulário (inputs) ---------- */
