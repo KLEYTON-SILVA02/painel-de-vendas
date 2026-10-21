@@ -14,7 +14,7 @@ import {
 } from '../../lib/business/classification';
 import { normalize } from '../../lib/business/normalize';
 import { buildClassificationInputs } from '../../lib/mappers';
-import { fmtMoney } from '../../lib/format';
+import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { isMobileDevice } from '../../lib/whatsapp';
 import {
   useBulkInsertGenericSubstances,
@@ -860,6 +860,7 @@ function ClassificadosTab() {
   const [dateTo, setDateTo] = useState('');
   const [dermoScanning, setDermoScanning] = useState(false);
   const [dermoSuggestions, setDermoSuggestions] = useState<string[] | null>(null);
+  const [dateLookupProduto, setDateLookupProduto] = useState<string | null>(null);
   const PAGE_SIZE = 500;
 
   // classifyProductTier() runs once per distinct product across the sales
@@ -896,6 +897,31 @@ function ClassificadosTab() {
     });
     return Array.from(map.values());
   }, [sales, catalog, products, brandKeywords, exclusiveBrands, dateFrom, dateTo]);
+
+  // Datas de venda do produto aberto em "Ver datas" — um dia por linha, com
+  // qtd/valor somados quando o mesmo produto vendeu mais de uma vez no
+  // mesmo dia. Respeita o mesmo filtro De/Até da tabela acima (senão os
+  // totais da linha e a lista de datas do modal se contradiriam). Só
+  // calcula quando o modal está de fato aberto — `sales` tem dezenas de
+  // milhares de linhas, não vale a pena rodar isso a cada clique na tabela.
+  const dateLookupRows = useMemo(() => {
+    if (!dateLookupProduto || !sales) return null;
+    const map = new Map<string, { dataISO: string; qtd: number; valor: number }>();
+    sales.forEach((s) => {
+      if (s.produto !== dateLookupProduto) return;
+      if (dateFrom && s.dataISO && s.dataISO < dateFrom) return;
+      if (dateTo && s.dataISO && s.dataISO > dateTo) return;
+      const key = s.dataISO ?? '—';
+      const existing = map.get(key);
+      if (existing) {
+        existing.qtd += s.qtd;
+        existing.valor += s.valor;
+      } else {
+        map.set(key, { dataISO: key, qtd: s.qtd, valor: s.valor });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => b.dataISO.localeCompare(a.dataISO));
+  }, [dateLookupProduto, sales, dateFrom, dateTo]);
 
   if (!sales || !catalog || !products || !brandKeywords || !exclusiveBrands || !classifiedProducts) {
     return <PageLoading />;
@@ -1030,8 +1056,9 @@ function ClassificadosTab() {
             </button>
           )}
           <p className="text-[11px] text-slate-500">
-            Em branco = todo o histórico de vendas. Com período definido, a reclassificação feita abaixo também fica
-            restrita a ele — igual à Auditoria.
+            Em branco = todo o detalhe de vendas disponível (hoje, só o mês vigente — meses anteriores já viraram
+            subtotal). Com período definido, a reclassificação feita abaixo também fica restrita a ele — igual à
+            Auditoria.
           </p>
         </div>
       </div>
@@ -1169,6 +1196,7 @@ function ClassificadosTab() {
                   <th className="py-1.5 pr-3">Ocorrências</th>
                   <th className="py-1.5 pr-3">Qtd</th>
                   <th className="py-1.5 pr-3">Valor</th>
+                  <th className="py-1.5 pr-3">Datas</th>
                   <th className="py-1.5 pr-3">Reclassificar</th>
                 </tr>
               </thead>
@@ -1201,6 +1229,15 @@ function ClassificadosTab() {
                     <td className="py-1.5 pr-3 font-mono">{p.ocorrencias}</td>
                     <td className="py-1.5 pr-3 font-mono">{p.qtd}</td>
                     <td className="py-1.5 pr-3 font-mono">{fmtMoney(p.valor)}</td>
+                    <td className="py-1.5 pr-3">
+                      <button
+                        type="button"
+                        onClick={() => setDateLookupProduto(p.produto)}
+                        className="rounded-md border border-cyan-500/60 text-cyan-400 px-2.5 py-1 text-[11px] font-medium whitespace-nowrap"
+                      >
+                        📅 Ver datas
+                      </button>
+                    </td>
                     <td className="py-1.5 pr-3">
                       <select
                         defaultValue={p.categoria}
@@ -1261,7 +1298,71 @@ function ClassificadosTab() {
           </div>
         )}
       </div>
+
+      {dateLookupProduto && (
+        <DateLookupModal
+          produto={dateLookupProduto}
+          rows={dateLookupRows}
+          onClose={() => setDateLookupProduto(null)}
+        />
+      )}
     </>
+  );
+}
+
+/** Modal da função "Ver datas" (ClassificadosTab) — lista cada dia em que o
+ * produto vendeu, dentro do mesmo filtro De/Até da tela. Período em branco
+ * só enxerga o mês vigente: vendas de meses anteriores já viraram subtotal
+ * (REGRA 2, ver CLAUDE.md) e não têm mais detalhe por produto/dia. */
+function DateLookupModal({
+  produto,
+  rows,
+  onClose,
+}: {
+  produto: string;
+  rows: { dataISO: string; qtd: number; valor: number }[] | null;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50" onClick={onClose}>
+      <div
+        className="w-full max-w-md max-h-[80vh] overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 mb-1">
+          <h3 className="font-semibold text-sm">📅 Datas de venda</h3>
+          <button type="button" onClick={onClose} className="text-slate-500 hover:text-rose-400" title="Fechar">
+            ✕
+          </button>
+        </div>
+        <p className="text-xs text-slate-400 mb-3">{produto}</p>
+        {!rows || rows.length === 0 ? (
+          <p className="text-xs text-slate-500 py-4 text-center">
+            Nenhuma venda deste produto no período filtrado. Vendas de meses anteriores ao vigente só ficam
+            guardadas como subtotal, sem data por produto.
+          </p>
+        ) : (
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-left text-slate-400 border-b border-slate-800">
+                <th className="py-1.5 pr-3">Data</th>
+                <th className="py-1.5 pr-3 text-right">Qtd</th>
+                <th className="py-1.5 pr-3 text-right">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.dataISO} className="border-b border-slate-900">
+                  <td className="py-1.5 pr-3 font-mono">{r.dataISO === '—' ? '—' : fmtDateBR(r.dataISO)}</td>
+                  <td className="py-1.5 pr-3 font-mono text-right">{r.qtd}</td>
+                  <td className="py-1.5 pr-3 font-mono text-right">{fmtMoney(r.valor)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
   );
 }
 
