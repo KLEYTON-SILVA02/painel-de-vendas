@@ -197,6 +197,30 @@ export function buildDsmReviewRowsFromImage(
     collaboratorId: m.matricula ? (collaboratorByMatricula.get(m.matricula)?.id ?? null) : null,
     dataISO,
     quantidade: m.quantidade ?? 0,
+    quantidadeIncerta: m.quantidade === null,
     fonte: m.matchedBy,
   }));
+}
+
+// Padrão bem mais solto que MATRICULA_NAME_LINE — só pra contar quantas
+// linhas do texto PARECEM o início de um registro de colaborador (uma
+// sequência de 4+ dígitos logo no começo da linha), mesmo que o resto da
+// linha não tenha dado pra interpretar depois. Serve só pra comparar contra
+// quantas linhas realmente viraram uma linha reconhecida — nunca pra
+// extrair dado nenhum (correndo o risco de contar falso-positivo é aceitável
+// aqui, já que o resultado é só um alerta pro ADM conferir, nunca algo
+// salvo automaticamente).
+const APPARENT_COLLABORATOR_LINE = /^\d{4,10}\b/;
+
+/** Segunda análise: conta quantas linhas do texto parecem o início de um
+ * registro de colaborador, pra comparar contra `matches.length` depois das
+ * duas leituras (matrícula-traço + nome) — se o texto aparenta ter mais
+ * linhas de colaborador do que o número de linhas reconhecidas, é sinal de
+ * que alguém pode ter ficado de fora (matrícula E nome ilegíveis pro OCR,
+ * o único caso que nenhuma das duas leituras consegue recuperar sozinha). */
+export function countApparentCollaboratorLines(text: string): number {
+  return text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !FOOTER_LINE_PATTERN.test(l) && APPARENT_COLLABORATOR_LINE.test(l)).length;
 }

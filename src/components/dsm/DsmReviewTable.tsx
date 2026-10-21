@@ -68,8 +68,14 @@ export function DsmReviewTable({ rows, collaboratorsById, onChangeRow, onRemoveR
                     min={0}
                     value={r.quantidade}
                     onChange={(e) => onChangeRow(r.key, { quantidade: Math.max(0, Number(e.target.value) || 0) })}
-                    className="input !py-1 !text-xs w-20 text-right"
+                    className={`input !py-1 !text-xs w-20 text-right ${r.quantidadeIncerta ? '!border-amber-500' : ''}`}
+                    title={r.quantidadeIncerta ? 'Quantidade não reconhecida — este 0 é só um valor de preenchimento. Confira antes de salvar.' : undefined}
                   />
+                  {r.quantidadeIncerta && (
+                    <span className="block text-[10px] text-amber-400 mt-0.5" title="Quantidade não reconhecida no texto/planilha — confira antes de salvar">
+                      não reconhecida
+                    </span>
+                  )}
                 </td>
                 <td className="py-1.5 px-3">
                   <button type="button" onClick={() => onRemoveRow(r.key)} className="text-slate-500 hover:text-rose-400" title="Remover linha">

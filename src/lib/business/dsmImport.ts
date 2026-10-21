@@ -109,6 +109,12 @@ export interface DsmParsedRow {
   dataISO: string | null;
   dataRaw: string;
   quantidade: number;
+  /** true quando a célula de quantidade estava em branco (ou a coluna nem
+   * foi encontrada na planilha) — nesses casos `quantidade` cai pra 0 só
+   * como valor seguro pro banco, não porque a planilha realmente dizia
+   * "zero clientes". Sinaliza a linha na conferência em vez de deixar um
+   * zero sem explicação se passar despercebido pelo ADM. */
+  quantidadeIncerta: boolean;
 }
 
 /** Parses the day-rows out of a DSM sheet whose merged cells have already
@@ -125,8 +131,10 @@ export function parseDsmRows(rows: unknown[][], rawRows: unknown[][], map: DsmCo
     const dataISO = map.data >= 0 ? dateFromCell(rr[map.data], dataRaw) : null;
     const matriculaNomeRaw = map.matriculaNome >= 0 ? String(r[map.matriculaNome] ?? '').trim() : '';
     const { matricula, nome } = splitMatriculaNome(matriculaNomeRaw);
+    const quantidadeCellRaw = map.quantidade >= 0 ? String(r[map.quantidade] ?? '').trim() : '';
     const quantidade = map.quantidade >= 0 ? parseNumeroBR(r[map.quantidade]) : 0;
-    out.push({ matriculaRaw: matriculaNomeRaw, matricula, nomePlanilha: nome, dataISO, dataRaw, quantidade });
+    const quantidadeIncerta = map.quantidade < 0 || quantidadeCellRaw === '';
+    out.push({ matriculaRaw: matriculaNomeRaw, matricula, nomePlanilha: nome, dataISO, dataRaw, quantidade, quantidadeIncerta });
   });
   return out;
 }
@@ -143,6 +151,10 @@ export interface DsmReviewRow {
   collaboratorId: string | null;
   dataISO: string | null;
   quantidade: number;
+  /** true quando `quantidade` é um valor seguro de preenchimento (0), não
+   * um número de verdade lido da planilha/imagem — sinaliza a linha na
+   * conferência pra nunca ficar indistinguível de um "0 clientes" real. */
+  quantidadeIncerta: boolean;
   /** 'nome' quando a linha só foi encontrada pela segunda leitura por nome
    * (ver parseDsmImageLinesByCollaboratorName) — ausente/undefined para a
    * planilha e para a primeira leitura por matrícula-traço da imagem. Só
@@ -157,6 +169,7 @@ export function buildDsmReviewRows(parsed: DsmParsedRow[], collaboratorByMatricu
     matriculaRaw: p.matriculaRaw,
     matricula: p.matricula,
     nomeFonte: p.nomePlanilha,
+    quantidadeIncerta: p.quantidadeIncerta,
     collaboratorId: p.matricula ? (collaboratorByMatricula.get(p.matricula)?.id ?? null) : null,
     dataISO: p.dataISO,
     quantidade: p.quantidade,
