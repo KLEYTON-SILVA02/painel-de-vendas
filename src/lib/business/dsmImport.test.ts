@@ -77,8 +77,24 @@ describe('parseDsmRows', () => {
 describe('buildDsmReviewRows', () => {
   it('resolves a matching colaborador and flags an unregistered matrícula as null', () => {
     const parsed = [
-      { matriculaRaw: '70208345-DEIVESON', matricula: '70208345', nomePlanilha: 'DEIVESON', dataISO: '2026-09-01', dataRaw: '01/09/2026', quantidade: 1 },
-      { matriculaRaw: '99999999-FULANO', matricula: '99999999', nomePlanilha: 'FULANO', dataISO: '2026-09-01', dataRaw: '01/09/2026', quantidade: 2 },
+      {
+        matriculaRaw: '70208345-DEIVESON',
+        matricula: '70208345',
+        nomePlanilha: 'DEIVESON',
+        dataISO: '2026-09-01',
+        dataRaw: '01/09/2026',
+        quantidade: 1,
+        quantidadeIncerta: false,
+      },
+      {
+        matriculaRaw: '99999999-FULANO',
+        matricula: '99999999',
+        nomePlanilha: 'FULANO',
+        dataISO: '2026-09-01',
+        dataRaw: '01/09/2026',
+        quantidade: 2,
+        quantidadeIncerta: false,
+      },
     ];
     const byMatricula = new Map([['70208345', { id: 'collab-1' }]]);
     const rows = buildDsmReviewRows(parsed, byMatricula);

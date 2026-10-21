@@ -4,13 +4,13 @@ import { DsmReviewTable } from '../../components/dsm/DsmReviewTable';
 import { Spinner } from '../../components/Spinner';
 import {
   buildDsmReviewRowsFromImage,
+  countApparentCollaboratorLines,
   detectDateInText,
   parseDsmImageLines,
   parseDsmImageLinesByCollaboratorName,
 } from '../../lib/business/dsmImageParse';
 import type { DsmReviewRow } from '../../lib/business/dsmImport';
 import { normalizeMatricula } from '../../lib/business/parsing';
-import { todayISO } from '../../lib/dateRange';
 import { saveDsmReview, translateDbError } from '../../lib/dsmRecordsImport';
 import { recognizeImageText } from '../../lib/ocr';
 import { useCollaborators, useDsmRecords } from '../../lib/queries';
@@ -41,17 +41,23 @@ export function DsmImageImportSection() {
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState<number | null>(null);
   const [text, setText] = useState('');
-  const [dataISO, setDataISO] = useState(todayISO());
+  // Em branco de propósito (não todayISO()) — o ADM precisa informar a data
+  // ou o período explicitamente antes de conseguir processar; "Processar
+  // texto" fica desabilitado até isso acontecer (ver o disabled do botão
+  // abaixo). handleScan ainda pré-preenche automaticamente quando acha uma
+  // data no texto (ver detectDateInText), o que já conta como informado.
+  const [dataISO, setDataISO] = useState('');
   // "Período": quando o print mostra um total acumulado de vários dias (ex.:
   // relatório da semana) em vez de um único dia — grava tudo na data de FIM
   // do período (dataInicio fica só de referência/anotação, não muda o que é
   // salvo). Cada linha continua editável na conferência abaixo, então dá pra
   // ajustar individualmente se algum colaborador precisar de outra data.
   const [dateMode, setDateMode] = useState<'dia' | 'periodo'>('dia');
-  const [dataInicio, setDataInicio] = useState(todayISO());
-  const [dataFim, setDataFim] = useState(todayISO());
+  const [dataInicio, setDataInicio] = useState('');
+  const [dataFim, setDataFim] = useState('');
   const [rows, setRows] = useState<DsmReviewRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [completenessWarning, setCompletenessWarning] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<{ count: number; duplicateCount: number; unregisteredCount: number } | null>(null);
 
@@ -152,6 +158,16 @@ export function DsmImageImportSection() {
       setError('Nenhuma linha de colaborador foi reconhecida neste texto. Confira o texto extraído ou tente escanear de novo.');
       return;
     }
+    // Segunda análise: compara quantas linhas o texto PARECE ter (mesmo que
+    // nem toda tenha virado uma linha reconhecida) contra quantas de fato
+    // viraram — o único caso que nenhuma das duas leituras acima consegue
+    // recuperar sozinha é matrícula E nome ilegíveis pro OCR ao mesmo tempo.
+    const apparentLines = countApparentCollaboratorLines(text);
+    setCompletenessWarning(
+      apparentLines > matches.length
+        ? `O texto parece ter ${apparentLines} linha(s) de colaborador, mas só ${matches.length} foram reconhecidas. Role o texto extraído e confira se alguém ficou de fora antes de salvar.`
+        : null,
+    );
     setRows(buildDsmReviewRowsFromImage(matches, effectiveDate, collaboratorByMatricula));
     setStep('review');
   }
@@ -184,11 +200,12 @@ export function DsmImageImportSection() {
     setStep('input');
     clearImage();
     setText('');
-    setDataISO(todayISO());
+    setDataISO('');
     setDateMode('dia');
-    setDataInicio(todayISO());
-    setDataFim(todayISO());
+    setDataInicio('');
+    setDataFim('');
     setRows([]);
+    setCompletenessWarning(null);
     setResult(null);
     setError(null);
   }
@@ -312,7 +329,16 @@ export function DsmImageImportSection() {
           <button
             type="button"
             onClick={handleProcessText}
-            disabled={!text.trim()}
+            disabled={!text.trim() || (dateMode === 'dia' ? !dataISO : !dataInicio || !dataFim)}
+            title={
+              dateMode === 'dia'
+                ? !dataISO
+                  ? 'Informe a data desta análise antes de processar'
+                  : undefined
+                : !dataInicio || !dataFim
+                  ? 'Informe o início e o fim do período antes de processar'
+                  : undefined
+            }
             className="rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm mt-3 disabled:opacity-60"
           >
             Processar texto
@@ -335,6 +361,7 @@ export function DsmImageImportSection() {
             . Corrija data ou quantidade se necessário, ou remova uma linha, antes de salvar. Colaboradores não cadastrados aparecem sinalizados e não são
             salvos.
           </p>
+          {completenessWarning && <p className="text-xs text-amber-400 mb-3">⚠️ {completenessWarning}</p>}
           <DsmReviewTable rows={rows} collaboratorsById={collaboratorsById} onChangeRow={updateRow} onRemoveRow={removeRow} />
           {error && <p className="text-xs text-rose-400 mt-3">{error}</p>}
           <div className="flex gap-2 mt-3">
