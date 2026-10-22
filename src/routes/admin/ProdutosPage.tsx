@@ -59,16 +59,20 @@ export function ProdutosPage() {
   return (
     <div className="flex flex-col gap-3">
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <div className="flex flex-wrap gap-1">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`rounded-lg px-3 py-1.5 text-sm ${tab === t.id ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
-            >
-              {t.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          {/* Botões de aba esticados lado a lado, largura igual — mesmo
+             padrão responsivo já usado nos filtros de Classificados. */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 flex-1">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`w-full rounded-lg px-3 py-1.5 text-sm ${tab === t.id ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
           <HelpTip
             helpKey={`produtos.aba_${tab}`}
             fallback={
