@@ -51,13 +51,25 @@ interface DateRangeState {
 
 const DateRangeContext = createContext<DateRangeState | undefined>(undefined);
 
-export function DateRangeProvider({ children }: { children: ReactNode }) {
+export function DateRangeProvider({
+  children,
+  initialDay,
+}: {
+  children: ReactNode;
+  /** When set, this provider instance starts on a single selected day
+   * instead of the usual whole-month default (legacy `_modoGeral`). Used
+   * to give a page its OWN independent date scope — a nested
+   * DateRangeProvider shadows the app-wide one for everything under it —
+   * without changing the shared default that Dashboard/Ranking/Metas/DSM
+   * still rely on. */
+  initialDay?: string;
+}) {
   const today = new Date();
-  const [refYear, setRefYear] = useState(today.getFullYear());
-  const [refMonth, setRefMonth] = useState(today.getMonth());
-  const [dashFrom, setDashFrom] = useState(monthFirstISO(refYear, refMonth));
-  const [dashTo, setDashTo] = useState(monthLastISO(refYear, refMonth));
-  const [modoGeral, setModoGeralFlag] = useState(true);
+  const [refYear, setRefYear] = useState(initialDay ? Number(initialDay.slice(0, 4)) : today.getFullYear());
+  const [refMonth, setRefMonth] = useState(initialDay ? Number(initialDay.slice(5, 7)) - 1 : today.getMonth());
+  const [dashFrom, setDashFrom] = useState(initialDay ?? monthFirstISO(today.getFullYear(), today.getMonth()));
+  const [dashTo, setDashTo] = useState(initialDay ?? monthLastISO(today.getFullYear(), today.getMonth()));
+  const [modoGeral, setModoGeralFlag] = useState(!initialDay);
   const [buscaPeriodoOpen, setBuscaPeriodoOpen] = useState(false);
   const [rangeAnchor, setRangeAnchor] = useState<string | null>(null);
   const [rankFilter, setRankFilterState] = useState<RankFilter>('ALL');
