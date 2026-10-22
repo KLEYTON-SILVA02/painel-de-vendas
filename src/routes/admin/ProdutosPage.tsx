@@ -112,12 +112,12 @@ function MutationError({ error }: { error: unknown }) {
 function CategoryTabs({ group, setGroup }: { group: CategoryKey; setGroup: (k: CategoryKey) => void }) {
   const CAT_LABEL = useCategoryLabelMap();
   return (
-    <div className="flex gap-1 mb-1">
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mb-1">
       {CAT_KEYS.map((k) => (
         <button
           key={k}
           onClick={() => setGroup(k)}
-          className={`rounded-lg px-3 py-1.5 text-xs ${group === k ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+          className={`w-full rounded-lg px-3 py-1.5 text-xs ${group === k ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
         >
           {CAT_LABEL[k]}
         </button>
@@ -431,15 +431,15 @@ function CatalogoTab() {
         <MutationError error={insertCatalog.error} />
       </div>
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-          <div className="flex gap-1">
+        <div className="flex items-start justify-between mb-3 flex-wrap gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 flex-1 min-w-[260px]">
             <button
               onClick={() => {
                 setOrigemTab('manual');
                 setSelected(new Set());
                 setSelectMode(false);
               }}
-              className={`rounded-lg px-3 py-1.5 text-xs ${origemTab === 'manual' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+              className={`w-full rounded-lg px-3 py-1.5 text-xs ${origemTab === 'manual' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
             >
               Cadastrados ({counts.manual})
             </button>
@@ -449,7 +449,7 @@ function CatalogoTab() {
                 setSelected(new Set());
                 setSelectMode(false);
               }}
-              className={`rounded-lg px-3 py-1.5 text-xs ${origemTab === 'substancia' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+              className={`w-full rounded-lg px-3 py-1.5 text-xs ${origemTab === 'substancia' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
               title="Produtos inseridos automaticamente pela varredura da aba Substâncias"
             >
               Via Substância ({counts.substancia})
@@ -460,7 +460,7 @@ function CatalogoTab() {
                 setSelected(new Set());
                 setSelectMode(false);
               }}
-              className={`rounded-lg px-3 py-1.5 text-xs ${origemTab === 'vendas' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+              className={`w-full rounded-lg px-3 py-1.5 text-xs ${origemTab === 'vendas' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
               title="Produtos que a Lista de Vendas já resolve para uma categoria, aprovados manualmente aqui"
             >
               Da Lista de Vendas ({counts.vendas})
@@ -471,7 +471,7 @@ function CatalogoTab() {
                 setSelected(new Set());
                 setSelectMode(false);
               }}
-              className={`rounded-lg px-3 py-1.5 text-xs ${origemTab === 'multilojas' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+              className={`w-full rounded-lg px-3 py-1.5 text-xs ${origemTab === 'multilojas' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
               title="Produtos recebidos automaticamente de uma loja irmã do mesmo modelo de catálogo (Minha Loja)"
             >
               Multilojas ({counts.multilojas})

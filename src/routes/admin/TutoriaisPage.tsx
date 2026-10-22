@@ -116,12 +116,12 @@ export function TutoriaisPage() {
       )}
 
       {!buscaNormalizada && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5">
           {gruposComConteudo.map((g) => (
             <button
               key={g}
               onClick={() => setGrupoAtivo(g)}
-              className={`rounded-lg px-3 py-1.5 text-sm ${grupoAtual === g ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+              className={`w-full rounded-lg px-3 py-1.5 text-sm ${grupoAtual === g ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
             >
               {GRUPO_LABELS[g] ?? g}
             </button>

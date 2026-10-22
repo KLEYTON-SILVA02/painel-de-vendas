@@ -115,29 +115,31 @@ export function AuditoriaPage() {
             </select>
           </div>
         </div>
-        <div className="flex flex-wrap gap-1">
-          <button
-            onClick={() => setTab('pendentes')}
-            className={`rounded-lg px-3 py-1.5 text-xs ${tab === 'pendentes' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
-          >
-            Pendentes de Revisão
-          </button>
-          <HelpTip helpKey="auditoria.pendentes" fallback="Produtos vendidos que o sistema ainda não conseguiu classificar automaticamente — selecione um ou mais e escolha a categoria certa." />
-          {CAT_KEYS.map((k) => (
+        <div className="flex items-center gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5 flex-1">
             <button
-              key={k}
-              onClick={() => setTab(k)}
-              className={`rounded-lg px-3 py-1.5 text-xs ${tab === k ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+              onClick={() => setTab('pendentes')}
+              className={`w-full rounded-lg px-3 py-1.5 text-xs ${tab === 'pendentes' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
             >
-              {categoryLabels[k]}
+              Pendentes de Revisão
             </button>
-          ))}
-          <button
-            onClick={() => setTab('recentes')}
-            className={`rounded-lg px-3 py-1.5 text-xs ${tab === 'recentes' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
-          >
-            Últimos Classificados
-          </button>
+            {CAT_KEYS.map((k) => (
+              <button
+                key={k}
+                onClick={() => setTab(k)}
+                className={`w-full rounded-lg px-3 py-1.5 text-xs ${tab === k ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+              >
+                {categoryLabels[k]}
+              </button>
+            ))}
+            <button
+              onClick={() => setTab('recentes')}
+              className={`w-full rounded-lg px-3 py-1.5 text-xs ${tab === 'recentes' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+            >
+              Últimos Classificados
+            </button>
+          </div>
+          <HelpTip helpKey="auditoria.pendentes" fallback="Produtos vendidos que o sistema ainda não conseguiu classificar automaticamente — selecione um ou mais e escolha a categoria certa." />
         </div>
       </div>
 

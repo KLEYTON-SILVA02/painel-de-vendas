@@ -262,12 +262,12 @@ function BioGruposView({
           </button>
         </div>
         <p className="text-xs text-slate-500 mb-3">Vincule produtos aos grupos G1–G4.</p>
-        <div className="flex gap-1">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
           {BIO_GROUP_KEYS.map((k) => (
             <button
               key={k}
               onClick={() => setTab(k)}
-              className={`rounded-lg px-3 py-1.5 text-xs ${tab === k ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+              className={`w-full rounded-lg px-3 py-1.5 text-xs ${tab === k ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
             >
               {GRUPO_LABELS[k]}
             </button>

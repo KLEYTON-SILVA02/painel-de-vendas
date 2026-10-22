@@ -92,16 +92,16 @@ export function DinamicasPage() {
         />
       </div>
 
-      <div className="flex gap-1">
+      <div className="grid grid-cols-2 gap-1.5">
         <button
           onClick={() => setTab('ativas')}
-          className={`rounded-lg px-3 py-1.5 text-sm ${tab === 'ativas' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+          className={`w-full rounded-lg px-3 py-1.5 text-sm ${tab === 'ativas' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
         >
           Ativas / Agendadas
         </button>
         <button
           onClick={() => setTab('galeria')}
-          className={`rounded-lg px-3 py-1.5 text-sm ${tab === 'galeria' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+          className={`w-full rounded-lg px-3 py-1.5 text-sm ${tab === 'galeria' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
         >
           🖼️ Galeria de Dinâmicas
         </button>
