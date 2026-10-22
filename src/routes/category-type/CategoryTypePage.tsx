@@ -238,12 +238,12 @@ export function CategoryTypePage() {
         </div>
       )}
 
-      <div className="flex gap-1 flex-wrap">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-1.5">
         {(['ALL', ...groupNames] as const).map((k) => (
           <button
             key={k}
             onClick={() => setGroupFilter(k)}
-            className={`rounded-lg px-3 py-1.5 text-xs ${groupFilter === k ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+            className={`w-full rounded-lg px-3 py-1.5 text-xs ${groupFilter === k ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
           >
             {k === 'ALL' ? 'Todos' : k}
           </button>

@@ -186,16 +186,16 @@ export function ListaVendasPage() {
           )}
         </div>
         {salesListEnabled && (
-          <div className="flex gap-1 mb-2">
+          <div className="grid grid-cols-2 gap-1.5 mb-2">
             <button
               onClick={() => setTab('todas')}
-              className={`rounded-lg px-3 py-1.5 text-xs ${tab === 'todas' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+              className={`w-full rounded-lg px-3 py-1.5 text-xs ${tab === 'todas' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
             >
               Todas
             </button>
             <button
               onClick={() => setTab('outros')}
-              className={`rounded-lg px-3 py-1.5 text-xs ${tab === 'outros' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+              className={`w-full rounded-lg px-3 py-1.5 text-xs ${tab === 'outros' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
             >
               OUTROS {outrosSales.length > 0 && `(${outrosSales.length.toLocaleString('pt-BR')})`}
             </button>

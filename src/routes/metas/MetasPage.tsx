@@ -47,28 +47,28 @@ export function MetasPage() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex gap-1">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
         <button
           onClick={() => setTab('categoria')}
-          className={`rounded-lg px-3 py-1.5 text-sm ${tab === 'categoria' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+          className={`w-full rounded-lg px-3 py-1.5 text-sm ${tab === 'categoria' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
         >
           Por Categoria
         </button>
         <button
           onClick={() => setTab('individuais')}
-          className={`rounded-lg px-3 py-1.5 text-sm ${tab === 'individuais' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+          className={`w-full rounded-lg px-3 py-1.5 text-sm ${tab === 'individuais' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
         >
           Metas Individuais
         </button>
         <button
           onClick={() => setTab('unidade')}
-          className={`rounded-lg px-3 py-1.5 text-sm ${tab === 'unidade' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+          className={`w-full rounded-lg px-3 py-1.5 text-sm ${tab === 'unidade' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
         >
           Sub-categorias
         </button>
         <button
           onClick={() => setTab('comissoes')}
-          className={`rounded-lg px-3 py-1.5 text-sm ${tab === 'comissoes' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
+          className={`w-full rounded-lg px-3 py-1.5 text-sm ${tab === 'comissoes' ? 'bg-cyan-500 text-slate-950 font-medium' : 'border border-slate-700 text-slate-300'}`}
         >
           Comissões
         </button>

@@ -220,11 +220,11 @@ export function DsmImageImportSection() {
             imagem em si não é guardada.
           </p>
 
-          <div className="flex gap-2 mb-3">
+          <div className="grid grid-cols-2 gap-1.5 mb-3">
             <button
               type="button"
               onClick={() => setDateMode('dia')}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
+              className={`w-full rounded-lg px-3 py-1.5 text-xs font-medium ${
                 dateMode === 'dia' ? 'bg-cyan-500 text-slate-950' : 'border border-slate-700 text-slate-300'
               }`}
             >
@@ -233,7 +233,7 @@ export function DsmImageImportSection() {
             <button
               type="button"
               onClick={() => setDateMode('periodo')}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
+              className={`w-full rounded-lg px-3 py-1.5 text-xs font-medium ${
                 dateMode === 'periodo' ? 'bg-cyan-500 text-slate-950' : 'border border-slate-700 text-slate-300'
               }`}
             >
