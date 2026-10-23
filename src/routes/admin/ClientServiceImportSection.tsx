@@ -17,13 +17,30 @@ const MAX_SIZE = 50 * 1024 * 1024;
 type Step = 'pick' | 'review' | 'done';
 
 /** Importação de "Vendas por Clientes" (UVC — Unidades Vendidas por
- * Cliente): mesmo layout de colunas já reconhecido pela importação de
- * vendas comum (ver importMapping.ts), por isso reaproveita
- * `detectHeaderRow`/`autoMapColumns` dali sem um parser próprio — a
- * diferença é só o destino (client_service_records, nunca `sales`) e que o
- * parser agrega as linhas por vendedor/dia antes da revisão (ver
- * clientServiceImport.ts). Reimportar o mesmo dia SUBSTITUI o valor salvo
- * (upsert por `collaborator_id`+`data`), nunca soma — diferente do DSM. */
+ * Cliente). Reaproveita `detectHeaderRow`/`autoMapColumns` de
+ * importMapping.ts (mesmo motor da importação de vendas comum), mas com um
+ * `overrides` próprio pro campo "qtd": nesta planilha real (colunas A-R,
+ * confirmada pelo usuário) o layout só é idêntico ao da planilha de vendas
+ * até a coluna I (A=Data, ..., H=Vendedor Nome, I=Matrícula) — a partir da
+ * coluna J ele diverge completamente (Valor/Qtde Cliente/TKM de Venda
+ * Líquida, Recebimento e Total, sem nenhuma coluna de produto). O
+ * "atendimentos" certo é a coluna **K: QTDE CLIENTE VENDA LÍQUIDA**, nunca a
+ * posição fixa antiga (coluna L, que nessa planilha é "TKM Venda" — uma
+ * razão, não uma contagem). Quando a mesma matrícula aparece em mais de uma
+ * linha no mesmo dia (um PDV diferente por linha — coluna F), o agregador
+ * (clientServiceImport.ts) já soma todas automaticamente: a chave de
+ * agrupamento é só matrícula+dia, nunca inclui o PDV.
+ *
+ * Destino: client_service_records, nunca `sales`. Reimportar o mesmo dia
+ * SUBSTITUI o valor salvo (upsert por `collaborator_id`+`data`), nunca soma
+ * — diferente do DSM. */
+const CLIENT_SERVICE_FIELD_OVERRIDES = { qtd: ['qtde cliente venda liquida'] };
+/** Último recurso, só quando a planilha não tem um cabeçalho reconhecível
+ * nem pelo override acima nem pelos termos genéricos de importMapping.ts
+ * (ex.: "qtd") — a coluna K (índice 10) é a posição real da planilha
+ * confirmada pelo usuário, nunca a FIXED_COLS.qtd global (que é da
+ * planilha de vendas comum, coluna L). */
+const CLIENT_SERVICE_QTD_FALLBACK_COL = 10;
 export function ClientServiceImportSection() {
   const { profile } = useAuth();
   const { data: collaborators } = useCollaborators();
@@ -50,9 +67,14 @@ export function ClientServiceImportSection() {
     const headers = body[headerIdx];
     const dataRows = body.slice(headerIdx + 1);
     const dataRowsRaw = bodyRaw.slice(headerIdx + 1);
-    const map = autoMapColumns(headers);
-    if (map.data < 0 || map.matricula < 0 || map.qtd < 0) {
-      setError('Não foi possível identificar as colunas de data, matrícula e quantidade vendida nesta planilha.');
+    const map = autoMapColumns(headers, CLIENT_SERVICE_FIELD_OVERRIDES);
+    // Último recurso: se nem o override acima nem os termos genéricos de
+    // importMapping.ts (ex.: "qtd", que bate em "QTDE...") acharem a coluna
+    // pelo cabeçalho, cai na posição real desta planilha (K) — nunca na
+    // FIXED_COLS.qtd global, que é da planilha de vendas comum (coluna L).
+    if (map.qtd < 0) map.qtd = CLIENT_SERVICE_QTD_FALLBACK_COL;
+    if (map.data < 0 || map.matricula < 0) {
+      setError('Não foi possível identificar as colunas de data e matrícula nesta planilha.');
       return;
     }
     const parsed = aggregateClientServiceRows(dataRows, dataRowsRaw, map);
