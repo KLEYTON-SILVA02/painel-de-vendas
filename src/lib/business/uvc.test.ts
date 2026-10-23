@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeUvcSummary, fmtUvc, type DailyItensRow } from './uvc';
+import { computeUvcDailyRows, computeUvcSummary, fmtUvc, type DailyItensRow } from './uvc';
 import type { ClientServiceRecord, Collaborator } from './types';
 
 function collaborator(over: Partial<Collaborator> = {}): Collaborator {
@@ -87,6 +87,34 @@ describe('computeUvcSummary — Modo Geral (média das razões diárias)', () =>
     const { rows, totals } = computeUvcSummary(dailyItens, [], collaborators, '2026-09-01', '2026-09-30', true);
     expect(rows).toEqual([]);
     expect(totals).toEqual({ itens: 5, atendimentos: 0, uvc: null });
+  });
+});
+
+describe('computeUvcDailyRows', () => {
+  it('monta um total da loja por dia, mais recente primeiro, com a razão do próprio dia', () => {
+    const collaborators = [collaborator({ id: 'c1', matricula: '001' }), collaborator({ id: 'c2', matricula: '002', nome: 'Beltrano Souza' })];
+    const dailyItens: DailyItensRow[] = [
+      { matricula: '001', dataISO: '2026-09-01', itensTotal: 6 },
+      { matricula: '002', dataISO: '2026-09-01', itensTotal: 4 },
+      { matricula: '001', dataISO: '2026-09-02', itensTotal: 9 },
+    ];
+    const records: ClientServiceRecord[] = [
+      { id: 'r1', collaboratorId: 'c1', dataISO: '2026-09-01', atendimentos: 2 },
+      { id: 'r2', collaboratorId: 'c2', dataISO: '2026-09-01', atendimentos: 3 },
+      // 02/09 sem nenhum atendimento importado — uvc null, nunca 0 nem erro.
+    ];
+    const rows = computeUvcDailyRows(dailyItens, records, collaborators, '2026-09-01', '2026-09-30');
+    expect(rows).toEqual([
+      { dataISO: '2026-09-02', itens: 9, atendimentos: 0, uvc: null },
+      { dataISO: '2026-09-01', itens: 10, atendimentos: 5, uvc: 2 },
+    ]);
+  });
+
+  it('respeita o filtro de período', () => {
+    const collaborators = [collaborator()];
+    const dailyItens: DailyItensRow[] = [{ matricula: '001', dataISO: '2026-08-31', itensTotal: 50 }];
+    const rows = computeUvcDailyRows(dailyItens, [], collaborators, '2026-09-01', '2026-09-30');
+    expect(rows).toEqual([]);
   });
 });
 

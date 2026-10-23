@@ -65,20 +65,17 @@ function avg(nums: number[]): number {
   return nums.reduce((a, b) => a + b, 0) / nums.length;
 }
 
-export function computeUvcSummary(
+/** Agrega itens vendidos + atendimentos por (matrícula, dia) e por dia (loja
+ * inteira), restrito a [fromDate, toDate] — base compartilhada por
+ * computeUvcSummary (razão por colaborador/loja) e computeUvcDailyRows
+ * (quadro por dia, usado na visão "Por dia" da tela própria de UVC). */
+function buildDayAggregates(
   dailyItens: DailyItensRow[],
   records: ClientServiceRecord[],
-  collaborators: Collaborator[],
+  collaboratorsById: Map<string, Collaborator>,
   fromDate: string,
   toDate: string,
-  modoGeral: boolean,
-): { rows: UvcSummaryRow[]; totals: UvcTotals } {
-  const collaboratorsById = new Map(collaborators.map((c) => [c.id, c]));
-  const collaboratorByMatricula = new Map(collaborators.map((c) => [normalizeMatricula(c.matricula), c]));
-
-  // Agregados por (matrícula, dia) — pra média diária por colaborador — e
-  // por dia (loja inteira) — pra média diária do total da loja, que nunca
-  // pode vir de médiar as razões por colaborador (ver comentário no topo).
+): { byMatriculaDay: Map<string, DayAgg>; byDay: Map<string, DayAgg> } {
   const byMatriculaDay = new Map<string, DayAgg>();
   const byDay = new Map<string, DayAgg>();
 
@@ -108,6 +105,25 @@ export function computeUvcSummary(
     d.atendimentos += r.atendimentos;
     byDay.set(r.dataISO, d);
   });
+
+  return { byMatriculaDay, byDay };
+}
+
+export function computeUvcSummary(
+  dailyItens: DailyItensRow[],
+  records: ClientServiceRecord[],
+  collaborators: Collaborator[],
+  fromDate: string,
+  toDate: string,
+  modoGeral: boolean,
+): { rows: UvcSummaryRow[]; totals: UvcTotals } {
+  const collaboratorsById = new Map(collaborators.map((c) => [c.id, c]));
+  const collaboratorByMatricula = new Map(collaborators.map((c) => [normalizeMatricula(c.matricula), c]));
+
+  // Agregados por (matrícula, dia) — pra média diária por colaborador — e
+  // por dia (loja inteira) — pra média diária do total da loja, que nunca
+  // pode vir de médiar as razões por colaborador (ver comentário no topo).
+  const { byMatriculaDay, byDay } = buildDayAggregates(dailyItens, records, collaboratorsById, fromDate, toDate);
 
   // Por colaborador: soma simples (itens/atendimentos do período) + lista
   // das razões diárias (só nos dias com atendimentos > 0), pra alimentar
@@ -161,6 +177,38 @@ export function computeUvcSummary(
       : null;
 
   return { rows, totals: { itens: totalItens, atendimentos: totalAtendimentos, uvc: uvcTotal } };
+}
+
+export interface UvcDailyRow {
+  dataISO: string;
+  itens: number;
+  atendimentos: number;
+  /** null quando aquele dia não teve nenhum atendimento importado. */
+  uvc: number | null;
+}
+
+/** Quadro "Por dia" da tela própria de UVC (UvcPage.tsx) — um total da LOJA
+ * INTEIRA por dia (não por colaborador), ordenado do mais recente pro mais
+ * antigo. Cada dia usa sua própria razão (itens do dia ÷ atendimentos do
+ * dia) — não depende de Modo Geral, que só afeta como o RESUMO do período
+ * agrega esses dias (ver computeUvcSummary), nunca os dias individuais. */
+export function computeUvcDailyRows(
+  dailyItens: DailyItensRow[],
+  records: ClientServiceRecord[],
+  collaborators: Collaborator[],
+  fromDate: string,
+  toDate: string,
+): UvcDailyRow[] {
+  const collaboratorsById = new Map(collaborators.map((c) => [c.id, c]));
+  const { byDay } = buildDayAggregates(dailyItens, records, collaboratorsById, fromDate, toDate);
+  return Array.from(byDay.entries())
+    .map(([dataISO, agg]) => ({
+      dataISO,
+      itens: agg.itens,
+      atendimentos: agg.atendimentos,
+      uvc: agg.atendimentos > 0 ? agg.itens / agg.atendimentos : null,
+    }))
+    .sort((a, b) => (a.dataISO < b.dataISO ? 1 : -1));
 }
 
 /** "3,0" — 1 casa decimal, vírgula (igual ao padrão já usado no sistema). */
