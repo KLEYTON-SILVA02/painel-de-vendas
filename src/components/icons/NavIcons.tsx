@@ -310,3 +310,14 @@ export function ShieldIcon(props: SVGProps<SVGSVGElement>) {
     </Base>
   );
 }
+
+// Acompanhamento de UVC (Unidades Vendidas por Cliente).
+export function BarChartIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <line x1="18" y1="20" x2="18" y2="10" />
+      <line x1="12" y1="20" x2="12" y2="4" />
+      <line x1="6" y1="20" x2="6" y2="14" />
+    </Base>
+  );
+}

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { PageLoading } from '../../components/PageLoading';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../auth/AuthContext';
+import { ClientServiceImportHistoryPanel, ClientServiceImportSection } from './ClientServiceImportSection';
 import { DsmImageImportSection } from './DsmImageImportSection';
 import { DsmImportSection } from './DsmImportSection';
 import { DsmImportHistoryPanel } from '../../components/dsm/DsmImportHistoryPanel';
@@ -21,6 +22,7 @@ import { yieldToMain } from '../../lib/scheduler';
 import {
   useBrandKeywords,
   useCatalog,
+  useClientServiceImports,
   useCollaborators,
   useDsmImports,
   useExclusiveBrands,
@@ -109,6 +111,7 @@ export function ImportarPage() {
   const { data: existingSales, refetch: refetchSales } = useSales();
   const { data: pastImports } = useSalesImports();
   const { data: pastDsmImports } = useDsmImports();
+  const { data: pastClientServiceImports } = useClientServiceImports();
   const { data: collaborators } = useCollaborators();
   const { data: importFieldOverrides } = useImportFieldOverrides();
 
@@ -116,7 +119,7 @@ export function ImportarPage() {
   // Alterna entre a importação normal de vendas e a do DSM — pedido
   // explícito do usuário: só um dos dois fica visível por vez, em vez de
   // mostrar as duas seções empilhadas o tempo todo.
-  const [mode, setMode] = useState<'vendas' | 'dsm'>('vendas');
+  const [mode, setMode] = useState<'vendas' | 'dsm' | 'uvc'>('vendas');
   const [step, setStep] = useState<Step>('pick');
   const [sheets, setSheets] = useState<ParsedSheet[]>([]);
   const [fileName, setFileName] = useState('');
@@ -537,20 +540,27 @@ export function ImportarPage() {
 
   return (
     <div className="flex flex-col gap-6">
-    <div className="flex gap-2">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
       <button
         type="button"
         onClick={() => setMode('vendas')}
-        className={`rounded-lg px-4 py-2 text-sm font-medium ${mode === 'vendas' ? 'bg-cyan-500 text-slate-950' : 'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}
+        className={`w-full rounded-lg px-4 py-2 text-sm font-medium ${mode === 'vendas' ? 'bg-cyan-500 text-slate-950' : 'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}
       >
         📊 Importar Vendas
       </button>
       <button
         type="button"
         onClick={() => setMode('dsm')}
-        className={`rounded-lg px-4 py-2 text-sm font-medium ${mode === 'dsm' ? 'bg-cyan-500 text-slate-950' : 'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}
+        className={`w-full rounded-lg px-4 py-2 text-sm font-medium ${mode === 'dsm' ? 'bg-cyan-500 text-slate-950' : 'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}
       >
         🎟️ Inserir DSM
+      </button>
+      <button
+        type="button"
+        onClick={() => setMode('uvc')}
+        className={`w-full rounded-lg px-4 py-2 text-sm font-medium ${mode === 'uvc' ? 'bg-cyan-500 text-slate-950' : 'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}
+      >
+        📈 Vendas por Clientes
       </button>
     </div>
 
@@ -852,6 +862,15 @@ export function ImportarPage() {
       </div>
       <DsmImportHistoryPanel imports={pastDsmImports ?? []} />
     </div>
+    </div>
+    )}
+
+    {mode === 'uvc' && (
+    <div className="flex flex-col lg:flex-row gap-4 items-start">
+      <div className="flex flex-col gap-4 flex-1 min-w-0 w-full">
+        <ClientServiceImportSection />
+      </div>
+      <ClientServiceImportHistoryPanel imports={pastClientServiceImports ?? []} />
     </div>
     )}
     </div>

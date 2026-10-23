@@ -8,7 +8,7 @@ import { monthFirstISO, monthLastISO } from '../lib/dateRange';
 // 'DSM' is not a sales category — selecting it swaps the ranking area over
 // to dsm_records data (see DashboardPage's isDsmMode) instead of filtering
 // `sales` like every other member here.
-export type RankFilter = 'ALL' | 'DERM' | 'GEN' | 'MP' | 'LEVMEL' | 'CHIP' | 'DSM' | `DIN:${string}`;
+export type RankFilter = 'ALL' | 'DERM' | 'GEN' | 'MP' | 'LEVMEL' | 'CHIP' | 'DSM' | 'UVC' | `DIN:${string}`;
 
 interface DateRangeState {
   refYear: number;

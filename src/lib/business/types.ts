@@ -23,6 +23,18 @@ export interface DsmRecord {
   quantidade: number;
 }
 
+/** UVC (Unidades Vendidas por Cliente): atendimentos de um colaborador num
+ * dia, importados da planilha "Vendas por Clientes" (ver migration 0103) —
+ * nunca calculado a partir de `sales`, que não tem como dizer quantos
+ * clientes um vendedor atendeu. Reimportar o mesmo dia SUBSTITUI este
+ * valor, nunca soma. */
+export interface ClientServiceRecord {
+  id: string;
+  collaboratorId: string;
+  dataISO: string;
+  atendimentos: number;
+}
+
 export interface Collaborator {
   id: string;
   matricula: string;

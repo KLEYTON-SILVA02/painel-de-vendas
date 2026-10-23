@@ -16,6 +16,7 @@ import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { RankingModeToggle } from '../../components/ranking/RankingModeToggle';
 import { CAT_KEYS, type CategoryKey } from '../../lib/business/classification';
 import { computeDsmSummary } from '../../lib/business/dsm';
+import { computeUvcSummary, fmtUvc } from '../../lib/business/uvc';
 import { computeDinamicaRanking, intersectDynamicPeriod } from '../../lib/business/dynamics';
 import {
   diasRestantesNoMes,
@@ -33,6 +34,7 @@ import { useUpdateStoreSettings } from '../../lib/mutations';
 import { generateAllCategoryImages, generateRankingImageBlob, tryCopyImage, type CategoryImageSpec, type MultiImageResult } from '../../lib/rankingImage';
 import {
   useCategoryTypes,
+  useClientServiceRecords,
   useCollaborators,
   useDsmRecords,
   useDynamics,
@@ -88,7 +90,11 @@ const RANK_FILTERS: { k: RankFilter; l: string }[] = [
 // mesmo "Mercadoria Geral" que resolveRankFilterParams já usa quando uma
 // Dinâmica não é encontrada.
 function chartCategoryFromRankFilter(rankFilter: RankFilter): ChartCategoryKey {
-  if (rankFilter === 'ALL' || rankFilter.startsWith('DIN:')) return 'MER';
+  // UVC (itens ÷ atendimentos por dia) não tem um ponto natural nessa
+  // curva — é uma razão, não um total somável dia a dia como o resto —
+  // cai no mesmo fallback que Dinâmicas já usa (Mercadoria Geral) em vez
+  // de tentar desenhar uma linha de UVC aqui.
+  if (rankFilter === 'ALL' || rankFilter === 'UVC' || rankFilter.startsWith('DIN:')) return 'MER';
   // .startsWith() above isn't a type guard, so TS can't narrow the
   // template-literal DIN: member out on its own (same situation already
   // noted in resolveRankFilterParams below) — the remaining values here are
@@ -120,6 +126,10 @@ function resolveRankFilterParams(
   // DashboardPage's isDsmMode overrides every actual value derived from
   // this (ranking, meta bar, stat cards) before it reaches the screen.
   if (rankFilter === 'DSM') return { from: dashFrom, to: dashTo, catFilter: 'ALL' as const, label: 'DSM', dinamica: null };
+  // UVC também não é uma CategoryKey — mesmo placeholder 'ALL' que DSM usa
+  // acima; DashboardPage's isUvcMode sobrescreve ranking/barra/cards antes
+  // de chegar na tela, igual isDsmMode já faz.
+  if (rankFilter === 'UVC') return { from: dashFrom, to: dashTo, catFilter: 'ALL' as const, label: 'UVC', dinamica: null };
   const found = RANK_FILTERS.find((x) => x.k === rankFilter);
   // rankFilter here is one of RANK_FILTERS' keys ('ALL'|'DERM'|'GEN'|'MP') —
   // the DIN:/LEVMEL/CHIP cases were already returned above, but .startsWith()
@@ -172,6 +182,9 @@ function RankFilterBar({
             🎟️ DSM
           </SubtabButton>
         )}
+        <SubtabButton active={rankFilter === 'UVC'} onClick={() => setRankFilter('UVC')} shrink={singleLine}>
+          📈 UVC
+        </SubtabButton>
       </div>
       {activeDynamics.length > 0 && (
         <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
@@ -309,6 +322,7 @@ export function DashboardPage() {
   const { data: store } = useStore();
   const { data: billingCycle } = useStoreBillingCycle();
   const { data: dsmRecords } = useDsmRecords();
+  const { data: clientServiceRecords } = useClientServiceRecords();
   const { data: categoryTypes } = useCategoryTypes();
   const dsmCategory = categoryTypes?.find((c) => c.chave === 'dsm');
   const { data: specialLists, isError: specialListsError } = useSpecialLists();
@@ -433,6 +447,17 @@ export function DashboardPage() {
   // lógica — só os cartões de meta/R$ (que não fazem sentido pro DSM) são
   // sobrescritos separadamente mais abaixo (ver isDsmMode).
   const isDsmMode = rankFilter === 'DSM';
+  // UVC = itens vendidos ÷ atendimentos, uma RAZÃO — não dá pra ranquear
+  // nem somar do mesmo jeito que DSM soma conversões; ver uvc.ts. O ranking
+  // usa `uvc` tanto em `valor` quanto `itens` (mesma convenção do DSM
+  // acima, valor = itens = a métrica em si), mas o "total da loja" nunca
+  // pode vir de rankingFiltered.reduce(...) — só de uvcSummary.totals,
+  // calculado à parte como a razão dos totais, não a soma das razões.
+  const isUvcMode = rankFilter === 'UVC';
+  const uvcSummary = useMemo(
+    () => (isUvcMode ? computeUvcSummary(categoryTotals ?? [], clientServiceRecords ?? [], collaboratorsData, dashFrom, dashTo) : null),
+    [isUvcMode, categoryTotals, clientServiceRecords, collaboratorsData, dashFrom, dashTo],
+  );
   const rankingFiltered = useMemo(() => {
     if (isDsmMode) {
       return computeDsmSummary(dsmRecords ?? [], collaboratorsData, dashFrom, dashTo).map((r) => ({
@@ -444,6 +469,18 @@ export function DashboardPage() {
         qtd: { DERM: 0, GEN: 0, MP: 0, MER: 0, SEM: 0 },
         valor: r.conversoes,
         itens: r.conversoes,
+      }));
+    }
+    if (isUvcMode) {
+      return (uvcSummary?.rows ?? []).map((r) => ({
+        matricula: r.matricula,
+        nome: r.nome,
+        apelido: r.apelido,
+        foto: r.foto,
+        metaIndividual: 0,
+        qtd: { DERM: 0, GEN: 0, MP: 0, MER: 0, SEM: 0 },
+        valor: r.uvc,
+        itens: r.uvc,
       }));
     }
     // A Dinâmica matches products by its own rules (keyword/product list),
@@ -463,6 +500,8 @@ export function DashboardPage() {
   }, [
     isDsmMode,
     dsmRecords,
+    isUvcMode,
+    uvcSummary,
     dashFrom,
     dashTo,
     rankFilterParams.dinamica,
@@ -541,13 +580,16 @@ export function DashboardPage() {
 
   const isUnitRanking =
     isDsmMode ||
+    isUvcMode ||
     rankFilterParams.catFilter === 'LEVMEL' ||
     rankFilterParams.catFilter === 'CHIP' ||
     rankFilterParams.dinamica?.metrica === 'unidade';
   // "un." pra Levmel/Chip, "conv." pro DSM — mesma trilha de formatação
-  // (isUnitRanking), só troca o sufixo mostrado.
+  // (isUnitRanking), só troca o sufixo mostrado. UVC nem entra nessa
+  // trilha: é uma razão (1 casa decimal, sem sufixo), não uma contagem —
+  // fmtValue trata isso à parte, antes de chegar no `${v} ${unitSuffix}`.
   const unitSuffix = isDsmMode ? 'conv.' : 'un.';
-  const fmtValue = (v: number) => (isUnitRanking ? `${v} ${unitSuffix}` : fmtMoney(v));
+  const fmtValue = (v: number) => (isUvcMode ? fmtUvc(v) : isUnitRanking ? `${v} ${unitSuffix}` : fmtMoney(v));
   const rankingFilteredList = rankingFiltered.filter((r) => r.valor > 0 || r.itens > 0);
   const modeloRanking = storeSettings.modelo_ranking as 'escadinha' | 'lista';
 
@@ -564,20 +606,28 @@ export function DashboardPage() {
   // vendido no mês) / dias restantes — que EVOLUÇÃO DIÁRIA já usa. 'ALL'
   // (Mercadoria Geral) usa o mesmo fallback que effectiveMetaGeral() já
   // aplica no resto da tela.
-  const barValor = isUnitRanking
-    ? rankingFiltered.reduce((a, r) => a + r.itens, 0)
-    : rankingFiltered.reduce((a, r) => a + r.valor, 0);
+  // UVC nunca soma o ranking (isso somaria razões — sem significado, ver
+  // uvc.ts): o "total do período" é sempre a razão dos totais da loja,
+  // calculada à parte em uvcSummary. `?? 0` só pra manter barValor como
+  // number (usado em contas abaixo que já ficam neutralizadas por
+  // barMetaBase=0 quando isUvcMode) — o visor da barra usa fmtUvc direto
+  // no JSX, que mostra "—" para null em vez de "0,0".
+  const barValor = isUvcMode
+    ? (uvcSummary?.totals.uvc ?? 0)
+    : isUnitRanking
+      ? rankingFiltered.reduce((a, r) => a + r.itens, 0)
+      : rankingFiltered.reduce((a, r) => a + r.valor, 0);
   const barGoalMode = modoGeral ? 'mes' : 'dia';
-  // DSM não tem meta cadastrada (não é uma categoria de vendas) — sem isso,
-  // catFilter cai no fallback 'ALL' (ver resolveRankFilterParams) e
+  // DSM/UVC não têm meta cadastrada (não são categorias de venda) — sem
+  // isso, catFilter cai no fallback 'ALL' (ver resolveRankFilterParams) e
   // mostraria a Meta Geral em R$ da loja inteira ao lado de um ranking em
-  // conversões, o que não faz sentido nenhum.
-  const barMetaBase = isDsmMode
+  // conversões/UVC, o que não faz sentido nenhum.
+  const barMetaBase = isDsmMode || isUvcMode
     ? 0
     : rankFilterParams.catFilter === 'ALL'
       ? effectiveMetaGeralFromTotals(goals, barGoalMode, monthToDateTotals, collaborators, storeSettings.meta_geral_fallback)
       : getGoalFromTotals(goals[rankFilterParams.catFilter], barGoalMode, monthToDateTotals, collaborators);
-  const barSuperBase = isDsmMode
+  const barSuperBase = isDsmMode || isUvcMode
     ? 0
     : rankFilterParams.catFilter === 'ALL'
       ? getSuperMetaFromTotals(goals.MER, barGoalMode, monthToDateTotals, collaborators)
@@ -620,8 +670,19 @@ export function DashboardPage() {
     metaLabel = 'Dias restantes do mês';
     faltaLabel = 'Colaboradores participantes';
   }
+  // UVC também não tem meta — mostra dois números úteis de verdade em vez
+  // de "Meta Geral: 0"/"Falta p/ Meta: 0": o total de atendimentos
+  // importados no período, e quantos colaboradores tiveram atendimento
+  // (mesmo padrão do DSM acima, só trocando a métrica).
+  if (isUvcMode) {
+    metaLabel = 'Atendimentos no período';
+    faltaLabel = 'Colaboradores participantes';
+  }
   const saldo = barValor - barMetaBase;
-  const itensCategoria = rankingFiltered.reduce((a, r) => a + r.itens, 0);
+  // Mesmo motivo de barValor acima: "Itens Vendidos" pro UVC é o total de
+  // verdade (uvcSummary.totals.itens), nunca a soma das razões por
+  // colaborador que rankingFiltered.reduce(...) daria.
+  const itensCategoria = isUvcMode ? (uvcSummary?.totals.itens ?? 0) : rankingFiltered.reduce((a, r) => a + r.itens, 0);
 
   async function handleCopyRanking() {
     const text = formatRankingText(rankingFilteredList, rankFilterParams.label, rankFilterParams.from, rankFilterParams.to, store?.nome_loja);
@@ -708,19 +769,24 @@ export function DashboardPage() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flex: '1 1 auto', minWidth: 200 }}>
               <div>
                 <div style={{ color: '#ffb700', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 700 }}>
-                  ⭐ {isDsmMode ? 'Conversões DSM no período' : 'Venda total do período'}
+                  ⭐ {isDsmMode ? 'Conversões DSM no período' : isUvcMode ? 'UVC geral do período' : 'Venda total do período'}
                 </div>
-                <div style={{ fontSize: 26, textShadow: '0 0 10px rgba(0,240,255,.55)' }}>{fmtValue(barValor)}</div>
+                <div style={{ fontSize: 26, textShadow: '0 0 10px rgba(0,240,255,.55)' }}>
+                  {/* UVC pode não ter nenhum atendimento importado no período —
+                      fmtUvc(null) mostra "—", nunca "0,0" (que pareceria um
+                      resultado real em vez de "sem dado"). */}
+                  {isUvcMode ? fmtUvc(uvcSummary?.totals.uvc ?? null) : fmtValue(barValor)}
+                </div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                {/* DSM não tem meta pra comparar "atingimento" — reaproveita
-                    este espaço pra mostrar quantos colaboradores converteram
-                    no período em vez de um "0%" sem sentido. */}
+                {/* DSM/UVC não têm meta pra comparar "atingimento" — reaproveita
+                    este espaço pra mostrar quantos colaboradores converteram/
+                    tiveram atendimento no período em vez de um "0%" sem sentido. */}
                 <div style={{ color: '#8b90bf', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.08em' }}>
-                  {isDsmMode ? 'Colaboradores' : 'Atingim. período'}
+                  {isDsmMode || isUvcMode ? 'Colaboradores' : 'Atingim. período'}
                 </div>
                 <div style={{ fontSize: 26, textShadow: '0 0 10px rgba(0,240,255,.55)', color: '#00f0ff' }}>
-                  {isDsmMode ? rankingFiltered.length : `${barPct.toFixed(0)}%`}
+                  {isDsmMode || isUvcMode ? rankingFiltered.length : `${barPct.toFixed(0)}%`}
                 </div>
               </div>
             </div>
@@ -760,34 +826,35 @@ export function DashboardPage() {
               />
             </div>
             <div style={{ display: 'flex', gap: 'clamp(3px, 0.5vw, 6px)', flexShrink: 0 }}>
-              {/* Copiar ranking/Gerar imagem ainda não têm uma versão pro DSM
-                  (o texto/imagem gerados assumem R$ ou "un.") — desligados
-                  aqui em vez de gerar uma saída errada; a tela própria do
-                  DSM (/dsm) também não oferece essas duas ações hoje. */}
+              {/* Copiar ranking/Gerar imagem ainda não têm uma versão pro
+                  DSM nem pro UVC (o texto/imagem gerados assumem R$ ou
+                  "un.") — desligados aqui em vez de gerar uma saída
+                  errada; as telas próprias (/dsm, ADM > UVC) também não
+                  oferecem essas duas ações hoje. */}
               <button
                 onClick={handleCopyRanking}
-                disabled={isDsmMode}
-                title={isDsmMode ? 'Ainda não disponível para o ranking de DSM' : 'Copiar ranking de vendas p/ WhatsApp'}
+                disabled={isDsmMode || isUvcMode}
+                title={isDsmMode || isUvcMode ? 'Ainda não disponível para este ranking' : 'Copiar ranking de vendas p/ WhatsApp'}
                 style={{
                   ...ACTION_BUTTON_STYLE,
                   background: 'transparent',
                   border: '1px solid #212948',
                   color: '#8b90bf',
-                  opacity: isDsmMode ? 0.4 : 1,
+                  opacity: isDsmMode || isUvcMode ? 0.4 : 1,
                 }}
               >
                 {rankingCopied ? '✓ Copiado!' : '📋 Copiar ranking'}
               </button>
               <button
                 onClick={() => setImageScopeOpen(true)}
-                disabled={generatingImage || isDsmMode}
-                title={isDsmMode ? 'Ainda não disponível para o ranking de DSM' : 'Gerar imagem do ranking'}
+                disabled={generatingImage || isDsmMode || isUvcMode}
+                title={isDsmMode || isUvcMode ? 'Ainda não disponível para este ranking' : 'Gerar imagem do ranking'}
                 style={{
                   ...ACTION_BUTTON_STYLE,
                   background: 'transparent',
                   border: '1px solid #ffb700',
                   color: '#ffb700',
-                  opacity: generatingImage || isDsmMode ? 0.5 : 1,
+                  opacity: generatingImage || isDsmMode || isUvcMode ? 0.5 : 1,
                 }}
               >
                 {generatingImage
@@ -861,11 +928,21 @@ export function DashboardPage() {
         <div className="lg:col-start-2 lg:row-start-1 grid grid-cols-2 gap-2">
           <StatCard
             label={metaLabel}
-            value={isDsmMode ? `${diasRestantesNoMes()} dia(s)` : formatChartValue(metaExibida, isUnitRanking)}
+            value={
+              isDsmMode
+                ? `${diasRestantesNoMes()} dia(s)`
+                : isUvcMode
+                  ? (uvcSummary?.totals.atendimentos ?? 0).toLocaleString('pt-BR')
+                  : formatChartValue(metaExibida, isUnitRanking)
+            }
             color="#00f0ff"
-            badge={!isDsmMode && atingiuBarMeta ? 'MG ✓' : undefined}
+            badge={!isDsmMode && !isUvcMode && atingiuBarMeta ? 'MG ✓' : undefined}
           />
-          <StatCard label={faltaLabel} value={isDsmMode ? String(rankingFiltered.length) : formatChartValue(faltaValor, isUnitRanking)} color="#a82bff" />
+          <StatCard
+            label={faltaLabel}
+            value={isDsmMode || isUvcMode ? String(rankingFiltered.length) : formatChartValue(faltaValor, isUnitRanking)}
+            color="#a82bff"
+          />
           {/* Sign hidden by design (visual only) — `saldo` itself stays negative for every calculation elsewhere. */}
           <StatCard label="Saldo" value={fmtValue(Math.abs(saldo))} color={saldo >= 0 ? '#ffb700' : '#ff3df0'} />
           <StatCard label="Itens Vendidos" value={fmtValue(itensCategoria)} color="#14ff00" />

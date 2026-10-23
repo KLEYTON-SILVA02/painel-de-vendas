@@ -57,6 +57,7 @@ const ColaboradoresPage = lazy(() => import('./admin/ColaboradoresPage').then((m
 const ProdutosPage = lazy(() => import('./admin/ProdutosPage').then((m) => ({ default: m.ProdutosPage })));
 const ImportarPage = lazy(() => import('./admin/ImportarPage').then((m) => ({ default: m.ImportarPage })));
 const AuditoriaPage = lazy(() => import('./admin/AuditoriaPage').then((m) => ({ default: m.AuditoriaPage })));
+const UvcPage = lazy(() => import('./admin/UvcPage').then((m) => ({ default: m.UvcPage })));
 const ListaVendasPage = lazy(() => import('./admin/ListaVendasPage').then((m) => ({ default: m.ListaVendasPage })));
 const VendasArquivadasPage = lazy(() => import('./admin/VendasArquivadasPage').then((m) => ({ default: m.VendasArquivadasPage })));
 const BackupPage = lazy(() => import('./admin/BackupPage').then((m) => ({ default: m.BackupPage })));
@@ -330,6 +331,7 @@ export function AppShell() {
                     <Route path="produtos" element={<ProdutosPage />} />
                     <Route path="importar" element={<ImportarPage />} />
                     <Route path="auditoria" element={<AuditoriaPage />} />
+                    <Route path="uvc" element={<UvcPage />} />
                     <Route path="vendas" element={<ListaVendasPage />} />
                     <Route path="vendas-arquivadas" element={<VendasArquivadasPage />} />
                     <Route path="backup" element={<BackupPage />} />

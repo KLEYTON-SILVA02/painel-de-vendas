@@ -6,7 +6,7 @@ import type { GenericConquistaConfig } from './business/conquistas';
 import type { CategoryTotalRow, SpecialListItem } from './business/summary';
 import type { CardTextLayer, CardZone, ConquistaCardTemplate } from './conquistaCardRender';
 import { monthFirstISO, monthLastISO } from './dateRange';
-import { mapBioGroupGoal, mapCollaborator, mapCommissionRate, mapDsmRecord, mapDynamic, mapGoal, mapSale, mapSpecialListItem, SALE_COLUMNS, type SaleRow } from './mappers';
+import { mapBioGroupGoal, mapClientServiceRecord, mapCollaborator, mapCommissionRate, mapDsmRecord, mapDynamic, mapGoal, mapSale, mapSpecialListItem, SALE_COLUMNS, type SaleRow } from './mappers';
 import type { BulkDeletableTable } from './mutations';
 import { supabase } from './supabase';
 import type { Tables } from '../types/database';
@@ -259,6 +259,53 @@ export function useDsmImports() {
         .from('dsm_imports')
         .select('id, origem, file_name, row_count, duplicate_count, created_at')
         .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+/** Atendimentos (UVC) de toda a loja — um registro por colaborador/dia,
+ * sempre o valor mais recente importado pra aquele dia (substitui, nunca
+ * soma — ver migration 0103). Pequena o bastante (mesma ordem de grandeza
+ * de useDsmRecords) pra buscar inteira, igual useCollaborators. */
+export function useClientServiceRecords() {
+  return useQuery({
+    queryKey: ['client_service_records'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('client_service_records').select('id, collaborator_id, data, atendimentos');
+      if (error) throw error;
+      return data.map(mapClientServiceRecord);
+    },
+  });
+}
+
+/** Histórico do import de "Vendas por Clientes" — mirrors useDsmImports. */
+export function useClientServiceImports() {
+  return useQuery({
+    queryKey: ['client_service_imports'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('client_service_imports')
+        .select('id, file_name, row_count, created_at')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+/** Numerador do UVC — soma de sales.qtd por matrícula/dia, agregada no
+ * banco (RPC daily_items_sold_by_collaborator, migration 0103) em vez de
+ * baixar o histórico de vendas inteiro no navegador — mesmo raciocínio de
+ * distinct_products_in_sales/last_sale_date_by_collaborator (migration
+ * 0102). */
+export function useDailyItemsSoldByCollaborator(desde: string, ate: string, enabled = true) {
+  return useQuery({
+    queryKey: ['daily_items_sold_by_collaborator', desde, ate],
+    enabled,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('daily_items_sold_by_collaborator', { desde, ate });
       if (error) throw error;
       return data;
     },
