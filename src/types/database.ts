@@ -427,6 +427,93 @@ export type Database = {
           },
         ]
       }
+      client_service_imports: {
+        Row: {
+          created_at: string
+          file_name: string | null
+          id: string
+          row_count: number
+          store_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_name?: string | null
+          id?: string
+          row_count?: number
+          store_id: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string | null
+          id?: string
+          row_count?: number
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_service_imports_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_service_records: {
+        Row: {
+          atendimentos: number
+          collaborator_id: string
+          created_at: string
+          data: string
+          id: string
+          import_id: string | null
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          atendimentos: number
+          collaborator_id: string
+          created_at?: string
+          data: string
+          id?: string
+          import_id?: string | null
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          atendimentos?: number
+          collaborator_id?: string
+          created_at?: string
+          data?: string
+          id?: string
+          import_id?: string | null
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_service_records_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_service_records_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "client_service_imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_service_records_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       collaborators: {
         Row: {
           apelido: string | null
@@ -1836,10 +1923,25 @@ export type Database = {
         Args: { category_type_id_param: string; produto: string }
         Returns: string
       }
+      classify_bio_for_category_batch: {
+        Args: { category_type_id_param: string; produtos: string[] }
+        Returns: {
+          grupo: string
+          produto: string
+        }[]
+      }
       current_collaborator_id: { Args: never; Returns: string }
       current_collaborator_matricula: { Args: never; Returns: string }
       current_role: { Args: never; Returns: string }
       current_store_id: { Args: never; Returns: string }
+      daily_items_sold_by_collaborator: {
+        Args: { ate: string; desde: string }
+        Returns: {
+          data_iso: string
+          matricula: string
+          total_qtd: number
+        }[]
+      }
       dispatch_import_notification_for_collaborator: {
         Args: {
           apelido_param: string
@@ -1879,7 +1981,7 @@ export type Database = {
       distinct_products_in_sales: {
         Args: never
         Returns: {
-          codigo: string | null
+          codigo: string
           produto: string
         }[]
       }
@@ -1894,7 +1996,7 @@ export type Database = {
       last_sale_date_by_collaborator: {
         Args: never
         Returns: {
-          last_sale_date: string | null
+          last_sale_date: string
           matricula: string
         }[]
       }
@@ -1920,11 +2022,11 @@ export type Database = {
       list_stores_billing_for_builder: {
         Args: never
         Returns: {
-          cycle_type: string | null
-          ends_at: string | null
+          cycle_type: string
+          ends_at: string
           nome_loja: string
           numero_loja: string
-          started_at: string | null
+          started_at: string
           status: string
           store_id: string
         }[]
