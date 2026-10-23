@@ -36,7 +36,7 @@ import {
   useCategoryTypes,
   useClientServiceRecords,
   useCollaborators,
-  useDailySalesValorByCollaborator,
+  useDailyItemsSoldByCollaborator,
   useDsmRecords,
   useDynamics,
   useGoals,
@@ -91,7 +91,7 @@ const RANK_FILTERS: { k: RankFilter; l: string }[] = [
 // mesmo "Mercadoria Geral" que resolveRankFilterParams já usa quando uma
 // Dinâmica não é encontrada.
 function chartCategoryFromRankFilter(rankFilter: RankFilter): ChartCategoryKey {
-  // UVC (valor em R$ ÷ atendimentos por dia) não tem um ponto natural nessa
+  // UVC (itens ÷ atendimentos por dia) não tem um ponto natural nessa
   // curva — é uma razão, não um total somável dia a dia como o resto —
   // cai no mesmo fallback que Dinâmicas já usa (Mercadoria Geral) em vez
   // de tentar desenhar uma linha de UVC aqui.
@@ -329,13 +329,13 @@ export function DashboardPage() {
   const { data: specialLists, isError: specialListsError } = useSpecialLists();
   const { data: dynamics, isError: dynamicsError } = useDynamics();
   const { dashFrom, dashTo, refYear, refMonth, rankFilter, modoGeral, setRankFilter } = useDateRange();
-  // Numerador do UVC em R$ — só buscado quando o filtro UVC está ativo
-  // (ver isUvcMode mais abaixo), igual ao resto das queries condicionais
-  // desta página. Precisa de granularidade diária (não só o total do
-  // período, como categoryTotals) pro Modo Geral calcular a média das
-  // razões diárias em vez da razão do total do mês — ver uvc.ts.
+  // Numerador do UVC — só buscado quando o filtro UVC está ativo (ver
+  // isUvcMode mais abaixo), igual ao resto das queries condicionais desta
+  // página. Precisa de granularidade diária (não só o total do período,
+  // como categoryTotals) pro Modo Geral calcular a média das razões
+  // diárias em vez da razão do total do mês — ver uvc.ts.
   const isUvcMode = rankFilter === 'UVC';
-  const { data: dailySalesValorUvc } = useDailySalesValorByCollaborator(dashFrom, dashTo, isUvcMode);
+  const { data: dailyItensUvc } = useDailyItemsSoldByCollaborator(dashFrom, dashTo, isUvcMode);
   const updateStoreSettings = useUpdateStoreSettings(profile?.store_id);
 
   // Plano de Ação Tartaruga (Desktop): categoria/colaborador totals — the
@@ -455,17 +455,17 @@ export function DashboardPage() {
   // lógica — só os cartões de meta/R$ (que não fazem sentido pro DSM) são
   // sobrescritos separadamente mais abaixo (ver isDsmMode).
   const isDsmMode = rankFilter === 'DSM';
-  // UVC = valor vendido (R$) ÷ atendimentos, uma RAZÃO — não dá pra ranquear
+  // UVC = itens vendidos ÷ atendimentos, uma RAZÃO — não dá pra ranquear
   // nem somar do mesmo jeito que DSM soma conversões; ver uvc.ts. O ranking
   // usa `uvc` tanto em `valor` quanto `itens` (mesma convenção do DSM
   // acima, valor = itens = a métrica em si), mas o "total da loja" nunca
   // pode vir de rankingFiltered.reduce(...) — só de uvcSummary.totals,
   // calculado à parte (razão dos totais do período, ou média das razões
   // diárias no Modo Geral — ver computeUvcSummary). isUvcMode já foi
-  // declarado mais acima, junto do fetch de dailySalesValorUvc.
+  // declarado mais acima, junto do fetch de dailyItensUvc.
   const uvcSummary = useMemo(
-    () => (isUvcMode ? computeUvcSummary(dailySalesValorUvc ?? [], clientServiceRecords ?? [], collaboratorsData, dashFrom, dashTo, modoGeral) : null),
-    [isUvcMode, dailySalesValorUvc, clientServiceRecords, collaboratorsData, dashFrom, dashTo, modoGeral],
+    () => (isUvcMode ? computeUvcSummary(dailyItensUvc ?? [], clientServiceRecords ?? [], collaboratorsData, dashFrom, dashTo, modoGeral) : null),
+    [isUvcMode, dailyItensUvc, clientServiceRecords, collaboratorsData, dashFrom, dashTo, modoGeral],
   );
   const rankingFiltered = useMemo(() => {
     if (isDsmMode) {
@@ -688,10 +688,10 @@ export function DashboardPage() {
     faltaLabel = 'Colaboradores participantes';
   }
   const saldo = barValor - barMetaBase;
-  // Mesmo motivo de barValor acima: pro UVC esse card mostra "Valor
-  // Vendido" (uvcSummary.totals.valor, em R$), o total de verdade, nunca a
-  // soma das razões por colaborador que rankingFiltered.reduce(...) daria.
-  const itensCategoria = isUvcMode ? (uvcSummary?.totals.valor ?? 0) : rankingFiltered.reduce((a, r) => a + r.itens, 0);
+  // Mesmo motivo de barValor acima: "Itens Vendidos" pro UVC é o total de
+  // verdade (uvcSummary.totals.itens), nunca a soma das razões por
+  // colaborador que rankingFiltered.reduce(...) daria.
+  const itensCategoria = isUvcMode ? (uvcSummary?.totals.itens ?? 0) : rankingFiltered.reduce((a, r) => a + r.itens, 0);
 
   async function handleCopyRanking() {
     const text = formatRankingText(rankingFilteredList, rankFilterParams.label, rankFilterParams.from, rankFilterParams.to, store?.nome_loja);
@@ -954,7 +954,7 @@ export function DashboardPage() {
           />
           {/* Sign hidden by design (visual only) — `saldo` itself stays negative for every calculation elsewhere. */}
           <StatCard label="Saldo" value={fmtValue(Math.abs(saldo))} color={saldo >= 0 ? '#ffb700' : '#ff3df0'} />
-          <StatCard label={isUvcMode ? 'Valor Vendido' : 'Itens Vendidos'} value={fmtValue(itensCategoria)} color="#14ff00" />
+          <StatCard label="Itens Vendidos" value={fmtValue(itensCategoria)} color="#14ff00" />
         </div>
 
         <div className="lg:col-start-2 lg:row-start-2">

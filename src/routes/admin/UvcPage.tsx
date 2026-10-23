@@ -5,16 +5,16 @@ import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilt
 import { DateRangeProvider, useDateRange } from '../DateRangeContext';
 import { todayISO } from '../../lib/dateRange';
 import { computeUvcSummary, fmtUvc } from '../../lib/business/uvc';
-import { useClientServiceRecords, useCollaborators, useDailySalesValorByCollaborator } from '../../lib/queries';
+import { useClientServiceRecords, useCollaborators, useDailyItemsSoldByCollaborator } from '../../lib/queries';
 
 const NEON_CYAN = '#00f0ff';
 const NEON_GOLD = '#ffb700';
 
-/** Acompanhamento de UVC (Unidades Vendidas por Cliente) = valor vendido
- * (R$) ÷ atendimentos, por colaborador e no total da loja, no período
+/** Acompanhamento de UVC (Unidades Vendidas por Cliente) = itens vendidos
+ * ÷ atendimentos, por colaborador e no total da loja, no período
  * selecionado — mesma lógica de DashboardPage's isUvcMode, reaproveitada
  * via computeUvcSummary (lib/business/uvc.ts) pra nunca divergir entre as
- * duas telas. Valor vendido vem de `sales_category_totals_daily`
+ * duas telas. Itens vendidos vem de `sales_category_totals_daily`
  * (categoria='ALL', migration 0094); atendimentos vem só da importação
  * "Vendas por Clientes" (ImportarPage.tsx), nunca de `sales`.
  *
@@ -37,12 +37,12 @@ function UvcInner() {
   const [ordem, setOrdem] = useState<'uvc' | 'atendimentos' | 'alfabetica'>('uvc');
   const { data: collaborators } = useCollaborators();
   const { data: records } = useClientServiceRecords();
-  const { data: dailyValor } = useDailySalesValorByCollaborator(dashFrom, dashTo);
+  const { data: dailyItens } = useDailyItemsSoldByCollaborator(dashFrom, dashTo);
 
   const summary = useMemo(() => {
-    if (!collaborators || !records || !dailyValor) return null;
-    return computeUvcSummary(dailyValor, records, collaborators, dashFrom, dashTo, modoGeral);
-  }, [collaborators, records, dailyValor, dashFrom, dashTo, modoGeral]);
+    if (!collaborators || !records || !dailyItens) return null;
+    return computeUvcSummary(dailyItens, records, collaborators, dashFrom, dashTo, modoGeral);
+  }, [collaborators, records, dailyItens, dashFrom, dashTo, modoGeral]);
 
   if (!summary) return <PageLoading />;
   const { rows, totals } = summary;
@@ -54,7 +54,7 @@ function UvcInner() {
   });
 
   const statCards: MfbStatCard[] = [
-    { label: 'Valor vendido', value: fmtUvc(totals.valor), color: NEON_CYAN },
+    { label: 'Itens vendidos', value: totals.itens.toLocaleString('pt-BR'), color: NEON_CYAN },
     { label: 'Atendimentos', value: totals.atendimentos.toLocaleString('pt-BR'), color: NEON_CYAN },
     { label: modoGeral ? 'UVC médio do mês' : 'UVC geral da loja', value: fmtUvc(totals.uvc), color: NEON_GOLD },
   ];
@@ -66,12 +66,12 @@ function UvcInner() {
           <h3 className="font-semibold text-sm">📈 Acompanhamento de UVC</h3>
           <HelpTip
             helpKey="uvc.intro"
-            fallback="UVC (Unidades Vendidas por Cliente) = valor vendido (R$) ÷ clientes atendidos. Valor vendido já vem das vendas importadas; atendimentos vem só da planilha 'Vendas por Clientes' (ADM → Importar). No Modo Geral, o UVC é a média das razões diárias do mês — evita distorção quando a importação de atendimentos não cobre todo dia."
+            fallback="UVC (Unidades Vendidas por Cliente) = itens vendidos ÷ clientes atendidos. Itens vendidos já vem das vendas importadas; atendimentos vem só da planilha 'Vendas por Clientes' (ADM → Importar). No Modo Geral, o UVC é a média das razões diárias do mês — evita distorção quando a importação de atendimentos não cobre todo dia."
           />
         </div>
         <p className="text-xs text-slate-500">
-          Quanto maior o UVC, mais cada cliente gastou em média. Colaborador sem atendimentos importados no período
-          mostra “—”, não R$ 0,00 nem erro.
+          Quanto maior o UVC, mais itens em média cada cliente levou. Colaborador sem atendimentos importados no
+          período mostra “—”, não 0 nem erro.
         </p>
       </div>
 
@@ -88,7 +88,7 @@ function UvcInner() {
         </div>
         {sorted.length === 0 ? (
           <div className="text-sm text-slate-500 py-4 text-center">
-            Nenhuma venda nem atendimento importado para este período.
+            Nenhum item vendido nem atendimento importado para este período.
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -96,7 +96,7 @@ function UvcInner() {
               <thead>
                 <tr className="text-left text-slate-400 border-b border-slate-800">
                   <th className="py-1.5 pr-3">Colaborador</th>
-                  <th className="py-1.5 pr-3 text-right">Valor vendido</th>
+                  <th className="py-1.5 pr-3 text-right">Itens vendidos</th>
                   <th className="py-1.5 pr-3 text-right">Atendimentos</th>
                   <th className="py-1.5 pr-3 text-right">UVC</th>
                 </tr>
@@ -105,7 +105,7 @@ function UvcInner() {
                 {sorted.map((r) => (
                   <tr key={r.matricula} className="border-b border-slate-900">
                     <td className="py-1.5 pr-3">{r.apelido || r.nome}</td>
-                    <td className="py-1.5 pr-3 font-mono text-right">{fmtUvc(r.valor)}</td>
+                    <td className="py-1.5 pr-3 font-mono text-right">{r.itens.toLocaleString('pt-BR')}</td>
                     <td className="py-1.5 pr-3 font-mono text-right">{r.atendimentos.toLocaleString('pt-BR')}</td>
                     <td className="py-1.5 pr-3 font-mono text-right" style={{ color: NEON_GOLD }}>
                       {fmtUvc(r.uvc)}
@@ -116,7 +116,7 @@ function UvcInner() {
               <tfoot>
                 <tr className="border-t border-slate-700 font-semibold">
                   <td className="py-1.5 pr-3">Total da loja</td>
-                  <td className="py-1.5 pr-3 font-mono text-right">{fmtUvc(totals.valor)}</td>
+                  <td className="py-1.5 pr-3 font-mono text-right">{totals.itens.toLocaleString('pt-BR')}</td>
                   <td className="py-1.5 pr-3 font-mono text-right">{totals.atendimentos.toLocaleString('pt-BR')}</td>
                   <td className="py-1.5 pr-3 font-mono text-right" style={{ color: NEON_GOLD }}>
                     {fmtUvc(totals.uvc)}

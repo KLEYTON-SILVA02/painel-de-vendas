@@ -9,7 +9,7 @@ import { monthFirstISO, monthLastISO } from './dateRange';
 import { mapBioGroupGoal, mapClientServiceRecord, mapCollaborator, mapCommissionRate, mapDsmRecord, mapDynamic, mapGoal, mapSale, mapSpecialListItem, SALE_COLUMNS, type SaleRow } from './mappers';
 import type { BulkDeletableTable } from './mutations';
 import { supabase } from './supabase';
-import type { DailyValorRow } from './business/uvc';
+import type { DailyItensRow } from './business/uvc';
 import type { Tables } from '../types/database';
 
 type ProductRow = Tables<'products'>;
@@ -296,26 +296,26 @@ export function useClientServiceImports() {
   });
 }
 
-/** Numerador do UVC em R$ — valor vendido por matrícula/dia, lido direto de
+/** Numerador do UVC — itens vendidos por matrícula/dia, lido direto de
  * `sales_category_totals_daily` (categoria='ALL', migration 0094) — a mesma
  * tabela-rollup que mobile_category_totals() já usa, aqui mantida em
  * granularidade por dia (sem somar o período inteiro) porque o Modo Geral
  * precisa calcular a MÉDIA das razões diárias, não só a razão dos totais
  * (ver computeUvcSummary em lib/business/uvc.ts). RLS da própria tabela já
  * restringe por store_id, igual `sales` — sem RPC nova. */
-export function useDailySalesValorByCollaborator(desde: string, ate: string, enabled = true) {
+export function useDailyItemsSoldByCollaborator(desde: string, ate: string, enabled = true) {
   return useQuery({
-    queryKey: ['sales_category_totals_daily_valor', desde, ate],
+    queryKey: ['sales_category_totals_daily_itens', desde, ate],
     enabled,
-    queryFn: async (): Promise<DailyValorRow[]> => {
+    queryFn: async (): Promise<DailyItensRow[]> => {
       const { data, error } = await supabase
         .from('sales_category_totals_daily')
-        .select('matricula, data_iso, valor_total')
+        .select('matricula, data_iso, itens_total')
         .eq('categoria', 'ALL')
         .gte('data_iso', desde)
         .lte('data_iso', ate);
       if (error) throw error;
-      return (data ?? []).map((row) => ({ matricula: row.matricula, dataISO: row.data_iso, valorTotal: Number(row.valor_total) }));
+      return (data ?? []).map((row) => ({ matricula: row.matricula, dataISO: row.data_iso, itensTotal: Number(row.itens_total) }));
     },
   });
 }
