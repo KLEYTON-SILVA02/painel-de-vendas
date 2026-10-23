@@ -2,11 +2,12 @@ import { useMemo, useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
 import { HelpTip } from '../../components/HelpTip';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
+import { PodiumSplit, type PodiumSpots } from '../../components/ranking/PodiumSplit';
 import { DateRangeProvider, useDateRange } from '../DateRangeContext';
 import { fmtDateBR } from '../../lib/format';
 import { todayISO } from '../../lib/dateRange';
 import { computeUvcDailyRows, computeUvcSummary, fmtUvc } from '../../lib/business/uvc';
-import { useClientServiceRecords, useCollaborators, useDailyItemsSoldByCollaborator } from '../../lib/queries';
+import { useClientServiceRecords, useCollaborators, useDailyItemsSoldByCollaborator, useStoreSettings } from '../../lib/queries';
 
 const NEON_CYAN = '#00f0ff';
 const NEON_GOLD = '#ffb700';
@@ -67,14 +68,17 @@ function MetricToggle({ on, onClick, label }: { on: boolean; onClick: () => void
  * razões diárias do mês (não a razão do total do mês) — ver
  * computeUvcSummary.
  *
- * Duas camadas de controle, pedidas pelo usuário depois de investigar um
- * caso real onde o UVC saiu sempre perto de 1,0: "Por colaborador"/"Por
- * dia" troca a tabela entre o resumo por vendedor (como já existia) e um
- * quadro dia a dia da loja inteira (computeUvcDailyRows) — útil pra achar
- * exatamente em que dia um número parece errado. Os dois toggles "Itens
- * vendidos"/"Atendimentos" só escondem/mostram essas colunas (e os cards
- * correspondentes) em qualquer uma das duas visões — o UVC em si nunca
- * some; com os dois desligados, sobra só ele. */
+ * "Por colaborador" usa o mesmo PodiumSplit (pódio + lista em pílulas) de
+ * toda outra tela de ranking do sistema (DsmPage.tsx, CategoryPage.tsx) —
+ * ranqueado por UVC, sem seletor de ordenação próprio (nenhuma outra tela
+ * de ranking tem um). "Por dia" (pedido do usuário depois de investigar um
+ * caso real onde o UVC saiu sempre perto de 1,0) troca pra um quadro dia a
+ * dia da loja inteira (computeUvcDailyRows), em tabela — não existe um
+ * padrão de pódio equivalente pra "total por dia" em nenhuma outra tela. Os
+ * dois toggles "Itens vendidos"/"Atendimentos" controlam os cards da barra
+ * de métricas e as colunas da visão "Por dia"; no pódio, só "Atendimentos"
+ * tem efeito (o valor secundário mostrado sob o UVC), já que PodiumSplit só
+ * tem um slot de valor secundário. */
 export function UvcPage() {
   return (
     <DateRangeProvider initialDay={todayISO()}>
@@ -85,13 +89,13 @@ export function UvcPage() {
 
 function UvcInner() {
   const { dashFrom, dashTo, modoGeral } = useDateRange();
-  const [ordem, setOrdem] = useState<'uvc' | 'atendimentos' | 'alfabetica'>('uvc');
   const [visao, setVisao] = useState<'colaborador' | 'dia'>('colaborador');
   const [mostrarItens, setMostrarItens] = useState(true);
   const [mostrarAtendimentos, setMostrarAtendimentos] = useState(true);
   const { data: collaborators } = useCollaborators();
   const { data: records } = useClientServiceRecords();
   const { data: dailyItens } = useDailyItemsSoldByCollaborator(dashFrom, dashTo);
+  const { data: storeSettings } = useStoreSettings();
 
   const summary = useMemo(() => {
     if (!collaborators || !records || !dailyItens) return null;
@@ -103,14 +107,11 @@ function UvcInner() {
     return computeUvcDailyRows(dailyItens, records, collaborators, dashFrom, dashTo);
   }, [collaborators, records, dailyItens, dashFrom, dashTo]);
 
-  if (!summary || !dailyRows) return <PageLoading />;
-  const { rows, totals } = summary;
-
-  const sorted = rows.slice().sort((a, b) => {
-    if (ordem === 'alfabetica') return a.nome.localeCompare(b.nome, 'pt-BR');
-    if (ordem === 'atendimentos') return b.atendimentos - a.atendimentos;
-    return b.uvc - a.uvc;
-  });
+  if (!summary || !dailyRows || !storeSettings) return <PageLoading />;
+  // computeUvcSummary já devolve rows ordenadas por UVC — mesmo critério de
+  // ranking que o pódio abaixo usa, igual a toda outra tela de ranking do
+  // sistema (DSM, categorias) não ter seletor de ordenação próprio.
+  const { rows: sorted, totals } = summary;
 
   const statCards: MfbStatCard[] = [
     ...(mostrarItens ? [{ label: 'Itens vendidos', value: totals.itens.toLocaleString('pt-BR'), color: NEON_CYAN }] : []),
@@ -181,57 +182,27 @@ function UvcInner() {
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         {visao === 'colaborador' ? (
           <>
-            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-              <div className="text-xs text-slate-500">{sorted.length} colaborador(es) com movimento no período</div>
-              <select value={ordem} onChange={(e) => setOrdem(e.target.value as typeof ordem)} className="input" title="Ordenar por">
-                <option value="uvc">Maior UVC</option>
-                <option value="atendimentos">Mais atendimentos</option>
-                <option value="alfabetica">A-Z</option>
-              </select>
-            </div>
+            <p className="text-xs text-slate-500 mb-3">
+              Ranking de UVC por colaborador no período — mesmo pódio das demais categorias.
+            </p>
             {sorted.length === 0 ? (
               <div className="text-sm text-slate-500 py-4 text-center">
                 Nenhum item vendido nem atendimento importado para este período.
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-left text-slate-400 border-b border-slate-800">
-                      <th className="py-1.5 pr-3">Colaborador</th>
-                      {mostrarItens && <th className="py-1.5 pr-3 text-right">Itens vendidos</th>}
-                      {mostrarAtendimentos && <th className="py-1.5 pr-3 text-right">Atendimentos</th>}
-                      <th className="py-1.5 pr-3 text-right">UVC</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sorted.map((r) => (
-                      <tr key={r.matricula} className="border-b border-slate-900">
-                        <td className="py-1.5 pr-3">{r.apelido || r.nome}</td>
-                        {mostrarItens && <td className="py-1.5 pr-3 font-mono text-right">{r.itens.toLocaleString('pt-BR')}</td>}
-                        {mostrarAtendimentos && (
-                          <td className="py-1.5 pr-3 font-mono text-right">{r.atendimentos.toLocaleString('pt-BR')}</td>
-                        )}
-                        <td className="py-1.5 pr-3 font-mono text-right" style={{ color: NEON_GOLD }}>
-                          {fmtUvc(r.uvc)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t border-slate-700 font-semibold">
-                      <td className="py-1.5 pr-3">Total da loja</td>
-                      {mostrarItens && <td className="py-1.5 pr-3 font-mono text-right">{totals.itens.toLocaleString('pt-BR')}</td>}
-                      {mostrarAtendimentos && (
-                        <td className="py-1.5 pr-3 font-mono text-right">{totals.atendimentos.toLocaleString('pt-BR')}</td>
-                      )}
-                      <td className="py-1.5 pr-3 font-mono text-right" style={{ color: NEON_GOLD }}>
-                        {fmtUvc(totals.uvc)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+              // PodiumSplit só tem UM slot de valor secundário (ver sua própria
+              // doc) — por isso o toggle "Atendimentos" controla esse slot no
+              // pódio, mas "Itens vendidos" não tem onde entrar aqui; os dois
+              // continuam valendo nos cards acima e na visão "Por dia" abaixo.
+              <PodiumSplit
+                ranking={sorted}
+                getValue={(r) => r.uvc}
+                formatValue={fmtUvc}
+                bgUrl={storeSettings.ranking_podium_bg_url}
+                spots={storeSettings.ranking_podium_spots as unknown as PodiumSpots | null}
+                getSecondaryValue={mostrarAtendimentos ? (r) => r.atendimentos : undefined}
+                formatSecondaryValue={mostrarAtendimentos ? (v) => `${v.toLocaleString('pt-BR')} atend.` : undefined}
+              />
             )}
           </>
         ) : (
