@@ -6,6 +6,7 @@ import './Sidebar.css';
 import { FunctionIcon } from './icons/FunctionIcon';
 import {
   BagIcon,
+  BarChartIcon,
   ChevronIcon,
   CpuIcon,
   DropletIcon,
@@ -59,6 +60,11 @@ const CAT_NAV: {
   { key: 'CHIP', label: 'Chip', color: '#00f0ff', icon: CpuIcon, slot: 'chip', grupo: 'Categorias', to: '/categoria/CHIP', end: false },
   { key: 'DINAMICA', label: 'Dinâmicas', color: '#a82bff', icon: TargetIcon, slot: 'dinamicas', grupo: 'Programas', to: '/dinamicas', end: false },
   { key: 'CONQUISTAS', label: 'Conquistas', color: '#ffb700', icon: MedalIcon, slot: 'conquistas', grupo: 'Programas', to: '/conquistas', end: false },
+  // UVC: ao contrário de BIOSINTÉTICA/DSM logo abaixo, não depende de uma
+  // linha em category_types nem de um toggle "ativo" — é um recurso fixo do
+  // sistema (igual Dinâmicas/Conquistas), por isso entra direto aqui no
+  // CAT_NAV em vez de um bloco condicional à parte.
+  { key: 'UVC', label: 'UVC', color: '#ffb700', icon: BarChartIcon, slot: 'uvc', grupo: 'Programas', to: '/admin/uvc', end: false },
   { key: 'ADM', label: 'ADM', color: '#00f0ff', icon: SettingsIcon, slot: 'adm', grupo: 'Sistema', to: '/admin', end: false },
 ];
 
