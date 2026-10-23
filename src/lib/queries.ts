@@ -9,6 +9,7 @@ import { monthFirstISO, monthLastISO } from './dateRange';
 import { mapBioGroupGoal, mapClientServiceRecord, mapCollaborator, mapCommissionRate, mapDsmRecord, mapDynamic, mapGoal, mapSale, mapSpecialListItem, SALE_COLUMNS, type SaleRow } from './mappers';
 import type { BulkDeletableTable } from './mutations';
 import { supabase } from './supabase';
+import type { DailyValorRow } from './business/uvc';
 import type { Tables } from '../types/database';
 
 type ProductRow = Tables<'products'>;
@@ -295,19 +296,26 @@ export function useClientServiceImports() {
   });
 }
 
-/** Numerador do UVC — soma de sales.qtd por matrícula/dia, agregada no
- * banco (RPC daily_items_sold_by_collaborator, migration 0103) em vez de
- * baixar o histórico de vendas inteiro no navegador — mesmo raciocínio de
- * distinct_products_in_sales/last_sale_date_by_collaborator (migration
- * 0102). */
-export function useDailyItemsSoldByCollaborator(desde: string, ate: string, enabled = true) {
+/** Numerador do UVC em R$ — valor vendido por matrícula/dia, lido direto de
+ * `sales_category_totals_daily` (categoria='ALL', migration 0094) — a mesma
+ * tabela-rollup que mobile_category_totals() já usa, aqui mantida em
+ * granularidade por dia (sem somar o período inteiro) porque o Modo Geral
+ * precisa calcular a MÉDIA das razões diárias, não só a razão dos totais
+ * (ver computeUvcSummary em lib/business/uvc.ts). RLS da própria tabela já
+ * restringe por store_id, igual `sales` — sem RPC nova. */
+export function useDailySalesValorByCollaborator(desde: string, ate: string, enabled = true) {
   return useQuery({
-    queryKey: ['daily_items_sold_by_collaborator', desde, ate],
+    queryKey: ['sales_category_totals_daily_valor', desde, ate],
     enabled,
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc('daily_items_sold_by_collaborator', { desde, ate });
+    queryFn: async (): Promise<DailyValorRow[]> => {
+      const { data, error } = await supabase
+        .from('sales_category_totals_daily')
+        .select('matricula, data_iso, valor_total')
+        .eq('categoria', 'ALL')
+        .gte('data_iso', desde)
+        .lte('data_iso', ate);
       if (error) throw error;
-      return data;
+      return (data ?? []).map((row) => ({ matricula: row.matricula, dataISO: row.data_iso, valorTotal: Number(row.valor_total) }));
     },
   });
 }
