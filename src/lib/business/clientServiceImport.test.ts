@@ -5,7 +5,7 @@ import type { ColumnMap } from './importMapping';
 const map: ColumnMap = { data: 0, matricula: 1, vendedor: 2, codigo: -1, produto: -1, qtd: 3, valor: -1 };
 
 describe('aggregateClientServiceRows', () => {
-  it('sums the quantity column per matrícula+dia across multiple product lines', () => {
+  it('sums the quantity column per matrícula+dia across multiple PDV lines', () => {
     const rows: unknown[][] = [
       ['01/09/2026', '70208345', 'DEIVESON', '2'],
       ['01/09/2026', '70208345', 'DEIVESON', '1'],

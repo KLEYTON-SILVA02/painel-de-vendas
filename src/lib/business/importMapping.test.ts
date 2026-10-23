@@ -44,4 +44,18 @@ describe('autoMapColumns', () => {
     expect(map.qtd).toBe(11);
     expect(map.valor).toBe(12);
   });
+
+  it('com o override da planilha "Vendas por Clientes", mapeia "qtd" pra QTDE CLIENTE VENDA LÍQUIDA (K), não pra TKM VENDA (L)', () => {
+    const headers = [
+      'DATA', 'GO', 'GR', 'FILIAL', 'FILIAL NOME', 'PDV', 'VENDEDOR', 'VENDEDOR NOME', 'MATRICULA',
+      'VALOR VENDA LIQUIDA', 'QTDE CLIENTE VENDA LIQUIDA', 'TKM VENDA',
+      'VALOR VENDA RECEBTO', 'QTDE CLIENTE RECEBTO', 'TKM RECEBTO',
+      'VALOR VENDA TOTAL', 'QTDE CLIENTE TOTAL', 'TKM TOTAL',
+    ];
+    const map = autoMapColumns(headers, { qtd: ['qtde cliente venda liquida'] });
+    expect(map.data).toBe(0);
+    expect(map.vendedor).toBe(7);
+    expect(map.matricula).toBe(8);
+    expect(map.qtd).toBe(10); // K — nunca L (12, "TKM VENDA"), nem N/Q (Recebto/Total)
+  });
 });

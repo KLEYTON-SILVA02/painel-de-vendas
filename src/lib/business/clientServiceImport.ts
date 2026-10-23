@@ -1,21 +1,27 @@
 // Importação "Vendas por Clientes" (UVC — Unidades Vendidas por Cliente).
 //
-// A planilha de origem usa o MESMO layout fixo (A=Data, G=Vendedor código,
-// H=Vendedor Nome, I=Matrícula, J=Código do Produto, K=Descrição do
-// Produto, L=Quantidade Vendida, M=Valor do Produto) já reconhecido pela
-// importação de vendas comum (ver FIXED_COLS/FIELD_NAMES em
-// importMapping.ts) — por isso reaproveita `detectHeaderRow`/
-// `autoMapColumns` dali sem nenhuma mudança, em vez de um parser próprio.
-// A diferença não é o layout: é que, nesta planilha específica, a coluna L
-// já representa quantos clientes aquele vendedor atendeu naquela linha
-// (confirmado pelo usuário), não unidades de produto — por isso o destino
-// é outra tabela (`client_service_records`, migration 0103), nunca `sales`.
+// A planilha de origem (layout real confirmado pelo usuário, colunas A-R)
+// só coincide com a planilha de vendas comum até a coluna I: A=Data,
+// B=GO, C=GR, D=Filial, E=Filial Nome, F=PDV, G=Vendedor código, H=Vendedor
+// Nome, I=Matrícula — a partir da coluna J ela é totalmente diferente, sem
+// nenhum dado de produto: J=Valor Venda Líquida, K=Qtde Cliente Venda
+// Líquida, L=TKM Venda, M-O=mesmos três campos pro "Recebimento", P-R=mesmos
+// três pro "Total" (TKM = Ticket Médio = Valor ÷ Qtde Cliente, já vem pronto
+// na planilha, não é usado aqui). O "atendimentos" certo é a coluna K —
+// reconhecida pelo cabeçalho via um `overrides` dedicado em
+// ClientServiceImportSection.tsx, reaproveitando `detectHeaderRow`/
+// `autoMapColumns` de importMapping.ts (mesmo motor da importação de vendas
+// comum) em vez de um parser próprio, mas sem depender da posição fixa
+// antiga (coluna L, que nessa planilha é "TKM Venda" — uma razão, não uma
+// contagem). Destino: `client_service_records` (migration 0103), nunca
+// `sales`.
 //
-// Cada linha da planilha é um item vendido; o que salvamos é UM número por
-// vendedor/dia (atendimentos = soma de L daquele vendedor naquele dia),
-// então este módulo agrega antes de chegar na tela de revisão — o ADM
-// nunca revisa linha de produto por linha de produto, só vendedor/dia,
-// igual ao DSM.
+// Uma loja com atendimento em mais de um PDV no mesmo dia pode ter várias
+// linhas pro mesmo vendedor (uma por PDV, coluna F) — o agrupamento abaixo
+// soma todas (chave = matrícula+dia, nunca inclui o PDV), exatamente como
+// pedido. O que salvamos é UM número por vendedor/dia, então este módulo
+// agrega antes de chegar na tela de revisão — o ADM nunca revisa linha a
+// linha, só vendedor/dia, igual ao DSM.
 import type { ColumnMap } from './importMapping';
 import type { DsmReviewRow } from './dsmImport';
 import { dateFromCell, idFromCell, normalizeMatricula, parseNumeroBR } from './parsing';
@@ -27,8 +33,9 @@ export interface ClientServiceParsedRow {
   atendimentos: number;
 }
 
-/** Agrupa as linhas (uma por produto vendido) em uma por matrícula+dia,
- * somando a coluna de quantidade. Linha sem data (subtotal/rodapé) ou sem
+/** Agrupa as linhas (uma por PDV, quando o colaborador atendeu em mais de
+ * um no mesmo dia) em uma por matrícula+dia, somando a coluna de
+ * quantidade de clientes. Linha sem data (subtotal/rodapé) ou sem
  * matrícula é ignorada — mesma regra "sem data = ignorar" do DSM, que
  * cobre os dois casos de uma vez sem precisar reconhecer texto
  * "Total"/"Subtotal". */
