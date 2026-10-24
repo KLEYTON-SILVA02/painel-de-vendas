@@ -16,6 +16,7 @@
 // controlável via CSS/JS, só via aquele diálogo.
 import { matchesSpecialList, type SpecialListItem } from './business/summary';
 import type { Sale } from './business/types';
+import { fmtUvc } from './business/uvc';
 import { fmtDateBR, fmtMoney } from './format';
 
 function escapeHtml(s: string): string {
@@ -348,5 +349,62 @@ export function buildCategoryExtractHtml(params: {
       Período: ${escapeHtml(periodLabel)}<br />
       Colaborador: ${escapeHtml(sellerName ?? 'Todos')}${showComissao ? `<br />Comissão: ${commissionPercent}%` : ''}
     </div>
+    ${table}`;
+}
+
+export interface UvcExtractRow {
+  matricula: string;
+  nome: string;
+  apelido: string;
+  itens: number;
+  atendimentos: number;
+  uvc: number;
+}
+
+/** Extrato de UVC por colaborador (UvcPage.tsx, "Imprimir extrato") — uma
+ * única tabela colaborador × itens vendidos/atendimentos/UVC, no mesmo
+ * padrão visual (impressora térmica) dos outros extratos deste arquivo.
+ * `rows`/`totals` vêm prontos de computeUvcSummary (uvc.ts) — já na mesma
+ * ordem (por UVC, maior primeiro) que o pódio da tela usa, sem recalcular
+ * nada aqui. UVC é formatado com fmtUvc (a mesma razão itens÷atendimentos,
+ * nunca R$ de verdade, mesmo com o prefixo visual "R$" — ver uvc.ts). */
+export function buildUvcExtractHtml(params: {
+  periodLabel: string;
+  storeName?: string | null;
+  rows: UvcExtractRow[];
+  totals: { itens: number; atendimentos: number; uvc: number | null };
+}): string {
+  const { periodLabel, storeName, rows, totals } = params;
+  const table = rows.length
+    ? `<table>
+        <thead><tr>
+          <th>Colaborador</th>
+          <th style="text-align:right">Itens vendidos</th>
+          <th style="text-align:right">Atendimentos</th>
+          <th style="text-align:right">UVC</th>
+        </tr></thead>
+        <tbody>
+          ${rows
+            .map(
+              (r) => `<tr>
+            <td>${escapeHtml(r.apelido || r.nome)}</td>
+            <td style="text-align:right">${r.itens.toLocaleString('pt-BR')}</td>
+            <td style="text-align:right">${r.atendimentos.toLocaleString('pt-BR')}</td>
+            <td style="text-align:right">${fmtUvc(r.uvc)}</td>
+          </tr>`,
+            )
+            .join('')}
+          <tr class="total-row">
+            <td>Total do período</td>
+            <td style="text-align:right">${totals.itens.toLocaleString('pt-BR')}</td>
+            <td style="text-align:right">${totals.atendimentos.toLocaleString('pt-BR')}</td>
+            <td style="text-align:right">${fmtUvc(totals.uvc)}</td>
+          </tr>
+        </tbody>
+      </table>`
+    : `<div class="empty">Nenhum item vendido nem atendimento importado no período.</div>`;
+
+  return `<h1>Extrato de UVC${storeName ? ` — ${escapeHtml(storeName)}` : ''}</h1>
+    <div class="meta">Período: ${escapeHtml(periodLabel)}</div>
     ${table}`;
 }
