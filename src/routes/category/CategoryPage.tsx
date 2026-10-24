@@ -13,7 +13,7 @@ import { CATEGORY_COLOR, CATEGORY_EMOJI, useCategoryLabelMap } from '../../lib/b
 import type { CategoryKey } from '../../lib/business/classification';
 import { copyText, formatRankingText } from '../../lib/clipboard';
 import { diasRestantesNoMes, getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
-import { monthFirstISO, todayISO } from '../../lib/dateRange';
+import { addDaysISO, monthFirstISO, todayISO } from '../../lib/dateRange';
 import { computeSummary, computeVendorExtract } from '../../lib/business/summary';
 import { VISITANTE_SETOR, type CommissionRate, type SummaryRow } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
@@ -56,6 +56,14 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
   const salesRangeFrom = [currentMonthFirst, dashFrom].sort()[0];
   const salesRangeTo = [todayISO(), dashTo].sort().at(-1)!;
   const { data: sales } = useSalesInRange(salesRangeFrom, salesRangeTo);
+  // Seta de tendência (dia anterior) — só com um único dia selecionado (ver
+  // CLAUDE.md/decisão do usuário, 2026-10-24). Busca própria e dedicada
+  // (um único dia), independente do range mais amplo de `sales` acima, pra
+  // nunca depender de `salesRangeFrom` cobrir ou não esse dia (ex.: início
+  // do mês já corta `salesRangeFrom` bem em cima do 1º dia).
+  const modoDiaForTrend = dashFrom === dashTo;
+  const previousDayISO = modoDiaForTrend ? addDaysISO(dashFrom, -1) : null;
+  const { data: prevDaySales } = useSalesInRange(previousDayISO ?? dashFrom, previousDayISO ?? dashFrom, !!previousDayISO);
   // Reclassificar produtos (abaixo) retroage sobre "todo o histórico do
   // produto" quando o De/Até fica em branco (o padrão) — isso é maior que
   // o período limitado acima, então só busca o histórico completo quando o
@@ -97,6 +105,16 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
     () => (sales && collaborators ? computeSummary(sales, collaborators, dashFrom, dashTo, summaryFilter, specialLists) : []),
     [sales, collaborators, dashFrom, dashTo, summaryFilter, specialLists],
   );
+  // Seta de tendência: mapa matrícula → valor do colaborador nesta mesma
+  // categoria, no dia de venda anterior — null inteiro fora de "dia único".
+  const previousValueMap = useMemo(() => {
+    if (!previousDayISO || !prevDaySales || !collaborators) return null;
+    const map = new Map<string, number>();
+    computeSummary(prevDaySales, collaborators, previousDayISO, previousDayISO, summaryFilter, specialLists).forEach((r) =>
+      map.set(r.matricula, isUnit ? r.itens : r.valor),
+    );
+    return map;
+  }, [previousDayISO, prevDaySales, collaborators, summaryFilter, specialLists, isUnit]);
   // Levmel/Chip's "Meta Diária (hoje)" stat needs a second same-shaped
   // ranking scoped to just today — only worth computing for those two
   // screens.
@@ -307,6 +325,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
             formatValue={(v) => (isUnit ? `${v} un.` : fmtMoney(v))}
             bgUrl={storeSettings.ranking_podium_bg_url}
             spots={storeSettings.ranking_podium_spots as unknown as PodiumSpots | null}
+            getPreviousValue={previousValueMap ? (r) => previousValueMap.get(r.matricula) ?? 0 : undefined}
           />
         ) : (
           <PodiumStaircase
@@ -314,6 +333,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
             getValue={(r: SummaryRow) => (isUnit ? r.itens : r.valor)}
             formatValue={(v) => (isUnit ? `${v} un.` : fmtMoney(v))}
             variant={modeloRanking}
+            getPreviousValue={previousValueMap ? (r) => previousValueMap.get(r.matricula) ?? 0 : undefined}
           />
         )}
         <div className="flex flex-wrap gap-2 mt-4">

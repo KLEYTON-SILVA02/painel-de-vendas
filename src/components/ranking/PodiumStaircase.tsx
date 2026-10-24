@@ -1,4 +1,5 @@
 import { podiumHeightPx } from '../../lib/business/ranking';
+import { TrendArrow } from '../TrendArrow';
 
 export interface StaircaseRow {
   matricula: string;
@@ -49,6 +50,7 @@ export function PodiumStaircase<T extends StaircaseRow>({
   formatValue,
   variant,
   getSub,
+  getPreviousValue,
 }: {
   ranking: T[];
   getValue: (r: T) => number;
@@ -57,6 +59,10 @@ export function PodiumStaircase<T extends StaircaseRow>({
   /** Optional secondary label shown under the name (e.g. BIOSINTÉTICA's unit count).
    * Its presence switches the escadinha variant to the simpler .pc-card design. */
   getSub?: (r: T) => string;
+  /** Mesmo valor do colaborador no dia de venda anterior — ver a mesma prop
+   * em PodiumSplit.tsx (TrendArrow ao lado do valor principal, em todos os
+   * 3 variantes abaixo). */
+  getPreviousValue?: (r: T) => number | null | undefined;
 }) {
   if (!ranking.length) {
     return <div className="text-sm text-slate-500 py-6 text-center">Sem vendas para este período.</div>;
@@ -84,7 +90,15 @@ export function PodiumStaircase<T extends StaircaseRow>({
               <div style={{ fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.apelido || r.nome}</div>
               {getSub && <div style={{ fontSize: 10.5, color: '#8b90bf' }}>{getSub(r)}</div>}
             </div>
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, color: '#ffb700', flexShrink: 0 }}>{formatValue(getValue(r))}</div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, color: '#ffb700', flexShrink: 0 }}>
+              {formatValue(getValue(r))}
+              {getPreviousValue && (
+                <>
+                  {' '}
+                  <TrendArrow current={getValue(r)} previous={getPreviousValue(r)} />
+                </>
+              )}
+            </div>
           </div>
         ))}
       </div>
@@ -114,6 +128,12 @@ export function PodiumStaircase<T extends StaircaseRow>({
                 }}
               >
                 {formatValue(getValue(r))}
+                {getPreviousValue && (
+                  <>
+                    {' '}
+                    <TrendArrow current={getValue(r)} previous={getPreviousValue(r)} />
+                  </>
+                )}
               </div>
               <div
                 style={{
@@ -230,6 +250,12 @@ export function PodiumStaircase<T extends StaircaseRow>({
               }}
             >
               {formatValue(getValue(r))}
+              {getPreviousValue && (
+                <>
+                  {' '}
+                  <TrendArrow current={getValue(r)} previous={getPreviousValue(r)} />
+                </>
+              )}
             </div>
             <div style={{ position: 'relative', width: '100%', boxSizing: 'border-box', height }}>
               <div

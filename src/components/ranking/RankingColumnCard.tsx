@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { HelpTip } from '../HelpTip';
+import { TrendArrow } from '../TrendArrow';
 import type { ColumnRankingRow } from '../../lib/business/ranking';
 import { copyText, formatRankingText } from '../../lib/clipboard';
 import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
@@ -41,6 +42,7 @@ export function RankingColumnCard({
   dashTo,
   storeName,
   onGenerateAll,
+  getPreviousValue,
 }: {
   title: string;
   icon: string;
@@ -59,6 +61,9 @@ export function RankingColumnCard({
    * step — the parent (RankingPage) owns the sales data for every column,
    * so it generates and displays the multi-image modal itself. */
   onGenerateAll: () => void;
+  /** Mesmo valor do colaborador nesta coluna, no dia de venda anterior — ver
+   * a mesma prop em PodiumSplit.tsx (TrendArrow ao lado do valor). */
+  getPreviousValue?: (r: ColumnRankingRow) => number | null | undefined;
 }) {
   const [copied, setCopied] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -159,6 +164,12 @@ export function RankingColumnCard({
                 </div>
                 <div style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", color: '#ffb700', flexShrink: 0, whiteSpace: 'nowrap' }}>
                   {isUnit ? `${r.itens} ${unitLabel}` : r.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  {getPreviousValue && (
+                    <>
+                      {' '}
+                      <TrendArrow current={isUnit ? r.itens : r.valor} previous={getPreviousValue(r)} />
+                    </>
+                  )}
                 </div>
               </div>
             );

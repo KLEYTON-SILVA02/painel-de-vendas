@@ -4,7 +4,7 @@ import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilt
 import { PodiumSplit, type PodiumSpots } from '../../components/ranking/PodiumSplit';
 import { DateRangeProvider, useDateRange } from '../DateRangeContext';
 import { fmtDateBR } from '../../lib/format';
-import { todayISO } from '../../lib/dateRange';
+import { addDaysISO, todayISO } from '../../lib/dateRange';
 import { computeUvcDailyRows, computeUvcSummary, fmtUvc } from '../../lib/business/uvc';
 import { useClientServiceRecords, useCollaborators, useDailyItemsSoldByCollaborator, useStoreSettings } from '../../lib/queries';
 
@@ -101,6 +101,13 @@ function UvcInner() {
   const { data: records } = useClientServiceRecords();
   const { data: dailyItens } = useDailyItemsSoldByCollaborator(dashFrom, dashTo);
   const { data: storeSettings } = useStoreSettings();
+  // Seta de tendência (dia anterior) — só com um único dia selecionado;
+  // `records` (client_service_records) já vem completo (sem filtro de
+  // data), mas `dailyItens` é por período, então precisa de uma busca
+  // própria e dedicada pro dia anterior (mesmo raciocínio de
+  // DashboardPage.tsx's prevDayItensUvc).
+  const previousDayISO = dashFrom === dashTo ? addDaysISO(dashFrom, -1) : null;
+  const { data: prevDayItens } = useDailyItemsSoldByCollaborator(previousDayISO ?? dashFrom, previousDayISO ?? dashFrom, !!previousDayISO);
 
   const summary = useMemo(() => {
     if (!collaborators || !records || !dailyItens) return null;
@@ -111,6 +118,14 @@ function UvcInner() {
     if (!collaborators || !records || !dailyItens) return null;
     return computeUvcDailyRows(dailyItens, records, collaborators, dashFrom, dashTo);
   }, [collaborators, records, dailyItens, dashFrom, dashTo]);
+
+  // Seta de tendência: UVC de cada colaborador no dia de venda anterior.
+  const previousValueMap = useMemo(() => {
+    if (!previousDayISO || !collaborators || !records) return null;
+    const map = new Map<string, number>();
+    computeUvcSummary(prevDayItens ?? [], records, collaborators, previousDayISO, previousDayISO, false).rows.forEach((r) => map.set(r.matricula, r.uvc));
+    return map;
+  }, [previousDayISO, prevDayItens, records, collaborators]);
 
   if (!summary || !dailyRows || !storeSettings) return <PageLoading />;
   // computeUvcSummary já devolve rows ordenadas por UVC — mesmo critério de
@@ -190,6 +205,7 @@ function UvcInner() {
                 spots={storeSettings.ranking_podium_spots as unknown as PodiumSpots | null}
                 getSecondaryValue={mostrarAtendimentos ? (r) => r.atendimentos : undefined}
                 formatSecondaryValue={mostrarAtendimentos ? (v) => `${v.toLocaleString('pt-BR')} atend.` : undefined}
+                getPreviousValue={previousValueMap ? (r) => previousValueMap.get(r.matricula) ?? 0 : undefined}
               />
             )}
           </>

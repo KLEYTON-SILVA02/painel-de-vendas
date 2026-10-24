@@ -1,4 +1,5 @@
 import podiumPremiumBg from '../../assets/ranking/podium-premium-bg.jpg';
+import { TrendArrow } from '../TrendArrow';
 import type { StaircaseRow } from './PodiumStaircase';
 
 // "Ranking Geral de Vendas" — new split layout (top-3 over the ADM-supplied
@@ -95,6 +96,7 @@ export function PodiumSplit<T extends StaircaseRow>({
   spots,
   getSecondaryValue,
   formatSecondaryValue,
+  getPreviousValue,
 }: {
   ranking: T[];
   getValue: (r: T) => number;
@@ -110,6 +112,12 @@ export function PodiumSplit<T extends StaircaseRow>({
    * layout unchanged. */
   getSecondaryValue?: (r: T) => number;
   formatSecondaryValue?: (v: number) => string;
+  /** Mesmo valor do colaborador, só que no dia de venda anterior — quando
+   * fornecido, mostra a setinha de tendência (TrendArrow) ao lado do valor
+   * principal. Retornar null/undefined pra um colaborador específico (ou
+   * omitir a prop inteira) simplesmente não mostra seta nenhuma pra ele —
+   * usado só quando um único dia está selecionado (ver cada tela chamadora). */
+  getPreviousValue?: (r: T) => number | null | undefined;
 }) {
   if (!ranking.length) {
     return <div className="text-sm text-slate-500 py-6 text-center">Sem vendas para este período.</div>;
@@ -160,15 +168,30 @@ export function PodiumSplit<T extends StaircaseRow>({
             spots={effectiveSpots}
             getSecondaryValue={getSecondaryValue}
             formatSecondaryValue={formatSecondaryValue}
+            getPreviousValue={getPreviousValue}
           />
         ))}
       </div>
 
       {rest.length > 0 && (
         <div style={{ flex: '2 1 380px', display: 'flex', gap: 16, minWidth: 0 }}>
-          <PillColumn slots={col1} getValue={getValue} formatValue={formatValue} getSecondaryValue={getSecondaryValue} formatSecondaryValue={formatSecondaryValue} />
+          <PillColumn
+            slots={col1}
+            getValue={getValue}
+            formatValue={formatValue}
+            getSecondaryValue={getSecondaryValue}
+            formatSecondaryValue={formatSecondaryValue}
+            getPreviousValue={getPreviousValue}
+          />
           {col2.length > 0 && (
-            <PillColumn slots={col2} getValue={getValue} formatValue={formatValue} getSecondaryValue={getSecondaryValue} formatSecondaryValue={formatSecondaryValue} />
+            <PillColumn
+              slots={col2}
+              getValue={getValue}
+              formatValue={formatValue}
+              getSecondaryValue={getSecondaryValue}
+              formatSecondaryValue={formatSecondaryValue}
+              getPreviousValue={getPreviousValue}
+            />
           )}
         </div>
       )}
@@ -206,6 +229,7 @@ function PodiumText<T extends StaircaseRow>({
   spots,
   getSecondaryValue,
   formatSecondaryValue,
+  getPreviousValue,
 }: {
   rank: 0 | 1 | 2;
   row: T;
@@ -214,6 +238,7 @@ function PodiumText<T extends StaircaseRow>({
   spots: PodiumSpots;
   getSecondaryValue?: (r: T) => number;
   formatSecondaryValue?: (v: number) => string;
+  getPreviousValue?: (r: T) => number | null | undefined;
 }) {
   const spot = spots[rank];
   if (!spot) return null;
@@ -239,6 +264,12 @@ function PodiumText<T extends StaircaseRow>({
         }}
       >
         {formatValue(getValue(row))}
+        {getPreviousValue && (
+          <>
+            {' '}
+            <TrendArrow current={getValue(row)} previous={getPreviousValue(row)} />
+          </>
+        )}
       </div>
       {getSecondaryValue && formatSecondaryValue && (
         <div
@@ -301,12 +332,14 @@ function PillColumn<T extends StaircaseRow>({
   formatValue,
   getSecondaryValue,
   formatSecondaryValue,
+  getPreviousValue,
 }: {
   slots: PillSlot<T>[];
   getValue: (r: T) => number;
   formatValue: (v: number) => string;
   getSecondaryValue?: (r: T) => number;
   formatSecondaryValue?: (v: number) => string;
+  getPreviousValue?: (r: T) => number | null | undefined;
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: '1 1 0', minWidth: 0 }}>
@@ -352,6 +385,12 @@ function PillColumn<T extends StaircaseRow>({
             <span style={{ marginLeft: 'auto', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, fontSize: 12, color: '#64B5F6' }}>
                 {formatValue(getValue(slot.row))}
+                {getPreviousValue && (
+                  <>
+                    {' '}
+                    <TrendArrow current={getValue(slot.row)} previous={getPreviousValue(slot.row)} />
+                  </>
+                )}
               </span>
               {getSecondaryValue && formatSecondaryValue && (
                 <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, fontSize: 9, color: '#94a3b8' }}>

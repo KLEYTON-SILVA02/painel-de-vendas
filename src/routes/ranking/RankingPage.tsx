@@ -7,8 +7,9 @@ import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { computeDsmSummary } from '../../lib/business/dsm';
 import { diasRestantesNoMes, effectiveMetaGeral, getGoal, getSuperMeta, goalProration } from '../../lib/business/goals';
 import { computeColumnRanking, type ColumnRankingRow } from '../../lib/business/ranking';
+import { computeSummary } from '../../lib/business/summary';
 import { VISITANTE_SETOR, type Goal } from '../../lib/business/types';
-import { monthFirstISO, monthLastISO, todayISO } from '../../lib/dateRange';
+import { addDaysISO, monthFirstISO, monthLastISO, todayISO } from '../../lib/dateRange';
 import { monthName, fmtDateBR, fmtMoney } from '../../lib/format';
 import { accumulateMonthExtract, buildMonthExtract, buildMonthExtractHtml, openPrintPreview } from '../../lib/printExtract';
 import { generateAllCategoryImages, type CategoryImageSpec, type MultiImageResult } from '../../lib/rankingImage';
@@ -62,6 +63,11 @@ export function RankingPage() {
   const salesRangeFrom = [currentMonthFirst, refMonthFirst, dashFrom].sort()[0];
   const salesRangeTo = [todayISO(), refMonthLast, dashTo].sort().at(-1)!;
   const { data: sales } = useSalesInRange(salesRangeFrom, salesRangeTo);
+  // Seta de tendência (dia anterior) — só com um único dia selecionado;
+  // busca própria e dedicada (um único dia), independente de `sales` acima
+  // (mesmo raciocínio de CategoryPage.tsx).
+  const previousDayISO = dashFrom === dashTo ? addDaysISO(dashFrom, -1) : null;
+  const { data: prevDaySales } = useSalesInRange(previousDayISO ?? dashFrom, previousDayISO ?? dashFrom, !!previousDayISO);
   const categoryLabels = useCategoryLabelMap();
   const [generatingAll, setGeneratingAll] = useState(false);
   const [generatingProgress, setGeneratingProgress] = useState({ done: 0, total: 0 });
@@ -156,6 +162,30 @@ export function RankingPage() {
     return cols;
   }, [salesData, collaboratorsData, goals, dashFrom, dashTo, mode, refYear, refMonth, specialLists, categoryLabels, hiddenCategories, dsmCategory, dsmRecords]);
 
+  // Seta de tendência: mapa coluna → (matrícula → valor do colaborador no
+  // dia de venda anterior), um Map por chave de coluna — null inteiro fora
+  // de "dia único".
+  const previousValueMaps = useMemo(() => {
+    if (!previousDayISO) return null;
+    const prevSalesData = prevDaySales ?? [];
+    const result = new Map<string, Map<string, number>>();
+    RANKING_COLS.forEach((c) => {
+      const isUnit = c.key === 'LEVMEL' || c.key === 'CHIP';
+      const columnFilter = c.key === 'MER' ? 'ALL' : c.key;
+      const map = new Map<string, number>();
+      computeSummary(prevSalesData, collaboratorsData, previousDayISO, previousDayISO, columnFilter, specialLists).forEach((r) =>
+        map.set(r.matricula, isUnit ? r.itens : r.valor),
+      );
+      result.set(c.key, map);
+    });
+    if (dsmCategory?.ativo) {
+      const map = new Map<string, number>();
+      computeDsmSummary(dsmRecords ?? [], collaboratorsData, previousDayISO, previousDayISO).forEach((r) => map.set(r.matricula, r.conversoes));
+      result.set('DSM', map);
+    }
+    return result;
+  }, [previousDayISO, prevDaySales, collaboratorsData, specialLists, dsmCategory, dsmRecords]);
+
   if (!collaborators || !sales || !goals || !storeSettings || !specialLists) {
     return <PageLoading />;
   }
@@ -225,22 +255,26 @@ export function RankingPage() {
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 10 }}>
-          {columnData.map((c) => (
-            <RankingColumnCard
-              key={c.key}
-              title={c.titulo}
-              icon={c.icon}
-              color={c.cor}
-              ranking={c.ranking}
-              isUnit={c.isUnit}
-              unitLabel={c.unitLabel}
-              metaDiaria={c.metaDiaria}
-              dashFrom={dashFrom}
-              dashTo={dashTo}
-              storeName={store?.nome_loja}
-              onGenerateAll={handleGenerateAllImages}
-            />
-          ))}
+          {columnData.map((c) => {
+            const prevMap = previousValueMaps?.get(c.key);
+            return (
+              <RankingColumnCard
+                key={c.key}
+                title={c.titulo}
+                icon={c.icon}
+                color={c.cor}
+                ranking={c.ranking}
+                isUnit={c.isUnit}
+                unitLabel={c.unitLabel}
+                metaDiaria={c.metaDiaria}
+                dashFrom={dashFrom}
+                dashTo={dashTo}
+                storeName={store?.nome_loja}
+                onGenerateAll={handleGenerateAllImages}
+                getPreviousValue={prevMap ? (r) => prevMap.get(r.matricula) ?? 0 : undefined}
+              />
+            );
+          })}
         </div>
         {generatingAll && (
           <div className="mt-3 text-xs text-slate-500 text-center">

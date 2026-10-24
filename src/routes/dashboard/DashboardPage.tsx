@@ -27,7 +27,7 @@ import {
 } from '../../lib/business/goals';
 import type { Dynamic, Goal } from '../../lib/business/types';
 import { summaryFromCategoryTotals, sumCategoryTotals } from '../../lib/business/summary';
-import { monthFirstISO, monthLastISO, todayISO } from '../../lib/dateRange';
+import { addDaysISO, monthFirstISO, monthLastISO, todayISO } from '../../lib/dateRange';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { copyText, formatRankingText } from '../../lib/clipboard';
 import { useUpdateStoreSettings } from '../../lib/mutations';
@@ -378,6 +378,20 @@ export function DashboardPage() {
   // ver uvc.ts.
   const { data: dailyItensUvc } = useDailyItemsSoldByCollaborator(salesRangeFrom, salesRangeTo);
 
+  // Seta de tendência (dia anterior) — só faz sentido com um único dia
+  // selecionado (dashFrom === dashTo); fora disso não há um "dia anterior"
+  // único pra comparar (decisão do usuário, 2026-10-24). Busca própria,
+  // sempre o dia de calendário imediatamente anterior, independente da
+  // categoria/filtro selecionado no momento — troca de categoria não dispara
+  // um novo fetch. categoryTotals cobre as 6 categorias fixas + Levmel/Chip;
+  // dsmRecords/clientServiceRecords já vêm completos (sem filtro de data,
+  // ver seus próprios fetches acima); UVC precisa da sua própria busca por
+  // dia porque dailyItensUvc é por período. Dinâmicas ficam fora do escopo
+  // desta seta (ver previousValueMap abaixo).
+  const previousDayISO = dashFrom === dashTo ? addDaysISO(dashFrom, -1) : null;
+  const { data: prevDayCategoryTotals } = useMobileCategoryTotals(previousDayISO ?? dashFrom, previousDayISO ?? dashFrom, !!previousDayISO);
+  const { data: prevDayItensUvc } = useDailyItemsSoldByCollaborator(previousDayISO ?? dashFrom, previousDayISO ?? dashFrom, !!previousDayISO);
+
   // rankFilter lives in DateRangeContext, shared with RankingPage — sem
   // isso, escolher uma categoria lá (ou aqui, numa visita anterior) deixava
   // a Tela Início sempre "presa" naquela categoria da próxima vez que fosse
@@ -475,6 +489,29 @@ export function DashboardPage() {
     () => computeUvcSummary(dailyItensUvc ?? [], clientServiceRecords ?? [], collaboratorsData, dashFrom, dashTo, modoGeral),
     [dailyItensUvc, clientServiceRecords, collaboratorsData, dashFrom, dashTo, modoGeral],
   );
+  // Seta de tendência (dia anterior): valor de cada colaborador no dia de
+  // venda anterior, na mesma métrica (itens ou valor) que o ranking atual
+  // usa — null inteiro quando fora de "dia único" ou numa Dinâmica (fora do
+  // escopo, ver chartCategoryFromRankFilter's mesmo raciocínio). LEVMEL/CHIP
+  // comparam por itens (mesma convenção de isUnitRanking mais abaixo),
+  // nunca por valor.
+  const previousValueMap = useMemo(() => {
+    if (!previousDayISO || rankFilterParams.dinamica) return null;
+    const map = new Map<string, number>();
+    if (isDsmMode) {
+      computeDsmSummary(dsmRecords ?? [], collaboratorsData, previousDayISO, previousDayISO).forEach((r) => map.set(r.matricula, r.conversoes));
+    } else if (isUvcMode) {
+      computeUvcSummary(prevDayItensUvc ?? [], clientServiceRecords ?? [], collaboratorsData, previousDayISO, previousDayISO, false).rows.forEach((r) =>
+        map.set(r.matricula, r.uvc),
+      );
+    } else {
+      const catIsUnit = rankFilterParams.catFilter === 'LEVMEL' || rankFilterParams.catFilter === 'CHIP';
+      summaryFromCategoryTotals(prevDayCategoryTotals ?? [], collaboratorsData, rankFilterParams.catFilter).forEach((r) =>
+        map.set(r.matricula, catIsUnit ? r.itens : r.valor),
+      );
+    }
+    return map;
+  }, [previousDayISO, rankFilterParams.dinamica, rankFilterParams.catFilter, isDsmMode, isUvcMode, dsmRecords, prevDayItensUvc, clientServiceRecords, collaboratorsData, prevDayCategoryTotals]);
   const rankingFiltered = useMemo(() => {
     if (isDsmMode) {
       return computeDsmSummary(dsmRecords ?? [], collaboratorsData, dashFrom, dashTo).map((r) => ({
@@ -913,6 +950,7 @@ export function DashboardPage() {
                 formatValue={fmtValue}
                 bgUrl={storeSettings.ranking_podium_bg_url}
                 spots={storeSettings.ranking_podium_spots as unknown as PodiumSpots | null}
+                getPreviousValue={previousValueMap ? (r) => previousValueMap.get(r.matricula) ?? 0 : undefined}
               />
             ) : (
               <PodiumStaircase
@@ -920,6 +958,7 @@ export function DashboardPage() {
                 getValue={(r) => (isUnitRanking ? r.itens : r.valor)}
                 formatValue={fmtValue}
                 variant={modeloRanking}
+                getPreviousValue={previousValueMap ? (r) => previousValueMap.get(r.matricula) ?? 0 : undefined}
               />
             )}
           </div>
