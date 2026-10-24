@@ -137,29 +137,23 @@ export function RankingColumnCard({
         <span>{title}</span>
       </div>
 
-      {/* flex:1 (em vez de só maxHeight) faz colunas curtas (poucos
-          colaboradores, ex.: Levmel/DSM) crescerem até a mesma altura que o
-          grid já estica o card inteiro para (align-items:stretch, puxada
-          pela coluna mais alta da linha) — empurra os botões Copiar/Gerar
-          imagem pro fim do card, alinhados entre todas as colunas, em vez
-          de ficarem logo abaixo da última linha de cada lista (pedido
-          explícito do usuário, 2026-10-24). maxHeight continua sendo o teto
-          pra colunas com muitos colaboradores, que passam a rolar em vez de
-          esticar o card indefinidamente.
-          IMPORTANTE: sem minHeight:0 aqui — combinado com flex-grow, isso faz
-          o CSS Grid tratar a contribuição de altura deste item como 0 ao
-          calcular a altura "auto" da linha (grid mede o conteúdo ANTES de
-          distribuir o espaço extra do flex-grow), colapsando a linha inteira
-          para a altura do cabeçalho+botões e escondendo a lista de
-          colaboradores de toda coluna, mesmo as mais compridas (bug visto em
-          produção, 2026-10-24, corrigido na sessão seguinte). Sem minHeight
-          explícito, o item usa min-height:auto (padrão de flex item), que
-          preserva a altura intrínseca da lista para o grid medir — o
-          max-height abaixo continua limitando o resultado final e
-          acionando o scroll quando a lista realmente é mais alta que 360px. */}
+      {/* SEM flex-grow aqui (ao contrário de uma tentativa anterior) — um
+          item com overflow diferente de "visible" (overflowY:auto) é
+          tratado pela spec de Flexbox como se seu min-height:auto fosse 0
+          PRA FINS DE DIMENSIONAMENTO DO GRID, mesmo sem declarar
+          min-height:0 explicitamente — ou seja, flex-grow + overflow:auto
+          juntos sempre colapsam a altura "auto" da linha do grid pra cada
+          card, não tem como evitar isso só tirando o minHeight (bug visto
+          em produção 2026-10-24 numa 1ª tentativa de correção que não
+          resolveu por esse motivo). Aqui a lista cresce só até o próprio
+          conteúdo, até o teto de maxHeight — sizing normal, visível pro
+          grid medir certinho. O alinhamento dos botões embaixo (pedido
+          original) vem do wrapper deles logo abaixo, com marginTop:'auto'
+          — essa sim é a técnica correta pra "rodapé fixo embaixo de um card
+          esticado pelo grid", sem mexer no dimensionamento da lista. */}
       <div
         className="ranking-col-scroll"
-        style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: '1 1 0', maxHeight: 360, overflowY: 'auto' }}
+        style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 360, overflowY: 'auto' }}
       >
         {ranking.length === 0 ? (
           <div style={{ padding: '16px 0' }} className="text-sm text-slate-500 text-center">
@@ -236,20 +230,27 @@ export function RankingColumnCard({
         )}
       </div>
 
-      <button
-        onClick={handleCopy}
-        className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
-      >
-        {copied ? '✓ Copiado!' : '📋 Copiar'}
-      </button>
-      <button
-        onClick={() => setScopeModalOpen(true)}
-        disabled={generating}
-        className="rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
-        style={{ borderColor: '#ffb700', color: '#ffb700' }}
-      >
-        {generating ? 'Gerando...' : '🖼️ Gerar imagem'}
-      </button>
+      {/* marginTop:'auto' empurra este bloco (e tudo depois dele) pro fim do
+          card — técnica padrão de "rodapé fixo" num flex column esticado
+          pelo grid pai (align-items:stretch, puxado pela coluna mais alta
+          da linha): consome o espaço sobrando sem precisar que a lista
+          acima seja ela mesma flex-grow (ver comentário da lista rolável). */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 'auto' }}>
+        <button
+          onClick={handleCopy}
+          className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
+        >
+          {copied ? '✓ Copiado!' : '📋 Copiar'}
+        </button>
+        <button
+          onClick={() => setScopeModalOpen(true)}
+          disabled={generating}
+          className="rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+          style={{ borderColor: '#ffb700', color: '#ffb700' }}
+        >
+          {generating ? 'Gerando...' : '🖼️ Gerar imagem'}
+        </button>
+      </div>
       <HelpTip helpKey="ranking.gerar_imagem_coluna" fallback="Escolha entre gerar a imagem só desta categoria ou de todas as colunas do ranking de uma vez." />
 
       {scopeModalOpen && (
