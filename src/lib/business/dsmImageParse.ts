@@ -26,7 +26,11 @@ import { normalizeMatricula } from './parsing';
 
 const FOOTER_LINE_PATTERN = /\b(sub)?tota(l|is)\b/i;
 const NAO_IDENTIFICADO_PATTERN = /n[ãa]o\s+identificad/i;
-const MATRICULA_NAME_LINE = /^(\d{4,10})\s*[-–—]\s*(.+)$/;
+// Exportado — dsmImageColumns.ts (2ª análise, por posição/coluna) reusa
+// exatamente o mesmo reconhecimento de "início de linha de colaborador"
+// desta 1ª análise (por texto/regex), pra nunca haver duas definições do
+// que é uma linha de colaborador divergindo entre si.
+export const MATRICULA_NAME_LINE = /^(\d{4,10})\s*[-–—]\s*(.+)$/;
 
 export interface DsmImageLineMatch {
   lineRaw: string;
@@ -34,11 +38,14 @@ export interface DsmImageLineMatch {
   matricula: string;
   nome: string;
   quantidade: number | null;
-  /** Set only by the second-pass name search (parseDsmImageLinesByCollaboratorName)
-   * — absent for a line matched the normal way, so the review table can
-   * flag these for extra scrutiny (matched by nome, not by the stricter
-   * matrícula-dash pattern). */
-  matchedBy?: 'nome';
+  /** 'nome': set only by the second-pass name search
+   * (parseDsmImageLinesByCollaboratorName). 'coluna': set by the caller
+   * (DsmImageImportSection.tsx) when the column/position-based 2nd analysis
+   * (dsmImageColumns.ts) filled in a quantidade the line-based reading
+   * found null — absent for a line matched the normal way with an already
+   * recognized quantidade, so the review table can flag these for extra
+   * scrutiny. */
+  matchedBy?: 'nome' | 'coluna';
 }
 
 // Um token de CONTAGEM ("Vendas" ou "Número de Clientes") é sempre um
@@ -47,7 +54,9 @@ export interface DsmImageLineMatch {
 // carregam vírgula decimal, com ou sem o símbolo "%" (o OCR às vezes perde
 // o "%" mas quase nunca inventa uma vírgula) — então é essa vírgula que
 // distingue de forma confiável uma contagem de um valor monetário/percentual.
-const COUNT_TOKEN = /^\d[\d.]*$/;
+// Exportado — dsmImageColumns.ts reusa exatamente a mesma definição de "cara
+// de contagem inteira" pra escolher candidatos numéricos numa linha.
+export const COUNT_TOKEN = /^\d[\d.]*$/;
 // Aceita um "%" opcional colado no fim do token só pra não quebrar a
 // detecção de onde termina a linha de texto e começa a sequência de números.
 const NUMERIC_TOKEN = /^[\d.,]+%?$/;

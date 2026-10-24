@@ -410,30 +410,42 @@ export function buildUvcExtractHtml(params: {
   totals: { itens: number; atendimentos: number; uvc: number | null };
 }): string {
   const { periodLabel, storeName, rows, totals } = params;
+  // Cabeçalhos abreviados ("Itens"/"Atend." em vez de "Itens vendidos"/
+  // "Atendimentos") + white-space:nowrap em cada célula numérica — sem
+  // isso, "R$ 3,02" podia quebrar entre o "R$" e o número (ou "Itens
+  // vendidos" entre as duas palavras), desalinhando a tabela inteira numa
+  // página estreita (pedido explícito do usuário, 2026-10-24, com
+  // referência visual do problema).
   const table = rows.length
-    ? `<table>
+    ? `<table style="table-layout:fixed; width:100%;">
+        <colgroup>
+          <col style="width:40%;" />
+          <col style="width:20%;" />
+          <col style="width:20%;" />
+          <col style="width:20%;" />
+        </colgroup>
         <thead><tr>
           <th>Colaborador</th>
-          <th style="text-align:right">Itens vendidos</th>
-          <th style="text-align:right">Atendimentos</th>
-          <th style="text-align:right">UVC</th>
+          <th style="text-align:right; white-space:nowrap;">Itens</th>
+          <th style="text-align:right; white-space:nowrap;">Atend.</th>
+          <th style="text-align:right; white-space:nowrap;">UVC</th>
         </tr></thead>
         <tbody>
           ${rows
             .map(
               (r) => `<tr>
-            <td>${escapeHtml(r.apelido || r.nome)}</td>
-            <td style="text-align:right">${r.itens.toLocaleString('pt-BR')}</td>
-            <td style="text-align:right">${r.atendimentos.toLocaleString('pt-BR')}</td>
-            <td style="text-align:right">${fmtUvc(r.uvc)}</td>
+            <td style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(r.apelido || r.nome)}</td>
+            <td style="text-align:right; white-space:nowrap;">${r.itens.toLocaleString('pt-BR')}</td>
+            <td style="text-align:right; white-space:nowrap;">${r.atendimentos.toLocaleString('pt-BR')}</td>
+            <td style="text-align:right; white-space:nowrap;">${fmtUvc(r.uvc)}</td>
           </tr>`,
             )
             .join('')}
           <tr class="total-row">
-            <td>Total do período</td>
-            <td style="text-align:right">${totals.itens.toLocaleString('pt-BR')}</td>
-            <td style="text-align:right">${totals.atendimentos.toLocaleString('pt-BR')}</td>
-            <td style="text-align:right">${fmtUvc(totals.uvc)}</td>
+            <td style="white-space:nowrap;">Total</td>
+            <td style="text-align:right; white-space:nowrap;">${totals.itens.toLocaleString('pt-BR')}</td>
+            <td style="text-align:right; white-space:nowrap;">${totals.atendimentos.toLocaleString('pt-BR')}</td>
+            <td style="text-align:right; white-space:nowrap;">${fmtUvc(totals.uvc)}</td>
           </tr>
         </tbody>
       </table>`

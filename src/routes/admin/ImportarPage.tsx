@@ -121,6 +121,10 @@ export function ImportarPage() {
   // mostrar as duas seções empilhadas o tempo todo.
   const [mode, setMode] = useState<'vendas' | 'dsm' | 'uvc'>('vendas');
   const [step, setStep] = useState<Step>('pick');
+  // Espelha o step interno de DsmImageImportSection — só pra decidir se a
+  // barra "Importar planilha de DSM" aparece (só na 1ª etapa, 'input';
+  // pedido do usuário, 2026-10-24: some depois que o OCR já processou algo).
+  const [dsmImageStep, setDsmImageStep] = useState<'input' | 'review' | 'done'>('input');
   const [sheets, setSheets] = useState<ParsedSheet[]>([]);
   const [fileName, setFileName] = useState('');
   const [fileHash, setFileHash] = useState('');
@@ -857,8 +861,8 @@ export function ImportarPage() {
     <div className="flex flex-col gap-4">
     <div className="flex flex-col lg:flex-row gap-4 items-start">
       <div className="flex flex-col gap-4 flex-1 min-w-0 w-full">
-        <DsmImportSection />
-        <DsmImageImportSection />
+        {dsmImageStep === 'input' && <DsmImportSection />}
+        <DsmImageImportSection onStepChange={setDsmImageStep} />
       </div>
       <DsmImportHistoryPanel imports={pastDsmImports ?? []} />
     </div>
