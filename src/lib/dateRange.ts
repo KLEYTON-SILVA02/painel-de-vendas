@@ -19,3 +19,15 @@ export function todayISO(): string {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString().slice(0, 10);
 }
+
+/** Desloca uma data ISO (YYYY-MM-DD) por `days` dias de calendário — usado
+ * pela seta de tendência (dia anterior) pra achar o dia de venda anterior
+ * ao dia único selecionado (days = -1). O `T00:00:00` evita o mesmo
+ * problema de fuso do comentário acima do todayISO: sem ele, `new
+ * Date('YYYY-MM-DD')` é interpretado como meia-noite UTC, que em fusos
+ * negativos (Brasil) já é o dia anterior no horário local. */
+export function addDaysISO(dateISO: string, days: number): string {
+  const d = new Date(`${dateISO}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}

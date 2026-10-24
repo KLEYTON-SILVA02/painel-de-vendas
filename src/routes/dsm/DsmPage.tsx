@@ -5,6 +5,7 @@ import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilt
 import { PodiumSplit, type PodiumSpots } from '../../components/ranking/PodiumSplit';
 import { computeDsmSummary } from '../../lib/business/dsm';
 import { diasRestantesNoMes } from '../../lib/business/goals';
+import { addDaysISO } from '../../lib/dateRange';
 import { useCollaborators, useDsmRecords, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 
@@ -31,6 +32,16 @@ export function DsmPage() {
     () => computeDsmSummary(recordsData, collaboratorsData, dashFrom, dashTo),
     [recordsData, collaboratorsData, dashFrom, dashTo],
   );
+  // Seta de tendência (dia anterior) — só com um único dia selecionado;
+  // dsmRecords já vem completo (sem filtro de data), então não precisa de
+  // busca própria aqui, só reclassificar o mesmo array pro dia anterior.
+  const previousDayISO = dashFrom === dashTo ? addDaysISO(dashFrom, -1) : null;
+  const previousValueMap = useMemo(() => {
+    if (!previousDayISO) return null;
+    const map = new Map<string, number>();
+    computeDsmSummary(recordsData, collaboratorsData, previousDayISO, previousDayISO).forEach((r) => map.set(r.matricula, r.conversoes));
+    return map;
+  }, [previousDayISO, recordsData, collaboratorsData]);
 
   // Checked BEFORE the "still missing" guard below — see PageError's own
   // comment for why: a query that already gave up leaves `data` undefined
@@ -73,6 +84,7 @@ export function DsmPage() {
             formatValue={(v) => `${v} conv.`}
             bgUrl={storeSettings.ranking_podium_bg_url}
             spots={storeSettings.ranking_podium_spots as unknown as PodiumSpots | null}
+            getPreviousValue={previousValueMap ? (r) => previousValueMap.get(r.matricula) ?? 0 : undefined}
           />
         )}
       </div>
