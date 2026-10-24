@@ -175,7 +175,7 @@ export function RankingColumnCard({
                   }}
                 >
                   {isUnit ? `${r.itens} ${unitLabel}` : r.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                  {getPreviousValue && <TrendArrow current={isUnit ? r.itens : r.valor} previous={getPreviousValue(r)} size={11} />}
+                  {getPreviousValue && <TrendArrow current={isUnit ? r.itens : r.valor} previous={getPreviousValue(r)} size={9} />}
                 </div>
               </div>
             );

@@ -27,7 +27,7 @@ const LABELS: Record<TrendColor, string> = {
 export function TrendArrow({
   current,
   previous,
-  size = 14,
+  size = 11,
 }: {
   current: number;
   previous: number | null | undefined;
