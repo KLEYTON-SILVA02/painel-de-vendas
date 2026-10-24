@@ -180,7 +180,10 @@ export function ConquistasPage() {
             </h3>
           </div>
 
-          <div className="flex flex-wrap gap-2 mb-3">
+          {/* Botões esticados lado a lado, largura igual, preenchendo o
+             espaço disponível — mesmo padrão responsivo já usado nas abas
+             de ADM > Produtos (ProdutosPage.tsx). */}
+          <div className="grid gap-2 mb-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))' }}>
             {categories.map((c) => (
               <button
                 key={c.key}
@@ -188,6 +191,7 @@ export function ConquistasPage() {
                   setCatKey(c.key);
                   setTierFilter('ALL');
                 }}
+                className="w-full"
                 style={{
                   background: catKey === c.key ? c.color : 'transparent',
                   border: `1px solid ${c.color}`,
@@ -213,24 +217,27 @@ export function ConquistasPage() {
           {!isUnit && (
             <div className="flex flex-wrap items-center gap-2">
               <HelpTip helpKey="conquistas.faixas" fallback="Cada faixa é um valor de premiação da categoria — filtre por uma faixa para ver só quem já bateu ela no dia." />
-              {(['ALL', ...tiersFor(catKey, generic)] as TierFilter[]).map((f) => (
-                <button
-                  key={String(f)}
-                  onClick={() => setTierFilter(f)}
-                  style={{
-                    background: tierFilter === f ? '#ffb700' : '#0b0e1d',
-                    border: '1px solid #ffb700',
-                    color: tierFilter === f ? '#231a02' : '#ffb700',
-                    padding: '5px 11px',
-                    borderRadius: 999,
-                    cursor: 'pointer',
-                    fontSize: 11,
-                    fontWeight: 700,
-                  }}
-                >
-                  {f === 'ALL' ? 'Todos' : `🏆 ${conquistaTierLabel(catKey, f, generic)}`}
-                </button>
-              ))}
+              <div className="grid gap-2 flex-1" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))' }}>
+                {(['ALL', ...tiersFor(catKey, generic)] as TierFilter[]).map((f) => (
+                  <button
+                    key={String(f)}
+                    onClick={() => setTierFilter(f)}
+                    className="w-full"
+                    style={{
+                      background: tierFilter === f ? '#ffb700' : '#0b0e1d',
+                      border: '1px solid #ffb700',
+                      color: tierFilter === f ? '#231a02' : '#ffb700',
+                      padding: '5px 11px',
+                      borderRadius: 999,
+                      cursor: 'pointer',
+                      fontSize: 11,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {f === 'ALL' ? 'Todos' : `🏆 ${conquistaTierLabel(catKey, f, generic)}`}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
