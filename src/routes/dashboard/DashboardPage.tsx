@@ -91,11 +91,11 @@ const RANK_FILTERS: { k: RankFilter; l: string }[] = [
 // mesmo "Mercadoria Geral" que resolveRankFilterParams já usa quando uma
 // Dinâmica não é encontrada.
 function chartCategoryFromRankFilter(rankFilter: RankFilter): ChartCategoryKey {
-  // UVC (itens ÷ atendimentos por dia) não tem um ponto natural nessa
-  // curva — é uma razão, não um total somável dia a dia como o resto —
-  // cai no mesmo fallback que Dinâmicas já usa (Mercadoria Geral) em vez
-  // de tentar desenhar uma linha de UVC aqui.
-  if (rankFilter === 'ALL' || rankFilter === 'UVC' || rankFilter.startsWith('DIN:')) return 'MER';
+  if (rankFilter === 'UVC') return 'UVC';
+  // Dinâmicas não têm lógica própria pra casar produtos dia a dia (ver
+  // computeDailyPoints) — cai no mesmo fallback que 'ALL' já usa
+  // (Mercadoria Geral).
+  if (rankFilter === 'ALL' || rankFilter.startsWith('DIN:')) return 'MER';
   // .startsWith() above isn't a type guard, so TS can't narrow the
   // template-literal DIN: member out on its own (same situation already
   // noted in resolveRankFilterParams below) — the remaining values here are
@@ -329,13 +329,7 @@ export function DashboardPage() {
   const { data: specialLists, isError: specialListsError } = useSpecialLists();
   const { data: dynamics, isError: dynamicsError } = useDynamics();
   const { dashFrom, dashTo, refYear, refMonth, rankFilter, modoGeral, setRankFilter } = useDateRange();
-  // Numerador do UVC — só buscado quando o filtro UVC está ativo (ver
-  // isUvcMode mais abaixo), igual ao resto das queries condicionais desta
-  // página. Precisa de granularidade diária (não só o total do período,
-  // como categoryTotals) pro Modo Geral calcular a média das razões
-  // diárias em vez da razão do total do mês — ver uvc.ts.
   const isUvcMode = rankFilter === 'UVC';
-  const { data: dailyItensUvc } = useDailyItemsSoldByCollaborator(dashFrom, dashTo, isUvcMode);
   const updateStoreSettings = useUpdateStoreSettings(profile?.store_id);
 
   // Plano de Ação Tartaruga (Desktop): categoria/colaborador totals — the
@@ -371,6 +365,18 @@ export function DashboardPage() {
   const salesRangeFrom = [currentMonthFirst, monthFirst, dashFrom].sort()[0];
   const salesRangeTo = [currentMonthLast, monthLast, dashTo].sort().at(-1)!;
   const { data: sales } = useSalesInRange(salesRangeFrom, salesRangeTo);
+  // Numerador do UVC — buscado sempre (não só quando o filtro UVC está
+  // ativo), na mesma janela união que `sales` acima usa: cobre tanto o
+  // dashFrom/dashTo do ranking/barra em modo UVC (isUvcMode) quanto o mês
+  // inteiro que a Evolução Diária pode estar exibindo e a geração de imagem
+  // "Todas as categorias" (allCategorySpecs) — computeUvcSummary/
+  // computeUvcDailyRows já filtram por fromDate/toDate internamente, então
+  // buscar essa janela mais ampla aqui não muda o resultado de nenhum dos
+  // três usos, só evita um 2º fetch por range. Precisa de granularidade
+  // diária (não só o total do período, como categoryTotals) pro Modo Geral
+  // calcular a média das razões diárias em vez da razão do total do mês —
+  // ver uvc.ts.
+  const { data: dailyItensUvc } = useDailyItemsSoldByCollaborator(salesRangeFrom, salesRangeTo);
 
   // rankFilter lives in DateRangeContext, shared with RankingPage — sem
   // isso, escolher uma categoria lá (ou aqui, numa visita anterior) deixava
@@ -461,11 +467,13 @@ export function DashboardPage() {
   // acima, valor = itens = a métrica em si), mas o "total da loja" nunca
   // pode vir de rankingFiltered.reduce(...) — só de uvcSummary.totals,
   // calculado à parte (razão dos totais do período, ou média das razões
-  // diárias no Modo Geral — ver computeUvcSummary). isUvcMode já foi
-  // declarado mais acima, junto do fetch de dailyItensUvc.
+  // diárias no Modo Geral — ver computeUvcSummary). Calculado sempre (não só
+  // quando isUvcMode), já que allCategorySpecs (geração de imagem "Todas as
+  // categorias") também precisa do total/ranking de UVC independente do
+  // filtro selecionado no momento.
   const uvcSummary = useMemo(
-    () => (isUvcMode ? computeUvcSummary(dailyItensUvc ?? [], clientServiceRecords ?? [], collaboratorsData, dashFrom, dashTo, modoGeral) : null),
-    [isUvcMode, dailyItensUvc, clientServiceRecords, collaboratorsData, dashFrom, dashTo, modoGeral],
+    () => computeUvcSummary(dailyItensUvc ?? [], clientServiceRecords ?? [], collaboratorsData, dashFrom, dashTo, modoGeral),
+    [dailyItensUvc, clientServiceRecords, collaboratorsData, dashFrom, dashTo, modoGeral],
   );
   const rankingFiltered = useMemo(() => {
     if (isDsmMode) {
@@ -564,8 +572,26 @@ export function DashboardPage() {
         metaDiaria: getGoalFromTotals(dsmGoal, 'dia', monthToDateTotals ?? [], collaboratorsData),
       });
     }
+    // UVC também não é uma CategoryKey (ver isUvcMode acima) e, diferente de
+    // DSM, não tem um "ativo"/ocultar próprio — o botão de filtro na tela
+    // sempre aparece (RankFilterBar), então a imagem entra sempre também.
+    // Igual ao resto do ranking de UVC (rankingFiltered/barValor acima), o
+    // total não pode vir da soma das razões de `uvcSummary.rows` — só de
+    // uvcSummary.totals.uvc, passado à parte via totalOverride/totalLabel
+    // (rankingImage.ts) em vez do `ranking.reduce((a,r)=>a+r.valor)` padrão.
+    // valueFormatter: fmtUvc garante "R$ 3,6" (1 casa decimal) tanto nas
+    // barras individuais quanto no total, em vez de fmtMoney/contagem.
+    specs.push({
+      key: 'UVC',
+      titulo: 'UVC',
+      rows: uvcSummary.rows.map((r) => ({ nome: r.nome, apelido: r.apelido, foto: r.foto, valor: r.uvc })),
+      isUnit: false,
+      valueFormatter: fmtUvc,
+      totalOverride: uvcSummary.totals.uvc ?? 0,
+      totalLabel: 'UVC GERAL DA LOJA',
+    });
     return specs;
-  }, [categoryTotals, collaboratorsData, goals, dashFrom, dashTo, categoryLabels, hiddenCategories, dsmCategory, dsmRecords, monthToDateTotals]);
+  }, [categoryTotals, collaboratorsData, goals, dashFrom, dashTo, categoryLabels, hiddenCategories, dsmCategory, dsmRecords, monthToDateTotals, uvcSummary]);
 
   // Checked BEFORE the "still missing" guard below — see PageError's own
   // comment for why: a query that already gave up leaves `data` undefined
@@ -915,6 +941,8 @@ export function DashboardPage() {
             monthLast={monthLast}
             dsmRecords={dsmRecords ?? []}
             dsmLabel={dsmCategory?.nome}
+            dailyItensUvc={dailyItensUvc ?? []}
+            clientServiceRecords={clientServiceRecords ?? []}
           />
         </div>
 

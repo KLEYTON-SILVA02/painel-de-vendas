@@ -59,10 +59,26 @@ export async function generateRankingImageBlob(
    * everywhere else DSM appears, instead of reading like a LEVMEL/CHIP unit
    * count. */
   unitLabel = 'un.',
+  /** UVC's bulk-image spec passes this: the store-wide UVC (itens ÷
+   * atendimentos — a RATIO) can never be `ranking.reduce((a,r) => a+r.valor)`
+   * like every other category (that would sum ratios, meaningless — same
+   * reasoning already documented in uvc.ts/DashboardPage.tsx), so this
+   * overrides the "TOTAL VENDIDO" box's value with the real store total
+   * computed elsewhere (uvcSummary.totals.uvc), leaving the per-row bars
+   * (each row's own, individually valid, ratio) untouched. */
+  totalOverride?: number,
+  /** UVC's bulk-image spec passes "UVC GERAL DA LOJA" here, replacing the
+   * "TOTAL VENDIDO"/"TOTAL DE UNIDADES" box label — neither wording fits a
+   * ratio. */
+  totalLabel?: string,
+  /** UVC's bulk-image spec passes fmtUvc here so both the per-row values and
+   * the total box render "R$ 3,6" (1 casa decimal, prefixo visual) instead
+   * of running a ratio through fmtMoney/unit-count formatting. */
+  valueFormatter?: (v: number) => string,
 ): Promise<Blob | null> {
   const ranking = rankingIn.filter((r) => r.valor > 0).slice(0, 10);
-  const totalValor = ranking.reduce((a, r) => a + r.valor, 0);
-  const fmtValue = (v: number) => (isUnit ? `${Math.round(v)} ${unitLabel}` : fmtMoney(v));
+  const totalValor = totalOverride ?? ranking.reduce((a, r) => a + r.valor, 0);
+  const fmtValue = valueFormatter ?? ((v: number) => (isUnit ? `${Math.round(v)} ${unitLabel}` : fmtMoney(v)));
   const pctAtingimento = metaDiaria && metaDiaria > 0 ? Math.min(999, (totalValor / metaDiaria) * 100) : null;
 
   const W = 1000;
@@ -104,7 +120,7 @@ export async function generateRankingImageBlob(
   ctx.stroke();
   ctx.fillStyle = '#8b90bf';
   ctx.font = '600 10px Arial';
-  ctx.fillText(isUnit ? 'TOTAL DE UNIDADES' : 'TOTAL VENDIDO', W - 170, 94);
+  ctx.fillText(totalLabel ?? (isUnit ? 'TOTAL DE UNIDADES' : 'TOTAL VENDIDO'), W - 170, 94);
   ctx.fillStyle = '#14ff00';
   ctx.font = '800 22px Arial';
   ctx.fillText(fmtValue(totalValor), W - 170, 118);
@@ -232,6 +248,14 @@ export interface CategoryImageSpec {
   /** Same as generateRankingImageBlob's `unitLabel` — defaults to "un." when
    * omitted. */
   unitLabel?: string;
+  /** Same as generateRankingImageBlob's `totalOverride` — only UVC's spec
+   * sets this (its store-wide total is a ratio, never derivable from
+   * `rows`). */
+  totalOverride?: number;
+  /** Same as generateRankingImageBlob's `totalLabel`. */
+  totalLabel?: string;
+  /** Same as generateRankingImageBlob's `valueFormatter`. */
+  valueFormatter?: (v: number) => string;
 }
 
 export interface MultiImageResult {
@@ -267,7 +291,19 @@ export async function generateAllCategoryImages(
   let done = 0;
   const settled = await Promise.all(
     specs.map(async (spec) => {
-      const blob = await generateRankingImageBlob(spec.rows, spec.titulo, fromDate, toDate, storeName, spec.isUnit, spec.metaDiaria, spec.unitLabel);
+      const blob = await generateRankingImageBlob(
+        spec.rows,
+        spec.titulo,
+        fromDate,
+        toDate,
+        storeName,
+        spec.isUnit,
+        spec.metaDiaria,
+        spec.unitLabel,
+        spec.totalOverride,
+        spec.totalLabel,
+        spec.valueFormatter,
+      );
       onProgress?.(++done, specs.length);
       if (!blob) return null;
       return { key: spec.key, title: spec.titulo, url: URL.createObjectURL(blob), filename: `ranking-${spec.key.toLowerCase()}.png` };
