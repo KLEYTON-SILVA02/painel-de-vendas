@@ -162,14 +162,20 @@ export function RankingColumnCard({
                     <div style={{ fontSize: 9, color: '#8b90bf', flexShrink: 0, width: 26, textAlign: 'right' }}>{r.pct !== null ? `${r.pct.toFixed(0)}%` : '—'}</div>
                   </div>
                 </div>
-                <div style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", color: '#ffb700', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                <div
+                  style={{
+                    fontSize: 10,
+                    fontFamily: "'JetBrains Mono', monospace",
+                    color: '#ffb700',
+                    flexShrink: 0,
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 3,
+                  }}
+                >
                   {isUnit ? `${r.itens} ${unitLabel}` : r.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                  {getPreviousValue && (
-                    <>
-                      {' '}
-                      <TrendArrow current={isUnit ? r.itens : r.valor} previous={getPreviousValue(r)} />
-                    </>
-                  )}
+                  {getPreviousValue && <TrendArrow current={isUnit ? r.itens : r.valor} previous={getPreviousValue(r)} size={11} />}
                 </div>
               </div>
             );
