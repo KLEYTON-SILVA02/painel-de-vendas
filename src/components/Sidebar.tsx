@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useCategoryLabelMap } from '../lib/business/categoryLabels';
@@ -88,6 +89,7 @@ export function Sidebar({
   logoUrl,
   onNavigate,
   showImportButton = true,
+  closeOnOutsideClick = false,
 }: {
   collapsed: boolean;
   onToggleCollapsed: () => void;
@@ -98,7 +100,26 @@ export function Sidebar({
    * but "Carregar Vendas" (bulk sales import) stays a desktop-only action —
    * hidden here instead of duplicating the whole nav/footer markup. */
   showImportButton?: boolean;
+  /** Clique fora da área do menu, só enquanto `collapsed` é false, chama
+   * `onToggleCollapsed` pra recolher automaticamente (pedido explícito do
+   * usuário, 2026-10-24). Só o AppShell desktop passa isso — a gaveta
+   * mobile (MobileAdminShell) já tem seu próprio fechamento via
+   * sb-backdrop e sempre renderiza com collapsed=false, então ligar isso
+   * lá também funcionaria (onToggleCollapsed já fecha a gaveta), mas não é
+   * necessário reimplementar o que já existe. */
+  closeOnOutsideClick?: boolean;
 }) {
+  const asideRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!closeOnOutsideClick || collapsed) return;
+    function handlePointerDown(e: MouseEvent) {
+      if (asideRef.current && !asideRef.current.contains(e.target as Node)) {
+        onToggleCollapsed();
+      }
+    }
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [closeOnOutsideClick, collapsed, onToggleCollapsed]);
   // BIOSINTÉTICA only shows up here when this store actually has a
   // category_types row for it — new stores don't get one seeded
   // automatically, so without this check every store would see a dead
@@ -128,7 +149,7 @@ export function Sidebar({
   const extraCategories = (categoryTypes ?? []).filter((c) => c.chave !== 'biosintetica' && c.chave !== 'dsm');
 
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" ref={asideRef}>
       <div className="sb-header">
         <div className="sb-logo">{logoUrl ? <img src={logoUrl} alt="" /> : 'GV'}</div>
         <div className="sb-title">
@@ -143,67 +164,79 @@ export function Sidebar({
         </button>
       </div>
 
+      {/* Sem mais os rótulos de grupo (PRINCIPAL/CATEGORIAS/PROGRAMAS) —
+          removidos a pedido do usuário (2026-10-24): "não será necessário
+          que seja exibido esses informativos que mostram o que é cada
+          botão". `title` em cada link cobre o pedido complementar — passar
+          o mouse por cima mostra o nome do botão, útil principalmente com o
+          menu colapsado (só ícones), mas funciona igual expandido. */}
       <nav className="sb-nav">
-        {GROUPS.map((g) => (
-          <div key={g}>
-            <div className="sb-group-label">{g}</div>
-            {CAT_NAV.filter((c) => c.grupo === g && !hiddenCategories.includes(c.key)).map((c) => (
-              <NavLink
-                key={c.key}
-                to={c.to}
-                end={c.end}
-                onClick={onNavigate}
-                style={{ '--sbc': c.color } as React.CSSProperties}
-                className={({ isActive }) => (isActive ? 'active' : '')}
-              >
-                <FunctionIcon slot={c.slot} fallback={c.icon} size={18} />
-                <span className="sb-label">{categoryLabels[c.key as keyof typeof categoryLabels] ?? c.label}</span>
-              </NavLink>
-            ))}
-            {g === 'Programas' && bioCategory && bioCategory.ativo && (
-              <NavLink
-                to="/bio"
-                end={false}
-                onClick={onNavigate}
-                style={{ '--sbc': '#14ff00' } as React.CSSProperties}
-                className={({ isActive }) => (isActive ? 'active' : '')}
-              >
-                <FunctionIcon slot="biosintetica" fallback={LeafIcon} size={18} />
-                <span className="sb-label">{bioCategory.nome}</span>
-              </NavLink>
-            )}
-            {g === 'Programas' && dsmCategory && dsmCategory.ativo && (
-              <NavLink
-                to="/dsm"
-                end={false}
-                onClick={onNavigate}
-                style={{ '--sbc': '#ffb700' } as React.CSSProperties}
-                className={({ isActive }) => (isActive ? 'active' : '')}
-              >
-                <FunctionIcon slot="dsm" fallback={TagIcon} size={18} />
-                <span className="sb-label">{dsmCategory.nome}</span>
-              </NavLink>
-            )}
-            {g === 'Programas' &&
-              extraCategories.map((c) => (
+        {GROUPS.map((g) => {
+          const label = (key: string, fallback: string) => categoryLabels[key as keyof typeof categoryLabels] ?? fallback;
+          return (
+            <div key={g}>
+              {CAT_NAV.filter((c) => c.grupo === g && !hiddenCategories.includes(c.key)).map((c) => (
                 <NavLink
-                  key={c.id}
-                  to={`/categoria-parceria/${c.chave}`}
-                  end={false}
+                  key={c.key}
+                  to={c.to}
+                  end={c.end}
                   onClick={onNavigate}
-                  style={{ '--sbc': '#00c2ff' } as React.CSSProperties}
+                  title={label(c.key, c.label)}
+                  style={{ '--sbc': c.color } as React.CSSProperties}
                   className={({ isActive }) => (isActive ? 'active' : '')}
                 >
-                  {c.icone_url ? (
-                    <img src={c.icone_url} alt="" width={18} height={18} style={{ objectFit: 'contain' }} />
-                  ) : (
-                    <TagIcon width={18} height={18} />
-                  )}
-                  <span className="sb-label">{c.nome}</span>
+                  <FunctionIcon slot={c.slot} fallback={c.icon} size={18} />
+                  <span className="sb-label">{label(c.key, c.label)}</span>
                 </NavLink>
               ))}
-          </div>
-        ))}
+              {g === 'Programas' && bioCategory && bioCategory.ativo && (
+                <NavLink
+                  to="/bio"
+                  end={false}
+                  onClick={onNavigate}
+                  title={bioCategory.nome}
+                  style={{ '--sbc': '#14ff00' } as React.CSSProperties}
+                  className={({ isActive }) => (isActive ? 'active' : '')}
+                >
+                  <FunctionIcon slot="biosintetica" fallback={LeafIcon} size={18} />
+                  <span className="sb-label">{bioCategory.nome}</span>
+                </NavLink>
+              )}
+              {g === 'Programas' && dsmCategory && dsmCategory.ativo && (
+                <NavLink
+                  to="/dsm"
+                  end={false}
+                  onClick={onNavigate}
+                  title={dsmCategory.nome}
+                  style={{ '--sbc': '#ffb700' } as React.CSSProperties}
+                  className={({ isActive }) => (isActive ? 'active' : '')}
+                >
+                  <FunctionIcon slot="dsm" fallback={TagIcon} size={18} />
+                  <span className="sb-label">{dsmCategory.nome}</span>
+                </NavLink>
+              )}
+              {g === 'Programas' &&
+                extraCategories.map((c) => (
+                  <NavLink
+                    key={c.id}
+                    to={`/categoria-parceria/${c.chave}`}
+                    end={false}
+                    onClick={onNavigate}
+                    title={c.nome}
+                    style={{ '--sbc': '#00c2ff' } as React.CSSProperties}
+                    className={({ isActive }) => (isActive ? 'active' : '')}
+                  >
+                    {c.icone_url ? (
+                      <img src={c.icone_url} alt="" width={18} height={18} style={{ objectFit: 'contain' }} />
+                    ) : (
+                      <TagIcon width={18} height={18} />
+                    )}
+                    <span className="sb-label">{c.nome}</span>
+                  </NavLink>
+                ))}
+            </div>
+          );
+        })}
       </nav>
 
       {/* ADM/settings link, pulled out of the scrolling nav above so it
@@ -217,6 +250,7 @@ export function Sidebar({
           to={TUTORIAIS_NAV_ITEM.to}
           end={TUTORIAIS_NAV_ITEM.end}
           onClick={onNavigate}
+          title={TUTORIAIS_NAV_ITEM.label}
           style={{ '--sbc': TUTORIAIS_NAV_ITEM.color } as React.CSSProperties}
           className={({ isActive }) => (isActive ? 'active' : '')}
         >
@@ -227,6 +261,7 @@ export function Sidebar({
           to={ADM_NAV_ITEM.to}
           end={ADM_NAV_ITEM.end}
           onClick={onNavigate}
+          title={categoryLabels[ADM_NAV_ITEM.key as keyof typeof categoryLabels] ?? ADM_NAV_ITEM.label}
           style={{ '--sbc': ADM_NAV_ITEM.color } as React.CSSProperties}
           className={({ isActive }) => (isActive ? 'active' : '')}
         >
@@ -236,12 +271,12 @@ export function Sidebar({
       </nav>
 
       <div className="sb-footer">
-        <button type="button" className="sb-logout-btn" onClick={() => signOut()}>
+        <button type="button" className="sb-logout-btn" onClick={() => signOut()} title="Sair">
           <LogoutIcon width={13} height={13} />
           <span className="sb-label">Sair</span>
         </button>
         {showImportButton && (
-          <NavLink to="/admin/importar" className="sb-import-btn" onClick={onNavigate}>
+          <NavLink to="/admin/importar" className="sb-import-btn" onClick={onNavigate} title="Importar Vendas">
             <UploadIcon width={26} height={26} />
             <span className="sb-label">Importar Vendas</span>
           </NavLink>

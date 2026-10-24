@@ -307,7 +307,17 @@ export function RankingPage() {
     const isAcumulado = extratoModo === 'acumulado';
     const categorias = isAcumulado ? accumulateMonthExtract(categoriasBase) : categoriasBase;
     const monthLabel = `${monthName(refMonth)}/${refYear}`;
-    const html = buildMonthExtractHtml(categorias, monthLabel, store?.nome_loja, nomeColaborador, isAcumulado ? 'Acumulado' : 'Valor');
+    const html = buildMonthExtractHtml(
+      categorias,
+      monthLabel,
+      store?.nome_loja,
+      nomeColaborador,
+      isAcumulado ? 'Acumulado' : 'Valor',
+      'Extrato do Mês',
+      'Total do mês',
+      true,
+      !isAcumulado,
+    );
     openPrintPreview(`Extrato ${isAcumulado ? '(acumulado) ' : ''}— ${nomeColaborador} — ${monthLabel}`, html);
   }
 

@@ -15,9 +15,33 @@
 // cabeçalho/rodapé e gráficos de fundo desligados) — isso continua não
 // controlável via CSS/JS, só via aquele diálogo.
 import { matchesSpecialList, type SpecialListItem } from './business/summary';
+import { computeTrend, type TrendColor } from './business/trend';
 import type { Sale } from './business/types';
 import { fmtUvc } from './business/uvc';
 import { fmtDateBR, fmtMoney } from './format';
+
+// Mesmas cores de TrendArrow.tsx (componente React) — reaproveitadas aqui
+// como HTML/CSS puro, já que a impressão não passa pelo React.
+const TREND_COLORS: Record<TrendColor, string> = {
+  green: '#14a800',
+  orange: '#b8860b',
+  red: '#c0392b',
+};
+
+/** Triângulo de tendência (mesma regra de trend.ts) em HTML/CSS puro (border
+ * trick), pro extrato impresso — "Dias individuais" do Extrato por
+ * Colaborador (RankingPage.tsx/MobileRankingPage.tsx), pedido explícito do
+ * usuário (2026-10-24). `previous` null (primeiro dia da lista, sem dia
+ * anterior pra comparar) não renderiza nada, mesma regra do TrendArrow
+ * React. Cores mais escuras que as neon do app (ainda verde/laranja/
+ * vermelho) — ficam ilegíveis em tinta clara sobre papel branco. */
+function trendArrowHtml(current: number, previous: number | null): string {
+  if (previous === null) return '';
+  const trend = computeTrend(current, previous);
+  const color = TREND_COLORS[trend.color];
+  const side = trend.direction === 'up' ? `border-bottom:9px solid ${color};` : `border-top:9px solid ${color};`;
+  return `<span style="display:inline-block;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;${side}margin-right:4px;vertical-align:middle;"></span>`;
+}
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -262,6 +286,14 @@ export function buildMonthExtractHtml(
   heading: string = 'Extrato do Mês',
   totalLabel: string = 'Total do mês',
   showDayTable: boolean = true,
+  // Triângulo de tendência antes do valor de cada dia, comparando com a
+  // entrada anterior da própria lista (os dias aqui já são só os que
+  // tiveram venda, não o calendário inteiro) — só faz sentido em "dias
+  // individuais": no acumulado a soma só cresce, a seta seria sempre verde
+  // pra cima, sem informação nenhuma. Só o Extrato por Colaborador
+  // (RankingPage.tsx/MobileRankingPage.tsx) liga isso; os extratos de
+  // totais da loja (SidebarCalendarCard.tsx) ficam como estavam.
+  showTrend: boolean = false,
 ): string {
   const fmt = (v: number, isUnit: boolean) => (isUnit ? `${v} un.` : fmtMoney(v));
   const sections = categories.length
@@ -272,7 +304,10 @@ export function buildMonthExtractHtml(
             return `<h2>${escapeHtml(c.label)}</h2>${total}`;
           }
           const rows = c.days
-            .map((d) => `<tr><td>${fmtDateBR(d.dataISO)}</td><td style="text-align:right">${fmt(d.value, c.isUnit)}</td></tr>`)
+            .map((d, i) => {
+              const arrow = showTrend ? trendArrowHtml(d.value, i > 0 ? c.days[i - 1].value : null) : '';
+              return `<tr><td>${fmtDateBR(d.dataISO)}</td><td style="text-align:right">${arrow}${fmt(d.value, c.isUnit)}</td></tr>`;
+            })
             .join('');
           const table = c.days.length
             ? `<table><thead><tr><th>Dia</th><th style="text-align:right">${escapeHtml(valueColumnLabel)}</th></tr></thead><tbody>${rows}</tbody></table>`

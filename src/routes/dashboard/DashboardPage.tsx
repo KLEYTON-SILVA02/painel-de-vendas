@@ -1021,7 +1021,15 @@ export function DashboardPage() {
           />
           {/* Sign hidden by design (visual only) — `saldo` itself stays negative for every calculation elsewhere. */}
           <StatCard label="Saldo" value={fmtValue(Math.abs(saldo))} color={saldo >= 0 ? '#ffb700' : '#ff3df0'} />
-          <StatCard label="Itens Vendidos" value={fmtValue(itensCategoria)} color="#14ff00" />
+          {/* UVC: "Itens Vendidos" é sempre uma contagem de unidades, nunca
+              a razão que fmtValue (=fmtUvc em modo UVC) mostraria aqui —
+              mesmo "un." que LEVMEL/CHIP já usam (correção pedida pelo
+              usuário, 2026-10-24). */}
+          <StatCard
+            label="Itens Vendidos"
+            value={isUvcMode ? `${itensCategoria.toLocaleString('pt-BR')} un.` : fmtValue(itensCategoria)}
+            color="#14ff00"
+          />
         </div>
 
         <div className="lg:col-start-2 lg:row-start-2">

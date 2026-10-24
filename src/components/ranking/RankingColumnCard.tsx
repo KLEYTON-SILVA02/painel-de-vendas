@@ -137,7 +137,19 @@ export function RankingColumnCard({
         <span>{title}</span>
       </div>
 
-      <div className="ranking-col-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 360, overflowY: 'auto' }}>
+      {/* flex:1 (em vez de só maxHeight) faz colunas curtas (poucos
+          colaboradores, ex.: Levmel/DSM) crescerem até a mesma altura que o
+          grid já estica o card inteiro para (align-items:stretch, puxada
+          pela coluna mais alta da linha) — empurra os botões Copiar/Gerar
+          imagem pro fim do card, alinhados entre todas as colunas, em vez
+          de ficarem logo abaixo da última linha de cada lista (pedido
+          explícito do usuário, 2026-10-24). maxHeight continua sendo o teto
+          pra colunas com muitos colaboradores, que passam a rolar em vez de
+          esticar o card indefinidamente. */}
+      <div
+        className="ranking-col-scroll"
+        style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: '1 1 0', minHeight: 0, maxHeight: 360, overflowY: 'auto' }}
+      >
         {ranking.length === 0 ? (
           <div style={{ padding: '16px 0' }} className="text-sm text-slate-500 text-center">
             Sem vendas.

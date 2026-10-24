@@ -119,9 +119,10 @@ describe('computeUvcDailyRows', () => {
 });
 
 describe('fmtUvc', () => {
-  it('formata com 1 casa decimal, vírgula, e prefixo "R$" só visual (UVC continua sendo itens ÷ atendimentos, não dinheiro)', () => {
-    expect(fmtUvc(3)).toBe('R$ 3,0');
-    expect(fmtUvc(2.6)).toBe('R$ 2,6');
+  it('formata com 2 casas decimais, vírgula, e prefixo "R$" só visual (UVC continua sendo itens ÷ atendimentos, não dinheiro)', () => {
+    expect(fmtUvc(3)).toBe('R$ 3,00');
+    expect(fmtUvc(2.6)).toBe('R$ 2,60');
+    expect(fmtUvc(2.3456)).toBe('R$ 2,35');
   });
 
   it('retorna travessão para null', () => {

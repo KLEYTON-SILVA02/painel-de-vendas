@@ -106,23 +106,6 @@
   margin-top: 8px;
 }
 
-.sb-group-label {
-  font-size: 9px;
-  color: #8b90bf;
-  text-transform: uppercase;
-  letter-spacing: .06em;
-  font-weight: 700;
-  padding: 6px 10px 2px;
-}
-.sb-group-label:first-child {
-  padding-top: 0;
-}
-.app-shell.is-collapsed .sb-group-label {
-  padding: 6px 0 2px;
-  text-align: center;
-  font-size: 0;
-}
-
 .sb-footer {
   flex-shrink: 0;
   padding: 10px 8px;
