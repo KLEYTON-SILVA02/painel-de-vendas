@@ -235,6 +235,7 @@ export function AppShell() {
           onToggleCollapsed={() => setCollapsed((v) => !v)}
           logoUrl={storeQuery.data?.logo_url}
           onNavigate={() => setMobileOpen(false)}
+          closeOnOutsideClick
         />
         <div className="sb-backdrop" onClick={() => setMobileOpen(false)} />
         <div className="app-content">
