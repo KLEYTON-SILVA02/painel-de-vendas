@@ -4,11 +4,12 @@ import { DsmReviewTable } from '../../components/dsm/DsmReviewTable';
 import { Spinner } from '../../components/Spinner';
 import { detectClientesColumnValues } from '../../lib/business/dsmImageColumns';
 import {
+  buildCleanDsmImageText,
   buildDsmReviewRowsFromImage,
+  computeDsmImageMatches,
   countApparentCollaboratorLines,
   detectDateInText,
-  parseDsmImageLines,
-  parseDsmImageLinesByCollaboratorName,
+  type DsmImageLineMatch,
 } from '../../lib/business/dsmImageParse';
 import type { DsmReviewRow } from '../../lib/business/dsmImport';
 import { normalizeMatricula } from '../../lib/business/parsing';
@@ -32,15 +33,32 @@ type Step = 'input' | 'review' | 'done';
  *
  * Duas análises sobre a mesma imagem (pedido do usuário, 2026-10-24),
  * ambas do MESMO passe de OCR (não roda o motor duas vezes):
- * - 1ª análise (por linha/texto): o `recognized.text` de sempre, lido linha
- *   a linha por parseDsmImageLines — ignora Loja/Data/Vendas/Valor,
- *   procurando só o padrão "<matrícula>-<NOME> ... <inteiro>".
+ * - 1ª análise (por linha/texto): o texto bruto do OCR, lido linha a linha
+ *   por parseDsmImageLines/parseDsmImageLinesByCollaboratorName — ignora
+ *   Loja/Data/Vendas/Valor, procurando só o padrão
+ *   "<matrícula>-<NOME> ... <inteiro>" (ou o nome já cadastrado, quando a
+ *   matrícula sai ilegível do OCR).
  * - 2ª análise (por coluna/posição): detectClientesColumnValues
  *   (dsmImageColumns.ts) localiza o cabeçalho "Número de Clientes" pela
  *   posição na imagem e lê, pra cada linha, o número mais próximo dele em
  *   X — cobre o caso que a 1ª não resolve sozinha (linha com nome legível
  *   mas número perdido/embaralhado pelo OCR). Só preenche quantidade
  *   quando a 1ª não achou nada (nunca sobrescreve um valor já lido).
+ * As duas são mescladas (computeDsmImageMatches, dsmImageParse.ts) logo
+ * após escanear, e a caixa "Texto extraído" mostra o resultado já
+ * reconstruído e limpo (buildCleanDsmImageText) — uma linha por colaborador
+ * reconhecido, sem Loja/Data/Vendas/Valor/Clientes(%)/cabeçalhos/outros
+ * textos da imagem (pedido explícito do usuário, 2026-10-24: essas colunas
+ * deviam ser ignoradas também no texto capturado, não só no resultado
+ * final). `matches`/`rawText` ficam guardados à parte: se o ADM não tocar
+ * no texto, "Processar texto" reusa esse resultado já calculado (preserva
+ * os selos "2ª leitura"/"2ª análise (coluna)" da conferência); se editar ou
+ * colar outro texto por cima, reprocessa esse texto do zero a partir do
+ * mesmo computeDsmImageMatches (sem selo nenhum, igual ao caminho "colar
+ * texto" de sempre). `rawText` guarda só o despejo original do OCR, usado
+ * apenas internamente pela checagem de completude (countApparentCollaboratorLines
+ * precisa do texto cru, não do já filtrado, pra notar colaborador que ficou
+ * de fora até da reconstrução).
  * `onStepChange` avisa o ImportarPage da troca de etapa — a barra "Importar
  * planilha de DSM" só aparece na etapa 'input' (ver ImportarPage.tsx). */
 export function DsmImageImportSection({ onStepChange }: { onStepChange?: (step: Step) => void }) {
@@ -56,6 +74,16 @@ export function DsmImageImportSection({ onStepChange }: { onStepChange?: (step: 
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState<number | null>(null);
   const [text, setText] = useState('');
+  // Despejo bruto do OCR (recognized.text), só pra countApparentCollaboratorLines
+  // (ver comentário do componente acima) — nunca mostrado na tela.
+  const [rawText, setRawText] = useState('');
+  // Resultado já mesclado (1ª leitura + 2ª leitura por nome + 2ª análise por
+  // coluna) do último scan — reusado por "Processar texto" enquanto `text`
+  // continuar igual ao texto limpo gerado a partir daqui (ver comentário do
+  // componente). Vazio quando nenhuma imagem foi escaneada ainda (ou o ADM
+  // só colou texto direto), caso em que handleProcessText recalcula tudo a
+  // partir do `text` atual.
+  const [matches, setMatches] = useState<DsmImageLineMatch[]>([]);
   // null = a 2ª análise (por coluna) ainda não rodou pra imagem atual;
   // Map (mesmo vazio) = já rodou. Só passa a bloquear "Processar texto"
   // quando existe imagem carregada (ver o `disabled` do botão abaixo) —
@@ -115,6 +143,8 @@ export function DsmImageImportSection({ onStepChange }: { onStepChange?: (step: 
     setImageBlob(blob);
     setImagePreviewUrl(URL.createObjectURL(blob));
     setClientesColumnMatches(null);
+    setMatches([]);
+    setRawText('');
   }
 
   function clearImage() {
@@ -122,6 +152,8 @@ export function DsmImageImportSection({ onStepChange }: { onStepChange?: (step: 
     setImageBlob(null);
     setImagePreviewUrl(null);
     setClientesColumnMatches(null);
+    setMatches([]);
+    setRawText('');
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
@@ -140,7 +172,7 @@ export function DsmImageImportSection({ onStepChange }: { onStepChange?: (step: 
     setClientesColumnMatches(null);
     try {
       const { text: recognized, blocks } = await recognizeImageText(imageBlob, setScanProgress);
-      setText(recognized);
+      setRawText(recognized);
       // Auto-detecção de data só se aplica no modo "dia único" — em modo
       // período o ADM já informou início/fim manualmente.
       if (dateMode === 'dia') {
@@ -152,7 +184,18 @@ export function DsmImageImportSection({ onStepChange }: { onStepChange?: (step: 
       // Map vazio quando não achou o cabeçalho "Clientes" na imagem, o que
       // ainda assim conta como "análise concluída" (libera "Processar
       // texto"; só não tem nada pra confirmar).
-      setClientesColumnMatches(detectClientesColumnValues(blocks));
+      const columnMatches = detectClientesColumnValues(blocks);
+      setClientesColumnMatches(columnMatches);
+      // Mescla as duas leituras por texto + a confirmação por coluna (mesmo
+      // motor que "Processar texto" reusa) e já mostra o resultado
+      // reconstruído/limpo na caixa — ignorando Loja/Data/Vendas/Valor/
+      // Clientes(%)/cabeçalhos e qualquer outro texto da imagem, em vez do
+      // despejo bruto do OCR (pedido explícito do usuário, 2026-10-24). Sem
+      // nenhum colaborador reconhecido, mostra o texto bruto mesmo — ao
+      // menos dá pro ADM ver o que o OCR leu e corrigir à mão.
+      const merged = computeDsmImageMatches(recognized, collaboratorNames, columnMatches);
+      setMatches(merged);
+      setText(merged.length > 0 ? buildCleanDsmImageText(merged) : recognized);
     } catch {
       setError('Não foi possível ler o texto desta imagem. Tente uma foto mais nítida, ou cole o texto manualmente abaixo.');
     } finally {
@@ -181,25 +224,14 @@ export function DsmImageImportSection({ onStepChange }: { onStepChange?: (step: 
       }
       effectiveDate = dataFim;
     }
-    const primaryMatches = parseDsmImageLines(text);
-    // Segunda leitura/verificação: pega colaboradores cuja linha a primeira
-    // leitura descartou (matrícula ilegível pro OCR, traço sumido, linha
-    // quebrada) mas cujo nome ainda aparece no texto — ver o comentário da
-    // função em dsmImageParse.ts.
-    const alreadyMatched = new Set(primaryMatches.map((m) => m.matricula).filter(Boolean));
-    const secondPassMatches = parseDsmImageLinesByCollaboratorName(text, collaboratorNames, alreadyMatched);
-    let matches = [...primaryMatches, ...secondPassMatches];
-    // 2ª análise por coluna (dsmImageColumns.ts): só preenche quando as duas
-    // leituras acima não acharam quantidade nenhuma pra aquela matrícula —
-    // nunca sobrescreve um valor que a leitura por linha já reconheceu.
-    if (clientesColumnMatches && clientesColumnMatches.size > 0) {
-      matches = matches.map((m) => {
-        if (!m.matricula || m.quantidade !== null) return m;
-        const columnValue = clientesColumnMatches.get(m.matricula);
-        return columnValue !== undefined ? { ...m, quantidade: columnValue, matchedBy: 'coluna' as const } : m;
-      });
-    }
-    if (matches.length === 0) {
+    // Reusa o resultado já calculado no scan (com os selos "2ª leitura"/"2ª
+    // análise (coluna)") enquanto o ADM não tocar no texto; se editou ou
+    // colou outro texto por cima, recalcula do zero a partir do texto atual
+    // (mesmo motor, sem selo nenhum — igual ao caminho "colar texto" direto,
+    // sem nunca escanear imagem nenhuma).
+    const effectiveMatches =
+      matches.length > 0 && text === buildCleanDsmImageText(matches) ? matches : computeDsmImageMatches(text, collaboratorNames, clientesColumnMatches);
+    if (effectiveMatches.length === 0) {
       setError('Nenhuma linha de colaborador foi reconhecida neste texto. Confira o texto extraído ou tente escanear de novo.');
       return;
     }
@@ -207,13 +239,16 @@ export function DsmImageImportSection({ onStepChange }: { onStepChange?: (step: 
     // nem toda tenha virado uma linha reconhecida) contra quantas de fato
     // viraram — o único caso que nenhuma das duas leituras acima consegue
     // recuperar sozinha é matrícula E nome ilegíveis pro OCR ao mesmo tempo.
-    const apparentLines = countApparentCollaboratorLines(text);
+    // Sempre a partir do texto BRUTO do OCR (rawText) — o texto já limpo/
+    // reconstruído mostrado na tela só teria linhas já reconhecidas, o que
+    // tornaria essa checagem inútil (nunca detectaria ninguém faltando).
+    const apparentLines = countApparentCollaboratorLines(rawText || text);
     setCompletenessWarning(
-      apparentLines > matches.length
-        ? `O texto parece ter ${apparentLines} linha(s) de colaborador, mas só ${matches.length} foram reconhecidas. Role o texto extraído e confira se alguém ficou de fora antes de salvar.`
+      apparentLines > effectiveMatches.length
+        ? `O texto parece ter ${apparentLines} linha(s) de colaborador, mas só ${effectiveMatches.length} foram reconhecidas. Role o texto extraído e confira se alguém ficou de fora antes de salvar.`
         : null,
     );
-    setRows(buildDsmReviewRowsFromImage(matches, effectiveDate, collaboratorByMatricula));
+    setRows(buildDsmReviewRowsFromImage(effectiveMatches, effectiveDate, collaboratorByMatricula));
     setStep('review');
   }
 

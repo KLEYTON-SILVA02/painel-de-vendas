@@ -67,6 +67,15 @@ describe('detectClientesColumnValues', () => {
     expect(result.get('1234')).toBe(10);
   });
 
+  it('devolve mapa vazio (nunca usa a coluna de % por engano) quando só reconhece "Clientes(%)", sem nenhum "Clientes" sozinho', () => {
+    // Cabeçalho mesclado/complexo onde o OCR só recupera a palavra com "%"
+    // — nunca deve tratar a posição dela como se fosse a de contagem.
+    const header = line([word('Clientes(%)', 400, 440, 0)], 0);
+    const row = line([word('70209751-ANGELICA', 0, 80, 20), word('74', 295, 305, 20), word('5', 415, 425, 20)], 20);
+    const result = detectClientesColumnValues(blocksFixture([header, row]));
+    expect(result.size).toBe(0);
+  });
+
   it('devolve mapa vazio quando não acha cabeçalho "Clientes" nenhum', () => {
     const row = line([word('70209751-ANGELICA', 0, 80, 20), word('74', 295, 305, 20)], 20);
     const result = detectClientesColumnValues(blocksFixture([row]));

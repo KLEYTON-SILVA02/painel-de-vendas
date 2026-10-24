@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { buildDsmReviewRowsFromImage, detectDateInText, parseDsmImageLines, parseDsmImageLinesByCollaboratorName } from './dsmImageParse';
+import {
+  buildCleanDsmImageText,
+  buildDsmReviewRowsFromImage,
+  computeDsmImageMatches,
+  detectDateInText,
+  parseDsmImageLines,
+  parseDsmImageLinesByCollaboratorName,
+} from './dsmImageParse';
 
 describe('parseDsmImageLines', () => {
   it('parses a typical OCR line into matrícula, nome and the trailing quantidade', () => {
@@ -47,6 +54,11 @@ describe('parseDsmImageLines', () => {
   it('still picks the correct column when the OCR drops the "%" symbol but keeps the decimal comma', () => {
     const [row] = parseDsmImageLines('70208345-DEIVESON RAMOS PAIVA 1.540 56.955,35 126 18,50');
     expect(row.quantidade).toBe(126);
+  });
+
+  it('ignora um prefixo espúrio antes da matrícula (célula "Loja" mesclada grudada na 1ª linha pelo OCR)', () => {
+    const [row] = parseDsmImageLines('567152 70209751-ANGELICA CHRYSTINA DE FATIMA 1.455 84.079,41 74 5,09%');
+    expect(row).toMatchObject({ matricula: '70209751', nome: 'ANGELICA CHRYSTINA DE FATIMA', quantidade: 74 });
   });
 
   it('parses several real-shaped lines from the same report at once', () => {
@@ -129,6 +141,51 @@ describe('buildDsmReviewRowsFromImage: fonte flag', () => {
     const rows = buildDsmReviewRowsFromImage([...primary, ...secondPass], '2026-09-23', new Map());
     expect(rows[0].fonte).toBeUndefined();
     expect(rows[1].fonte).toBe('nome');
+  });
+});
+
+describe('computeDsmImageMatches + buildCleanDsmImageText', () => {
+  const colaboradores = [
+    { nome: 'DEIVESON RAMOS PAIVA', matricula: '70208345' },
+    { nome: 'JACOB JURANDIR DE LIMA TELES', matricula: '70003335' },
+  ];
+
+  it('mescla 1ª leitura + 2ª leitura por nome + confirmação por coluna, sem sobrescrever valor já lido', () => {
+    const text = [
+      '70208345-DEIVESON RAMOS PAIVA 1.540 56.955,35 126', // já tem quantidade — coluna nunca sobrescreve
+      'JACOB JURANDIR DE LIMA TELES', // só o nome, sem matrícula nem número — achado pela 2ª leitura, sem quantidade
+    ].join('\n');
+    const columnMatches = new Map([
+      ['70208345', 999], // nunca deve aparecer — já tinha 126
+      ['70003335', 145], // preenche o buraco da 2ª leitura por nome
+    ]);
+    const matches = computeDsmImageMatches(text, colaboradores, columnMatches);
+    expect(matches[0]).toMatchObject({ matricula: '70208345', quantidade: 126 });
+    expect(matches[0].matchedBy).toBeUndefined();
+    expect(matches[1]).toMatchObject({ matricula: '70003335', quantidade: 145, matchedBy: 'coluna' });
+  });
+
+  it('reconstrói um texto limpo, sem nenhuma das outras colunas/cabeçalhos do OCR bruto', () => {
+    const rawText = [
+      'Empreendimentos Pague Menos — Vendas por vendedor',
+      'Loja Matrícula - Nome funcionário Data Número de Vendas Valor das Vendas (R$) Número de Clientes Número de Clientes(%)',
+      '70208345-DEIVESON RAMOS PAIVA 1.540 56.955,35 126 18,50%',
+      'TOTAL GERAL 11.820 804.664,39 1124',
+    ].join('\n');
+    const matches = computeDsmImageMatches(rawText, [], null);
+    const cleanText = buildCleanDsmImageText(matches);
+    expect(cleanText).toBe('70208345-DEIVESON RAMOS PAIVA  126');
+    // Round-trip sem perdas (exceto lineRaw, que é literalmente o texto cru
+    // de origem — naturalmente diferente antes/depois da reconstrução).
+    const strip = (ms: typeof matches) => ms.map(({ lineRaw: _lineRaw, ...rest }) => rest);
+    expect(strip(computeDsmImageMatches(cleanText, [], null))).toEqual(strip(matches));
+  });
+
+  it('mantém uma linha sem quantidade reconhecida sem inventar um número', () => {
+    const matches = computeDsmImageMatches('70208345-DEIVESON RAMOS PAIVA', [], null);
+    const cleanText = buildCleanDsmImageText(matches);
+    expect(cleanText).toBe('70208345-DEIVESON RAMOS PAIVA');
+    expect(computeDsmImageMatches(cleanText, [], null)[0].quantidade).toBeNull();
   });
 });
 

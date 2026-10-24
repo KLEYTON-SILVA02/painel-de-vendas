@@ -18,13 +18,16 @@ import {
   type GenericConquistaConfig,
 } from '../../lib/business/conquistas';
 import { computeDsmConquistas, computeDsmConquistasDayGallery } from '../../lib/business/dsm';
+import { computeUvcConquistas, computeUvcConquistasDayGallery } from '../../lib/business/uvc';
 import { BUILT_IN_TEMPLATE, renderConquistaCard, type ConquistaCardTemplate } from '../../lib/conquistaCardRender';
 import { generateConquistaImageBlob } from '../../lib/conquistaImage';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
 import {
   useCategoryTypes,
+  useClientServiceRecords,
   useCollaborators,
   useConquistaCardTemplates,
+  useDailyItemsSoldByCollaborator,
   useDsmRecords,
   useGenericConquistaConfigs,
   useSalesInRange,
@@ -71,6 +74,7 @@ function matchesFilter(row: ConquistaRow, filter: TierFilter): boolean {
 }
 
 const DSM_COLOR = '#00e0c0';
+const UVC_COLOR = '#ffb700';
 
 export function ConquistasPage() {
   const { data: collaborators } = useCollaborators();
@@ -86,6 +90,12 @@ export function ConquistasPage() {
   // computeConquistas/computeConquistasDayGallery are both called with
   // dashFrom/dashTo only.
   const { data: sales } = useSalesInRange(dashFrom, dashTo);
+  // UVC (coluna própria, sempre visível — sem "ativo"/ocultar próprio,
+  // mesmo raciocínio já documentado em RankingPage.tsx) — mesma dupla fonte
+  // de dados usada lá: clientServiceRecords completo, dailyItensUvc por
+  // período.
+  const { data: clientServiceRecords } = useClientServiceRecords();
+  const { data: dailyItensUvc } = useDailyItemsSoldByCollaborator(dashFrom, dashTo);
   const categoryLabels = useCategoryLabelMap();
   const hiddenCategories = storeSettings?.hidden_categories ?? [];
   const dsmCategory = categoryTypes?.find((c) => c.chave === 'dsm');
@@ -110,7 +120,8 @@ export function ConquistasPage() {
       dsmCategory && dsmCategory.ativo
         ? [{ key: 'DSM' as ConquistaCategoria, label: dsmCategory.nome, color: DSM_COLOR, generic: undefined as GenericConquistaConfig | undefined }]
         : [];
-    return [...fixed, ...generic, ...dsm];
+    const uvc = [{ key: 'UVC' as ConquistaCategoria, label: 'UVC', color: UVC_COLOR, generic: undefined as GenericConquistaConfig | undefined }];
+    return [...fixed, ...generic, ...dsm, ...uvc];
   }, [categoryLabels, genericConquistas, hiddenCategories, dsmCategory]);
   const [catKey, setCatKey] = useState<ConquistaCategoria>('DERM');
   const [tierFilter, setTierFilter] = useState<TierFilter>('ALL');
@@ -120,6 +131,7 @@ export function ConquistasPage() {
   const info = categories.find((c) => c.key === catKey) ?? categories[0];
   const generic = info?.generic;
   const isDsm = info?.key === 'DSM';
+  const isUvc = info?.key === 'UVC';
 
   // Safe stand-ins so the useMemo calls below always run in the same order
   // (Rules of Hooks) whether or not every query has resolved yet — the
@@ -127,19 +139,25 @@ export function ConquistasPage() {
   const salesData = sales ?? [];
   const collaboratorsData = collaborators ?? [];
   const dsmRecordsData = dsmRecords ?? [];
+  const dailyItensUvcData = dailyItensUvc ?? [];
+  const clientServiceRecordsData = clientServiceRecords ?? [];
   const rows = useMemo(
     () =>
       isDsm
         ? computeDsmConquistas(dsmRecordsData, collaboratorsData, dashFrom, dashTo)
-        : computeConquistas(salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists, generic),
-    [isDsm, dsmRecordsData, salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists, generic],
+        : isUvc
+          ? computeUvcConquistas(dailyItensUvcData, clientServiceRecordsData, collaboratorsData, dashFrom, dashTo)
+          : computeConquistas(salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists, generic),
+    [isDsm, isUvc, dsmRecordsData, dailyItensUvcData, clientServiceRecordsData, salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists, generic],
   );
   const dayGallery = useMemo(
     () =>
       isDsm
         ? computeDsmConquistasDayGallery(dsmRecordsData, collaboratorsData, dashFrom, dashTo)
-        : computeConquistasDayGallery(salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists, generic),
-    [isDsm, dsmRecordsData, salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists, generic],
+        : isUvc
+          ? computeUvcConquistasDayGallery(dailyItensUvcData, clientServiceRecordsData, collaboratorsData, dashFrom, dashTo)
+          : computeConquistasDayGallery(salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists, generic),
+    [isDsm, isUvc, dsmRecordsData, dailyItensUvcData, clientServiceRecordsData, salesData, collaboratorsData, dashFrom, dashTo, catKey, specialLists, generic],
   );
 
   if (!collaborators || !sales || !specialLists || !storeSettings || !categoryTypes || !dsmRecords) {
@@ -174,11 +192,9 @@ export function ConquistasPage() {
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-4">
       <div className="flex flex-col gap-3 min-w-0">
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
-            <h3 className="text-lg font-semibold" style={{ color: '#ffb700' }}>
-              🏆 Galeria de Conquistas — {info.label}
-            </h3>
-          </div>
+          {/* Título "🏆 Galeria de Conquistas" agora vive só na barra superior
+             centralizada (AppShell.tsx's PAGE_TITLES), mesmo padrão de
+             Ranking Geral/UVC/etc — não duplica mais aqui dentro do card. */}
 
           {/* Botões esticados lado a lado, largura igual, preenchendo o
              espaço disponível — mesmo padrão responsivo já usado nas abas

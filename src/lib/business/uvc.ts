@@ -23,6 +23,7 @@
 // pro cálculo acima. Atendimentos vem de `client_service_records` (migration
 // 0103), nunca de `sales` — a planilha de vendas comum não tem como dizer
 // quantos clientes um vendedor atendeu.
+import type { ConquistaRow } from './conquistas';
 import { firstName } from './normalize';
 import { normalizeMatricula } from './parsing';
 import type { ClientServiceRecord, Collaborator } from './types';
@@ -209,6 +210,83 @@ export function computeUvcDailyRows(
       uvc: agg.atendimentos > 0 ? agg.itens / agg.atendimentos : null,
     }))
     .sort((a, b) => (a.dataISO < b.dataISO ? 1 : -1));
+}
+
+/** Galeria de Conquistas support for UVC — mesmo formato de
+ * computeDsmConquistas (dsm.ts): UVC não tem escada fixa de R$/unidades (é
+ * uma razão, itens ÷ atendimentos — uma escada fixa não teria significado,
+ * mesmo raciocínio de isUnitConquista pra LEVMEL/CHIP/DSM), então qualquer
+ * dia com razão calculável (atendimentos > 0 naquele dia) já é a própria
+ * conquista — tier = a razão daquele dia, melhor dia único vence (nunca
+ * somado/mediado num período "Modo Geral"). `itens`/`valor` guardam a
+ * própria razão, pra a linha satisfazer o formato de ConquistaRow sem um
+ * campo dedicado (mesma convenção que DSM já usa). */
+export function computeUvcConquistas(
+  dailyItens: DailyItensRow[],
+  records: ClientServiceRecord[],
+  collaborators: Collaborator[],
+  fromDate: string,
+  toDate: string,
+): ConquistaRow[] {
+  const collaboratorsById = new Map(collaborators.map((c) => [c.id, c]));
+  const collaboratorByMatricula = new Map(collaborators.map((c) => [normalizeMatricula(c.matricula), c]));
+  const { byMatriculaDay } = buildDayAggregates(dailyItens, records, collaboratorsById, fromDate, toDate);
+  const bestByMatricula = new Map<string, ConquistaRow>();
+
+  byMatriculaDay.forEach((agg, key) => {
+    if (agg.atendimentos <= 0) return; // sem atendimento = razão não calculável naquele dia
+    const sep = key.indexOf('|');
+    const c = collaboratorByMatricula.get(key.slice(0, sep));
+    if (!c) return;
+    const tier = agg.itens / agg.atendimentos;
+    if (tier <= 0) return;
+    const current = bestByMatricula.get(c.matricula);
+    if (!current || tier > current.tier) {
+      bestByMatricula.set(c.matricula, {
+        matricula: c.matricula,
+        nome: c.nome,
+        apelido: c.apelido || firstName(c.nome),
+        foto: c.fotoConquista || c.foto,
+        metaIndividual: 0,
+        qtd: { DERM: 0, GEN: 0, MP: 0, MER: 0, SEM: 0 },
+        valor: tier,
+        itens: tier,
+        tier,
+      });
+    }
+  });
+
+  return Array.from(bestByMatricula.values()).sort((a, b) => b.tier - a.tier);
+}
+
+/** Sidebar "Galeria de dias" para UVC — um dia conta como tendo conquista
+ * quando pelo menos um colaborador teve razão calculável (atendimentos > 0)
+ * naquele dia, mesmo padrão de computeDsmConquistasDayGallery. */
+export function computeUvcConquistasDayGallery(
+  dailyItens: DailyItensRow[],
+  records: ClientServiceRecord[],
+  collaborators: Collaborator[],
+  fromDate: string,
+  toDate: string,
+): { dia: string; count: number }[] {
+  const collaboratorsById = new Map(collaborators.map((c) => [c.id, c]));
+  const { byMatriculaDay } = buildDayAggregates(dailyItens, records, collaboratorsById, fromDate, toDate);
+  const achieversByDay = new Map<string, Set<string>>();
+  byMatriculaDay.forEach((agg, key) => {
+    if (agg.atendimentos <= 0) return;
+    const sep = key.indexOf('|');
+    const matricula = key.slice(0, sep);
+    const dataISO = key.slice(sep + 1);
+    const set = achieversByDay.get(dataISO) ?? new Set<string>();
+    set.add(matricula);
+    achieversByDay.set(dataISO, set);
+  });
+
+  const days: string[] = [];
+  for (let d = new Date(`${fromDate}T00:00:00`); d.toISOString().slice(0, 10) <= toDate; d.setDate(d.getDate() + 1)) {
+    days.push(d.toISOString().slice(0, 10));
+  }
+  return days.reverse().map((dia) => ({ dia, count: achieversByDay.get(dia)?.size ?? 0 }));
 }
 
 /** Mesma razão dia a dia de computeUvcDailyRows, só que de um único
