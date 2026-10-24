@@ -211,8 +211,11 @@ export function computeUvcDailyRows(
     .sort((a, b) => (a.dataISO < b.dataISO ? 1 : -1));
 }
 
-/** "3,0" — 1 casa decimal, vírgula (igual ao padrão já usado no sistema). */
+/** "R$ 3,0" — 1 casa decimal, vírgula, prefixo "R$" só por formatação visual
+ * pedida pelo usuário (decisão explícita, 2026-10-24): o UVC continua
+ * sendo itens ÷ atendimentos, nunca um valor monetário de verdade — o "R$"
+ * aqui não representa reais, é só o estilo visual escolhido pra exibição. */
 export function fmtUvc(v: number | null): string {
   if (v === null) return '—';
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  return `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`;
 }
