@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { PageLoading } from '../../components/PageLoading';
-import { HelpTip } from '../../components/HelpTip';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
 import { PodiumSplit, type PodiumSpots } from '../../components/ranking/PodiumSplit';
 import { DateRangeProvider, useDateRange } from '../DateRangeContext';
@@ -16,7 +15,8 @@ const BORDER = '#212948';
 /** Chip liga/desliga pro controle de quais métricas aparecem nas tabelas
  * abaixo — mesma linguagem visual do ToggleButton de MetricsFilterBar
  * (pílula com uma bolinha indicadora), só que local a esta tela porque
- * aquele componente não é exportado. */
+ * aquele componente não é exportado. Mesma altura/borda dos botões de
+ * visão ao lado (Por colaborador/Por dia) — os 4 dividem uma linha só. */
 function MetricToggle({ on, onClick, label }: { on: boolean; onClick: () => void; label: string }) {
   return (
     <button
@@ -26,9 +26,9 @@ function MetricToggle({ on, onClick, label }: { on: boolean; onClick: () => void
         background: on ? 'rgba(0,229,255,.12)' : 'transparent',
         border: `1.5px solid ${NEON_CYAN}`,
         color: NEON_CYAN,
-        borderRadius: 20,
-        padding: '6px 10px',
-        fontSize: 11,
+        borderRadius: 10,
+        padding: '8px 10px',
+        fontSize: 11.5,
         fontWeight: 700,
         textTransform: 'uppercase',
         cursor: 'pointer',
@@ -78,7 +78,12 @@ function MetricToggle({ on, onClick, label }: { on: boolean; onClick: () => void
  * dois toggles "Itens vendidos"/"Atendimentos" controlam os cards da barra
  * de métricas e as colunas da visão "Por dia"; no pódio, só "Atendimentos"
  * tem efeito (o valor secundário mostrado sob o UVC), já que PodiumSplit só
- * tem um slot de valor secundário. */
+ * tem um slot de valor secundário.
+ *
+ * Sem título/descrição própria aqui dentro — "📈 UVC" é mostrado na barra
+ * superior via AppShell's PAGE_TITLES (rota /admin/uvc), igual toda outra
+ * tela de ranking (Levmel, DSM, etc.) não repete o título dentro do
+ * conteúdo. */
 export function UvcPage() {
   return (
     <DateRangeProvider initialDay={todayISO()}>
@@ -121,23 +126,9 @@ function UvcInner() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <div className="flex items-center gap-2 mb-1">
-          <h3 className="font-semibold text-sm">📈 Acompanhamento de UVC</h3>
-          <HelpTip
-            helpKey="uvc.intro"
-            fallback="UVC (Unidades Vendidas por Cliente) = itens vendidos ÷ clientes atendidos. Itens vendidos já vem das vendas importadas; atendimentos vem só da planilha 'Vendas por Clientes' (ADM → Importar). No Modo Geral, o UVC é a média das razões diárias do mês — evita distorção quando a importação de atendimentos não cobre todo dia. Use 'Por dia' pra conferir, dia a dia, se os dois números batem com o esperado."
-          />
-        </div>
-        <p className="text-xs text-slate-500">
-          Quanto maior o UVC, mais itens em média cada cliente levou. Colaborador ou dia sem atendimentos importados
-          mostra “—”, não 0 nem erro.
-        </p>
-      </div>
-
       <MetricsFilterBar statCards={statCards} />
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-4 gap-2">
         <button
           onClick={() => setVisao('colaborador')}
           className="w-full"
@@ -172,9 +163,6 @@ function UvcInner() {
         >
           Por dia
         </button>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
         <MetricToggle on={mostrarItens} onClick={() => setMostrarItens((v) => !v)} label="Itens vendidos" />
         <MetricToggle on={mostrarAtendimentos} onClick={() => setMostrarAtendimentos((v) => !v)} label="Atendimentos" />
       </div>
