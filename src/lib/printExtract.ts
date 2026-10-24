@@ -116,6 +116,12 @@ export interface MonthExtractCategory {
   isUnit: boolean;
   total: number;
   days: { dataISO: string; value: number }[];
+  /** Sobrescreve `valueColumnLabel` (buildMonthExtractHtml) só pra esta
+   * categoria — usado pela UVC no Extrato por Colaborador (RankingPage.tsx):
+   * sua coluna sempre mostra "Valor" (a razão do próprio dia), mesmo quando
+   * o modo geral do extrato é "Acumulado" (UVC nunca passa por
+   * accumulateMonthExtract — soma de razões não tem significado). */
+  valueColumnLabel?: string;
 }
 
 /** As mesmas 6 categorias fixas usadas em todo extrato impresso. MER
@@ -310,7 +316,7 @@ export function buildMonthExtractHtml(
             })
             .join('');
           const table = c.days.length
-            ? `<table><thead><tr><th>Dia</th><th style="text-align:right">${escapeHtml(valueColumnLabel)}</th></tr></thead><tbody>${rows}</tbody></table>`
+            ? `<table><thead><tr><th>Dia</th><th style="text-align:right">${escapeHtml(c.valueColumnLabel ?? valueColumnLabel)}</th></tr></thead><tbody>${rows}</tbody></table>`
             : `<div class="empty">Nenhuma venda no período.</div>`;
           return `<h2>${escapeHtml(c.label)}</h2>${total}${table}`;
         })

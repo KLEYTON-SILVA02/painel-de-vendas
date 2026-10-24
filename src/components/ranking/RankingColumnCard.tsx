@@ -145,10 +145,21 @@ export function RankingColumnCard({
           de ficarem logo abaixo da última linha de cada lista (pedido
           explícito do usuário, 2026-10-24). maxHeight continua sendo o teto
           pra colunas com muitos colaboradores, que passam a rolar em vez de
-          esticar o card indefinidamente. */}
+          esticar o card indefinidamente.
+          IMPORTANTE: sem minHeight:0 aqui — combinado com flex-grow, isso faz
+          o CSS Grid tratar a contribuição de altura deste item como 0 ao
+          calcular a altura "auto" da linha (grid mede o conteúdo ANTES de
+          distribuir o espaço extra do flex-grow), colapsando a linha inteira
+          para a altura do cabeçalho+botões e escondendo a lista de
+          colaboradores de toda coluna, mesmo as mais compridas (bug visto em
+          produção, 2026-10-24, corrigido na sessão seguinte). Sem minHeight
+          explícito, o item usa min-height:auto (padrão de flex item), que
+          preserva a altura intrínseca da lista para o grid medir — o
+          max-height abaixo continua limitando o resultado final e
+          acionando o scroll quando a lista realmente é mais alta que 360px. */}
       <div
         className="ranking-col-scroll"
-        style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: '1 1 0', minHeight: 0, maxHeight: 360, overflowY: 'auto' }}
+        style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: '1 1 0', maxHeight: 360, overflowY: 'auto' }}
       >
         {ranking.length === 0 ? (
           <div style={{ padding: '16px 0' }} className="text-sm text-slate-500 text-center">

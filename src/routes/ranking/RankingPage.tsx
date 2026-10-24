@@ -9,10 +9,10 @@ import { diasRestantesNoMes, effectiveMetaGeral, getGoal, getSuperMeta, goalPror
 import { computeColumnRanking, type ColumnRankingRow } from '../../lib/business/ranking';
 import { computeSummary } from '../../lib/business/summary';
 import { VISITANTE_SETOR, type Goal } from '../../lib/business/types';
-import { computeUvcSummary, fmtUvc } from '../../lib/business/uvc';
+import { computeUvcDailyRowsForCollaborator, computeUvcSummary, fmtUvc } from '../../lib/business/uvc';
 import { addDaysISO, monthFirstISO, monthLastISO, todayISO } from '../../lib/dateRange';
 import { monthName, fmtDateBR, fmtMoney } from '../../lib/format';
-import { accumulateMonthExtract, buildMonthExtract, buildMonthExtractHtml, openPrintPreview } from '../../lib/printExtract';
+import { accumulateMonthExtract, buildMonthExtract, buildMonthExtractHtml, openPrintPreview, type MonthExtractCategory } from '../../lib/printExtract';
 import { generateAllCategoryImages, type CategoryImageSpec, type MultiImageResult } from '../../lib/rankingImage';
 import {
   useCategoryTypes,
@@ -57,6 +57,12 @@ const RANKING_COLS = [
   { key: 'LEVMEL' as const, titulo: 'Levmel', icon: '🍯', cor: '#ffb700' },
   { key: 'CHIP' as const, titulo: 'Chip', icon: '🔴', cor: '#00e5ff' },
 ];
+
+// Categorias selecionáveis no Extrato por Colaborador — as mesmas 6 fixas
+// acima + UVC (não vem de `sales`, tratada à parte em
+// handlePrintColaboradorExtract: é uma razão itens÷atendimentos, nunca soma
+// entre dias mesmo em "Dias acumulados" — ver comentário lá).
+const EXTRATO_CATEGORIES = [...RANKING_COLS, { key: 'UVC' as const, titulo: 'UVC', icon: '📈', cor: '#ffb700' }];
 
 export function RankingPage() {
   const { data: collaborators } = useCollaborators();
@@ -305,7 +311,33 @@ export function RankingPage() {
       extratoCategorias.has(c.key),
     );
     const isAcumulado = extratoModo === 'acumulado';
-    const categorias = isAcumulado ? accumulateMonthExtract(categoriasBase) : categoriasBase;
+    const categorias: MonthExtractCategory[] = isAcumulado ? accumulateMonthExtract(categoriasBase) : categoriasBase;
+    // UVC é uma razão (itens ÷ atendimentos) — nunca passa por
+    // accumulateMonthExtract, mesmo com "Dias acumulados" ativo (pedido
+    // explícito do usuário, 2026-10-24): soma de razões de dias diferentes
+    // não tem significado. Sempre mostra a razão do próprio dia, com a
+    // coluna rotulada "Valor" independente do modo escolhido para as
+    // outras categorias (valueColumnLabel por categoria).
+    if (extratoCategorias.has('UVC')) {
+      const uvcDays = computeUvcDailyRowsForCollaborator(
+        dailyItensUvc ?? [],
+        clientServiceRecords ?? [],
+        collaboratorsData,
+        extratoMatricula,
+        refMonthFirst,
+        refMonthLast,
+      );
+      const uvcMonthSummary = computeUvcSummary(dailyItensUvc ?? [], clientServiceRecords ?? [], collaboratorsData, refMonthFirst, refMonthLast, false);
+      const uvcTotal = uvcMonthSummary.rows.find((r) => r.matricula === extratoMatricula)?.uvc ?? 0;
+      categorias.push({
+        key: 'UVC',
+        label: 'UVC',
+        isUnit: false,
+        total: uvcTotal,
+        days: uvcDays.map((d) => ({ dataISO: d.dataISO, value: d.uvc ?? 0 })),
+        valueColumnLabel: 'Valor',
+      });
+    }
     const monthLabel = `${monthName(refMonth)}/${refYear}`;
     const html = buildMonthExtractHtml(
       categorias,
@@ -405,9 +437,12 @@ export function RankingPage() {
             navegação normal, então não segue aquele filtro. Largura igual
             pros 6 botões, ocupando a linha de ponta a ponta (grid em vez de
             flex-wrap) em vez de cada um só do tamanho do próprio texto. */}
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${RANKING_COLS.length}, 1fr)`, gap: 8, marginBottom: 12 }}>
-          {RANKING_COLS.map((c) => {
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${EXTRATO_CATEGORIES.length}, 1fr)`, gap: 8, marginBottom: 12 }}>
+          {EXTRATO_CATEGORIES.map((c) => {
             const checked = extratoCategorias.has(c.key);
+            // categoryLabels só cobre as 6 categorias fixas (Record
+            // tipado) — UVC não tem apelido configurável, sempre "UVC".
+            const label = c.key === 'UVC' ? c.titulo : (categoryLabels[c.key] ?? c.titulo);
             return (
               <button
                 key={c.key}
@@ -434,7 +469,7 @@ export function RankingPage() {
                 }}
               >
                 {checked ? '✓ ' : ''}
-                {categoryLabels[c.key] ?? c.titulo}
+                {label}
               </button>
             );
           })}
