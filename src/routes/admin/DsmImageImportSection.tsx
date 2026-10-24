@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { DsmReviewTable } from '../../components/dsm/DsmReviewTable';
 import { Spinner } from '../../components/Spinner';
+import { detectClientesColumnValues } from '../../lib/business/dsmImageColumns';
 import {
   buildDsmReviewRowsFromImage,
   countApparentCollaboratorLines,
@@ -27,8 +28,22 @@ type Step = 'input' | 'review' | 'done';
  * colar um texto já copiado de outro lugar sem nunca selecionar imagem
  * nenhuma (mesmo caminho "colar texto" do Super Troco do sistema antigo).
  * A imagem em si nunca é enviada nem guardada — só usada localmente para o
- * OCR e descartada. */
-export function DsmImageImportSection() {
+ * OCR e descartada.
+ *
+ * Duas análises sobre a mesma imagem (pedido do usuário, 2026-10-24),
+ * ambas do MESMO passe de OCR (não roda o motor duas vezes):
+ * - 1ª análise (por linha/texto): o `recognized.text` de sempre, lido linha
+ *   a linha por parseDsmImageLines — ignora Loja/Data/Vendas/Valor,
+ *   procurando só o padrão "<matrícula>-<NOME> ... <inteiro>".
+ * - 2ª análise (por coluna/posição): detectClientesColumnValues
+ *   (dsmImageColumns.ts) localiza o cabeçalho "Número de Clientes" pela
+ *   posição na imagem e lê, pra cada linha, o número mais próximo dele em
+ *   X — cobre o caso que a 1ª não resolve sozinha (linha com nome legível
+ *   mas número perdido/embaralhado pelo OCR). Só preenche quantidade
+ *   quando a 1ª não achou nada (nunca sobrescreve um valor já lido).
+ * `onStepChange` avisa o ImportarPage da troca de etapa — a barra "Importar
+ * planilha de DSM" só aparece na etapa 'input' (ver ImportarPage.tsx). */
+export function DsmImageImportSection({ onStepChange }: { onStepChange?: (step: Step) => void }) {
   const { profile } = useAuth();
   const { data: collaborators } = useCollaborators();
   const { data: existingRecords, refetch: refetchDsmRecords } = useDsmRecords();
@@ -41,6 +56,12 @@ export function DsmImageImportSection() {
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState<number | null>(null);
   const [text, setText] = useState('');
+  // null = a 2ª análise (por coluna) ainda não rodou pra imagem atual;
+  // Map (mesmo vazio) = já rodou. Só passa a bloquear "Processar texto"
+  // quando existe imagem carregada (ver o `disabled` do botão abaixo) —
+  // colar texto direto, sem nunca selecionar imagem, continua liberado
+  // como sempre.
+  const [clientesColumnMatches, setClientesColumnMatches] = useState<Map<string, number> | null>(null);
   // Em branco de propósito (não todayISO()) — o ADM precisa informar a data
   // ou o período explicitamente antes de conseguir processar; "Processar
   // texto" fica desabilitado até isso acontecer (ver o disabled do botão
@@ -60,6 +81,11 @@ export function DsmImageImportSection() {
   const [completenessWarning, setCompletenessWarning] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<{ count: number; duplicateCount: number; unregisteredCount: number } | null>(null);
+
+  useEffect(() => {
+    onStepChange?.(step);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   // Revoga a URL do preview ao trocar de imagem ou desmontar — nunca
   // guardamos a imagem em lugar nenhum além dessa memória temporária do navegador.
@@ -88,12 +114,14 @@ export function DsmImageImportSection() {
     if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
     setImageBlob(blob);
     setImagePreviewUrl(URL.createObjectURL(blob));
+    setClientesColumnMatches(null);
   }
 
   function clearImage() {
     if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
     setImageBlob(null);
     setImagePreviewUrl(null);
+    setClientesColumnMatches(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
@@ -109,8 +137,9 @@ export function DsmImageImportSection() {
     setError(null);
     setScanning(true);
     setScanProgress(0);
+    setClientesColumnMatches(null);
     try {
-      const recognized = await recognizeImageText(imageBlob, setScanProgress);
+      const { text: recognized, blocks } = await recognizeImageText(imageBlob, setScanProgress);
       setText(recognized);
       // Auto-detecção de data só se aplica no modo "dia único" — em modo
       // período o ADM já informou início/fim manualmente.
@@ -118,6 +147,12 @@ export function DsmImageImportSection() {
         const detectedDate = detectDateInText(recognized);
         if (detectedDate) setDataISO(detectedDate);
       }
+      // 2ª análise: mesmo passe de OCR, lendo a coluna "Número de Clientes"
+      // pela posição em vez do texto corrido (ver dsmImageColumns.ts) —
+      // Map vazio quando não achou o cabeçalho "Clientes" na imagem, o que
+      // ainda assim conta como "análise concluída" (libera "Processar
+      // texto"; só não tem nada pra confirmar).
+      setClientesColumnMatches(detectClientesColumnValues(blocks));
     } catch {
       setError('Não foi possível ler o texto desta imagem. Tente uma foto mais nítida, ou cole o texto manualmente abaixo.');
     } finally {
@@ -153,7 +188,17 @@ export function DsmImageImportSection() {
     // função em dsmImageParse.ts.
     const alreadyMatched = new Set(primaryMatches.map((m) => m.matricula).filter(Boolean));
     const secondPassMatches = parseDsmImageLinesByCollaboratorName(text, collaboratorNames, alreadyMatched);
-    const matches = [...primaryMatches, ...secondPassMatches];
+    let matches = [...primaryMatches, ...secondPassMatches];
+    // 2ª análise por coluna (dsmImageColumns.ts): só preenche quando as duas
+    // leituras acima não acharam quantidade nenhuma pra aquela matrícula —
+    // nunca sobrescreve um valor que a leitura por linha já reconheceu.
+    if (clientesColumnMatches && clientesColumnMatches.size > 0) {
+      matches = matches.map((m) => {
+        if (!m.matricula || m.quantidade !== null) return m;
+        const columnValue = clientesColumnMatches.get(m.matricula);
+        return columnValue !== undefined ? { ...m, quantidade: columnValue, matchedBy: 'coluna' as const } : m;
+      });
+    }
     if (matches.length === 0) {
       setError('Nenhuma linha de colaborador foi reconhecida neste texto. Confira o texto extraído ou tente escanear de novo.');
       return;
@@ -210,6 +255,17 @@ export function DsmImageImportSection() {
     setError(null);
   }
 
+  // Só bloqueia em "Processar texto" quando existe imagem carregada e a 2ª
+  // análise ainda não rodou pra ela — colar texto direto, sem imagem
+  // nenhuma, nunca passa por esse gate (ver comentário do state acima).
+  const waitingSecondAnalysis = !!imageBlob && clientesColumnMatches === null && !scanning;
+  const secondAnalysisStatus =
+    clientesColumnMatches === null
+      ? null
+      : clientesColumnMatches.size > 0
+        ? `✓ Segunda análise concluída — ${clientesColumnMatches.size} valor(es) de "Número de Clientes" confirmado(s) pela coluna.`
+        : '✓ Segunda análise concluída — não foi possível localizar a coluna "Número de Clientes" nesta imagem; revise o texto manualmente.';
+
   return (
     <div className="flex flex-col gap-3">
       {step === 'input' && (
@@ -220,124 +276,141 @@ export function DsmImageImportSection() {
             imagem em si não é guardada.
           </p>
 
-          <div className="grid grid-cols-2 gap-1.5 mb-3">
-            <button
-              type="button"
-              onClick={() => setDateMode('dia')}
-              className={`w-full rounded-lg px-3 py-1.5 text-xs font-medium ${
-                dateMode === 'dia' ? 'bg-cyan-500 text-slate-950' : 'border border-slate-700 text-slate-300'
-              }`}
-            >
-              Dia único
-            </button>
-            <button
-              type="button"
-              onClick={() => setDateMode('periodo')}
-              className={`w-full rounded-lg px-3 py-1.5 text-xs font-medium ${
-                dateMode === 'periodo' ? 'bg-cyan-500 text-slate-950' : 'border border-slate-700 text-slate-300'
-              }`}
-            >
-              Período
-            </button>
-          </div>
-
-          {dateMode === 'dia' ? (
-            <>
-              <label className="block text-xs text-slate-400 mb-1">Data desta análise</label>
-              <input type="date" value={dataISO} onChange={(e) => setDataISO(e.target.value)} className="input mb-3 max-w-[180px]" />
-            </>
-          ) : (
-            <div className="flex flex-wrap items-end gap-3 mb-3">
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">Início do período</label>
-                <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="input max-w-[180px]" />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">Fim do período</label>
-                <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="input max-w-[180px]" />
-              </div>
-              <p className="text-xs text-slate-500 mb-1.5 basis-full">
-                Os dados escaneados serão gravados na data de fim do período — cada linha continua editável na conferência antes de salvar.
-              </p>
-            </div>
-          )}
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={(e) => e.target.files?.[0] && setImage(e.target.files[0])}
-            style={{ display: 'none' }}
-          />
-
-          {!imagePreviewUrl ? (
-            <div
-              ref={pasteAreaRef}
-              onPaste={handlePaste}
-              tabIndex={0}
-              role="button"
-              onClick={() => pasteAreaRef.current?.focus()}
-              className="rounded-xl border border-dashed border-slate-700 p-6 text-center cursor-text focus:outline-none focus:border-cyan-500"
-            >
-              <p className="text-sm text-slate-300 mb-1">
-                Clique aqui e cole a imagem com <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-xs">Ctrl</kbd> +{' '}
-                <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-xs">V</kbd>
-              </p>
-              <p className="text-xs text-slate-500 mb-3">ou use o botão abaixo</p>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  fileInputRef.current?.click();
-                }}
-                className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800"
-              >
-                Selecionar imagem
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-start gap-3 mb-3">
-              <img src={imagePreviewUrl} alt="Prévia do print de DSM" className="rounded-lg border border-slate-800 max-h-40" />
-              <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Coluna esquerda: data, prévia da imagem e Escanear (agora
+                embaixo da prévia, não mais do lado) — paralela à caixa de
+                texto extraído à direita (pedido explícito do usuário,
+                2026-10-24). */}
+            <div className="flex flex-col gap-3">
+              <div className="grid grid-cols-2 gap-1.5">
                 <button
                   type="button"
-                  onClick={handleScan}
-                  disabled={scanning}
-                  className="rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm disabled:opacity-60 flex items-center gap-2"
+                  onClick={() => setDateMode('dia')}
+                  className={`w-full rounded-lg px-3 py-1.5 text-xs font-medium ${
+                    dateMode === 'dia' ? 'bg-cyan-500 text-slate-950' : 'border border-slate-700 text-slate-300'
+                  }`}
                 >
-                  {scanning && <Spinner size={14} color="#04121a" />}
-                  {scanning ? `Escaneando… ${scanProgress ?? 0}%` : '🔍 Escanear'}
+                  Dia único
                 </button>
-                <button type="button" onClick={clearImage} className="text-xs text-slate-500 hover:text-rose-400 text-left">
-                  Remover imagem
+                <button
+                  type="button"
+                  onClick={() => setDateMode('periodo')}
+                  className={`w-full rounded-lg px-3 py-1.5 text-xs font-medium ${
+                    dateMode === 'periodo' ? 'bg-cyan-500 text-slate-950' : 'border border-slate-700 text-slate-300'
+                  }`}
+                >
+                  Período
                 </button>
               </div>
-            </div>
-          )}
 
-          <label className="block text-xs text-slate-400 mt-4 mb-1">Texto extraído (revise antes de processar — ou cole um texto aqui direto)</label>
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={8}
-            placeholder="70208345-DEIVESON RAMOS PAIVA  1.540  56.955,35  126"
-            className="input font-mono text-xs w-full"
-          />
+              {dateMode === 'dia' ? (
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Data desta análise</label>
+                  <input type="date" value={dataISO} onChange={(e) => setDataISO(e.target.value)} className="input max-w-[180px]" />
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Início do período</label>
+                    <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="input max-w-[180px]" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Fim do período</label>
+                    <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="input max-w-[180px]" />
+                  </div>
+                  <p className="text-xs text-slate-500 basis-full">
+                    Os dados escaneados serão gravados na data de fim do período — cada linha continua editável na conferência antes de salvar.
+                  </p>
+                </div>
+              )}
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={(e) => e.target.files?.[0] && setImage(e.target.files[0])}
+                style={{ display: 'none' }}
+              />
+
+              {!imagePreviewUrl ? (
+                <div
+                  ref={pasteAreaRef}
+                  onPaste={handlePaste}
+                  tabIndex={0}
+                  role="button"
+                  onClick={() => pasteAreaRef.current?.focus()}
+                  className="rounded-xl border border-dashed border-slate-700 p-6 text-center cursor-text focus:outline-none focus:border-cyan-500"
+                >
+                  <p className="text-sm text-slate-300 mb-1">
+                    Clique aqui e cole a imagem com <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-xs">Ctrl</kbd> +{' '}
+                    <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-xs">V</kbd>
+                  </p>
+                  <p className="text-xs text-slate-500 mb-3">ou use o botão abaixo</p>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      fileInputRef.current?.click();
+                    }}
+                    className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800"
+                  >
+                    Selecionar imagem
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <img src={imagePreviewUrl} alt="Prévia do print de DSM" className="rounded-lg border border-slate-800 w-full max-h-72 object-contain" />
+                  <button
+                    type="button"
+                    onClick={handleScan}
+                    disabled={scanning}
+                    className="rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm disabled:opacity-60 flex items-center justify-center gap-2"
+                  >
+                    {scanning && <Spinner size={14} color="#04121a" />}
+                    {scanning ? `Escaneando… ${scanProgress ?? 0}%` : '🔍 Escanear'}
+                  </button>
+                  <button type="button" onClick={clearImage} className="text-xs text-slate-500 hover:text-rose-400 text-left">
+                    Remover imagem
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Coluna direita: texto extraído, paralela ao bloco acima. */}
+            <div className="flex flex-col">
+              <label className="block text-xs text-slate-400 mb-1">Texto extraído (revise antes de processar — ou cole um texto aqui direto)</label>
+              <textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                rows={12}
+                placeholder="70208345-DEIVESON RAMOS PAIVA  1.540  56.955,35  126"
+                className="input font-mono text-xs w-full flex-1 min-h-[220px]"
+              />
+              {secondAnalysisStatus && <p className="text-[11px] text-slate-500 mt-1.5">{secondAnalysisStatus}</p>}
+              {waitingSecondAnalysis && (
+                <p className="text-[11px] text-amber-400 mt-1.5">
+                  Clique em "Escanear" para rodar a segunda análise (confirmação da coluna "Número de Clientes") antes de processar.
+                </p>
+              )}
+            </div>
+          </div>
 
           {error && <p className="text-xs text-rose-400 mt-2">{error}</p>}
 
           <button
             type="button"
             onClick={handleProcessText}
-            disabled={!text.trim() || (dateMode === 'dia' ? !dataISO : !dataInicio || !dataFim)}
+            disabled={!text.trim() || (dateMode === 'dia' ? !dataISO : !dataInicio || !dataFim) || waitingSecondAnalysis}
             title={
-              dateMode === 'dia'
-                ? !dataISO
-                  ? 'Informe a data desta análise antes de processar'
-                  : undefined
-                : !dataInicio || !dataFim
-                  ? 'Informe o início e o fim do período antes de processar'
-                  : undefined
+              waitingSecondAnalysis
+                ? 'Escaneie a imagem (segunda análise) antes de processar'
+                : dateMode === 'dia'
+                  ? !dataISO
+                    ? 'Informe a data desta análise antes de processar'
+                    : undefined
+                  : !dataInicio || !dataFim
+                    ? 'Informe o início e o fim do período antes de processar'
+                    : undefined
             }
             className="rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm mt-3 disabled:opacity-60"
           >
@@ -351,7 +424,9 @@ export function DsmImageImportSection() {
           <h3 className="font-semibold text-sm mb-1">Conferir dados de DSM antes de salvar</h3>
           <p className="text-xs text-slate-500 mb-3">
             {rows.length} linha(s) reconhecida(s)
-            {rows.some((r) => r.fonte === 'nome') ? ` (${rows.filter((r) => r.fonte === 'nome').length} pela segunda leitura, por nome)` : ''} — data{' '}
+            {rows.some((r) => r.fonte === 'nome') ? ` (${rows.filter((r) => r.fonte === 'nome').length} pela segunda leitura, por nome)` : ''}
+            {rows.some((r) => r.fonte === 'coluna') ? ` (${rows.filter((r) => r.fonte === 'coluna').length} pela segunda análise, por coluna)` : ''} —
+            data{' '}
             {dateMode === 'dia'
               ? dataISO.split('-').reverse().join('/')
               : `${dataInicio.split('-').reverse().join('/')} a ${dataFim.split('-').reverse().join('/')} (gravado em ${dataFim

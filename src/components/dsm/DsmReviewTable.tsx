@@ -47,6 +47,14 @@ export function DsmReviewTable({ rows, collaboratorsById, onChangeRow, onRemoveR
                           2ª leitura
                         </span>
                       )}
+                      {r.fonte === 'coluna' && (
+                        <span
+                          className="ml-1.5 text-[10px] rounded-full bg-amber-500/20 text-amber-300 px-1.5 py-0.5 align-middle"
+                          title="A leitura por linha não achou a quantidade desta pessoa — a 2ª análise localizou e confirmou esse valor pela posição da coluna 'Número de Clientes' na imagem. Confira antes de salvar."
+                        >
+                          2ª análise (coluna)
+                        </span>
+                      )}
                     </span>
                   ) : (
                     <span className="text-amber-400" title={r.matriculaRaw}>

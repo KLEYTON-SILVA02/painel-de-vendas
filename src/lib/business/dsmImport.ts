@@ -156,11 +156,14 @@ export interface DsmReviewRow {
    * conferência pra nunca ficar indistinguível de um "0 clientes" real. */
   quantidadeIncerta: boolean;
   /** 'nome' quando a linha só foi encontrada pela segunda leitura por nome
-   * (ver parseDsmImageLinesByCollaboratorName) — ausente/undefined para a
-   * planilha e para a primeira leitura por matrícula-traço da imagem. Só
-   * usado para sinalizar a linha na tela de conferência, pede mais atenção
-   * do ADM antes de salvar. */
-  fonte?: 'nome';
+   * (ver parseDsmImageLinesByCollaboratorName); 'coluna' quando a
+   * quantidade veio da 2ª análise por posição/coluna (ver
+   * dsmImageColumns.ts) porque a leitura por linha não achou nenhum valor
+   * — ausente/undefined para a planilha e para a primeira leitura por
+   * matrícula-traço da imagem com quantidade já reconhecida. Só usado para
+   * sinalizar a linha na tela de conferência, pede mais atenção do ADM
+   * antes de salvar. */
+  fonte?: 'nome' | 'coluna';
 }
 
 export function buildDsmReviewRows(parsed: DsmParsedRow[], collaboratorByMatricula: Map<string, { id: string }>): DsmReviewRow[] {
