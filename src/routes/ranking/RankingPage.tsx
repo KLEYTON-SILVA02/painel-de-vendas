@@ -9,11 +9,23 @@ import { diasRestantesNoMes, effectiveMetaGeral, getGoal, getSuperMeta, goalPror
 import { computeColumnRanking, type ColumnRankingRow } from '../../lib/business/ranking';
 import { computeSummary } from '../../lib/business/summary';
 import { VISITANTE_SETOR, type Goal } from '../../lib/business/types';
+import { computeUvcSummary, fmtUvc } from '../../lib/business/uvc';
 import { addDaysISO, monthFirstISO, monthLastISO, todayISO } from '../../lib/dateRange';
 import { monthName, fmtDateBR, fmtMoney } from '../../lib/format';
 import { accumulateMonthExtract, buildMonthExtract, buildMonthExtractHtml, openPrintPreview } from '../../lib/printExtract';
 import { generateAllCategoryImages, type CategoryImageSpec, type MultiImageResult } from '../../lib/rankingImage';
-import { useCategoryTypes, useCollaborators, useDsmRecords, useGoals, useSalesInRange, useSpecialLists, useStore, useStoreSettings } from '../../lib/queries';
+import {
+  useCategoryTypes,
+  useClientServiceRecords,
+  useCollaborators,
+  useDailyItemsSoldByCollaborator,
+  useDsmRecords,
+  useGoals,
+  useSalesInRange,
+  useSpecialLists,
+  useStore,
+  useStoreSettings,
+} from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 
 interface RankingColumnData {
@@ -28,6 +40,12 @@ interface RankingColumnData {
    * labeled everywhere else in the app, same reasoning as
    * rankingImage.ts's own unitLabel. */
   unitLabel?: string;
+  /** Mesmos totalOverride/totalLabel/valueFormatter de rankingImage.ts — só
+   * UVC passa isso (sua razão não pode ser somada a partir de `ranking`,
+   * ver uvc.ts). */
+  totalOverride?: number;
+  totalLabel?: string;
+  valueFormatter?: (v: number) => string;
 }
 
 // Ported 1:1 from legacy/index-original.html (RANKING_COLS / viewRanking()).
@@ -63,11 +81,17 @@ export function RankingPage() {
   const salesRangeFrom = [currentMonthFirst, refMonthFirst, dashFrom].sort()[0];
   const salesRangeTo = [todayISO(), refMonthLast, dashTo].sort().at(-1)!;
   const { data: sales } = useSalesInRange(salesRangeFrom, salesRangeTo);
+  // UVC (coluna própria, sempre visível — mesmo "sem ocultar" do botão UVC
+  // em DashboardPage.tsx) — mesma dupla fonte de dados usada lá:
+  // clientServiceRecords já vem completo, dailyItensUvc é por período.
+  const { data: clientServiceRecords } = useClientServiceRecords();
+  const { data: dailyItensUvc } = useDailyItemsSoldByCollaborator(salesRangeFrom, salesRangeTo);
   // Seta de tendência (dia anterior) — só com um único dia selecionado;
   // busca própria e dedicada (um único dia), independente de `sales` acima
   // (mesmo raciocínio de CategoryPage.tsx).
   const previousDayISO = dashFrom === dashTo ? addDaysISO(dashFrom, -1) : null;
   const { data: prevDaySales } = useSalesInRange(previousDayISO ?? dashFrom, previousDayISO ?? dashFrom, !!previousDayISO);
+  const { data: prevDayItensUvc } = useDailyItemsSoldByCollaborator(previousDayISO ?? dashFrom, previousDayISO ?? dashFrom, !!previousDayISO);
   const categoryLabels = useCategoryLabelMap();
   const [generatingAll, setGeneratingAll] = useState(false);
   const [generatingProgress, setGeneratingProgress] = useState({ done: 0, total: 0 });
@@ -159,8 +183,57 @@ export function RankingPage() {
         unitLabel: 'conv.',
       });
     }
+    // UVC também não vem de `sales`/computeColumnRanking (itens ÷
+    // atendimentos, uma RAZÃO — ver uvc.ts) e, diferente de DSM, não tem um
+    // "ativo"/ocultar próprio — entra sempre, mesmo "sempre visível" do
+    // botão UVC em DashboardPage.tsx. O total da coluna nunca pode vir de
+    // somar `ranking` (somaria razões, sem significado) — só de
+    // uvcSummary.totals.uvc, passado à parte via totalOverride/totalLabel/
+    // valueFormatter (mesmo mecanismo de allCategorySpecs em
+    // DashboardPage.tsx).
+    const uvcSummary = computeUvcSummary(dailyItensUvc ?? [], clientServiceRecords ?? [], collaboratorsData, dashFrom, dashTo, modoGeral);
+    const uvcRanking: ColumnRankingRow[] = uvcSummary.rows.map((r) => ({
+      matricula: r.matricula,
+      nome: r.nome,
+      apelido: r.apelido,
+      foto: r.foto,
+      metaIndividual: 0,
+      qtd: { DERM: 0, GEN: 0, MP: 0, MER: 0, SEM: 0 },
+      valor: r.uvc,
+      itens: r.uvc,
+      pct: null,
+    }));
+    cols.push({
+      key: 'UVC',
+      titulo: 'UVC',
+      icon: '📈',
+      cor: '#ffb700',
+      ranking: uvcRanking,
+      isUnit: false,
+      metaDiaria: 0,
+      valueFormatter: fmtUvc,
+      totalOverride: uvcSummary.totals.uvc ?? 0,
+      totalLabel: 'UVC GERAL DA LOJA',
+    });
     return cols;
-  }, [salesData, collaboratorsData, goals, dashFrom, dashTo, mode, refYear, refMonth, specialLists, categoryLabels, hiddenCategories, dsmCategory, dsmRecords]);
+  }, [
+    salesData,
+    collaboratorsData,
+    goals,
+    dashFrom,
+    dashTo,
+    mode,
+    refYear,
+    refMonth,
+    specialLists,
+    categoryLabels,
+    hiddenCategories,
+    dsmCategory,
+    dsmRecords,
+    dailyItensUvc,
+    clientServiceRecords,
+    modoGeral,
+  ]);
 
   // Seta de tendência: mapa coluna → (matrícula → valor do colaborador no
   // dia de venda anterior), um Map por chave de coluna — null inteiro fora
@@ -183,8 +256,13 @@ export function RankingPage() {
       computeDsmSummary(dsmRecords ?? [], collaboratorsData, previousDayISO, previousDayISO).forEach((r) => map.set(r.matricula, r.conversoes));
       result.set('DSM', map);
     }
+    const uvcMap = new Map<string, number>();
+    computeUvcSummary(prevDayItensUvc ?? [], clientServiceRecords ?? [], collaboratorsData, previousDayISO, previousDayISO, false).rows.forEach((r) =>
+      uvcMap.set(r.matricula, r.uvc),
+    );
+    result.set('UVC', uvcMap);
     return result;
-  }, [previousDayISO, prevDaySales, collaboratorsData, specialLists, dsmCategory, dsmRecords]);
+  }, [previousDayISO, prevDaySales, collaboratorsData, specialLists, dsmCategory, dsmRecords, prevDayItensUvc, clientServiceRecords]);
 
   if (!collaborators || !sales || !goals || !storeSettings || !specialLists) {
     return <PageLoading />;
@@ -205,6 +283,9 @@ export function RankingPage() {
         isUnit: c.isUnit,
         metaDiaria: c.metaDiaria,
         unitLabel: c.unitLabel,
+        totalOverride: c.totalOverride,
+        totalLabel: c.totalLabel,
+        valueFormatter: c.valueFormatter,
       }));
       const results = await generateAllCategoryImages(specs, dashFrom, dashTo, store?.nome_loja, (done, total) =>
         setGeneratingProgress({ done, total }),
@@ -235,8 +316,11 @@ export function RankingPage() {
     // computeSummary pass per category — computeColumnRanking's `list`
     // only drops zero rows, so the sum is identical either way.
     ...columnData.map((c) => {
-      const total = c.isUnit ? c.ranking.reduce((a, r) => a + r.itens, 0) : c.ranking.reduce((a, r) => a + r.valor, 0);
-      return { label: `Total ${c.titulo}`, value: c.isUnit ? `${total} ${c.unitLabel ?? 'un.'}` : fmtMoney(total), color: c.cor };
+      // UVC: nunca soma o ranking (somaria razões, sem significado — ver
+      // uvc.ts) — totalOverride já traz o total real da loja.
+      const total = c.totalOverride ?? (c.isUnit ? c.ranking.reduce((a, r) => a + r.itens, 0) : c.ranking.reduce((a, r) => a + r.valor, 0));
+      const value = c.valueFormatter ? c.valueFormatter(total) : c.isUnit ? `${total} ${c.unitLabel ?? 'un.'}` : fmtMoney(total);
+      return { label: `Total ${c.titulo}`, value, color: c.cor };
     }),
     {
       stack: [
@@ -272,6 +356,9 @@ export function RankingPage() {
                 storeName={store?.nome_loja}
                 onGenerateAll={handleGenerateAllImages}
                 getPreviousValue={prevMap ? (r) => prevMap.get(r.matricula) ?? 0 : undefined}
+                formatValue={c.valueFormatter}
+                totalOverride={c.totalOverride}
+                totalLabel={c.totalLabel}
               />
             );
           })}

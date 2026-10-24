@@ -6,7 +6,8 @@ import { DateRangeProvider, useDateRange } from '../DateRangeContext';
 import { fmtDateBR } from '../../lib/format';
 import { addDaysISO, todayISO } from '../../lib/dateRange';
 import { computeUvcDailyRows, computeUvcSummary, fmtUvc } from '../../lib/business/uvc';
-import { useClientServiceRecords, useCollaborators, useDailyItemsSoldByCollaborator, useStoreSettings } from '../../lib/queries';
+import { buildUvcExtractHtml, openPrintPreview } from '../../lib/printExtract';
+import { useClientServiceRecords, useCollaborators, useDailyItemsSoldByCollaborator, useStore, useStoreSettings } from '../../lib/queries';
 
 const NEON_CYAN = '#00f0ff';
 const NEON_GOLD = '#ffb700';
@@ -101,6 +102,7 @@ function UvcInner() {
   const { data: records } = useClientServiceRecords();
   const { data: dailyItens } = useDailyItemsSoldByCollaborator(dashFrom, dashTo);
   const { data: storeSettings } = useStoreSettings();
+  const { data: store } = useStore();
   // Seta de tendência (dia anterior) — só com um único dia selecionado;
   // `records` (client_service_records) já vem completo (sem filtro de
   // data), mas `dailyItens` é por período, então precisa de uma busca
@@ -138,6 +140,16 @@ function UvcInner() {
     ...(mostrarAtendimentos ? [{ label: 'Atendimentos', value: totals.atendimentos.toLocaleString('pt-BR'), color: NEON_CYAN }] : []),
     { label: modoGeral ? 'UVC médio do mês' : 'UVC geral da loja', value: fmtUvc(totals.uvc), color: NEON_GOLD },
   ];
+
+  // Impressão com dados de colaboradores — sempre o ranking "Por
+  // colaborador" (sorted/totals), mesmo quando a visão na tela está em "Por
+  // dia": é o recorte que tem um valor por colaborador pra imprimir, igual
+  // ao extrato de qualquer outra categoria (CategoryPage.tsx).
+  function handlePrint() {
+    const periodLabel = `${fmtDateBR(dashFrom)} — ${fmtDateBR(dashTo)}`;
+    const html = buildUvcExtractHtml({ periodLabel, storeName: store?.nome_loja, rows: sorted, totals });
+    openPrintPreview(`Extrato de UVC — ${periodLabel}`, html);
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -260,6 +272,16 @@ function UvcInner() {
             )}
           </>
         )}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={handlePrint}
+          className="rounded-lg border px-3 py-1.5 text-sm font-semibold"
+          style={{ borderColor: NEON_GOLD, color: NEON_GOLD }}
+        >
+          🖨️ Imprimir extrato de colaboradores
+        </button>
       </div>
     </div>
   );

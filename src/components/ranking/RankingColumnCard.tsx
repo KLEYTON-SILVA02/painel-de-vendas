@@ -43,6 +43,9 @@ export function RankingColumnCard({
   storeName,
   onGenerateAll,
   getPreviousValue,
+  formatValue,
+  totalOverride,
+  totalLabel,
 }: {
   title: string;
   icon: string;
@@ -64,6 +67,17 @@ export function RankingColumnCard({
   /** Mesmo valor do colaborador nesta coluna, no dia de venda anterior — ver
    * a mesma prop em PodiumSplit.tsx (TrendArrow ao lado do valor). */
   getPreviousValue?: (r: ColumnRankingRow) => number | null | undefined;
+  /** Sobrescreve a formatação padrão (fmtMoney ou "N un.") tanto na tela
+   * quanto na imagem gerada (vira o `valueFormatter` de
+   * generateRankingImageBlob) — só a coluna de UVC passa isso (fmtUvc), já
+   * que seu `valor`/`itens` guardam uma razão, não R$/unidades (mesma
+   * convenção do DSM: valor = itens = a métrica em si). */
+  formatValue?: (v: number) => string;
+  /** Mesmo `totalOverride`/`totalLabel` de rankingImage.ts — só UVC passa
+   * isso (seu total da loja é uma razão, nunca derivável de somar as linhas
+   * de `ranking`, ver uvc.ts). */
+  totalOverride?: number;
+  totalLabel?: string;
 }) {
   const [copied, setCopied] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -81,7 +95,19 @@ export function RankingColumnCard({
     setGenerating(true);
     try {
       const rows = isUnit ? ranking.map((r) => ({ ...r, valor: r.itens })) : ranking;
-      const blob = await generateRankingImageBlob(rows, title, dashFrom, dashTo, storeName, isUnit, metaDiaria, unitLabel);
+      const blob = await generateRankingImageBlob(
+        rows,
+        title,
+        dashFrom,
+        dashTo,
+        storeName,
+        isUnit,
+        metaDiaria,
+        unitLabel,
+        totalOverride,
+        totalLabel,
+        formatValue,
+      );
       if (!blob) return;
       const copiedToClipboard = await tryCopyImage(blob);
       const url = URL.createObjectURL(blob);
@@ -174,7 +200,11 @@ export function RankingColumnCard({
                     gap: 3,
                   }}
                 >
-                  {isUnit ? `${r.itens} ${unitLabel}` : r.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  {formatValue
+                    ? formatValue(isUnit ? r.itens : r.valor)
+                    : isUnit
+                      ? `${r.itens} ${unitLabel}`
+                      : r.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                   {getPreviousValue && <TrendArrow current={isUnit ? r.itens : r.valor} previous={getPreviousValue(r)} size={9} />}
                 </div>
               </div>
