@@ -8,6 +8,7 @@
 import { normalizeMatricula } from './parsing';
 import { computeSummary, type SpecialListItem } from './summary';
 import type { Collaborator, Sale, SummaryRow } from './types';
+import { fmtUvc } from './uvc';
 
 // A plain string rather than a fixed literal union on purpose: an
 // ADM-created generic category (category_types.chave) needs to flow
@@ -69,7 +70,7 @@ export function tiersFor(categoria: ConquistaCategoria, generic?: GenericConquis
  * (isUnitConquista, conquistaTierParts/Label, the tier-filter row in
  * ConquistasPage) treat it the same way as the two existing unit categories. */
 export function isUnitConquista(categoria: ConquistaCategoria): boolean {
-  return categoria === 'LEVMEL' || categoria === 'CHIP' || categoria === 'DSM';
+  return categoria === 'LEVMEL' || categoria === 'CHIP' || categoria === 'DSM' || categoria === 'UVC';
 }
 
 const UNIT_CONQUISTA_SUFFIX: Record<string, string> = { DSM: 'c' };
@@ -90,6 +91,7 @@ export function unitConquistaSuffix(categoria: ConquistaCategoria): string {
  * keep their existing "un." caption, unchanged. */
 export function unitConquistaCaptionText(categoria: ConquistaCategoria, itens: number): string {
   if (categoria === 'DSM') return `${itens} ${itens === 1 ? 'conversão' : 'conversões'}`;
+  if (categoria === 'UVC') return fmtUvc(itens);
   return `${itens} ${unitConquistaSuffix(categoria)}`;
 }
 
@@ -119,7 +121,13 @@ export function conquistaTierParts(categoria: ConquistaCategoria, tier: number, 
     ? generic.nome.toUpperCase()
     : categoria === 'DSM'
       ? 'DSM'
-      : (CONQUISTA_TIER_SUFFIX[categoria as FixedConquistaCategoria] ?? categoria);
+      : categoria === 'UVC'
+        ? 'UVC'
+        : (CONQUISTA_TIER_SUFFIX[categoria as FixedConquistaCategoria] ?? categoria);
+  // UVC é uma razão (itens ÷ atendimentos), não um valor R$ nem uma
+  // contagem de unidades — mostra a própria razão formatada (fmtUvc), sem
+  // sufixo de unidade nenhum, igual ao resto do sistema (uvc.ts).
+  if (categoria === 'UVC') return { valor: fmtUvc(tier), categoria: nome };
   const unitSuffix = UNIT_CONQUISTA_SUFFIX[categoria] ?? 'un.';
   // LEVMEL/CHIP keep the tight "5un." convention already used everywhere
   // for them; DSM's "c" suffix reads as a unit letter, not a word, so it

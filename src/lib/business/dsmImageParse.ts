@@ -30,7 +30,17 @@ const NAO_IDENTIFICADO_PATTERN = /n[ãa]o\s+identificad/i;
 // exatamente o mesmo reconhecimento de "início de linha de colaborador"
 // desta 1ª análise (por texto/regex), pra nunca haver duas definições do
 // que é uma linha de colaborador divergindo entre si.
-export const MATRICULA_NAME_LINE = /^(\d{4,10})\s*[-–—]\s*(.+)$/;
+//
+// Deliberadamente SEM âncora `^` no início (só `$` no fim) — o relatório
+// real tem uma coluna "Loja" à esquerda da de Matrícula/Nome, e quando essa
+// célula é mesclada verticalmente (um valor só, cobrindo várias linhas da
+// tabela), o OCR às vezes gruda o texto dela na primeira linha da tabela
+// ("567152 70209751-FULANO..." em vez de só "70209751-FULANO...") — com a
+// âncora `^`, essa linha inteira falhava em casar e o colaborador sumia do
+// resultado sem nenhum aviso. Sem a âncora, o regex encontra o padrão
+// "dígitos-traço-nome" onde quer que ele comece na linha, ignorando
+// qualquer prefixo espúrio antes dele (bug visto em produção, 2026-10-24).
+export const MATRICULA_NAME_LINE = /(\d{4,10})\s*[-–—]\s*(.+)$/;
 
 export interface DsmImageLineMatch {
   lineRaw: string;
@@ -209,6 +219,55 @@ export function buildDsmReviewRowsFromImage(
     quantidadeIncerta: m.quantidade === null,
     fonte: m.matchedBy,
   }));
+}
+
+/** Roda as duas leituras por linha/texto (matrícula-traço, depois por nome
+ * — ver as duas funções acima) e, por cima, aplica a 2ª análise por coluna
+ * (dsmImageColumns.ts, já calculada à parte a partir dos bounding boxes do
+ * mesmo OCR) só pra preencher quantidades que as leituras por texto não
+ * acharam — nunca sobrescreve um valor já lido. Um único ponto de verdade
+ * pra essa junção, reaproveitado tanto na primeira vez (handleScan, pra
+ * montar o texto limpo mostrado na tela) quanto se o ADM reprocessar depois
+ * de editar/colar texto à mão (DsmImageImportSection.tsx). */
+export function computeDsmImageMatches(
+  text: string,
+  colaboradores: { nome: string; matricula: string }[],
+  columnMatches: Map<string, number> | null,
+): DsmImageLineMatch[] {
+  const primaryMatches = parseDsmImageLines(text);
+  const alreadyMatched = new Set(primaryMatches.map((m) => m.matricula).filter(Boolean));
+  const secondPassMatches = parseDsmImageLinesByCollaboratorName(text, colaboradores, alreadyMatched);
+  let matches = [...primaryMatches, ...secondPassMatches];
+  if (columnMatches && columnMatches.size > 0) {
+    matches = matches.map((m) => {
+      if (!m.matricula || m.quantidade !== null) return m;
+      const columnValue = columnMatches.get(m.matricula);
+      return columnValue !== undefined ? { ...m, quantidade: columnValue, matchedBy: 'coluna' as const } : m;
+    });
+  }
+  return matches;
+}
+
+/** Reconstrói um texto limpo — uma linha "<matrícula>-<NOME>  <quantidade>"
+ * por colaborador já reconhecido (quantidade omitida quando ainda null) —
+ * pra substituir, na caixa "Texto extraído", o despejo bruto do OCR (com
+ * Loja/Data/Vendas/Valor/Clientes(%) e qualquer outro texto/cabeçalho da
+ * imagem ainda visíveis). Até agora essas colunas só eram ignoradas
+ * internamente (dentro de parseDsmImageLines, ao montar as linhas da
+ * conferência) — o texto mostrado na tela continuava sendo o bruto, o que
+ * era exatamente o pedido do usuário (2026-10-24) que não tinha sido
+ * atendido: "as outras colunas... devem ser ignoradas" também no texto
+ * capturado, não só no resultado final. Cada linha que esta função escreve
+ * casa de novo com MATRICULA_NAME_LINE (ou NAO_IDENTIFICADO_PATTERN) sem
+ * perdas — round-trip sem perdas pra quando o ADM reprocessa sem editar
+ * nada. */
+export function buildCleanDsmImageText(matches: DsmImageLineMatch[]): string {
+  return matches
+    .map((m) => {
+      const label = m.matriculaRaw ? `${m.matriculaRaw}-${m.nome}` : m.nome;
+      return m.quantidade !== null ? `${label}  ${m.quantidade}` : label;
+    })
+    .join('\n');
 }
 
 // Padrão bem mais solto que MATRICULA_NAME_LINE — só pra contar quantas

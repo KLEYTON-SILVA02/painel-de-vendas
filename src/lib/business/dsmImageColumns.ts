@@ -86,10 +86,24 @@ function findClientesColumnXCenter(lines: OcrLine[]): number | null {
     }
   }
   if (candidates.length === 0) return null;
-  const withoutPercent = candidates.filter((c) => !c.hasPercent);
-  const pool = withoutPercent.length > 0 ? withoutPercent : candidates;
-  pool.sort((a, b) => a.y - b.y || a.xCenter - b.xCenter);
-  return pool[0].xCenter;
+  // Só UM candidato "clientes" no total: o filtro de "%" na vizinhança é a
+  // única pista que existe — se ele está marcado, é a coluna de PERCENTUAL
+  // (ou o "(%)" que o OCR quebrou num token separado), nunca a de
+  // CONTAGEM, e não há um segundo candidato pra desempatar por posição.
+  // Usar a posição dele mesmo assim leria sistematicamente a coluna errada
+  // (bug visto em produção, 2026-10-24: a 2ª análise "concluía com
+  // sucesso" mas confirmava o número de %, não o de clientes) — melhor não
+  // ter 2ª análise nenhuma do que confirmar o valor errado.
+  if (candidates.length === 1) return candidates[0].hasPercent ? null : candidates[0].xCenter;
+  // 2+ candidatos: não filtra mais por "%" aqui — a janela de vizinhança
+  // acima marca os DOIS como "tem % por perto" sempre que "Clientes" e
+  // "Clientes(%)" ficam lado a lado (o caso normal do relatório), então
+  // esse filtro descartaria justamente o cenário que essa análise existe
+  // pra resolver. Em vez disso, usa a ordem: a coluna de contagem sempre
+  // vem antes (mais à esquerda) da de percentual nesse relatório — mesmo
+  // critério já documentado acima.
+  candidates.sort((a, b) => a.y - b.y || a.xCenter - b.xCenter);
+  return candidates[0].xCenter;
 }
 
 /** 2ª análise (por coluna/posição): devolve matrícula → "Número de
