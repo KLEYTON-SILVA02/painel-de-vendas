@@ -232,12 +232,12 @@ function PodiumPhoto<T extends StaircaseRow>({ rank, row, spots }: { rank: 0 | 1
 }
 
 /** Seta de tendência do pódio (top 3) — pedido explícito do usuário
- * (2026-10-24, com referência visual): em vez de ficar ao lado do valor
- * (como nas pílulas 4-15, ver PillColumn), aqui é um selo à parte, maior,
- * sentado sobre a borda superior da foto de cada colocação — mesmo
- * posicionamento percentual (spot.left/top/diameter) de PodiumPhoto acima,
- * só que no topo do círculo em vez do centro. Sem nada a mostrar (sem base
- * de comparação pro colaborador), não renderiza nada. */
+ * (2026-10-24, com referência visual, ajustado num 2º round no mesmo dia:
+ * a 1ª versão ficava em cima da foto): fica no meio do vão entre a foto
+ * (círculo, spot.top/diameter) e o texto de valor (spot.valueTop) — nunca
+ * em cima de nenhum dos dois. Mesma posição horizontal de PodiumPhoto/
+ * PodiumText (spot.left). Sem nada a mostrar (sem base de comparação pro
+ * colaborador), não renderiza nada. */
 function PodiumTrendBadge<T extends StaircaseRow>({
   rank,
   row,
@@ -253,17 +253,21 @@ function PodiumTrendBadge<T extends StaircaseRow>({
 }) {
   const spot = spots[rank];
   if (!spot) return null;
+  const photoBottom = spot.top + spot.diameter / 2;
+  const midTop = (photoBottom + spot.valueTop) / 2;
   return (
     <div
       style={{
         position: 'absolute',
         left: `${spot.left}%`,
-        top: `${spot.top - spot.diameter / 2}%`,
+        top: `${midTop}%`,
         transform: 'translate(-50%,-50%)',
         zIndex: 1,
       }}
     >
-      <TrendArrow current={getValue(row)} previous={getPreviousValue(row)} size={`${spot.diameter * 0.4}cqw`} />
+      {/* -20% sobre a 1ª versão (spot.diameter * 0.4), pedido explícito do
+          usuário no mesmo ajuste de posição. */}
+      <TrendArrow current={getValue(row)} previous={getPreviousValue(row)} size={`${spot.diameter * 0.32}cqw`} />
     </div>
   );
 }
@@ -424,10 +428,10 @@ function PillColumn<T extends StaircaseRow>({
             <span style={{ marginLeft: 'auto', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, fontSize: 12, color: '#64B5F6', display: 'flex', alignItems: 'center', gap: 4 }}>
                 {formatValue(getValue(slot.row))}
-                {/* +80% de destaque sobre o glyph antigo (pedido explícito
-                    do usuário, 2026-10-24) — ver TrendArrow.tsx, default
-                    size=14, aqui explicitamente maior. */}
-                {getPreviousValue && <TrendArrow current={getValue(slot.row)} previous={getPreviousValue(slot.row)} size={20} />}
+                {/* Maior que o default de TrendArrow.tsx (pedido explícito
+                    do usuário, 2026-10-24 — depois reduzido 20% num
+                    segundo ajuste, igual a todo outro lugar). */}
+                {getPreviousValue && <TrendArrow current={getValue(slot.row)} previous={getPreviousValue(slot.row)} size={16} />}
               </span>
               {getSecondaryValue && formatSecondaryValue && (
                 <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, fontSize: 9, color: '#94a3b8' }}>
