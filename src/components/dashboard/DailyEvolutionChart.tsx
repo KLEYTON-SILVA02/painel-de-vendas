@@ -3,14 +3,15 @@ import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import type { CategoryKey, GoalCategoryKey } from '../../lib/business/classification';
 import { getGoal, getSuperMeta } from '../../lib/business/goals';
 import { matchesSpecialList, type SpecialListItem } from '../../lib/business/summary';
-import type { Collaborator, DsmRecord, Goal, Sale } from '../../lib/business/types';
+import type { ClientServiceRecord, Collaborator, DsmRecord, Goal, Sale } from '../../lib/business/types';
+import { computeUvcDailyRows, fmtUvc, type DailyItensRow } from '../../lib/business/uvc';
 import { fmtMoney } from '../../lib/format';
 
 // Esta tela não tem mais seletor de categoria próprio — segue sempre a
 // categoria escolhida no filtro de "Ranking Geral" logo acima (ver
 // chartCategoryFromRankFilter em DashboardPage.tsx), em vez de ter seu
 // próprio conjunto de botões que podia divergir do resto da tela.
-export type ChartCategoryKey = CategoryKey | 'LEVMEL' | 'CHIP' | 'DSM';
+export type ChartCategoryKey = CategoryKey | 'LEVMEL' | 'CHIP' | 'DSM' | 'UVC';
 
 export const CHART_CATEGORIES: { key: ChartCategoryKey; titulo: string; color: string }[] = [
   { key: 'MER', titulo: 'Mercadoria Geral', color: '#ff6a00' },
@@ -20,6 +21,7 @@ export const CHART_CATEGORIES: { key: ChartCategoryKey; titulo: string; color: s
   { key: 'LEVMEL', titulo: 'Levmel', color: '#ffb700' },
   { key: 'CHIP', titulo: 'Chip', color: '#00e5ff' },
   { key: 'DSM', titulo: 'DSM', color: '#00e0c0' },
+  { key: 'UVC', titulo: 'UVC', color: '#ffb700' },
 ];
 
 export interface DailyPoint {
@@ -42,6 +44,15 @@ export function formatChartValue(value: number, isUnit: boolean, unitLabel = 'un
   return isUnit ? `${value} ${unitLabel}` : fmtMoney(value);
 }
 
+/** UVC é a única categoria do gráfico cujo "valor do dia" é uma RAZÃO (itens
+ * ÷ atendimentos), não uma soma — por isso o eixo/tooltip usam fmtUvc
+ * (mesma formatação "R$ 3,6" da tela própria de UVC) em vez de
+ * formatChartValue (fmtMoney ou contagem de unidades), e nunca têm meta
+ * (ver goalFor abaixo, sempre undefined pra 'UVC'). */
+export function isRatioChartCategory(catKey: ChartCategoryKey): boolean {
+  return catKey === 'UVC';
+}
+
 /** Buckets `salesData` by day for the reference month (monthFirst..monthLast)
  * and one category — MER counts every sale (store total, same convention as
  * everywhere else this category is treated as "all sales"), LEVMEL/CHIP
@@ -49,8 +60,14 @@ export function formatChartValue(value: number, isUnit: boolean, unitLabel = 'un
  * value) and sum quantity sold instead of R$, the rest by `grupo`. DSM
  * doesn't come from `sales` at all (see dsm.ts) — it buckets `dsmRecords` by
  * day instead, summing `quantidade` for collaborators that still exist
- * (same filter computeDsmSummary already applies). Every calendar day gets a
- * point even with no sales (valor 0), so the x-axis never skips a day. */
+ * (same filter computeDsmSummary already applies). UVC also doesn't come
+ * from `sales` — it reuses computeUvcDailyRows (uvc.ts, the same function
+ * UvcPage's "Por dia" view uses) and takes each day's own ratio (itens do
+ * dia ÷ atendimentos do dia); a day with no atendimentos importados (uvc
+ * null) is left out of `byDay`, so it falls through to the same `0`
+ * fallback every other category's missing day already gets below — never
+ * NaN/Infinity. Every calendar day gets a point even with no sales (valor
+ * 0), so the x-axis never skips a day. */
 function computeDailyPoints(
   salesData: Sale[],
   dsmRecords: DsmRecord[],
@@ -61,6 +78,8 @@ function computeDailyPoints(
   specialLists: { levmel: SpecialListItem[]; chip: SpecialListItem[] } | undefined,
   metaDiaria: number,
   superMetaDiaria: number,
+  dailyItensUvc: DailyItensRow[],
+  clientServiceRecords: ClientServiceRecord[],
 ): DailyPoint[] {
   const isUnit = isUnitChartCategory(catKey);
   const byDay = new Map<string, number>();
@@ -70,6 +89,10 @@ function computeDailyPoints(
       if (!r.dataISO || r.dataISO < monthFirst || r.dataISO > monthLast) return;
       if (!collaboratorIds.has(r.collaboratorId)) return;
       byDay.set(r.dataISO, (byDay.get(r.dataISO) ?? 0) + r.quantidade);
+    });
+  } else if (catKey === 'UVC') {
+    computeUvcDailyRows(dailyItensUvc, clientServiceRecords, collaboratorsData, monthFirst, monthLast).forEach((r) => {
+      if (r.uvc !== null) byDay.set(r.dataISO, r.uvc);
     });
   } else {
     const list = catKey === 'LEVMEL' ? specialLists?.levmel : catKey === 'CHIP' ? specialLists?.chip : undefined;
@@ -127,14 +150,22 @@ interface DailyEvolutionChartProps {
    * default "DSM" titulo the same way every other DSM tab in the app
    * respects a store's own rename, falling back to "DSM" when not set. */
   dsmLabel?: string;
+  /** UVC's daily numerator/denominator — mesmas duas fontes que
+   * computeUvcSummary/computeUvcDailyRows já usam em DashboardPage.tsx/
+   * UvcPage.tsx (sales_category_totals_daily + client_service_records). */
+  dailyItensUvc: DailyItensRow[];
+  clientServiceRecords: ClientServiceRecord[];
 }
 
 /** DSM isn't a GoalCategoryKey (that union stays scoped to the 6 fixed
  * sales categories — see MetasPage.tsx/MobileDsmPage.tsx's own note on
  * this), so its goal is read the same way: a local cast, not a widened
- * shared type. */
+ * shared type. UVC isn't one either, and never has a goal at all (it's a
+ * ratio, not a sales category) — always undefined, which makes the axis
+ * below fall back to niceAxisMax over the observed daily ratios. */
 function goalFor(goals: Record<GoalCategoryKey, Goal | undefined>, catKey: ChartCategoryKey): Goal | undefined {
   if (catKey === 'DSM') return (goals as unknown as Partial<Record<'DSM', Goal>>).DSM;
+  if (catKey === 'UVC') return undefined;
   return goals[catKey];
 }
 
@@ -152,15 +183,43 @@ function unitLabelFor(catKey: ChartCategoryKey): string {
 // (LEVMEL/CHIP/DSM typically don't use one) falls back to 1.5× its daily
 // meta as headroom; with neither goal configured, falls back to the old
 // observed-max heuristic so the chart still reads sensibly.
-export function useDailyEvolutionChart({ catKey, salesData, collaboratorsData, goals, specialLists, monthFirst, monthLast, dsmRecords, dsmLabel }: DailyEvolutionChartProps) {
+export function useDailyEvolutionChart({
+  catKey,
+  salesData,
+  collaboratorsData,
+  goals,
+  specialLists,
+  monthFirst,
+  monthLast,
+  dsmRecords,
+  dsmLabel,
+  dailyItensUvc,
+  clientServiceRecords,
+}: DailyEvolutionChartProps) {
   const categoryLabels = useCategoryLabelMap();
   const categories = useMemo(
-    () => CHART_CATEGORIES.map((c) => (c.key === 'DSM' ? { ...c, titulo: dsmLabel ?? c.titulo } : { ...c, titulo: categoryLabels[c.key] ?? c.titulo })),
+    () =>
+      CHART_CATEGORIES.map((c) =>
+        c.key === 'DSM'
+          ? { ...c, titulo: dsmLabel ?? c.titulo }
+          // UVC não é customizável em ADM > Nomes das Categorias (só as 6
+          // categorias de venda + Levmel/Chip são) — mantém o "UVC" fixo de
+          // CHART_CATEGORIES em vez de indexar categoryLabels (que nem tem
+          // uma entrada 'UVC').
+          : c.key === 'UVC'
+            ? c
+            : { ...c, titulo: categoryLabels[c.key] ?? c.titulo },
+      ),
     [categoryLabels, dsmLabel],
   );
   const active = categories.find((c) => c.key === catKey)!;
   const isUnit = isUnitChartCategory(catKey);
+  const isRatio = isRatioChartCategory(catKey);
   const unitLabel = unitLabelFor(catKey);
+  // UVC troca formatChartValue (fmtMoney/contagem de unidades) por fmtUvc —
+  // mesma formatação "R$ 3,6" da tela própria de UVC — pros 3 rótulos do
+  // eixo e pro tooltip de cada barra.
+  const formatValue = isRatio ? fmtUvc : (v: number) => formatChartValue(v, isUnit, unitLabel);
 
   const goalAtual = goalFor(goals, catKey);
   const metaDiaria = useMemo(
@@ -172,8 +231,21 @@ export function useDailyEvolutionChart({ catKey, salesData, collaboratorsData, g
     [goalAtual, salesData, collaboratorsData],
   );
   const points = useMemo(
-    () => computeDailyPoints(salesData, dsmRecords, collaboratorsData, catKey, monthFirst, monthLast, specialLists, metaDiaria, superMetaDiaria),
-    [salesData, dsmRecords, collaboratorsData, catKey, monthFirst, monthLast, specialLists, metaDiaria, superMetaDiaria],
+    () =>
+      computeDailyPoints(
+        salesData,
+        dsmRecords,
+        collaboratorsData,
+        catKey,
+        monthFirst,
+        monthLast,
+        specialLists,
+        metaDiaria,
+        superMetaDiaria,
+        dailyItensUvc,
+        clientServiceRecords,
+      ),
+    [salesData, dsmRecords, collaboratorsData, catKey, monthFirst, monthLast, specialLists, metaDiaria, superMetaDiaria, dailyItensUvc, clientServiceRecords],
   );
   const { axisTop, axisMid } = useMemo(() => {
     if (superMetaDiaria > 0) {
@@ -186,11 +258,11 @@ export function useDailyEvolutionChart({ catKey, salesData, collaboratorsData, g
     return { axisTop: fallback, axisMid: fallback / 2 };
   }, [metaDiaria, superMetaDiaria, points]);
 
-  return { active, isUnit, unitLabel, points, axisTop, axisMid };
+  return { active, isUnit, unitLabel, formatValue, points, axisTop, axisMid };
 }
 
 export function DailyEvolutionChart(props: DailyEvolutionChartProps) {
-  const { active, isUnit, unitLabel, points, axisTop, axisMid } = useDailyEvolutionChart(props);
+  const { active, formatValue, points, axisTop, axisMid } = useDailyEvolutionChart(props);
   const CHART_H = 170;
 
   return (
@@ -216,9 +288,9 @@ export function DailyEvolutionChart(props: DailyEvolutionChartProps) {
         {/* Y-axis: 3 marks (0, meta diária, super meta diária) against the
             active category's own goals — see useDailyEvolutionChart above. */}
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: CHART_H, fontSize: 9, color: '#8b90bf', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0, textAlign: 'right', paddingBottom: 18 }}>
-          <span>{formatChartValue(axisTop, isUnit, unitLabel)}</span>
-          <span>{formatChartValue(axisMid, isUnit, unitLabel)}</span>
-          <span>{formatChartValue(0, isUnit, unitLabel)}</span>
+          <span>{formatValue(axisTop)}</span>
+          <span>{formatValue(axisMid)}</span>
+          <span>{formatValue(0)}</span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, flex: 1, minWidth: points.length * 16 }}>
@@ -232,7 +304,7 @@ export function DailyEvolutionChart(props: DailyEvolutionChartProps) {
             return (
               <div key={p.dateISO} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, minWidth: 14 }}>
                 <div
-                  title={`Realizado no dia: ${formatChartValue(p.valor, isUnit, unitLabel)}`}
+                  title={`Realizado no dia: ${formatValue(p.valor)}`}
                   style={{ position: 'relative', width: '100%', height: CHART_H, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', cursor: 'default' }}
                 >
                   {(showMeta || showSuper) && (
