@@ -211,6 +211,33 @@ export function computeUvcDailyRows(
     .sort((a, b) => (a.dataISO < b.dataISO ? 1 : -1));
 }
 
+/** Mesma razão dia a dia de computeUvcDailyRows, só que de um único
+ * colaborador (em vez do total da loja) — usado no Extrato por Colaborador
+ * (RankingPage.tsx): aquela tela nunca soma UVC entre dias, nem mesmo em
+ * "Dias acumulados" (razão de dois dias somada não tem significado — ver
+ * comentário no topo deste arquivo), então sempre precisa da razão já
+ * calculada dia a dia dessa pessoa. Mesma regra de computeUvcSummary: um dia
+ * sem nenhum atendimento importado não entra (razão não calculável). */
+export function computeUvcDailyRowsForCollaborator(
+  dailyItens: DailyItensRow[],
+  records: ClientServiceRecord[],
+  collaborators: Collaborator[],
+  matricula: string,
+  fromDate: string,
+  toDate: string,
+): UvcDailyRow[] {
+  const collaboratorsById = new Map(collaborators.map((c) => [c.id, c]));
+  const { byMatriculaDay } = buildDayAggregates(dailyItens, records, collaboratorsById, fromDate, toDate);
+  const target = normalizeMatricula(matricula);
+  const out: UvcDailyRow[] = [];
+  byMatriculaDay.forEach((agg, key) => {
+    const sep = key.indexOf('|');
+    if (key.slice(0, sep) !== target || agg.atendimentos <= 0) return;
+    out.push({ dataISO: key.slice(sep + 1), itens: agg.itens, atendimentos: agg.atendimentos, uvc: agg.itens / agg.atendimentos });
+  });
+  return out.sort((a, b) => a.dataISO.localeCompare(b.dataISO));
+}
+
 /** "R$ 2,35" — 2 casas decimais (pedido do usuário, 2026-10-24: "mais uma
  * casa decimal", de 1 pra 2), vírgula, prefixo "R$" só por formatação
  * visual — o UVC continua sendo itens ÷ atendimentos, nunca um valor

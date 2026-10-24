@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeUvcDailyRows, computeUvcSummary, fmtUvc, type DailyItensRow } from './uvc';
+import { computeUvcDailyRows, computeUvcDailyRowsForCollaborator, computeUvcSummary, fmtUvc, type DailyItensRow } from './uvc';
 import type { ClientServiceRecord, Collaborator } from './types';
 
 function collaborator(over: Partial<Collaborator> = {}): Collaborator {
@@ -115,6 +115,38 @@ describe('computeUvcDailyRows', () => {
     const dailyItens: DailyItensRow[] = [{ matricula: '001', dataISO: '2026-08-31', itensTotal: 50 }];
     const rows = computeUvcDailyRows(dailyItens, [], collaborators, '2026-09-01', '2026-09-30');
     expect(rows).toEqual([]);
+  });
+});
+
+describe('computeUvcDailyRowsForCollaborator', () => {
+  it('monta a razão dia a dia de um único colaborador, em ordem cronológica, ignorando outros colaboradores', () => {
+    const collaborators = [collaborator({ id: 'c1', matricula: '001' }), collaborator({ id: 'c2', matricula: '002', nome: 'Beltrano Souza' })];
+    const dailyItens: DailyItensRow[] = [
+      { matricula: '001', dataISO: '2026-09-02', itensTotal: 9 },
+      { matricula: '001', dataISO: '2026-09-01', itensTotal: 6 },
+      { matricula: '002', dataISO: '2026-09-01', itensTotal: 4 },
+    ];
+    const records: ClientServiceRecord[] = [
+      { id: 'r1', collaboratorId: 'c1', dataISO: '2026-09-01', atendimentos: 2 },
+      { id: 'r2', collaboratorId: 'c1', dataISO: '2026-09-02', atendimentos: 3 },
+      { id: 'r3', collaboratorId: 'c2', dataISO: '2026-09-01', atendimentos: 2 },
+    ];
+    const rows = computeUvcDailyRowsForCollaborator(dailyItens, records, collaborators, '001', '2026-09-01', '2026-09-30');
+    expect(rows).toEqual([
+      { dataISO: '2026-09-01', itens: 6, atendimentos: 2, uvc: 3 },
+      { dataISO: '2026-09-02', itens: 9, atendimentos: 3, uvc: 3 },
+    ]);
+  });
+
+  it('pula dias sem nenhum atendimento importado (razão não calculável), em vez de incluir um 0/null', () => {
+    const collaborators = [collaborator()];
+    const dailyItens: DailyItensRow[] = [
+      { matricula: '001', dataISO: '2026-09-01', itensTotal: 6 },
+      { matricula: '001', dataISO: '2026-09-02', itensTotal: 9 },
+    ];
+    const records: ClientServiceRecord[] = [{ id: 'r1', collaboratorId: 'c1', dataISO: '2026-09-01', atendimentos: 2 }];
+    const rows = computeUvcDailyRowsForCollaborator(dailyItens, records, collaborators, '001', '2026-09-01', '2026-09-30');
+    expect(rows).toEqual([{ dataISO: '2026-09-01', itens: 6, atendimentos: 2, uvc: 3 }]);
   });
 });
 
