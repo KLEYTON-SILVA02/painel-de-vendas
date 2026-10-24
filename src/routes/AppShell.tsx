@@ -93,6 +93,7 @@ const PAGE_TITLES: Record<string, { label: string; color: string; categoryKey?: 
   '/bio': { label: '🧪 BIOSINTÉTICA — Ranking Balcão', color: '#14ff00' },
   '/dsm': { label: '🎟️ DSM', color: '#ffb700' },
   '/dinamicas': { label: '🎯 Dinâmicas Comerciais', color: '#a82bff' },
+  '/admin/uvc': { label: '📈 UVC', color: '#ffb700' },
 };
 // Emoji prefixes above stay fixed; only the name after the emoji is
 // store-overridable (see useCategoryLabelMap) for the 6 fixed-category rows.
