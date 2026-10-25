@@ -622,47 +622,24 @@
   color: #002;
 }
 
-/* ---------- 7. Card do campeão de vendas ---------- */
-.mv2-champion-card {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+/* ---------- 7. Barra de filtro de categoria (Tela Inicial) ---------- */
+.mv2-category-filter {
   margin: 0 18px 16px;
   padding: 8px 12px;
   background: var(--mv2-bg-cards);
-  border: 1px solid var(--mv2-dourado);
+  border: 1px solid var(--mv2-ciano-claro);
   border-radius: var(--mv2-radius-sm);
 }
-.mv2-champion-card .mv2-avatar {
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  border: 2px solid var(--mv2-ciano-claro);
-  object-fit: cover;
-  flex-shrink: 0;
-  background: var(--mv2-bg-input);
-}
-.mv2-champion-card .mv2-info {
-  flex: 1;
-  min-width: 0;
-}
-.mv2-champion-card .mv2-badge {
-  font-size: 8px;
-  color: var(--mv2-dourado);
-  text-transform: uppercase;
-  font-weight: 700;
-}
-.mv2-champion-card .mv2-name {
-  font-size: 13px;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.mv2-champion-card .mv2-stars {
-  color: var(--mv2-dourado);
+.mv2-category-filter-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 11px;
-  flex-shrink: 0;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mv2-category-filter .mv2-chip-row {
+  margin: 10px 0 0;
 }
 
 /* ---------- 8. Ranking de vendas (colunas tipo pódio) ---------- */
