@@ -81,7 +81,10 @@ export const DEFAULT_PODIUM_SPOTS: PodiumSpots = {
 };
 
 const MAX_LISTED = 15;
-const PILL_HEIGHT = 38;
+// 56 (antes 38) — alto o bastante pra caber 2 linhas (nome numa, valor na
+// outra) sem cortar o nome, pedido explícito do usuário 2026-10-25 depois
+// do ajuste anterior deixar o nome e o valor espremidos lado a lado.
+const PILL_HEIGHT = 56;
 
 interface PillSlot<T> {
   row: T | null;
@@ -415,51 +418,50 @@ function PillColumn<T extends StaircaseRow>({
             <span style={{ width: 26, height: 26, borderRadius: '50%', border: '2px solid #8A2BE2', background: '#0b0e1d', overflow: 'hidden', flexShrink: 0 }}>
               {slot.row.foto && <img src={slot.row.foto} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
             </span>
-            <span
-              style={{
-                flex: 1,
-                minWidth: 0,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                textTransform: 'uppercase',
-                fontWeight: 700,
-                fontSize: 12,
-                color: '#fff',
-              }}
-            >
-              {slot.row.apelido || slot.row.nome}
-            </span>
-            {/* maxWidth + ellipsis como rede de segurança: o valor em si já
-                ficou menor (10px, antes 12px — pedido explícito do usuário,
-                2026-10-25, estava estourando a largura da barra em telas
-                estreitas e espremendo o nome ao lado quase a zero), mas um
-                valor muito grande (ex. com centena de milhar) ainda não
-                pode crescer além do que a barra tem pra dar. */}
-            <span style={{ marginLeft: 'auto', flexShrink: 0, maxWidth: '52%', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+            {/* Nome numa linha, valor na outra (pedido explícito do
+                usuário, 2026-10-25) — antes disputavam a mesma linha e o
+                nome quase sempre perdia, cortado a 1-2 caracteres. Cada
+                linha tem sua própria largura total (menos pos+avatar), em
+                vez de dividir a largura entre as duas. */}
+            <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2 }}>
               <span
                 style={{
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontWeight: 800,
-                  fontSize: 10,
-                  color: '#64B5F6',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  maxWidth: '100%',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
+                  textTransform: 'uppercase',
+                  fontWeight: 700,
+                  fontSize: 12,
+                  color: '#fff',
                 }}
               >
-                {formatValue(getValue(slot.row))}
-                {getPreviousValue && <TrendArrow current={getValue(slot.row)} previous={getPreviousValue(slot.row)} size={16} />}
+                {slot.row.apelido || slot.row.nome}
               </span>
-              {getSecondaryValue && formatSecondaryValue && (
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, fontSize: 8, color: '#94a3b8' }}>
-                  {formatSecondaryValue(getSecondaryValue(slot.row))}
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
+                <span
+                  style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontWeight: 800,
+                    fontSize: 11,
+                    color: '#64B5F6',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                  }}
+                >
+                  {formatValue(getValue(slot.row))}
+                  {getPreviousValue && <TrendArrow current={getValue(slot.row)} previous={getPreviousValue(slot.row)} size={16} />}
                 </span>
-              )}
+                {getSecondaryValue && formatSecondaryValue && (
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, fontSize: 9, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {formatSecondaryValue(getSecondaryValue(slot.row))}
+                  </span>
+                )}
+              </span>
             </span>
           </div>
         ),
