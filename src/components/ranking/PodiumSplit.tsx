@@ -3,9 +3,9 @@ import { TrendArrow } from '../TrendArrow';
 import type { StaircaseRow } from './PodiumStaircase';
 
 // "Ranking Geral de Vendas" — new split layout (top-3 over the ADM-supplied
-// podium artwork on the left, positions 4-15 as a two-column pill grid on
-// the right), toggled on via store_settings.ranking_moderno alongside the
-// older PodiumStaircase design it doesn't replace. The podium image is a
+// podium artwork on the left, positions 4-15 as a 1- or 2-column pill grid
+// on the right, see `columns`), toggled on via store_settings.ranking_moderno
+// alongside the older PodiumStaircase design it doesn't replace. The podium image is a
 // fixed background (silver/gold/bronze pedestals, crown baked in, no
 // baked-in text placeholders) — the system overlays each collaborator's
 // photo into the image's own blank white circle, plus the value/name as
@@ -81,10 +81,7 @@ export const DEFAULT_PODIUM_SPOTS: PodiumSpots = {
 };
 
 const MAX_LISTED = 15;
-// 56 (antes 38) — alto o bastante pra caber 2 linhas (nome numa, valor na
-// outra) sem cortar o nome, pedido explícito do usuário 2026-10-25 depois
-// do ajuste anterior deixar o nome e o valor espremidos lado a lado.
-const PILL_HEIGHT = 56;
+const PILL_HEIGHT = 38;
 
 interface PillSlot<T> {
   row: T | null;
@@ -100,6 +97,7 @@ export function PodiumSplit<T extends StaircaseRow>({
   getSecondaryValue,
   formatSecondaryValue,
   getPreviousValue,
+  columns = 2,
 }: {
   ranking: T[];
   getValue: (r: T) => number;
@@ -108,6 +106,13 @@ export function PodiumSplit<T extends StaircaseRow>({
   bgUrl?: string | null;
   /** Custom circle/text positions calibrated for `bgUrl`; falls back to the measured defaults when absent. */
   spots?: PodiumSpots | null;
+  /** Quantas colunas lado a lado pras colocações 4+ (padrão 2, como sempre
+   * foi). A Tela Inicial do mobile passa 1 — cada barra ocupa a largura
+   * inteira disponível, de um lado a outro da tela (pedido explícito do
+   * usuário, 2026-10-25) — o suficiente pra caber foto+nome+valor numa
+   * única linha sem cortar o nome, sem precisar empilhar nome/valor nem
+   * aumentar a altura da barra. */
+  columns?: 1 | 2;
   /** Optional second metric shown in a smaller font right below the main
    * value (e.g. Biosintética's "quantidade vendida" alongside its "pts")
    * — omitted entirely when not passed, so every other PodiumSplit caller
@@ -130,6 +135,9 @@ export function PodiumSplit<T extends StaircaseRow>({
   const effectiveSpots = spots || DEFAULT_PODIUM_SPOTS;
   const top3 = ranking.slice(0, 3);
   const rest = ranking.slice(3, MAX_LISTED);
+  // columns===1: uma lista só, cada barra ocupa a largura inteira — sem
+  // placeholder nenhum, não tem um 2º column pra alinhar linha a linha com.
+  const single: PillSlot<T>[] = rest.map((row, i) => ({ row, pos: 4 + i }));
   // Split into two even columns instead of always filling col1 first — that
   // used to leave col2 several bars short (e.g. 9 left over → 6/3) whenever
   // the total wasn't a multiple of 2. Halving first means the two columns
@@ -188,23 +196,36 @@ export function PodiumSplit<T extends StaircaseRow>({
 
       {rest.length > 0 && (
         <div style={{ flex: '2 1 380px', display: 'flex', gap: 16, minWidth: 0 }}>
-          <PillColumn
-            slots={col1}
-            getValue={getValue}
-            formatValue={formatValue}
-            getSecondaryValue={getSecondaryValue}
-            formatSecondaryValue={formatSecondaryValue}
-            getPreviousValue={getPreviousValue}
-          />
-          {col2.length > 0 && (
+          {columns === 1 ? (
             <PillColumn
-              slots={col2}
+              slots={single}
               getValue={getValue}
               formatValue={formatValue}
               getSecondaryValue={getSecondaryValue}
               formatSecondaryValue={formatSecondaryValue}
               getPreviousValue={getPreviousValue}
             />
+          ) : (
+            <>
+              <PillColumn
+                slots={col1}
+                getValue={getValue}
+                formatValue={formatValue}
+                getSecondaryValue={getSecondaryValue}
+                formatSecondaryValue={formatSecondaryValue}
+                getPreviousValue={getPreviousValue}
+              />
+              {col2.length > 0 && (
+                <PillColumn
+                  slots={col2}
+                  getValue={getValue}
+                  formatValue={formatValue}
+                  getSecondaryValue={getSecondaryValue}
+                  formatSecondaryValue={formatSecondaryValue}
+                  getPreviousValue={getPreviousValue}
+                />
+              )}
+            </>
           )}
         </div>
       )}
@@ -418,50 +439,48 @@ function PillColumn<T extends StaircaseRow>({
             <span style={{ width: 26, height: 26, borderRadius: '50%', border: '2px solid #8A2BE2', background: '#0b0e1d', overflow: 'hidden', flexShrink: 0 }}>
               {slot.row.foto && <img src={slot.row.foto} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
             </span>
-            {/* Nome numa linha, valor na outra (pedido explícito do
-                usuário, 2026-10-25) — antes disputavam a mesma linha e o
-                nome quase sempre perdia, cortado a 1-2 caracteres. Cada
-                linha tem sua própria largura total (menos pos+avatar), em
-                vez de dividir a largura entre as duas. */}
-            <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2 }}>
+            <span
+              style={{
+                flex: 1,
+                minWidth: 0,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                textTransform: 'uppercase',
+                fontWeight: 700,
+                fontSize: 12,
+                color: '#fff',
+              }}
+            >
+              {slot.row.apelido || slot.row.nome}
+            </span>
+            {/* maxWidth + ellipsis: numa barra de largura inteira (columns:1,
+                Tela Inicial mobile) sobra espaço de sobra; numa de 2 colunas
+                (padrão) ainda protege o nome de um valor muito grande. */}
+            <span style={{ marginLeft: 'auto', flexShrink: 0, maxWidth: '52%', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
               <span
                 style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontWeight: 800,
+                  fontSize: 12,
+                  color: '#64B5F6',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  maxWidth: '100%',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
-                  textTransform: 'uppercase',
-                  fontWeight: 700,
-                  fontSize: 12,
-                  color: '#fff',
                 }}
               >
-                {slot.row.apelido || slot.row.nome}
+                {formatValue(getValue(slot.row))}
+                {getPreviousValue && <TrendArrow current={getValue(slot.row)} previous={getPreviousValue(slot.row)} size={16} />}
               </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
-                <span
-                  style={{
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontWeight: 800,
-                    fontSize: 11,
-                    color: '#64B5F6',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    flexShrink: 0,
-                  }}
-                >
-                  {formatValue(getValue(slot.row))}
-                  {getPreviousValue && <TrendArrow current={getValue(slot.row)} previous={getPreviousValue(slot.row)} size={16} />}
+              {getSecondaryValue && formatSecondaryValue && (
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, fontSize: 9, color: '#94a3b8' }}>
+                  {formatSecondaryValue(getSecondaryValue(slot.row))}
                 </span>
-                {getSecondaryValue && formatSecondaryValue && (
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, fontSize: 9, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {formatSecondaryValue(getSecondaryValue(slot.row))}
-                  </span>
-                )}
-              </span>
+              )}
             </span>
           </div>
         ),
