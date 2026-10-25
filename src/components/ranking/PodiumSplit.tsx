@@ -385,7 +385,12 @@ function PillColumn<T extends StaircaseRow>({
   getPreviousValue?: (r: T) => number | null | undefined;
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: '1 1 0', minWidth: 0 }}>
+    // gap:8 é um PISO — com justifyContent:'space-between', o navegador só
+    // afasta mais que isso quando sobra altura; com muitas posições (pouca
+    // ou nenhuma sobra) as barras não ficam mais coladas umas nas outras
+    // (pedido explícito do usuário, 2026-10-25 — antes não tinha gap
+    // nenhum aqui, só o space-between).
+    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 8, flex: '1 1 0', minWidth: 0 }}>
       {slots.map((slot, i) =>
         slot.row === null ? (
           <div key={`placeholder-${i}`} aria-hidden="true" style={{ height: PILL_HEIGHT, flexShrink: 0 }} />
@@ -425,16 +430,33 @@ function PillColumn<T extends StaircaseRow>({
             >
               {slot.row.apelido || slot.row.nome}
             </span>
-            <span style={{ marginLeft: 'auto', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, fontSize: 12, color: '#64B5F6', display: 'flex', alignItems: 'center', gap: 4 }}>
+            {/* maxWidth + ellipsis como rede de segurança: o valor em si já
+                ficou menor (10px, antes 12px — pedido explícito do usuário,
+                2026-10-25, estava estourando a largura da barra em telas
+                estreitas e espremendo o nome ao lado quase a zero), mas um
+                valor muito grande (ex. com centena de milhar) ainda não
+                pode crescer além do que a barra tem pra dar. */}
+            <span style={{ marginLeft: 'auto', flexShrink: 0, maxWidth: '52%', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+              <span
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontWeight: 800,
+                  fontSize: 10,
+                  color: '#64B5F6',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  maxWidth: '100%',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
                 {formatValue(getValue(slot.row))}
-                {/* Maior que o default de TrendArrow.tsx (pedido explícito
-                    do usuário, 2026-10-24 — depois reduzido 20% num
-                    segundo ajuste, igual a todo outro lugar). */}
                 {getPreviousValue && <TrendArrow current={getValue(slot.row)} previous={getPreviousValue(slot.row)} size={16} />}
               </span>
               {getSecondaryValue && formatSecondaryValue && (
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, fontSize: 9, color: '#94a3b8' }}>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, fontSize: 8, color: '#94a3b8' }}>
                   {formatSecondaryValue(getSecondaryValue(slot.row))}
                 </span>
               )}
