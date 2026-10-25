@@ -198,13 +198,13 @@ function MobileCategoryFilterBar({
   const current = options.find((o) => o.key === catKey);
 
   return (
-    <div className="mv2-category-filter">
+    <div className="mv2-collapsible-bar">
       <div
         role="button"
         tabIndex={0}
         onClick={() => setOpen((v) => !v)}
         onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setOpen((v) => !v)}
-        className="mv2-category-filter-trigger"
+        className="mv2-collapsible-bar-trigger"
       >
         <span style={{ color: current?.cor }}>📊 Categoria: {current?.titulo ?? 'Todas'}</span>
         <span style={{ fontSize: 9, color: 'var(--mv2-texto-2)' }}>{open ? '▲' : '▼'}</span>

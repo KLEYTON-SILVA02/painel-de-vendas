@@ -622,15 +622,17 @@
   color: #002;
 }
 
-/* ---------- 7. Barra de filtro de categoria (Tela Inicial) ---------- */
-.mv2-category-filter {
+/* ---------- 7. Barra recolhível (filtro de categoria na Tela Inicial,
+   cabeçalho do filtro de datas expandido) — recolhida mostra só um resumo
+   de uma linha; clicar expande o conteúdo completo logo abaixo. ---------- */
+.mv2-collapsible-bar {
   margin: 0 18px 16px;
   padding: 8px 12px;
   background: var(--mv2-bg-cards);
   border: 1px solid var(--mv2-ciano-claro);
   border-radius: var(--mv2-radius-sm);
 }
-.mv2-category-filter-trigger {
+.mv2-collapsible-bar-trigger {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -638,7 +640,7 @@
   font-weight: 700;
   cursor: pointer;
 }
-.mv2-category-filter .mv2-chip-row {
+.mv2-collapsible-bar .mv2-chip-row {
   margin: 10px 0 0;
 }
 
