@@ -143,12 +143,10 @@ function resolveRankFilterParams(
 
 function RankFilterBar({
   dynamics,
-  singleLine,
   hiddenCategories,
   dsmLabel,
 }: {
   dynamics: Dynamic[];
-  singleLine?: boolean;
   hiddenCategories: string[];
   /** category_types.nome for the 'dsm' row, only when it's ativo — null
    * hides the button, same "ocultar" rule the sidebar/DSM page follow. */
@@ -167,10 +165,18 @@ function RankFilterBar({
 
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(3px, 0.5vw, 6px)', marginBottom: 6, flexWrap: singleLine ? 'nowrap' : 'wrap' }}>
+      {/* Botões de categoria esticados, mesma largura entre si, ocupando a
+          linha inteira — antes disputavam espaço com Copiar/Gerar
+          imagem/Premium na mesma linha (clamp() encolhendo tudo); agora
+          que esses 3 botões moraram embaixo do pódio (ver `footer` de
+          PodiumSplit), essa linha é só dos filtros (pedido explícito do
+          usuário, 2026-10-27). */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 4 }}>
         <HelpTip helpKey="dashboard.filtro_categoria" fallback="Escolha uma categoria para ver só as vendas dela na tela e no ranking." />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 6 }}>
         {visibleFilters.map((x) => (
-          <SubtabButton key={x.k} active={rankFilter === x.k} onClick={() => setRankFilter(x.k)} shrink={singleLine}>
+          <SubtabButton key={x.k} active={rankFilter === x.k} onClick={() => setRankFilter(x.k)} stretch>
             {/* Abreviação só para este filtro da tela Início — o rótulo completo
                 (customizável em ADM > Nomes das Categorias) continua em todo o
                 resto do sistema. 'ALL' shows categoryLabels.MER directly since
@@ -179,16 +185,16 @@ function RankFilterBar({
           </SubtabButton>
         ))}
         {dsmLabel && (
-          <SubtabButton active={rankFilter === 'DSM'} onClick={() => setRankFilter('DSM')} shrink={singleLine}>
+          <SubtabButton active={rankFilter === 'DSM'} onClick={() => setRankFilter('DSM')} stretch>
             🎟️ DSM
           </SubtabButton>
         )}
-        <SubtabButton active={rankFilter === 'UVC'} onClick={() => setRankFilter('UVC')} shrink={singleLine}>
+        <SubtabButton active={rankFilter === 'UVC'} onClick={() => setRankFilter('UVC')} stretch>
           📈 UVC
         </SubtabButton>
       </div>
       {activeDynamics.length > 0 && (
-        <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
           {activeDynamics.map((d) => (
             <SubtabButton key={d.id} active={rankFilter === `DIN:${d.id}`} onClick={() => setRankFilter(`DIN:${d.id}`)}>
               🎯 {d.marca || 'DINÂMICA'}
@@ -200,17 +206,13 @@ function RankFilterBar({
   );
 }
 
-// `shrink` scales padding/font-size down with the viewport (via clamp())
-// instead of the fixed sizing every other use of this button keeps — only
-// the Dashboard's "Ranking Geral" header needs it, where the category
-// filters share one non-wrapping row with the Copiar/Gerar imagem/toggle
-// buttons (ACTION_BUTTON_STYLE below matches the same clamp() curve) and a
-// narrower desktop window otherwise cut the row off instead of everything
-// shrinking to fit. Deliberately no flex-shrink here: shrinking a flex item
-// narrower than its own (nowrap) text just makes the text spill out over
-// whatever sits next to it — the RankFilterBar wrapper's own overflow-x is
-// what catches whatever this clamp() floor still doesn't fit.
-function SubtabButton({ active, onClick, children, shrink }: { active: boolean; onClick: () => void; children: ReactNode; shrink?: boolean }) {
+// `stretch` makes the button fill its grid cell (width:100%, centered text)
+// — used by the main category-filter row (RankFilterBar), now that it has
+// the whole "Ranking Geral" header row to itself (Copiar/Gerar
+// imagem/Premium moved below the pódio, see `footer` on PodiumSplit —
+// pedido explícito do usuário, 2026-10-27). Without `stretch` (e.g. the
+// Dinâmicas row below), the button keeps its original fit-content sizing.
+function SubtabButton({ active, onClick, children, stretch }: { active: boolean; onClick: () => void; children: ReactNode; stretch?: boolean }) {
   return (
     <button
       onClick={onClick}
@@ -218,15 +220,19 @@ function SubtabButton({ active, onClick, children, shrink }: { active: boolean; 
         background: active ? '#ffb700' : 'transparent',
         border: `1px solid ${active ? '#ffb700' : '#212948'}`,
         color: active ? '#231a02' : '#8b90bf',
-        padding: shrink ? 'clamp(2px, 0.4vw, 6px) clamp(3px, 0.7vw, 10px)' : '7px 13px',
+        padding: stretch ? '8px 6px' : '7px 13px',
         borderRadius: 10,
         cursor: 'pointer',
-        fontSize: shrink ? 'clamp(6px, 0.7vw, 10px)' : 12,
+        fontSize: stretch ? 11 : 12,
         fontWeight: 700,
         textTransform: 'uppercase',
         letterSpacing: '.04em',
         whiteSpace: 'nowrap',
-        flexShrink: 0,
+        overflow: stretch ? 'hidden' : undefined,
+        textOverflow: stretch ? 'ellipsis' : undefined,
+        width: stretch ? '100%' : undefined,
+        textAlign: stretch ? 'center' : undefined,
+        flexShrink: stretch ? undefined : 0,
       }}
     >
       {children}
@@ -234,17 +240,19 @@ function SubtabButton({ active, onClick, children, shrink }: { active: boolean; 
   );
 }
 
-// Shared with SubtabButton's `shrink` curve above so the category filters
-// and these action buttons shrink together, at the same rate, and the whole
-// "Ranking Geral" header row keeps everything visible on one line instead
-// of any of them getting clipped or forced into a scrollbar.
+// Botões do rodapé do pódio (Copiar ranking/Gerar imagem), mesma largura
+// entre si (flex:1) — RankingModeToggle usa seu próprio prop `fill` pro
+// mesmo efeito, já que não é um <button> que dá pra estilizar por fora.
 const ACTION_BUTTON_STYLE: CSSProperties = {
-  padding: 'clamp(2px, 0.4vw, 6px) clamp(3px, 0.7vw, 10px)',
+  flex: 1,
+  padding: '8px 6px',
   borderRadius: 10,
   cursor: 'pointer',
-  fontSize: 'clamp(6px, 0.7vw, 10px)',
+  fontSize: 11,
   fontWeight: 700,
   whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
 };
 
 function CategoryGauge({ label, valor, goal, color }: { label: string; valor: number; goal: number; color: string }) {
@@ -805,6 +813,51 @@ export function DashboardPage() {
     }
   }
 
+  // Copiar ranking/Gerar imagem/Premium — construído uma vez e reusado nos
+  // dois lugares que precisam dele (footer do pódio no modo Premium, linha
+  // própria abaixo do ranking no modo escadinha/lista), em vez de duplicar
+  // o JSX. Copiar ranking/Gerar imagem ainda não têm uma versão pro DSM nem
+  // pro UVC (o texto/imagem gerados assumem R$ ou "un.") — desligados aqui
+  // em vez de gerar uma saída errada; as telas próprias (/dsm, ADM > UVC)
+  // também não oferecem essas duas ações hoje.
+  const rankingActionButtons = (
+    <>
+      <button
+        onClick={handleCopyRanking}
+        disabled={isDsmMode || isUvcMode}
+        title={isDsmMode || isUvcMode ? 'Ainda não disponível para este ranking' : 'Copiar ranking de vendas p/ WhatsApp'}
+        style={{
+          ...ACTION_BUTTON_STYLE,
+          background: 'transparent',
+          border: '1px solid #212948',
+          color: '#8b90bf',
+          opacity: isDsmMode || isUvcMode ? 0.4 : 1,
+        }}
+      >
+        {rankingCopied ? '✓ Copiado!' : '📋 Copiar ranking'}
+      </button>
+      <button
+        onClick={() => setImageScopeOpen(true)}
+        disabled={generatingImage || isDsmMode || isUvcMode}
+        title={isDsmMode || isUvcMode ? 'Ainda não disponível para este ranking' : 'Gerar imagem do ranking'}
+        style={{
+          ...ACTION_BUTTON_STYLE,
+          background: 'transparent',
+          border: '1px solid #ffb700',
+          color: '#ffb700',
+          opacity: generatingImage || isDsmMode || isUvcMode ? 0.5 : 1,
+        }}
+      >
+        {generatingImage
+          ? generatingProgress.total > 0
+            ? `Gerando… (${generatingProgress.done}/${generatingProgress.total})`
+            : 'Gerando…'
+          : '🖼️ Gerar imagem'}
+      </button>
+      <RankingModeToggle on={storeSettings.ranking_moderno} onToggle={() => updateStoreSettings.mutate({ ranking_moderno: !storeSettings.ranking_moderno })} fill />
+    </>
+  );
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-2">
       {/* Each left/right pair below shares an explicit lg:row-start, so the
@@ -875,73 +928,11 @@ export function DashboardPage() {
         </div>
 
         <div className="lg:col-start-1 lg:row-start-2 min-w-0 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-          {/* Category filters + Copiar/Gerar imagem/toggle all share this one
-              non-wrapping row — every button here scales its padding/font
-              via the same clamp() curve (SubtabButton's `shrink` prop,
-              ACTION_BUTTON_STYLE, RankingModeToggle's `shrink` prop) so a
-              narrower desktop window shrinks everything down together
-              instead of clipping the tail end of the row. overflow-x lives
-              on the filter-bar's own wrapper (not this outer row) so if the
-              filters still don't fit at the clamp()s' floor, THEY scroll
-              inside their own box — the flex:1 1 auto wrapper is otherwise
-              allowed to shrink narrower than its content (min-width:0),
-              which without a matching overflow here let that content spill
-              out over the action buttons sitting right next to it instead
-              of clipping/scrolling. */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'clamp(4px, 1vw, 12px)', paddingBottom: 2 }}>
-            <div style={{ flex: '1 1 auto', minWidth: 0, overflowX: 'auto' }}>
-              <RankFilterBar
-                dynamics={dynamics}
-                singleLine
-                hiddenCategories={storeSettings.hidden_categories}
-                dsmLabel={dsmCategory?.ativo ? dsmCategory.nome : null}
-              />
-            </div>
-            <div style={{ display: 'flex', gap: 'clamp(3px, 0.5vw, 6px)', flexShrink: 0 }}>
-              {/* Copiar ranking/Gerar imagem ainda não têm uma versão pro
-                  DSM nem pro UVC (o texto/imagem gerados assumem R$ ou
-                  "un.") — desligados aqui em vez de gerar uma saída
-                  errada; as telas próprias (/dsm, ADM > UVC) também não
-                  oferecem essas duas ações hoje. */}
-              <button
-                onClick={handleCopyRanking}
-                disabled={isDsmMode || isUvcMode}
-                title={isDsmMode || isUvcMode ? 'Ainda não disponível para este ranking' : 'Copiar ranking de vendas p/ WhatsApp'}
-                style={{
-                  ...ACTION_BUTTON_STYLE,
-                  background: 'transparent',
-                  border: '1px solid #212948',
-                  color: '#8b90bf',
-                  opacity: isDsmMode || isUvcMode ? 0.4 : 1,
-                }}
-              >
-                {rankingCopied ? '✓ Copiado!' : '📋 Copiar ranking'}
-              </button>
-              <button
-                onClick={() => setImageScopeOpen(true)}
-                disabled={generatingImage || isDsmMode || isUvcMode}
-                title={isDsmMode || isUvcMode ? 'Ainda não disponível para este ranking' : 'Gerar imagem do ranking'}
-                style={{
-                  ...ACTION_BUTTON_STYLE,
-                  background: 'transparent',
-                  border: '1px solid #ffb700',
-                  color: '#ffb700',
-                  opacity: generatingImage || isDsmMode || isUvcMode ? 0.5 : 1,
-                }}
-              >
-                {generatingImage
-                  ? generatingProgress.total > 0
-                    ? `Gerando… (${generatingProgress.done}/${generatingProgress.total})`
-                    : 'Gerando…'
-                  : '🖼️ Gerar imagem'}
-              </button>
-              <RankingModeToggle
-                on={storeSettings.ranking_moderno}
-                onToggle={() => updateStoreSettings.mutate({ ranking_moderno: !storeSettings.ranking_moderno })}
-                shrink
-              />
-            </div>
-          </div>
+          {/* Filtros de categoria ocupam a linha inteira agora — Copiar
+              ranking/Gerar imagem/Premium moraram embaixo do pódio (ver
+              `footer` de PodiumSplit abaixo), em vez de dividir essa linha
+              com os filtros (pedido explícito do usuário, 2026-10-27). */}
+          <RankFilterBar dynamics={dynamics} hiddenCategories={storeSettings.hidden_categories} dsmLabel={dsmCategory?.ativo ? dsmCategory.nome : null} />
           <div className="mt-3">
             {storeSettings.ranking_moderno ? (
               <PodiumSplit
@@ -951,15 +942,23 @@ export function DashboardPage() {
                 bgUrl={storeSettings.ranking_podium_bg_url}
                 spots={storeSettings.ranking_podium_spots as unknown as PodiumSpots | null}
                 getPreviousValue={previousValueMap ? (r) => previousValueMap.get(r.matricula) ?? 0 : undefined}
+                footer={<div style={{ display: 'flex', gap: 8 }}>{rankingActionButtons}</div>}
               />
             ) : (
-              <PodiumStaircase
-                ranking={rankingFilteredList}
-                getValue={(r) => (isUnitRanking ? r.itens : r.valor)}
-                formatValue={fmtValue}
-                variant={modeloRanking}
-                getPreviousValue={previousValueMap ? (r) => previousValueMap.get(r.matricula) ?? 0 : undefined}
-              />
+              <>
+                <PodiumStaircase
+                  ranking={rankingFilteredList}
+                  getValue={(r) => (isUnitRanking ? r.itens : r.valor)}
+                  formatValue={fmtValue}
+                  variant={modeloRanking}
+                  getPreviousValue={previousValueMap ? (r) => previousValueMap.get(r.matricula) ?? 0 : undefined}
+                />
+                {/* Escadinha/lista não tem um "quadro do pódio" próprio pra
+                    ancorar embaixo dele (só o Premium/PodiumSplit tem) —
+                    aqui os 3 botões ficam numa linha própria, largura
+                    inteira, logo abaixo do ranking inteiro. */}
+                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>{rankingActionButtons}</div>
+              </>
             )}
           </div>
         </div>
@@ -1021,15 +1020,12 @@ export function DashboardPage() {
           />
           {/* Sign hidden by design (visual only) — `saldo` itself stays negative for every calculation elsewhere. */}
           <StatCard label="Saldo" value={fmtValue(Math.abs(saldo))} color={saldo >= 0 ? '#ffb700' : '#ff3df0'} />
-          {/* UVC: "Itens Vendidos" é sempre uma contagem de unidades, nunca
-              a razão que fmtValue (=fmtUvc em modo UVC) mostraria aqui —
-              mesmo "un." que LEVMEL/CHIP já usam (correção pedida pelo
-              usuário, 2026-10-24). */}
-          <StatCard
-            label="Itens Vendidos"
-            value={isUvcMode ? `${itensCategoria.toLocaleString('pt-BR')} un.` : fmtValue(itensCategoria)}
-            color="#14ff00"
-          />
+          {/* "Itens Vendidos" é sempre uma contagem de unidades, nunca um
+              valor em R$ — fmtValue (R$ pras categorias monetárias) não
+              fazia sentido aqui mesmo antes do UVC existir (correção
+              2026-10-24 só cobriu o caso UVC; agora é padrão pra toda
+              categoria — pedido explícito do usuário, 2026-10-27). */}
+          <StatCard label="Itens Vendidos" value={`${itensCategoria.toLocaleString('pt-BR')} un.`} color="#14ff00" />
         </div>
 
         <div className="lg:col-start-2 lg:row-start-2">
