@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import podiumPremiumBg from '../../assets/ranking/podium-premium-bg.jpg';
 import { TrendArrow } from '../TrendArrow';
 import type { StaircaseRow } from './PodiumStaircase';
@@ -98,6 +99,7 @@ export function PodiumSplit<T extends StaircaseRow>({
   formatSecondaryValue,
   getPreviousValue,
   columns = 2,
+  footer,
 }: {
   ranking: T[];
   getValue: (r: T) => number;
@@ -126,9 +128,22 @@ export function PodiumSplit<T extends StaircaseRow>({
    * omitir a prop inteira) simplesmente não mostra seta nenhuma pra ele —
    * usado só quando um único dia está selecionado (ver cada tela chamadora). */
   getPreviousValue?: (r: T) => number | null | undefined;
+  /** Conteúdo (normalmente 3 botões de largura igual) exibido logo abaixo
+   * do quadro do pódio, com a mesma largura dele — pedido explícito do
+   * usuário 2026-10-27 pra tirar Copiar ranking/Gerar imagem/Premium da
+   * mesma linha dos filtros de categoria e colocar embaixo do pódio.
+   * Omitido (nenhum outro caller passa isso hoje) não muda nada. Sempre
+   * renderizado, mesmo sem vendas no período — os botões continuam
+   * fazendo sentido mesmo com o ranking vazio. */
+  footer?: ReactNode;
 }) {
   if (!ranking.length) {
-    return <div className="text-sm text-slate-500 py-6 text-center">Sem vendas para este período.</div>;
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div className="text-sm text-slate-500 py-6 text-center">Sem vendas para este período.</div>
+        {footer}
+      </div>
+    );
   }
 
   const effectiveBg = bgUrl || podiumPremiumBg;
@@ -153,45 +168,49 @@ export function PodiumSplit<T extends StaircaseRow>({
 
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'stretch' }}>
-      <div
-        style={{
-          position: 'relative',
-          flex: '1 1 320px',
-          maxWidth: 460,
-          aspectRatio: PODIUM_BG_RATIO,
-          backgroundImage: `url(${effectiveBg})`,
-          backgroundSize: '100% 100%',
-          backgroundRepeat: 'no-repeat',
-          borderRadius: 16,
-          containerType: 'inline-size',
-        }}
-      >
-        {top3.map((row, rank) => (
-          <PodiumPhoto key={row.matricula} rank={rank as 0 | 1 | 2} row={row} spots={effectiveSpots} />
-        ))}
-        {getPreviousValue &&
-          top3.map((row, rank) => (
-            <PodiumTrendBadge
+      {/* Pódio + footer (Copiar/Gerar imagem/Premium, quando passado) na
+          mesma coluna, mesma largura — o footer fica logo abaixo do
+          quadro do pódio, não da lista de colocações 4+ ao lado. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: '1 1 320px', maxWidth: 460 }}>
+        <div
+          style={{
+            position: 'relative',
+            aspectRatio: PODIUM_BG_RATIO,
+            backgroundImage: `url(${effectiveBg})`,
+            backgroundSize: '100% 100%',
+            backgroundRepeat: 'no-repeat',
+            borderRadius: 16,
+            containerType: 'inline-size',
+          }}
+        >
+          {top3.map((row, rank) => (
+            <PodiumPhoto key={row.matricula} rank={rank as 0 | 1 | 2} row={row} spots={effectiveSpots} />
+          ))}
+          {getPreviousValue &&
+            top3.map((row, rank) => (
+              <PodiumTrendBadge
+                key={row.matricula}
+                rank={rank as 0 | 1 | 2}
+                row={row}
+                spots={effectiveSpots}
+                getValue={getValue}
+                getPreviousValue={getPreviousValue}
+              />
+            ))}
+          {top3.map((row, rank) => (
+            <PodiumText
               key={row.matricula}
               rank={rank as 0 | 1 | 2}
               row={row}
-              spots={effectiveSpots}
               getValue={getValue}
-              getPreviousValue={getPreviousValue}
+              formatValue={formatValue}
+              spots={effectiveSpots}
+              getSecondaryValue={getSecondaryValue}
+              formatSecondaryValue={formatSecondaryValue}
             />
           ))}
-        {top3.map((row, rank) => (
-          <PodiumText
-            key={row.matricula}
-            rank={rank as 0 | 1 | 2}
-            row={row}
-            getValue={getValue}
-            formatValue={formatValue}
-            spots={effectiveSpots}
-            getSecondaryValue={getSecondaryValue}
-            formatSecondaryValue={formatSecondaryValue}
-          />
-        ))}
+        </div>
+        {footer}
       </div>
 
       {rest.length > 0 && (

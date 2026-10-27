@@ -8,8 +8,11 @@
 // `shrink` scales padding/font-size down with the viewport instead of the
 // default fixed sizing — used where this button shares a non-wrapping row
 // with other buttons that need to shrink together to avoid the row getting
-// clipped (see DashboardPage's "Ranking Geral" header).
-export function RankingModeToggle({ on, onToggle, shrink }: { on: boolean; onToggle: () => void; shrink?: boolean }) {
+// clipped. `fill` instead stretches the button to the full width of its
+// flex parent (equal-width footer row under the podium, DashboardPage's
+// "Ranking Geral" card — pedido explícito do usuário, 2026-10-27);
+// mutually exclusive with `shrink` in practice, nobody passes both.
+export function RankingModeToggle({ on, onToggle, shrink, fill }: { on: boolean; onToggle: () => void; shrink?: boolean; fill?: boolean }) {
   return (
     <button
       onClick={onToggle}
@@ -24,7 +27,9 @@ export function RankingModeToggle({ on, onToggle, shrink }: { on: boolean; onTog
         fontSize: shrink ? 'clamp(6px, 0.7vw, 10px)' : 12,
         fontWeight: 700,
         whiteSpace: 'nowrap',
-        flexShrink: 0,
+        flexShrink: fill ? undefined : 0,
+        flex: fill ? 1 : undefined,
+        width: fill ? '100%' : undefined,
       }}
     >
       {on ? '🏆 Premium' : '🪜 Escadinha'}
