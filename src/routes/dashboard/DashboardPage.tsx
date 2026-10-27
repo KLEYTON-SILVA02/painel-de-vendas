@@ -290,7 +290,24 @@ function StatCard({ label, value, color, badge }: { label: string; value: string
         } as CSSProperties
       }
     >
-      <div style={{ fontSize: 9, color: '#8b90bf', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 4, fontWeight: 700 }}>
+      {/* nowrap + ellipsis: um rótulo comprido (ex. "Colaboradores
+          participantes") que quebrasse em 2 linhas deixava só este card
+          mais alto — e como os 4 cards dividem a mesma linha do grid, a
+          linha inteira estica junto. Garante que todo StatCard sempre
+          tenha a mesma altura, pedido explícito do usuário 2026-10-27. */}
+      <div
+        style={{
+          fontSize: 9,
+          color: '#8b90bf',
+          textTransform: 'uppercase',
+          letterSpacing: '.08em',
+          marginBottom: 4,
+          fontWeight: 700,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+      >
         {label}
         {badge && (
           <span style={{ marginLeft: 8, fontSize: 10, background: '#ffb700', color: '#231a02', padding: '2px 6px', borderRadius: 6, fontWeight: 800 }}>
@@ -748,7 +765,10 @@ export function DashboardPage() {
   // colaboradores converteram no período.
   if (isDsmMode) {
     metaLabel = 'Dias restantes do mês';
-    faltaLabel = 'Colaboradores participantes';
+    // Abreviado (era "Colaboradores participantes") pra caber numa linha só
+    // e não esticar a altura desse card (e, por tabela, a linha inteira de
+    // 4 cards no grid) — pedido explícito do usuário, 2026-10-27.
+    faltaLabel = 'Participantes';
   }
   // UVC também não tem meta — mostra dois números úteis de verdade em vez
   // de "Meta Geral: 0"/"Falta p/ Meta: 0": o total de atendimentos
@@ -756,7 +776,7 @@ export function DashboardPage() {
   // (mesmo padrão do DSM acima, só trocando a métrica).
   if (isUvcMode) {
     metaLabel = 'Atendimentos no período';
-    faltaLabel = 'Colaboradores participantes';
+    faltaLabel = 'Participantes';
   }
   const saldo = barValor - barMetaBase;
   // Mesmo motivo de barValor acima: "Itens Vendidos" pro UVC é o total de
