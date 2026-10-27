@@ -336,21 +336,31 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
             getPreviousValue={previousValueMap ? (r) => previousValueMap.get(r.matricula) ?? 0 : undefined}
           />
         )}
-        <div className="flex flex-wrap gap-2 mt-4">
-          <button onClick={handleCopy} className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800">
+        {/* Os 4 elementos de ação (botões + toggle Premium) com a mesma
+            largura, esticando a linha inteira até a outra ponta — os
+            HelpTips (ícones "?") ficam de fora, no tamanho pequeno de
+            sempre (pedido explícito do usuário, 2026-10-27, mesmo padrão
+            já aplicado no rodapé do pódio do Dashboard). */}
+        <div className="flex gap-2 mt-4 items-center">
+          <button
+            onClick={handleCopy}
+            style={{ flex: 1, minWidth: 0, textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+            className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800"
+          >
             {copied ? '✓ Copiado!' : '📋 Copiar ranking p/ WhatsApp'}
           </button>
           <button
             onClick={handleGenerateImage}
             disabled={generating}
             className="rounded-lg border px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
-            style={{ borderColor: '#ffb700', color: '#ffb700' }}
+            style={{ flex: 1, minWidth: 0, borderColor: '#ffb700', color: '#ffb700', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
           >
             {generating ? 'Gerando...' : '🖼️ Gerar imagem do ranking'}
           </button>
           <HelpTip helpKey="categoria.gerar_imagem" fallback="Monta uma imagem pronta do ranking desta categoria, para copiar ou baixar e compartilhar no WhatsApp." />
           <button
             onClick={() => setGalleryOpen(true)}
+            style={{ flex: 1, minWidth: 0, textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
             className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800"
           >
             👥 Detalhamento por vendedor
@@ -359,6 +369,7 @@ export function CategoryPage({ catKey }: { catKey: PageCategoryKey }) {
           <RankingModeToggle
             on={storeSettings.ranking_moderno}
             onToggle={() => updateStoreSettings.mutate({ ranking_moderno: !storeSettings.ranking_moderno })}
+            fill
           />
         </div>
       </div>
