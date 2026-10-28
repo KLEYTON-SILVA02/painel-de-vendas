@@ -155,12 +155,20 @@ export function Sidebar({
       // pedido explícito do usuário (2026-10-28). Só age nessa direção
       // (recolhido → expandido); recolher continua exclusivo do botão
       // sb-toggle, pra não fechar o menu sem querer no meio de um clique em
-      // algum link de navegação. onClick de cada NavLink/botão interno segue
-      // o seu próprio comportamento normalmente — o evento ainda borbulha
-      // até aqui, então clicar num ícone enquanto recolhido navega E expande
-      // ao mesmo tempo, o que é desejável (mostra onde você está).
-      onClick={() => {
-        if (collapsed) onToggleCollapsed();
+      // algum link de navegação.
+      //
+      // Nunca age quando o clique já pertence a um link ou botão (qualquer
+      // item do menu, "Importar Vendas", "Sair") — bug relatado em produção
+      // (2026-10-28): com o clique borbulhando até aqui, o próprio botão de
+      // "Importar Vendas" parou de navegar, e só o menu expandia. Deixar
+      // esses elementos de fora evita qualquer interferência com o clique
+      // deles, custando só o "clicar no ícone também expande" que a versão
+      // anterior tinha — clicar no fundo/título da barra continua expandindo
+      // normalmente.
+      onClick={(e) => {
+        if (!collapsed) return;
+        if ((e.target as HTMLElement).closest('a, button')) return;
+        onToggleCollapsed();
       }}
     >
       <div className="sb-header">
