@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Block } from 'tesseract.js';
-import { detectClientesColumnValues } from './dsmImageColumns';
+import { detectClientesColumnValues, findClientesColumnCropRange, matchColumnLinesToRows } from './dsmImageColumns';
 
 // Fixture mínimo no mesmo formato que o Tesseract devolve quando
 // lib/ocr.ts pede `{ blocks: true }` — só os campos que
@@ -91,5 +91,67 @@ describe('detectClientesColumnValues', () => {
 
   it('devolve mapa vazio para blocks null', () => {
     expect(detectClientesColumnValues(null).size).toBe(0);
+  });
+});
+
+describe('findClientesColumnCropRange', () => {
+  it('calcula a faixa horizontal da coluna a partir do cabeçalho e dos valores já encontrados', () => {
+    const header = line([word('Clientes', 290, 330, 0)], 0);
+    const row1 = line([word('70209751-ANGELICA', 0, 80, 20), word('74', 280, 310, 20)], 20);
+    const row2 = line([word('70208345-DEIVESON', 0, 80, 40), word('32', 300, 340, 40)], 40);
+    const range = findClientesColumnCropRange(blocksFixture([header, row1, row2]));
+    expect(range).not.toBeNull();
+    // Envelope: min(x0 do cabeçalho, dos valores) até max(x1), com margem.
+    expect(range!.x0).toBeLessThanOrEqual(280);
+    expect(range!.x1).toBeGreaterThanOrEqual(340);
+  });
+
+  it('nunca deixa a faixa começar antes de x=0', () => {
+    const header = line([word('Clientes', 2, 20, 0)], 0);
+    const range = findClientesColumnCropRange(blocksFixture([header]));
+    expect(range!.x0).toBeGreaterThanOrEqual(0);
+  });
+
+  it('devolve null quando não acha o cabeçalho "Clientes" (mesmo caso de detectClientesColumnValues)', () => {
+    const row = line([word('70209751-ANGELICA', 0, 80, 20), word('74', 295, 305, 20)], 20);
+    expect(findClientesColumnCropRange(blocksFixture([row]))).toBeNull();
+  });
+});
+
+describe('matchColumnLinesToRows', () => {
+  it('casa cada linha da releitura recortada com a linha de colaborador na mesma posição Y', () => {
+    const header = line([word('Clientes', 290, 330, 0)], 0);
+    const row1 = line([word('70209751-ANGELICA', 0, 80, 20), word('ruido', 280, 310, 20)], 20);
+    const row2 = line([word('70208345-DEIVESON', 0, 80, 50), word('ruido', 280, 310, 50)], 50);
+    const blocks = blocksFixture([header, row1, row2]);
+    // Releitura dedicada só da coluna: uma linha por colaborador, na mesma
+    // altura Y de cada linha original (rectangle do Tesseract não muda as
+    // coordenadas devolvidas).
+    const columnLines = [
+      { text: '74', yCenter: 25 },
+      { text: '32', yCenter: 55 },
+    ];
+    const result = matchColumnLinesToRows(columnLines, blocks);
+    expect(result.get('70209751')).toBe(74);
+    expect(result.get('70208345')).toBe(32);
+  });
+
+  it('corrige confusão de OCR na releitura recortada (mesmo bug "7a" → 74)', () => {
+    const row = line([word('70209751-ANGELICA', 0, 80, 20)], 20);
+    const result = matchColumnLinesToRows([{ text: '7a', yCenter: 25 }], blocksFixture([row]));
+    expect(result.get('70209751')).toBe(74);
+  });
+
+  it('não casa uma linha de colaborador com uma linha de releitura distante demais em Y', () => {
+    const row = line([word('70209751-ANGELICA', 0, 80, 20)], 20);
+    // Só uma linha na releitura, bem longe (y=500) de qualquer colaborador —
+    // não deve ser "o mais próximo mesmo assim" quando a distância é absurda.
+    const result = matchColumnLinesToRows([{ text: '74', yCenter: 500 }], blocksFixture([row]));
+    expect(result.size).toBe(0);
+  });
+
+  it('devolve mapa vazio quando a releitura não achou linha nenhuma', () => {
+    const row = line([word('70209751-ANGELICA', 0, 80, 20)], 20);
+    expect(matchColumnLinesToRows([], blocksFixture([row])).size).toBe(0);
   });
 });
