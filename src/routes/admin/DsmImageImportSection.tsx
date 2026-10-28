@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { DsmReviewTable } from '../../components/dsm/DsmReviewTable';
 import { Spinner } from '../../components/Spinner';
-import { detectClientesColumnValues } from '../../lib/business/dsmImageColumns';
+import { detectClientesColumnValues, findClientesColumnCropRange, matchColumnLinesToRows } from '../../lib/business/dsmImageColumns';
 import {
   buildCleanDsmImageText,
   buildDsmReviewRowsFromImage,
@@ -14,7 +14,7 @@ import {
 import type { DsmReviewRow } from '../../lib/business/dsmImport';
 import { normalizeMatricula } from '../../lib/business/parsing';
 import { saveDsmReview, translateDbError } from '../../lib/dsmRecordsImport';
-import { recognizeImageText } from '../../lib/ocr';
+import { recognizeColumnText, recognizeImageText } from '../../lib/ocr';
 import { useCollaborators, useDsmRecords } from '../../lib/queries';
 
 const MAX_IMAGE_SIZE = 15 * 1024 * 1024;
@@ -31,36 +31,50 @@ type Step = 'input' | 'review' | 'done';
  * A imagem em si nunca é enviada nem guardada — só usada localmente para o
  * OCR e descartada.
  *
- * Duas análises sobre a mesma imagem (pedido do usuário, 2026-10-24),
- * ambas do MESMO passe de OCR (não roda o motor duas vezes):
+ * Três análises sobre a mesma imagem (pedido do usuário, 2026-10-24 e
+ * 2026-10-28):
  * - 1ª análise (por linha/texto): o texto bruto do OCR, lido linha a linha
  *   por parseDsmImageLines/parseDsmImageLinesByCollaboratorName — ignora
  *   Loja/Data/Vendas/Valor, procurando só o padrão
  *   "<matrícula>-<NOME> ... <inteiro>" (ou o nome já cadastrado, quando a
  *   matrícula sai ilegível do OCR).
- * - 2ª análise (por coluna/posição): detectClientesColumnValues
- *   (dsmImageColumns.ts) localiza o cabeçalho "Número de Clientes" pela
- *   posição na imagem e lê, pra cada linha, o número mais próximo dele em
- *   X — essa é a única das duas que de fato busca pelo cabeçalho de
- *   verdade, então quando ela acha um valor pra uma matrícula, ele PREVALECE
- *   sobre o que a 1ª leu por texto/ordem dos números, mesmo que a 1ª já
- *   tivesse achado algo (pedido explícito do usuário, 2026-10-28 — ver
- *   computeDsmImageMatches).
- * As duas são mescladas (computeDsmImageMatches, dsmImageParse.ts) logo
- * após escanear, e a caixa "Texto extraído" mostra o resultado já
- * reconstruído e limpo (buildCleanDsmImageText) — uma linha por colaborador
- * reconhecido, sem Loja/Data/Vendas/Valor/Clientes(%)/cabeçalhos/outros
- * textos da imagem (pedido explícito do usuário, 2026-10-24: essas colunas
- * deviam ser ignoradas também no texto capturado, não só no resultado
- * final). `matches`/`rawText` ficam guardados à parte: se o ADM não tocar
- * no texto, "Processar texto" reusa esse resultado já calculado (preserva
- * os selos "2ª leitura"/"2ª análise (coluna)" da conferência); se editar ou
- * colar outro texto por cima, reprocessa esse texto do zero a partir do
- * mesmo computeDsmImageMatches (sem selo nenhum, igual ao caminho "colar
- * texto" de sempre). `rawText` guarda só o despejo original do OCR, usado
- * apenas internamente pela checagem de completude (countApparentCollaboratorLines
- * precisa do texto cru, não do já filtrado, pra notar colaborador que ficou
- * de fora até da reconstrução).
+ * - 2ª análise (por coluna/posição, MESMO passe de OCR da 1ª — não roda o
+ *   motor de novo): detectClientesColumnValues (dsmImageColumns.ts) localiza
+ *   o cabeçalho "Número de Clientes" pela posição na imagem e lê, pra cada
+ *   linha, o número mais próximo dele em X.
+ * - 3ª análise (recorte + releitura dedicada, roda o motor de OCR DE NOVO,
+ *   só dessa vez): quando a 2ª análise achou o cabeçalho "Número de
+ *   Clientes", findClientesColumnCropRange (dsmImageColumns.ts) calcula a
+ *   faixa vertical daquela coluna e recognizeColumnText (lib/ocr.ts) recorta
+ *   só essa faixa (via `rectangle` do Tesseract — a imagem original nunca é
+ *   alterada) e lê de novo, com whitelist só de dígitos — sem o resto da
+ *   tabela disputando atenção do motor. matchColumnLinesToRows
+ *   (dsmImageColumns.ts) casa cada linha dessa releitura com a linha de
+ *   colaborador certa pela posição Y. Pedido explícito do usuário
+ *   (2026-10-28): mesmo com a 2ª análise, alguns colaboradores continuavam
+ *   sem quantidade reconhecida — essa 3ª análise é a tentativa dedicada de
+ *   achar especificamente esses casos.
+ * A 2ª e a 3ª são mescladas numa única Map (3ª prevalece onde achou algo,
+ * já que é a releitura mais confiável — ver handleScan), e essa Map é quem
+ * decide o valor final sempre que achou algo pra uma matrícula, mesmo que a
+ * 1ª já tivesse achado algo (pedido explícito do usuário, 2026-10-28 — ver
+ * computeDsmImageMatches). As três são mescladas (computeDsmImageMatches,
+ * dsmImageParse.ts) logo após escanear, e a caixa "Texto extraído" mostra o
+ * resultado já reconstruído e limpo (buildCleanDsmImageText) — uma linha por
+ * colaborador reconhecido, sem Loja/Data/Vendas/Valor/Clientes(%)/
+ * cabeçalhos/outros textos da imagem (pedido explícito do usuário,
+ * 2026-10-24: essas colunas deviam ser ignoradas também no texto capturado,
+ * não só no resultado final). `matches`/`rawText` ficam guardados à parte:
+ * se o ADM não tocar no texto, "Processar texto" reusa esse resultado já
+ * calculado (preserva os selos "2ª leitura"/"2ª análise (coluna)" da
+ * conferência — a 3ª análise usa o mesmo selo "coluna" da 2ª, já que as duas
+ * alimentam a mesma Map final); se editar ou colar outro texto por cima,
+ * reprocessa esse texto do zero a partir do mesmo computeDsmImageMatches
+ * (sem selo nenhum, igual ao caminho "colar texto" de sempre). `rawText`
+ * guarda só o despejo original do OCR, usado apenas internamente pela
+ * checagem de completude (countApparentCollaboratorLines precisa do texto
+ * cru, não do já filtrado, pra notar colaborador que ficou de fora até da
+ * reconstrução).
  * `onStepChange` avisa o ImportarPage da troca de etapa — a barra "Importar
  * planilha de DSM" só aparece na etapa 'input' (ver ImportarPage.tsx). */
 export function DsmImageImportSection({ onStepChange }: { onStepChange?: (step: Step) => void }) {
@@ -182,22 +196,40 @@ export function DsmImageImportSection({ onStepChange }: { onStepChange?: (step: 
         if (detectedDate) setDataISO(detectedDate);
       }
       // 2ª análise: mesmo passe de OCR, lendo a coluna "Número de Clientes"
-      // pela posição em vez do texto corrido (ver dsmImageColumns.ts) —
-      // Map vazio quando não achou o cabeçalho "Clientes" na imagem, o que
-      // ainda assim conta como "análise concluída" (libera "Processar
-      // texto"; só não tem nada pra confirmar). Quando encontra algo, esse
-      // valor prevalece sobre o que a 1ª leitura (por texto) achou —
-      // computeDsmImageMatches é quem decide isso.
+      // pela posição em vez do texto corrido (ver dsmImageColumns.ts).
       const columnMatches = detectClientesColumnValues(blocks);
-      setClientesColumnMatches(columnMatches);
-      // Mescla as duas leituras por texto + a confirmação por coluna (mesmo
-      // motor que "Processar texto" reusa) e já mostra o resultado
-      // reconstruído/limpo na caixa — ignorando Loja/Data/Vendas/Valor/
-      // Clientes(%)/cabeçalhos e qualquer outro texto da imagem, em vez do
-      // despejo bruto do OCR (pedido explícito do usuário, 2026-10-24). Sem
-      // nenhum colaborador reconhecido, mostra o texto bruto mesmo — ao
-      // menos dá pro ADM ver o que o OCR leu e corrigir à mão.
-      const merged = computeDsmImageMatches(recognized, collaboratorNames, columnMatches);
+      // 3ª análise: quando a 2ª achou o cabeçalho "Número de Clientes",
+      // recorta só a faixa vertical dessa coluna (findClientesColumnCropRange)
+      // e roda o motor de OCR DE NOVO, dedicado só a ela (recognizeColumnText,
+      // lib/ocr.ts) — sem o resto da tabela disputando atenção, com
+      // whitelist só de dígitos. Cobre os colaboradores que a 2ª não achou
+      // (ou achou errado) por o token já estar ilegível no OCR de página
+      // inteira (pedido explícito do usuário, 2026-10-28). Puramente um
+      // reforço: se o cabeçalho não foi achado, ou a releitura falhar por
+      // qualquer motivo (imagem grande demais, navegador sem suporte a
+      // createImageBitmap, etc.), segue só com a 2ª análise — nunca trava o
+      // fluxo.
+      let finalColumnMatches = columnMatches;
+      const cropRange = findClientesColumnCropRange(blocks);
+      if (cropRange) {
+        try {
+          const columnLines = await recognizeColumnText(imageBlob, cropRange, setScanProgress);
+          const croppedMatches = matchColumnLinesToRows(columnLines, blocks);
+          if (croppedMatches.size > 0) finalColumnMatches = new Map([...columnMatches, ...croppedMatches]);
+        } catch {
+          // Mantém finalColumnMatches = columnMatches (só a 2ª análise).
+        }
+      }
+      setClientesColumnMatches(finalColumnMatches);
+      // Mescla a 1ª leitura (por texto) com a 2ª/3ª (por coluna, já
+      // mescladas acima — a 3ª prevalece onde achou algo) e já mostra o
+      // resultado reconstruído/limpo na caixa — ignorando Loja/Data/Vendas/
+      // Valor/Clientes(%)/cabeçalhos e qualquer outro texto da imagem, em
+      // vez do despejo bruto do OCR (pedido explícito do usuário,
+      // 2026-10-24). Sem nenhum colaborador reconhecido, mostra o texto
+      // bruto mesmo — ao menos dá pro ADM ver o que o OCR leu e corrigir à
+      // mão.
+      const merged = computeDsmImageMatches(recognized, collaboratorNames, finalColumnMatches);
       setMatches(merged);
       setText(merged.length > 0 ? buildCleanDsmImageText(merged) : recognized);
     } catch {
