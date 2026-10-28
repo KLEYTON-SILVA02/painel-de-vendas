@@ -74,6 +74,43 @@ export const COUNT_TOKEN = /^\d[\d.]*$/;
 // detecção de onde termina a linha de texto e começa a sequência de números.
 const NUMERIC_TOKEN = /^[\d.,]+%?$/;
 
+// Letras que o Tesseract mais confunde com um dígito parecido (bug visto em
+// produção, 2026-10-28: "74" lido como "7a" — a colaboradora tinha 74
+// clientes, mas o último caractere virou a letra "a" em vez do dígito "4").
+// Mapeamento conservador, só dos pares visualmente mais próximos nesse tipo
+// de relatório (fonte de planilha/sistema de ponto).
+const OCR_DIGIT_CONFUSIONS: Record<string, string> = {
+  o: '0',
+  O: '0',
+  l: '1',
+  I: '1',
+  i: '1',
+  z: '2',
+  Z: '2',
+  a: '4',
+  A: '4',
+  s: '5',
+  S: '5',
+  b: '8',
+  B: '8',
+  g: '9',
+  G: '9',
+  q: '9',
+};
+
+/** Tenta corrigir, letra a letra, as confusões de OCR acima num token que já
+ * tem pelo menos um dígito de verdade — "7a" vira "74", "l.455" vira "1.455"
+ * etc. Só mexe em tokens com ALGUM dígito (nunca força uma palavra qualquer
+ * a virar número); devolve o token sem alteração quando não há nada pra
+ * corrigir, o que faz chamar esta função sempre ser seguro mesmo fora do
+ * trecho numérico de uma linha. Exportado — dsmImageColumns.ts (2ª análise,
+ * por posição/coluna) reusa a mesma correção ao ler o token mais próximo em
+ * X do cabeçalho "Número de Clientes". */
+export function correctOcrDigitConfusions(token: string): string {
+  if (!/\d/.test(token)) return token;
+  return token.replace(/[a-zA-Z]/g, (ch) => OCR_DIGIT_CONFUSIONS[ch] ?? ch);
+}
+
 /** Splits the trailing run of whitespace-separated numeric tokens off the
  * end of `text` (a name possibly followed by "vendas  valor  clientes" and
  * sometimes a trailing "clientes(%)" too) — returns the leading non-numeric
@@ -88,15 +125,20 @@ function splitNameAndTrailingNumber(text: string): { nome: string; quantidade: n
   const tokens = text.trim().split(/\s+/);
   // Walks backward to find where the trailing run of numeric-looking
   // tokens *starts* (there can be several — vendas, valor, clientes, and
-  // sometimes clientes%).
+  // sometimes clientes%). Testa a versão corrigida de confusões de OCR
+  // (correctOcrDigitConfusions) em vez do token bruto — sem isso, um único
+  // caractere mal lido (ex.: "7a" em vez de "74") derrubava a detecção do
+  // trecho numérico inteiro, e os números todos (vendas/valor/clientes)
+  // acabavam grudados no nome em vez de virarem a quantidade (bug visto em
+  // produção, 2026-10-28).
   let numericRunStart = tokens.length;
   for (let i = tokens.length - 1; i >= 0; i--) {
-    if (NUMERIC_TOKEN.test(tokens[i])) numericRunStart = i;
+    if (NUMERIC_TOKEN.test(correctOcrDigitConfusions(tokens[i]))) numericRunStart = i;
     else break;
   }
   if (numericRunStart === tokens.length) return { nome: text.trim(), quantidade: null };
   const nome = tokens.slice(0, numericRunStart).join(' ').trim();
-  const numericTokens = tokens.slice(numericRunStart);
+  const numericTokens = tokens.slice(numericRunStart).map(correctOcrDigitConfusions);
   const countToken = [...numericTokens].reverse().find((t) => COUNT_TOKEN.test(t));
   const quantidade = countToken ? parseInt(countToken.replace(/\D/g, ''), 10) : null;
   return { nome, quantidade };

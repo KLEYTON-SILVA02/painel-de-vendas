@@ -21,7 +21,7 @@
 // inteiro continua funcionando com a 1ª análise sozinha, exatamente como
 // antes desta função existir.
 import type { Block } from 'tesseract.js';
-import { COUNT_TOKEN, MATRICULA_NAME_LINE } from './dsmImageParse';
+import { COUNT_TOKEN, correctOcrDigitConfusions, MATRICULA_NAME_LINE } from './dsmImageParse';
 import { normalizeMatricula } from './parsing';
 
 interface Bbox {
@@ -124,7 +124,13 @@ export function detectClientesColumnValues(blocks: Block[] | null): Map<string, 
     const match = MATRICULA_NAME_LINE.exec(line.text.trim());
     if (!match) continue;
     const matriculaDigits = match[1];
-    const candidates = line.words.filter((w) => COUNT_TOKEN.test(w.text) && w.text.replace(/\D/g, '') !== matriculaDigits);
+    // Testa/lê a versão corrigida de confusões de OCR (correctOcrDigitConfusions,
+    // dsmImageParse.ts) em vez da palavra bruta — mesmo caso da 1ª análise:
+    // um dígito lido como letra parecida ("7a" em vez de "74") não pode
+    // descartar essa palavra como candidata ao valor da coluna.
+    const candidates = line.words
+      .map((w) => ({ ...w, corrected: correctOcrDigitConfusions(w.text) }))
+      .filter((w) => COUNT_TOKEN.test(w.corrected) && w.corrected.replace(/\D/g, '') !== matriculaDigits);
     if (candidates.length === 0) continue;
     let best = candidates[0];
     let bestDist = Math.abs(xCenter(best.bbox) - headerXCenter);
@@ -135,7 +141,7 @@ export function detectClientesColumnValues(blocks: Block[] | null): Map<string, 
         bestDist = dist;
       }
     }
-    const value = parseInt(best.text.replace(/\D/g, ''), 10);
+    const value = parseInt(best.corrected.replace(/\D/g, ''), 10);
     if (Number.isNaN(value)) continue;
     result.set(normalizeMatricula(matriculaDigits), value);
   }
