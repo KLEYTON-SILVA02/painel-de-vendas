@@ -47,6 +47,14 @@ export function DsmReviewTable({ rows, collaboratorsById, onChangeRow, onRemoveR
                           2ª leitura
                         </span>
                       )}
+                      {r.fonte === 'nome-aproximado' && (
+                        <span
+                          className="ml-1.5 text-[10px] rounded-full bg-rose-500/20 text-rose-300 px-1.5 py-0.5 align-middle"
+                          title="O nome não bateu exatamente com o cadastrado — o OCR deve ter trocado ou perdido uma letra (o sistema casou por aproximação). CONFIRA SE É A PESSOA CERTA, além da quantidade, antes de salvar."
+                        >
+                          nome aproximado
+                        </span>
+                      )}
                       {r.fonte === 'coluna' && (
                         <span
                           className="ml-1.5 text-[10px] rounded-full bg-amber-500/20 text-amber-300 px-1.5 py-0.5 align-middle"

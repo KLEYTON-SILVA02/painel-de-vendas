@@ -94,6 +94,22 @@ describe('detectClientesColumnValues', () => {
   });
 });
 
+describe('detectClientesColumnValues — cabeçalho com ruído de OCR', () => {
+  it('ainda localiza a coluna quando o OCR troca uma letra do cabeçalho ("Cllentes" em vez de "Clientes")', () => {
+    const header = line([word('Cllentes', 290, 330, 0)], 0);
+    const row = line([word('70209751-ANGELICA', 0, 80, 20), word('74', 295, 305, 20)], 20);
+    const result = detectClientesColumnValues(blocksFixture([header, row]));
+    expect(result.get('70209751')).toBe(74);
+  });
+
+  it('não confunde outra palavra do cabeçalho (ex.: "Vendas") com "Clientes" mesmo com a tolerância', () => {
+    const header = line([word('Vendas', 90, 130, 0)], 0);
+    const row = line([word('70209751-ANGELICA', 0, 80, 20), word('74', 295, 305, 20)], 20);
+    const result = detectClientesColumnValues(blocksFixture([header, row]));
+    expect(result.size).toBe(0);
+  });
+});
+
 describe('findClientesColumnCropRange', () => {
   it('calcula a faixa horizontal da coluna a partir do cabeçalho e dos valores já encontrados', () => {
     const header = line([word('Clientes', 290, 330, 0)], 0);
