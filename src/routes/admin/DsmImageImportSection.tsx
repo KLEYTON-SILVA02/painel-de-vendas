@@ -41,9 +41,11 @@ type Step = 'input' | 'review' | 'done';
  * - 2ª análise (por coluna/posição): detectClientesColumnValues
  *   (dsmImageColumns.ts) localiza o cabeçalho "Número de Clientes" pela
  *   posição na imagem e lê, pra cada linha, o número mais próximo dele em
- *   X — cobre o caso que a 1ª não resolve sozinha (linha com nome legível
- *   mas número perdido/embaralhado pelo OCR). Só preenche quantidade
- *   quando a 1ª não achou nada (nunca sobrescreve um valor já lido).
+ *   X — essa é a única das duas que de fato busca pelo cabeçalho de
+ *   verdade, então quando ela acha um valor pra uma matrícula, ele PREVALECE
+ *   sobre o que a 1ª leu por texto/ordem dos números, mesmo que a 1ª já
+ *   tivesse achado algo (pedido explícito do usuário, 2026-10-28 — ver
+ *   computeDsmImageMatches).
  * As duas são mescladas (computeDsmImageMatches, dsmImageParse.ts) logo
  * após escanear, e a caixa "Texto extraído" mostra o resultado já
  * reconstruído e limpo (buildCleanDsmImageText) — uma linha por colaborador
@@ -183,7 +185,9 @@ export function DsmImageImportSection({ onStepChange }: { onStepChange?: (step: 
       // pela posição em vez do texto corrido (ver dsmImageColumns.ts) —
       // Map vazio quando não achou o cabeçalho "Clientes" na imagem, o que
       // ainda assim conta como "análise concluída" (libera "Processar
-      // texto"; só não tem nada pra confirmar).
+      // texto"; só não tem nada pra confirmar). Quando encontra algo, esse
+      // valor prevalece sobre o que a 1ª leitura (por texto) achou —
+      // computeDsmImageMatches é quem decide isso.
       const columnMatches = detectClientesColumnValues(blocks);
       setClientesColumnMatches(columnMatches);
       // Mescla as duas leituras por texto + a confirmação por coluna (mesmo

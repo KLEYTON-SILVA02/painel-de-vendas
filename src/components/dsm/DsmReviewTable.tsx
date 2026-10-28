@@ -50,7 +50,7 @@ export function DsmReviewTable({ rows, collaboratorsById, onChangeRow, onRemoveR
                       {r.fonte === 'coluna' && (
                         <span
                           className="ml-1.5 text-[10px] rounded-full bg-amber-500/20 text-amber-300 px-1.5 py-0.5 align-middle"
-                          title="A leitura por linha não achou a quantidade desta pessoa — a 2ª análise localizou e confirmou esse valor pela posição da coluna 'Número de Clientes' na imagem. Confira antes de salvar."
+                          title="A 2ª análise localizou o cabeçalho 'Número de Clientes' na imagem e leu este valor pela posição da coluna — usado no lugar do que a leitura por linha havia achado (ou preenchido, se a leitura por linha não tinha achado nada). Confira antes de salvar."
                         >
                           2ª análise (coluna)
                         </span>

@@ -49,12 +49,15 @@ export interface DsmImageLineMatch {
   nome: string;
   quantidade: number | null;
   /** 'nome': set only by the second-pass name search
-   * (parseDsmImageLinesByCollaboratorName). 'coluna': set by the caller
-   * (DsmImageImportSection.tsx) when the column/position-based 2nd analysis
-   * (dsmImageColumns.ts) filled in a quantidade the line-based reading
-   * found null — absent for a line matched the normal way with an already
-   * recognized quantidade, so the review table can flag these for extra
-   * scrutiny. */
+   * (parseDsmImageLinesByCollaboratorName). 'coluna': set whenever the
+   * column/position-based 2nd analysis (dsmImageColumns.ts, anchored on the
+   * real "Número de Clientes" header's position in the image) found a value
+   * for this matrícula that DIFFERS from what the line/text reading got —
+   * the column reading always wins in that case (see computeDsmImageMatches
+   * below), since it's anchored on the actual header instead of guessing by
+   * token shape/order. Absent when the line reading already agreed with the
+   * column reading (or the column reading found nothing for this row), so
+   * the review table only flags rows that were actually corrected. */
   matchedBy?: 'nome' | 'coluna';
 }
 
@@ -224,11 +227,21 @@ export function buildDsmReviewRowsFromImage(
 /** Roda as duas leituras por linha/texto (matrícula-traço, depois por nome
  * — ver as duas funções acima) e, por cima, aplica a 2ª análise por coluna
  * (dsmImageColumns.ts, já calculada à parte a partir dos bounding boxes do
- * mesmo OCR) só pra preencher quantidades que as leituras por texto não
- * acharam — nunca sobrescreve um valor já lido. Um único ponto de verdade
- * pra essa junção, reaproveitado tanto na primeira vez (handleScan, pra
- * montar o texto limpo mostrado na tela) quanto se o ADM reprocessar depois
- * de editar/colar texto à mão (DsmImageImportSection.tsx). */
+ * mesmo OCR). A leitura por coluna é a ÚLTIMA palavra: sempre que ela achou
+ * um valor pra uma matrícula, esse valor é usado, mesmo substituindo um que
+ * a leitura por texto já tinha encontrado — pedido explícito do usuário
+ * (2026-10-28): os três cabeçalhos do relatório (Matrícula, Nome do
+ * funcionário, Número de Clientes) são o parâmetro de busca, e a leitura
+ * por coluna é a única das duas que de fato procura pela POSIÇÃO do
+ * cabeçalho "Número de Clientes" na imagem — a leitura por texto só
+ * adivinha pela ordem/formato dos números da linha (vendas, valor, clientes,
+ * clientes%), o que falha sempre que o OCR perde, gruda ou reordena um
+ * token nessa sequência (o próprio bug relatado: números de "Número de
+ * Vendas"/"Valor das Vendas" sendo salvos em vez do de "Número de
+ * Clientes"). Um único ponto de verdade pra essa junção, reaproveitado
+ * tanto na primeira vez (handleScan, pra montar o texto limpo mostrado na
+ * tela) quanto se o ADM reprocessar depois de editar/colar texto à mão
+ * (DsmImageImportSection.tsx). */
 export function computeDsmImageMatches(
   text: string,
   colaboradores: { nome: string; matricula: string }[],
@@ -240,9 +253,10 @@ export function computeDsmImageMatches(
   let matches = [...primaryMatches, ...secondPassMatches];
   if (columnMatches && columnMatches.size > 0) {
     matches = matches.map((m) => {
-      if (!m.matricula || m.quantidade !== null) return m;
+      if (!m.matricula) return m;
       const columnValue = columnMatches.get(m.matricula);
-      return columnValue !== undefined ? { ...m, quantidade: columnValue, matchedBy: 'coluna' as const } : m;
+      if (columnValue === undefined || columnValue === m.quantidade) return m;
+      return { ...m, quantidade: columnValue, matchedBy: 'coluna' as const };
     });
   }
   return matches;
