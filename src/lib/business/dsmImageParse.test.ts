@@ -150,19 +150,26 @@ describe('computeDsmImageMatches + buildCleanDsmImageText', () => {
     { nome: 'JACOB JURANDIR DE LIMA TELES', matricula: '70003335' },
   ];
 
-  it('mescla 1ª leitura + 2ª leitura por nome + confirmação por coluna, sem sobrescrever valor já lido', () => {
+  it('mescla 1ª leitura + 2ª leitura por nome + confirmação por coluna — a leitura por coluna prevalece quando diverge', () => {
     const text = [
-      '70208345-DEIVESON RAMOS PAIVA 1.540 56.955,35 126', // já tem quantidade — coluna nunca sobrescreve
+      '70208345-DEIVESON RAMOS PAIVA 1.540 56.955,35 126', // 1ª leitura acha 126 (pelo formato/ordem dos números)
       'JACOB JURANDIR DE LIMA TELES', // só o nome, sem matrícula nem número — achado pela 2ª leitura, sem quantidade
     ].join('\n');
     const columnMatches = new Map([
-      ['70208345', 999], // nunca deve aparecer — já tinha 126
+      ['70208345', 999], // diverge de 126 (achado pela posição real do cabeçalho "Número de Clientes") — prevalece
       ['70003335', 145], // preenche o buraco da 2ª leitura por nome
     ]);
     const matches = computeDsmImageMatches(text, colaboradores, columnMatches);
+    expect(matches[0]).toMatchObject({ matricula: '70208345', quantidade: 999, matchedBy: 'coluna' });
+    expect(matches[1]).toMatchObject({ matricula: '70003335', quantidade: 145, matchedBy: 'coluna' });
+  });
+
+  it('não marca matchedBy quando a leitura por coluna confirma o mesmo valor que a 1ª leitura já tinha achado', () => {
+    const text = '70208345-DEIVESON RAMOS PAIVA 1.540 56.955,35 126';
+    const columnMatches = new Map([['70208345', 126]]);
+    const matches = computeDsmImageMatches(text, colaboradores, columnMatches);
     expect(matches[0]).toMatchObject({ matricula: '70208345', quantidade: 126 });
     expect(matches[0].matchedBy).toBeUndefined();
-    expect(matches[1]).toMatchObject({ matricula: '70003335', quantidade: 145, matchedBy: 'coluna' });
   });
 
   it('reconstrói um texto limpo, sem nenhuma das outras colunas/cabeçalhos do OCR bruto', () => {
