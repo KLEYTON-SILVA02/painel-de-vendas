@@ -149,7 +149,22 @@ export function Sidebar({
   const extraCategories = (categoryTypes ?? []).filter((c) => c.chave !== 'biosintetica' && c.chave !== 'dsm');
 
   return (
-    <aside className="sidebar" ref={asideRef}>
+    <aside
+      className="sidebar"
+      ref={asideRef}
+      // Clicar em qualquer lugar da barra (não só no botão pequeno de
+      // recolher/expandir) já expande o menu quando ele está recolhido —
+      // pedido explícito do usuário (2026-10-28). Só age nessa direção
+      // (recolhido → expandido); recolher continua exclusivo do botão
+      // sb-toggle, pra não fechar o menu sem querer no meio de um clique em
+      // algum link de navegação. onClick de cada NavLink/botão interno segue
+      // o seu próprio comportamento normalmente — o evento ainda borbulha
+      // até aqui, então clicar num ícone enquanto recolhido navega E expande
+      // ao mesmo tempo, o que é desejável (mostra onde você está).
+      onClick={() => {
+        if (collapsed) onToggleCollapsed();
+      }}
+    >
       <div className="sb-header">
         <div className="sb-logo">{logoUrl ? <img src={logoUrl} alt="" /> : 'GV'}</div>
         <div className="sb-title">
@@ -159,7 +174,18 @@ export function Sidebar({
             VENDAS
           </div>
         </div>
-        <button className="sb-toggle" onClick={onToggleCollapsed} title={collapsed ? 'Expandir menu' : 'Recolher menu'}>
+        {/* stopPropagation: sem isso, o clique borbulharia pro onClick do
+            <aside> acima e chamaria onToggleCollapsed() DUAS vezes no mesmo
+            clique (uma vez aqui, outra lá) — cancelando o toggle a si mesmo
+            e deixando o botão sem efeito nenhum ao tentar expandir. */}
+        <button
+          className="sb-toggle"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleCollapsed();
+          }}
+          title={collapsed ? 'Expandir menu' : 'Recolher menu'}
+        >
           <ChevronIcon width={15} height={15} />
         </button>
       </div>

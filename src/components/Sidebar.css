@@ -7,6 +7,13 @@
 .app-shell {
   --sb-w: 220px;
   --sb-w-collapsed: 68px;
+  /* Compartilhado entre .sidebar e .app-topbar (ver abaixo) — fundidas numa
+     única superfície visual (pedido explícito do usuário, 2026-10-28: "a
+     barra do menu lateral se funda com a barra superior"), em vez de duas
+     barras com fundos/bordas próprios e uma linha visível de separação
+     entre elas. */
+  --panel-bg: linear-gradient(180deg, hsl(240 55% 9%), hsl(240 60% 6%));
+  --panel-border: #212948;
 }
 
 .sidebar {
@@ -16,12 +23,33 @@
   bottom: 0;
   width: var(--sb-w);
   z-index: 90;
-  background: linear-gradient(180deg, hsl(240 55% 9%), hsl(240 60% 6%));
-  border-right: 1px solid #212948;
+  background: var(--panel-bg);
+  /* Sem border-right: a fronteira entre a barra (menu + topo, já fundidos
+     no mesmo fundo) e o conteúdo abaixo/à direita é inteira desenhada pelo
+     .app-main (border-top + border-left + border-top-left-radius), que
+     também arredonda o canto interno dessa união — ver mais abaixo. */
   display: flex;
   flex-direction: column;
   transition: width .22s ease, transform .25s ease;
   overflow: hidden;
+}
+
+/* Barra superior (o <header> dentro de .app-content, AppShell.tsx) — mesmo
+   fundo da sidebar, sem border-bottom própria, pra ler como uma peça só com
+   ela (canto interno arredondado em .app-main, abaixo). */
+.app-topbar {
+  background: var(--panel-bg);
+}
+
+/* <main> (AppShell.tsx) — o "L" formado por border-top + border-left,
+   fechado por border-top-left-radius, é a fronteira completa entre a barra
+   fundida (sidebar + topbar) e o conteúdo, com o canto interno arredondado
+   pedido pelo usuário (terceiro print anexado, 2026-10-28) em vez de um
+   ângulo reto. */
+.app-main {
+  border-top: 1px solid var(--panel-border);
+  border-left: 1px solid var(--panel-border);
+  border-top-left-radius: 18px;
 }
 
 .sb-header {
@@ -244,6 +272,12 @@
   }
   .app-shell.is-collapsed .sidebar .sb-toggle svg {
     transform: rotate(180deg);
+  }
+  /* Affordance pro clique-em-qualquer-lugar-expande (ver Sidebar.tsx) —
+     só enquanto recolhido, já que expandido o clique no corpo da barra não
+     faz nada (recolher continua exclusivo do sb-toggle). */
+  .app-shell.is-collapsed .sidebar {
+    cursor: pointer;
   }
   .app-shell.is-collapsed .sidebar nav.sb-nav a {
     justify-content: center;
