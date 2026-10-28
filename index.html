@@ -1,7 +1,16 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" translate="no">
   <head>
     <meta charset="UTF-8" />
+    <!-- Google Translate (e extensões compatíveis) reescreve nós de texto
+         com <font> extras; quando um desses nós está sob reconciliação
+         ativa do React (texto que muda a cada tick, como o progresso de
+         OCR em DsmImageImportSection.tsx), o DOM real e o que o React
+         espera saem de sincronia e a próxima atualização quebra com
+         "Failed to execute 'insertBefore'/'removeChild' on 'Node'"
+         (facebook/react#11538, visto em produção, 2026-10-28). O atributo
+         `translate="no"` acima + este meta cobrem o app inteiro. -->
+    <meta name="google" content="notranslate" />
     <link rel="icon" type="image/png" href="/favicon-48.png" />
     <link rel="apple-touch-icon" href="/pwa-192.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />

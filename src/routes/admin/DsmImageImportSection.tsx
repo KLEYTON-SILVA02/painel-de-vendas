@@ -403,6 +403,7 @@ export function DsmImageImportSection({ onStepChange }: { onStepChange?: (step: 
                     type="button"
                     onClick={handleScan}
                     disabled={scanning}
+                    translate="no"
                     className="rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm disabled:opacity-60 flex items-center justify-center gap-2"
                   >
                     {scanning && <Spinner size={14} color="#04121a" />}
