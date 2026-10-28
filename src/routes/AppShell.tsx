@@ -240,7 +240,7 @@ export function AppShell() {
         />
         <div className="sb-backdrop" onClick={() => setMobileOpen(false)} />
         <div className="app-content">
-          <header className="border-b border-slate-800 px-6 py-4">
+          <header className="app-topbar px-6 py-4">
             <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <button className="sb-hamburger" onClick={() => setMobileOpen(true)} aria-label="Abrir menu">
@@ -289,7 +289,7 @@ export function AppShell() {
               </div>
             </div>
           </header>
-          <main className="p-3">
+          <main className="app-main p-3">
           {/* Keyed by pathname so a crash in one screen (caught here instead
               of by the app-wide boundary in App.tsx) doesn't strand the
               user on a dead "Algo deu errado" card forever — clicking any
