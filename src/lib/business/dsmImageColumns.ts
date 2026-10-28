@@ -36,6 +36,7 @@
 // como antes dessas funções existirem.
 import type { Block } from 'tesseract.js';
 import { COUNT_TOKEN, correctOcrDigitConfusions, MATRICULA_NAME_LINE } from './dsmImageParse';
+import { levenshteinDistance } from './levenshtein';
 import { normalizeMatricula } from './parsing';
 
 interface Bbox {
@@ -75,6 +76,29 @@ function xCenter(bbox: Bbox): number {
 // uma das duas colunas de clientes do relatório (contagem e percentual).
 const CLIENT_WORD = /client/i;
 const PERCENT_CHAR = /%/;
+const CLIENT_WORD_TARGET = 'clientes';
+// Até 2 erros (~25% de "clientes", 8 letras) — cobre uma letra trocada,
+// perdida ou extra sem abrir pra palavras realmente diferentes do
+// cabeçalho (Vendas, Valor, Loja, Data, Matrícula, Desconto...), nenhuma
+// das quais chega perto dessa distância.
+const CLIENT_WORD_MAX_DISTANCE = 2;
+
+/** Mesmo critério de CLIENT_WORD (contém "client"), mas tolerante a ruído de
+ * OCR na própria palavra do cabeçalho — pedido explícito do usuário
+ * (2026-10-28): a 2ª/3ª análise inteira depende de achar essa palavra no
+ * MESMO OCR de página inteira, de baixa fidelidade, que estamos tentando
+ * compensar; exigir um match perfeito aqui é pedir que a parte ruim do OCR
+ * acerte justamente a palavra que decide se a parte boa (a releitura
+ * dedicada da coluna) vai rodar ou não. Só compara palavras de tamanho
+ * plausível (5-14 letras) — não força a comparação contra um token muito
+ * curto ou um bloco de texto grudado (ex.: várias palavras do cabeçalho
+ * coladas pelo OCR), onde a distância de edição não significa nada. */
+function isClientHeaderWord(wordText: string): boolean {
+  if (CLIENT_WORD.test(wordText)) return true;
+  const cleaned = wordText.toLowerCase().replace(/[^a-z]/g, '');
+  if (cleaned.length < 5 || cleaned.length > 14) return false;
+  return levenshteinDistance(cleaned, CLIENT_WORD_TARGET) <= CLIENT_WORD_MAX_DISTANCE;
+}
 
 interface ClientesHeaderMatch {
   xCenter: number;
@@ -97,7 +121,7 @@ function findClientesColumnHeader(lines: OcrLine[]): ClientesHeaderMatch | null 
   for (const line of lines) {
     for (let i = 0; i < line.words.length; i++) {
       const word = line.words[i];
-      if (!CLIENT_WORD.test(word.text)) continue;
+      if (!isClientHeaderWord(word.text)) continue;
       const neighborhood = line.words
         .slice(Math.max(0, i - 1), i + 3)
         .map((w) => w.text)

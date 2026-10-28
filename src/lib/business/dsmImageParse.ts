@@ -21,6 +21,7 @@
 // token, da direita pra esquerda, com cara de inteiro, pulando qualquer
 // vírgula/"%" que venha depois dele.
 import type { DsmReviewRow } from './dsmImport';
+import { levenshteinDistance } from './levenshtein';
 import { normalize } from './normalize';
 import { normalizeMatricula } from './parsing';
 
@@ -48,17 +49,23 @@ export interface DsmImageLineMatch {
   matricula: string;
   nome: string;
   quantidade: number | null;
-  /** 'nome': set only by the second-pass name search
-   * (parseDsmImageLinesByCollaboratorName). 'coluna': set whenever the
-   * column/position-based 2nd analysis (dsmImageColumns.ts, anchored on the
-   * real "Número de Clientes" header's position in the image) found a value
-   * for this matrícula that DIFFERS from what the line/text reading got —
-   * the column reading always wins in that case (see computeDsmImageMatches
-   * below), since it's anchored on the actual header instead of guessing by
-   * token shape/order. Absent when the line reading already agreed with the
-   * column reading (or the column reading found nothing for this row), so
-   * the review table only flags rows that were actually corrected. */
-  matchedBy?: 'nome' | 'coluna';
+  /** 'nome': set by the second-pass name search (parseDsmImageLinesByCollaboratorName)
+   * when the registered name matched the OCR text as an exact substring.
+   * 'nome-aproximado': same second pass, but the name only matched by edit
+   * distance (findBestFuzzyNameMatch) — the OCR swapped/dropped a letter in
+   * the registered name (e.g. "CRHYSTINA" instead of "CHRYSTINA") — flagged
+   * separately because the review table needs to warn the ADM to double
+   * check the PERSON, not just the quantidade. 'coluna': set whenever the
+   * column/position-based 2nd/3rd analysis (dsmImageColumns.ts, anchored on
+   * the real "Número de Clientes" header's position in the image) found a
+   * value for this matrícula that DIFFERS from what the line/text reading
+   * got — the column reading always wins in that case (see
+   * computeDsmImageMatches below), since it's anchored on the actual header
+   * instead of guessing by token shape/order. Absent when the line reading
+   * already agreed with the column reading (or the column reading found
+   * nothing for this row), so the review table only flags rows that were
+   * actually corrected. */
+  matchedBy?: 'nome' | 'nome-aproximado' | 'coluna';
 }
 
 // Um token de CONTAGEM ("Vendas" ou "Número de Clientes") é sempre um
@@ -198,6 +205,10 @@ export function parseDsmImageLinesByCollaboratorName(
     const line = rawLine.trim();
     if (!line || FOOTER_LINE_PATTERN.test(line)) continue;
     const normalizedLine = normalize(line);
+
+    // 1ª tentativa: substring idêntico (como sempre foi) — zero risco de
+    // confundir duas pessoas, sempre prioritário sobre a aproximação abaixo.
+    let matchedExact = false;
     for (const colaborador of colaboradores) {
       const nomeTrim = colaborador.nome.trim();
       const matricula = normalizeMatricula(colaborador.matricula);
@@ -209,10 +220,115 @@ export function parseDsmImageLinesByCollaboratorName(
       const { quantidade } = splitNameAndTrailingNumber(remainder);
       out.push({ lineRaw: line, matriculaRaw: colaborador.matricula, matricula, nome: nomeTrim, quantidade, matchedBy: 'nome' });
       foundThisPass.add(matricula);
+      matchedExact = true;
       break;
+    }
+    if (matchedExact) continue;
+
+    // 2ª tentativa (pedido explícito do usuário, 2026-10-28: "o vendedor
+    // sendo identificado com o nome completo [na imagem]... não está sendo
+    // reconhecido" — matrícula E nome com substring idêntico já falharam,
+    // mas o nome continua visível na imagem, só com uma letra trocada/
+    // perdida pelo OCR, ex.: "CRHYSTINA" em vez de "CHRYSTINA") — casamento
+    // por aproximação, nunca arriscando confundir duas pessoas (ver
+    // findBestFuzzyNameMatch).
+    const fuzzy = findBestFuzzyNameMatch(normalizedLine, colaboradores, alreadyMatched, foundThisPass);
+    if (fuzzy) {
+      const matricula = normalizeMatricula(fuzzy.colaborador.matricula);
+      const remainder = normalizedLine.slice(fuzzy.span.end).replace(/^[\s\-–—]+/, '');
+      const { quantidade } = splitNameAndTrailingNumber(remainder);
+      out.push({
+        lineRaw: line,
+        matriculaRaw: fuzzy.colaborador.matricula,
+        matricula,
+        nome: fuzzy.colaborador.nome.trim(),
+        quantidade,
+        matchedBy: 'nome-aproximado',
+      });
+      foundThisPass.add(matricula);
     }
   }
   return out;
+}
+
+// Nomes de 1 palavra só não entram na busca por aproximação — risco alto
+// demais de "aproximar" um sobrenome comum da pessoa errada sem o resto do
+// nome como contexto.
+const NOME_FUZZY_MIN_WORDS = 2;
+// ~1 erro de OCR a cada 5-6 caracteres do nome — generoso o bastante pra
+// cobrir uma letra trocada/perdida (ex.: "CRHYSTINA" vs "CHRYSTINA",
+// distância 2, num nome de ~29 caracteres), sem abrir pra nomes realmente
+// diferentes.
+const NOME_FUZZY_MAX_DISTANCE_RATIO = 0.18;
+// Quando o segundo melhor candidato fica a menos de 2 de distância do
+// melhor, os dois estão perto demais um do outro pra arriscar escolher —
+// melhor deixar os dois de fora (viram "Não cadastrado" na conferência, sem
+// nenhum dado salvo errado) do que atribuir a venda à pessoa errada.
+const NOME_FUZZY_AMBIGUITY_MARGIN = 2;
+
+interface WordSpan {
+  text: string;
+  start: number;
+  end: number;
+}
+
+function splitWordsWithOffsets(text: string): WordSpan[] {
+  const spans: WordSpan[] = [];
+  const re = /\S+/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    spans.push({ text: m[0], start: m.index, end: m.index + m[0].length });
+  }
+  return spans;
+}
+
+/** Desliza uma janela do mesmo número de palavras do nome cadastrado pela
+ * linha (em vez de indexOf, que exige substring idêntico) e devolve a
+ * posição da janela com menor distância de edição até o nome, desde que
+ * dentro do limite tolerado — null quando a linha não tem palavras
+ * suficientes ou nenhuma janela chegou perto o bastante. */
+function findNameFuzzyMatch(normalizedLine: string, normalizedNome: string): { start: number; end: number; distance: number } | null {
+  const nomeWordCount = normalizedNome.split(/\s+/).filter(Boolean).length;
+  if (nomeWordCount < NOME_FUZZY_MIN_WORDS) return null;
+  const lineSpans = splitWordsWithOffsets(normalizedLine);
+  if (lineSpans.length < nomeWordCount) return null;
+  const maxDistance = Math.max(1, Math.round(normalizedNome.length * NOME_FUZZY_MAX_DISTANCE_RATIO));
+  let best: { start: number; end: number; distance: number } | null = null;
+  for (let i = 0; i + nomeWordCount <= lineSpans.length; i++) {
+    const windowSpans = lineSpans.slice(i, i + nomeWordCount);
+    const windowText = windowSpans.map((w) => w.text).join(' ');
+    const distance = levenshteinDistance(windowText, normalizedNome);
+    if (distance <= maxDistance && (!best || distance < best.distance)) {
+      best = { start: windowSpans[0].start, end: windowSpans[windowSpans.length - 1].end, distance };
+    }
+  }
+  return best;
+}
+
+/** Roda findNameFuzzyMatch pra cada colaborador ainda não casado e devolve
+ * o melhor — só quando ele não está "empatado" (dentro de
+ * NOME_FUZZY_AMBIGUITY_MARGIN) com o segundo melhor, pra nunca adivinhar
+ * entre duas pessoas de nome parecido. */
+function findBestFuzzyNameMatch(
+  normalizedLine: string,
+  colaboradores: { nome: string; matricula: string }[],
+  alreadyMatched: Set<string>,
+  foundThisPass: Set<string>,
+): { colaborador: { nome: string; matricula: string }; span: { start: number; end: number } } | null {
+  const candidates: { colaborador: { nome: string; matricula: string }; span: { start: number; end: number }; distance: number }[] = [];
+  for (const colaborador of colaboradores) {
+    const nomeTrim = colaborador.nome.trim();
+    const matricula = normalizeMatricula(colaborador.matricula);
+    if (!nomeTrim || !matricula || alreadyMatched.has(matricula) || foundThisPass.has(matricula)) continue;
+    const match = findNameFuzzyMatch(normalizedLine, normalize(nomeTrim));
+    if (!match) continue;
+    candidates.push({ colaborador, span: { start: match.start, end: match.end }, distance: match.distance });
+  }
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => a.distance - b.distance);
+  const [bestC, secondC] = candidates;
+  if (secondC && secondC.distance - bestC.distance < NOME_FUZZY_AMBIGUITY_MARGIN) return null;
+  return bestC;
 }
 
 const DATE_IN_TEXT = /(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})/;

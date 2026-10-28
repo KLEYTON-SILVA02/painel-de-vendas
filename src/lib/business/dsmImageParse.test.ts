@@ -144,6 +144,35 @@ describe('parseDsmImageLinesByCollaboratorName', () => {
     const rows = parseDsmImageLinesByCollaboratorName('TOTAL GERAL 11.820 804.664,39 1124', colaboradores, new Set());
     expect(rows).toHaveLength(0);
   });
+
+  it('casa o nome por aproximação quando o OCR troca uma letra (ex.: "CRHYSTINA" em vez de "CHRYSTINA") — bug relatado, 2026-10-28', () => {
+    const colaboradoresComAcento = [{ nome: 'ANGÉLICA CHRYSTINA DE FÁTIMA', matricula: '70209751' }];
+    const text = 'ANGELICA CRHYSTINA DE FATIMA - 74';
+    const rows = parseDsmImageLinesByCollaboratorName(text, colaboradoresComAcento, new Set());
+    expect(rows).toEqual([
+      expect.objectContaining({ matricula: '70209751', nome: 'ANGÉLICA CHRYSTINA DE FÁTIMA', quantidade: 74, matchedBy: 'nome-aproximado' }),
+    ]);
+  });
+
+  it('não casa por aproximação nomes de uma palavra só (risco alto demais de pegar a pessoa errada)', () => {
+    const umaPalavra = [{ nome: 'CAROL', matricula: '70001111' }];
+    const rows = parseDsmImageLinesByCollaboratorName('CAROU 100', umaPalavra, new Set());
+    expect(rows).toHaveLength(0);
+  });
+
+  it('não casa por aproximação quando dois colaboradores cadastrados ficam ambíguos perto demais um do outro', () => {
+    const ambiguos = [
+      { nome: 'MARIA CLARA SOUZA', matricula: '70002222' },
+      { nome: 'MARIA CLARO SOUSA', matricula: '70003333' },
+    ];
+    const rows = parseDsmImageLinesByCollaboratorName('MARIA CLARA SOUSA 50', ambiguos, new Set());
+    expect(rows).toHaveLength(0);
+  });
+
+  it('não casa por aproximação um nome completamente diferente (distância alta demais)', () => {
+    const rows = parseDsmImageLinesByCollaboratorName('PESSOA TOTALMENTE DIFERENTE AQUI 50', colaboradores, new Set());
+    expect(rows).toHaveLength(0);
+  });
 });
 
 describe('buildDsmReviewRowsFromImage: fonte flag', () => {

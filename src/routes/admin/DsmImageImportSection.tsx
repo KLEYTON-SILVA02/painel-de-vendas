@@ -497,6 +497,9 @@ export function DsmImageImportSection({ onStepChange }: { onStepChange?: (step: 
           <p className="text-xs text-slate-500 mb-3">
             {rows.length} linha(s) reconhecida(s)
             {rows.some((r) => r.fonte === 'nome') ? ` (${rows.filter((r) => r.fonte === 'nome').length} pela segunda leitura, por nome)` : ''}
+            {rows.some((r) => r.fonte === 'nome-aproximado')
+              ? ` (${rows.filter((r) => r.fonte === 'nome-aproximado').length} por nome aproximado — confira se é a pessoa certa)`
+              : ''}
             {rows.some((r) => r.fonte === 'coluna') ? ` (${rows.filter((r) => r.fonte === 'coluna').length} pela segunda análise, por coluna)` : ''} —
             data{' '}
             {dateMode === 'dia'
