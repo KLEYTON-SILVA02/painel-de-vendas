@@ -57,7 +57,8 @@
   align-items: center;
   gap: 10px;
   padding: 16px 14px;
-  border-bottom: 1px solid #212948;
+  /* Sem border-bottom: pedido explícito do usuário (2026-10-28) — "remova
+     a linha que fica abaixo do ícone da logo do sistema". */
   flex-shrink: 0;
 }
 .sb-logo {

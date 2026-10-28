@@ -234,7 +234,6 @@ export function AppShell() {
         <Sidebar
           collapsed={collapsed}
           onToggleCollapsed={() => setCollapsed((v) => !v)}
-          logoUrl={storeQuery.data?.logo_url}
           onNavigate={() => setMobileOpen(false)}
           closeOnOutsideClick
         />
