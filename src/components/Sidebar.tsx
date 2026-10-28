@@ -86,14 +86,12 @@ const TUTORIAIS_NAV_ITEM = { label: 'Tutoriais', color: '#14ff00', icon: Graduat
 export function Sidebar({
   collapsed,
   onToggleCollapsed,
-  logoUrl,
   onNavigate,
   showImportButton = true,
   closeOnOutsideClick = false,
 }: {
   collapsed: boolean;
   onToggleCollapsed: () => void;
-  logoUrl?: string | null;
   /** Called on any nav-item / import-button click, so the mobile drawer can close itself. */
   onNavigate?: () => void;
   /** The ADM mobile shell reuses this same sidebar as its slide-out drawer,
@@ -166,7 +164,15 @@ export function Sidebar({
       }}
     >
       <div className="sb-header">
-        <div className="sb-logo">{logoUrl ? <img src={logoUrl} alt="" /> : 'GV'}</div>
+        {/* Ícone fixo do sistema (Gestão de Vendas) — nunca muda, mesmo
+            quando a loja personaliza seu próprio logo na barra de boas-vindas
+            (DashboardPage.tsx). Pedido explícito do usuário (2026-10-28):
+            antes, essa mesma imagem da loja (logo_url) substituía esse ícone
+            aqui também — o logo da loja deve aparecer só "conforme a loja",
+            na barra de boas-vindas, nunca no canto superior do menu. */}
+        <div className="sb-logo">
+          <img src="/logo-gestao-de-vendas.svg" alt="Gestão de Vendas" />
+        </div>
         <div className="sb-title">
           <div className="t1">
             GESTÃO DE

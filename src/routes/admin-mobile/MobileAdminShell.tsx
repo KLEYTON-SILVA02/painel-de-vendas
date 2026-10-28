@@ -115,7 +115,6 @@ export function MobileAdminShell() {
       <Sidebar
         collapsed={false}
         onToggleCollapsed={() => setDrawerOpen(false)}
-        logoUrl={store?.logo_url}
         onNavigate={() => setDrawerOpen(false)}
         showImportButton={false}
       />
