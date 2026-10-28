@@ -82,6 +82,13 @@ describe('detectClientesColumnValues', () => {
     expect(result.size).toBe(0);
   });
 
+  it('corrige confusão de OCR entre letra e dígito no valor da coluna ("7a" → 74, mesmo bug da leitura por texto)', () => {
+    const header = line([word('Clientes', 290, 310, 0)], 0);
+    const row = line([word('70209751-ANGELICA', 0, 80, 20), word('7a', 295, 305, 20)], 20);
+    const result = detectClientesColumnValues(blocksFixture([header, row]));
+    expect(result.get('70209751')).toBe(74);
+  });
+
   it('devolve mapa vazio para blocks null', () => {
     expect(detectClientesColumnValues(null).size).toBe(0);
   });

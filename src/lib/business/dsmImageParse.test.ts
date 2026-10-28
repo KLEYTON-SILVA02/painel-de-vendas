@@ -61,6 +61,22 @@ describe('parseDsmImageLines', () => {
     expect(row).toMatchObject({ matricula: '70209751', nome: 'ANGELICA CHRYSTINA DE FATIMA', quantidade: 74 });
   });
 
+  it('corrige confusão de OCR entre letra e dígito no final da linha ("7a" → 74, bug visto em produção, 2026-10-28)', () => {
+    const [row] = parseDsmImageLines('70209751-ANGELICA CRHYSTINA DE FATIMA... 1.455 84.079,41 7a');
+    expect(row).toMatchObject({ matricula: '70209751', quantidade: 74 });
+    expect(row.nome).not.toContain('7a');
+  });
+
+  it('corrige confusão de OCR mesmo em mais de um token do trecho numérico ("l.4SS" → 1.455)', () => {
+    const [row] = parseDsmImageLines('70208345-DEIVESON RAMOS PAIVA l.4SS 56.955,35 l26');
+    expect(row.quantidade).toBe(126);
+  });
+
+  it('não força uma palavra sem nenhum dígito a virar número (continua absorvida pelo nome)', () => {
+    const [row] = parseDsmImageLines('70208345-DEIVESON RAMOS PAIVA ETC');
+    expect(row).toMatchObject({ nome: 'DEIVESON RAMOS PAIVA ETC', quantidade: null });
+  });
+
   it('parses several real-shaped lines from the same report at once', () => {
     const text = [
       'Loja Matrícula - Nome funcionário Data',
