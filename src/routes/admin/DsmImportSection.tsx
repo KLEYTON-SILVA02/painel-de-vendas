@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../auth/AuthContext';
 import { DsmReviewTable } from '../../components/dsm/DsmReviewTable';
+import { CentralImportacaoPanel, type ImportStepInfo, type ImportStepStatus } from '../../components/import/CentralImportacaoPanel';
 import { Spinner } from '../../components/Spinner';
 import {
   buildDsmReviewRows,
@@ -141,8 +142,72 @@ export function DsmImportSection() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
+  // Traduz o `step`/`error`/`rows`/`saving`/`result` que já existem acima nas
+  // 5 etapas do painel visual (CentralImportacaoPanel) — só leitura do
+  // estado real, mesmo princípio de ImportarPage.tsx (ver seu comentário em
+  // buildVendasEtapas). Esta planilha (DSM) não tem indicador de progresso
+  // de leitura próprio (o parse é rápido o bastante pra não precisar de um
+  // hoje) — por isso as etapas 1-3 pulam direto de "aguardando" pra
+  // "concluído" quando `step` sai de 'pick', em vez de inventar um estado
+  // intermediário que não existe de verdade.
+  const etapa1Status: ImportStepStatus = step !== 'pick' ? 'concluido' : error ? 'erro' : 'aguardando';
+  const etapa2Status: ImportStepStatus = step === 'review' || step === 'done' ? 'concluido' : 'aguardando';
+  const etapa3Status: ImportStepStatus = step === 'review' || step === 'done' ? 'concluido' : 'aguardando';
+  const etapa4Status: ImportStepStatus =
+    step === 'done' ? 'concluido' : step === 'review' ? (error ? 'erro' : saving ? 'concluido' : 'andamento') : 'aguardando';
+  const etapa5Status: ImportStepStatus = step === 'done' ? 'concluido' : step === 'review' && saving ? 'andamento' : 'aguardando';
+  const dsmEtapas: ImportStepInfo[] = [
+    {
+      key: 'arquivo',
+      numero: '01',
+      titulo: 'Arquivo recebido',
+      descricao: 'Seleção da planilha de DSM (.xlsx, .xls, .xlsm, .csv, .ods).',
+      status: etapa1Status,
+      resultado: fileName || undefined,
+      mensagem: step === 'pick' && error ? error : undefined,
+    },
+    {
+      key: 'identificacao',
+      numero: '02',
+      titulo: 'Identificação de colunas',
+      descricao: 'Detecção do cabeçalho e das colunas de matrícula, data e número de clientes.',
+      status: etapa2Status,
+    },
+    {
+      key: 'leitura',
+      numero: '03',
+      titulo: 'Leitura e classificação dos dados',
+      descricao: 'Associação de cada linha ao colaborador cadastrado pela matrícula.',
+      status: etapa3Status,
+      resultado: rows.length > 0 ? `${rows.length} linha(s)` : undefined,
+    },
+    {
+      key: 'validacao',
+      numero: '04',
+      titulo: 'Validação e conferência',
+      descricao: 'Conferência de data e quantidade de cada linha antes de salvar.',
+      status: etapa4Status,
+      mensagem: etapa4Status === 'erro' ? (error ?? undefined) : undefined,
+    },
+    {
+      key: 'gravacao',
+      numero: '05',
+      titulo: 'Gravação no sistema',
+      descricao: 'Soma ao total de DSM já registrado para cada colaborador — nunca substitui.',
+      status: etapa5Status,
+      resultado: result ? `${result.count} gravado(s)` : undefined,
+    },
+  ];
+  const dsmConcluded = [etapa1Status, etapa2Status, etapa3Status, etapa4Status, etapa5Status].filter((s) => s === 'concluido').length;
+
   return (
     <div className="flex flex-col gap-3">
+        <CentralImportacaoPanel
+          titulo="CENTRAL DE IMPORTAÇÃO — DSM"
+          subtitulo="Análise, validação e gravação segura do DSM."
+          etapas={dsmEtapas}
+          progressoPct={(dsmConcluded / dsmEtapas.length) * 100}
+        />
         {step === 'pick' && (
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
             <h3 className="font-semibold text-sm mb-1">Importar planilha de DSM</h3>

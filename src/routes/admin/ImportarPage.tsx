@@ -8,6 +8,7 @@ import { ClientServiceImportHistoryPanel, ClientServiceImportSection } from './C
 import { DsmImageImportSection } from './DsmImageImportSection';
 import { DsmImportSection } from './DsmImportSection';
 import { DsmImportHistoryPanel } from '../../components/dsm/DsmImportHistoryPanel';
+import { CentralImportacaoPanel, type ImportStepInfo, type ImportStepStatus } from '../../components/import/CentralImportacaoPanel';
 import { CircularGauge } from '../../components/CircularGauge';
 import { HelpTip } from '../../components/HelpTip';
 import { Spinner } from '../../components/Spinner';
@@ -542,6 +543,8 @@ export function ImportarPage() {
     }, 250);
   }
 
+  const vendasCentral = buildVendasEtapas({ step, fileName, readPct, progress, error, sheets, summary, writeProgress, confirmResult });
+
   return (
     <div className="flex flex-col gap-6">
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
@@ -571,6 +574,7 @@ export function ImportarPage() {
     {mode === 'vendas' && (
     <div className="flex flex-col lg:flex-row gap-4 items-start">
       <div className="flex flex-col gap-3 flex-1 min-w-0 w-full">
+      <CentralImportacaoPanel etapas={vendasCentral.etapas} progressoPct={vendasCentral.pct} />
       {step === 'pick' && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <div className="flex items-start justify-between gap-3 mb-1">
@@ -1053,6 +1057,111 @@ async function summarize(
     amostras,
     previewRows,
   };
+}
+
+// Traduz o `step`/`readPct`/`progress`/`writeProgress`/`confirmResult` que já
+// existem no estado de ImportarPage (modo "Importar Vendas") nas 5 etapas do
+// painel visual CentralImportacaoPanel — função pura, só leitura do estado já
+// existente, nunca decide nada por conta própria nem inventa progresso (ver
+// comentário do componente). O % do contador soma 20 por etapa concluída,
+// mais um reforço opcional (leitura do arquivo / gravação em lote) quando já
+// existe um número real de progresso pra essa etapa específica.
+function buildVendasEtapas(args: {
+  step: Step;
+  fileName: string;
+  readPct: number | null;
+  progress: string | null;
+  error: string | null;
+  sheets: ParsedSheet[];
+  summary: SheetSummary | null;
+  writeProgress: { inserted: number; total: number } | null;
+  confirmResult: { count: number } | null;
+}): { etapas: ImportStepInfo[]; pct: number } {
+  const { step, fileName, readPct, progress, error, sheets, summary, writeProgress, confirmResult } = args;
+
+  const etapa1Status: ImportStepStatus = step !== 'pick' ? 'concluido' : readPct !== null ? 'andamento' : error ? 'erro' : 'aguardando';
+
+  const etapa2Status: ImportStepStatus =
+    step === 'analyze' || step === 'verify' || step === 'done' ? 'concluido' : step === 'map' ? 'andamento' : 'aguardando';
+
+  const etapa3Status: ImportStepStatus =
+    step === 'verify' || step === 'done' ? (summary ? 'concluido' : 'aguardando') : step === 'analyze' ? 'andamento' : 'aguardando';
+
+  const etapa4Blocked = step === 'verify' && !!error;
+  const gravacaoJaComecou = step === 'done' && (!!writeProgress || !!confirmResult);
+  const etapa4Status: ImportStepStatus = gravacaoJaComecou
+    ? 'concluido'
+    : step === 'verify'
+      ? etapa4Blocked
+        ? 'erro'
+        : 'andamento'
+      : step === 'done' && progress === 'Verificando planilha…'
+        ? 'andamento'
+        : 'aguardando';
+
+  const etapa5Status: ImportStepStatus = confirmResult
+    ? 'concluido'
+    : step === 'done' && (!!writeProgress || (!!progress && /gravando|substituindo/i.test(progress)))
+      ? 'andamento'
+      : 'aguardando';
+
+  const statuses = [etapa1Status, etapa2Status, etapa3Status, etapa4Status, etapa5Status];
+  let pct = (statuses.filter((s) => s === 'concluido').length / statuses.length) * 100;
+  if (etapa1Status === 'andamento' && readPct !== null) pct += (readPct / 100) * (100 / statuses.length);
+  if (etapa5Status === 'andamento' && writeProgress && writeProgress.total > 0) {
+    pct += (writeProgress.inserted / writeProgress.total) * (100 / statuses.length);
+  }
+  pct = Math.min(100, pct);
+
+  const etapas: ImportStepInfo[] = [
+    {
+      key: 'arquivo',
+      numero: '01',
+      titulo: 'Arquivo recebido',
+      descricao: 'Seleção e verificação de identidade do arquivo (.xlsx, .xls, .xlsm, .csv, .ods).',
+      status: etapa1Status,
+      resultado: fileName || undefined,
+      mensagem: step === 'pick' && error ? error : undefined,
+    },
+    {
+      key: 'identificacao',
+      numero: '02',
+      titulo: 'Identificação de abas e colunas',
+      descricao: 'Varredura das 15 primeiras linhas de cada aba e mapeamento automático das colunas.',
+      status: etapa2Status,
+      resultado: sheets.length > 0 ? `${sheets.length} aba(s)` : undefined,
+    },
+    {
+      key: 'leitura',
+      numero: '03',
+      titulo: 'Leitura e classificação dos dados',
+      descricao: 'Reclassificação de cada produto e conferência do nível de confiança.',
+      status: etapa3Status,
+      resultado: summary ? `${summary.total} linha(s)` : undefined,
+    },
+    {
+      key: 'validacao',
+      numero: '04',
+      titulo: 'Validação e conferência',
+      descricao: 'Comparação com os dados já registrados nas mesmas datas e revisão antes de gravar.',
+      status: etapa4Status,
+      mensagem: etapa4Status === 'erro' ? (error ?? undefined) : undefined,
+    },
+    {
+      key: 'gravacao',
+      numero: '05',
+      titulo: 'Gravação no sistema',
+      descricao: 'Gravação em lotes no banco e atualização do Dashboard, Ranking e Categorias.',
+      status: etapa5Status,
+      resultado: writeProgress
+        ? `${writeProgress.inserted}/${writeProgress.total}`
+        : confirmResult
+          ? `${confirmResult.count} gravado(s)`
+          : undefined,
+    },
+  ];
+
+  return { etapas, pct };
 }
 
 function VerifyStep({

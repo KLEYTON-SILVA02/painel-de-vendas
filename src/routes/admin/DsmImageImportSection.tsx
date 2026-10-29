@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { DsmReviewTable } from '../../components/dsm/DsmReviewTable';
+import { CentralImportacaoPanel, type ImportStepInfo, type ImportStepStatus } from '../../components/import/CentralImportacaoPanel';
 import { Spinner } from '../../components/Spinner';
 import { detectClientesColumnValues, findClientesColumnCropRange, matchColumnLinesToRows } from '../../lib/business/dsmImageColumns';
 import {
@@ -337,8 +338,93 @@ export function DsmImageImportSection({ onStepChange }: { onStepChange?: (step: 
         ? `✓ Segunda análise concluída — ${clientesColumnMatches.size} valor(es) de "Número de Clientes" confirmado(s) pela coluna.`
         : '✓ Segunda análise concluída — não foi possível localizar a coluna "Número de Clientes" nesta imagem; revise o texto manualmente.';
 
+  // Mesmo princípio das outras três telas de importação (ver o comentário de
+  // buildVendasEtapas em ImportarPage.tsx): só traduz o estado que já existe
+  // acima — nenhuma das três análises de OCR, nem o reconhecimento de
+  // colaborador, é alterado aqui. Caminho "colar texto direto" (sem nunca
+  // selecionar imagem) pula a etapa 2 (nada pra identificar numa imagem que
+  // não existe) direto pra "concluído", igual ao resto do fluxo já trata
+  // esse caso (ver waitingSecondAnalysis acima).
+  const hasInput = !!imageBlob || text.trim().length > 0;
+  const etapa1Status: ImportStepStatus = step !== 'input' ? 'concluido' : hasInput ? 'concluido' : error ? 'erro' : 'aguardando';
+  const etapa2Status: ImportStepStatus =
+    step !== 'input'
+      ? 'concluido'
+      : !imageBlob
+        ? hasInput
+          ? 'concluido'
+          : 'aguardando'
+        : scanning
+          ? 'andamento'
+          : clientesColumnMatches !== null
+            ? 'concluido'
+            : 'aguardando';
+  const etapa3Status: ImportStepStatus = step !== 'input' ? 'concluido' : scanning ? 'andamento' : 'aguardando';
+  const etapa4Status: ImportStepStatus =
+    step === 'done'
+      ? 'concluido'
+      : step === 'review'
+        ? error
+          ? 'erro'
+          : saving
+            ? 'concluido'
+            : completenessWarning
+              ? 'atencao'
+              : 'andamento'
+        : 'aguardando';
+  const etapa5Status: ImportStepStatus = step === 'done' ? 'concluido' : step === 'review' && saving ? 'andamento' : 'aguardando';
+  const dsmImagemEtapas: ImportStepInfo[] = [
+    {
+      key: 'arquivo',
+      numero: '01',
+      titulo: 'Arquivo recebido',
+      descricao: 'Imagem colada/selecionada, ou texto informado manualmente.',
+      status: etapa1Status,
+      mensagem: step === 'input' && error ? error : undefined,
+    },
+    {
+      key: 'identificacao',
+      numero: '02',
+      titulo: 'Identificação da coluna de clientes',
+      descricao: 'Localização do cabeçalho "Número de Clientes" pela posição na imagem (2ª e 3ª análises).',
+      status: etapa2Status,
+      resultado: clientesColumnMatches && clientesColumnMatches.size > 0 ? `${clientesColumnMatches.size} valor(es) pela coluna` : undefined,
+    },
+    {
+      key: 'leitura',
+      numero: '03',
+      titulo: 'Leitura e classificação dos dados',
+      descricao: 'Reconhecimento de cada colaborador por matrícula, nome (inclusive aproximado) ou coluna.',
+      status: etapa3Status,
+      resultado: step !== 'input' ? `${rows.length} linha(s)` : matches.length > 0 ? `${matches.length} reconhecido(s)` : undefined,
+    },
+    {
+      key: 'validacao',
+      numero: '04',
+      titulo: 'Validação e conferência',
+      descricao: 'Conferência de data e quantidade de cada colaborador antes de salvar.',
+      status: etapa4Status,
+      mensagem: etapa4Status === 'erro' ? (error ?? undefined) : etapa4Status === 'atencao' ? (completenessWarning ?? undefined) : undefined,
+    },
+    {
+      key: 'gravacao',
+      numero: '05',
+      titulo: 'Gravação no sistema',
+      descricao: 'Soma ao total de DSM já registrado para cada colaborador — nunca substitui.',
+      status: etapa5Status,
+      resultado: result ? `${result.count} gravado(s)` : undefined,
+    },
+  ];
+  const dsmImagemConcluded = [etapa1Status, etapa2Status, etapa3Status, etapa4Status, etapa5Status].filter((s) => s === 'concluido').length;
+
   return (
     <div className="flex flex-col gap-3">
+      <CentralImportacaoPanel
+        titulo="CENTRAL DE IMPORTAÇÃO — DSM (IMAGEM)"
+        subtitulo="Análise, validação e gravação segura do DSM a partir de uma foto."
+        etapas={dsmImagemEtapas}
+        progressoPct={(dsmImagemConcluded / dsmImagemEtapas.length) * 100}
+      />
       {step === 'input' && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <h3 className="font-semibold text-sm mb-1">Importar imagem de DSM</h3>
