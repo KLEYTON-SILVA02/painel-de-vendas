@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { DsmReviewTable } from '../../components/dsm/DsmReviewTable';
-import { CentralImportacaoPanel, type ImportStepInfo, type ImportStepStatus } from '../../components/import/CentralImportacaoPanel';
+import type { CentralImportacaoData, ImportStepInfo, ImportStepStatus } from '../../components/import/CentralImportacaoPanel';
 import { Spinner } from '../../components/Spinner';
 import { detectClientesColumnValues, findClientesColumnCropRange, matchColumnLinesToRows } from '../../lib/business/dsmImageColumns';
 import {
@@ -77,8 +77,19 @@ type Step = 'input' | 'review' | 'done';
  * cru, não do já filtrado, pra notar colaborador que ficou de fora até da
  * reconstrução).
  * `onStepChange` avisa o ImportarPage da troca de etapa — a barra "Importar
- * planilha de DSM" só aparece na etapa 'input' (ver ImportarPage.tsx). */
-export function DsmImageImportSection({ onStepChange }: { onStepChange?: (step: Step) => void }) {
+ * planilha de DSM" só aparece na etapa 'input' (ver ImportarPage.tsx).
+ * `onCentralChange` reporta o estado atual (etapas + % de progresso) pro
+ * ImportarPage, que decide ali fora qual dos dois painéis de DSM (este ou o
+ * de DsmImportSection) mostrar — este componente não desenha mais seu
+ * próprio `CentralImportacaoPanel` (pedido explícito do usuário, 2026-10-29:
+ * só pode haver UM velocímetro visível por vez na tela de DSM). */
+export function DsmImageImportSection({
+  onStepChange,
+  onCentralChange,
+}: {
+  onStepChange?: (step: Step) => void;
+  onCentralChange?: (central: CentralImportacaoData) => void;
+}) {
   const { profile } = useAuth();
   const { data: collaborators } = useCollaborators();
   const { data: existingRecords, refetch: refetchDsmRecords } = useDsmRecords();
@@ -416,15 +427,23 @@ export function DsmImageImportSection({ onStepChange }: { onStepChange?: (step: 
     },
   ];
   const dsmImagemConcluded = [etapa1Status, etapa2Status, etapa3Status, etapa4Status, etapa5Status].filter((s) => s === 'concluido').length;
+  const dsmImagemPct = (dsmImagemConcluded / dsmImagemEtapas.length) * 100;
+
+  // Dependências são os estados reais (não o array `dsmImagemEtapas` em si,
+  // que é um literal novo a cada render) — evita disparar o efeito (e o
+  // onCentralChange pro pai) em todo render sem uma mudança de verdade.
+  useEffect(() => {
+    onCentralChange?.({
+      titulo: 'CENTRAL DE IMPORTAÇÃO — DSM (IMAGEM)',
+      subtitulo: 'Análise, validação e gravação segura do DSM a partir de uma foto.',
+      etapas: dsmImagemEtapas,
+      pct: dsmImagemPct,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, imageBlob, text, error, scanning, clientesColumnMatches, matches, rows, completenessWarning, saving, result]);
 
   return (
     <div className="flex flex-col gap-3">
-      <CentralImportacaoPanel
-        titulo="CENTRAL DE IMPORTAÇÃO — DSM (IMAGEM)"
-        subtitulo="Análise, validação e gravação segura do DSM a partir de uma foto."
-        etapas={dsmImagemEtapas}
-        progressoPct={(dsmImagemConcluded / dsmImagemEtapas.length) * 100}
-      />
       {step === 'input' && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <h3 className="font-semibold text-sm mb-1">Importar imagem de DSM</h3>

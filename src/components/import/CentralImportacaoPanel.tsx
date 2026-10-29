@@ -30,6 +30,21 @@ export interface ImportStepInfo {
   mensagem?: string;
 }
 
+/** Pacote com tudo que `CentralImportacaoPanel` precisa pra se desenhar —
+ * usado por telas que têm mais de um "sub-fluxo" de entrada (ex.: DSM
+ * planilha vs. DSM imagem, dentro do mesmo modo "Inserir DSM") pra reportar
+ * seu estado pro componente pai, que decide ali fora qual delas mostrar.
+ * Pedido explícito do usuário, 2026-10-29: a tela de DSM estava mostrando
+ * DOIS velocímetros (um de cada sub-fluxo) ao mesmo tempo — só pode haver
+ * UM painel visível por vez, mesmo quando a tela tem mais de uma forma de
+ * lançar os dados. */
+export interface CentralImportacaoData {
+  titulo: string;
+  subtitulo: string;
+  etapas: ImportStepInfo[];
+  pct: number;
+}
+
 const STATUS_STYLE: Record<ImportStepStatus, { dot: string; text: string; border: string }> = {
   aguardando: { dot: 'bg-slate-600', text: 'text-slate-500', border: 'border-slate-800' },
   andamento: { dot: 'bg-cyan-400 animate-pulse motion-reduce:animate-none', text: 'text-cyan-300', border: 'border-cyan-500/40' },
