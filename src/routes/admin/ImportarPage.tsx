@@ -4,12 +4,11 @@ import { Link } from 'react-router-dom';
 import { PageLoading } from '../../components/PageLoading';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../auth/AuthContext';
-import { ClientServiceImportHistoryPanel, ClientServiceImportSection } from './ClientServiceImportSection';
+import { ClientServiceImportHistoryPanel, ClientServiceImportSection, type ClientServiceImportSectionHandle } from './ClientServiceImportSection';
 import { DsmImageImportSection } from './DsmImageImportSection';
-import { DsmImportSection } from './DsmImportSection';
+import { DsmImportSection, type DsmImportSectionHandle } from './DsmImportSection';
 import { DsmImportHistoryPanel } from '../../components/dsm/DsmImportHistoryPanel';
 import { CentralImportacaoPanel, type CentralImportacaoData, type ImportStepInfo, type ImportStepStatus } from '../../components/import/CentralImportacaoPanel';
-import { CircularGauge } from '../../components/CircularGauge';
 import { HelpTip } from '../../components/HelpTip';
 import { Spinner } from '../../components/Spinner';
 import { classifyProductTier } from '../../lib/business/classification';
@@ -122,18 +121,20 @@ export function ImportarPage() {
   // mostrar as duas seções empilhadas o tempo todo.
   const [mode, setMode] = useState<'vendas' | 'dsm' | 'uvc'>('vendas');
   const [step, setStep] = useState<Step>('pick');
-  // Espelha o step interno de DsmImageImportSection — só pra decidir se a
-  // barra "Importar planilha de DSM" aparece (só na 1ª etapa, 'input';
-  // pedido do usuário, 2026-10-24: some depois que o OCR já processou algo).
-  const [dsmImageStep, setDsmImageStep] = useState<'input' | 'review' | 'done'>('input');
-  // Os dois sub-fluxos de DSM (planilha e imagem) reportam seu próprio
-  // painel (etapas + %) aqui pro pai em vez de desenhar cada um o seu — só
-  // um CentralImportacaoPanel fica visível por vez na tela de DSM (pedido
-  // explícito do usuário, 2026-10-29: "está apresentando dois tipos de
-  // velocímetro... precisa ser mantido apenas um"). Ver dsmCentral abaixo
-  // pra qual dos dois é escolhido.
+  // DSM tem dois sub-fluxos de lançamento (planilha e imagem/OCR) — pedido
+  // explícito do usuário, 2026-10-29: a tela é 3 colunas (velocímetro |
+  // etapas | 3ª coluna variável), e a 3ª coluna alterna entre os dois
+  // conforme esse toggle manual (nunca os dois ativos ao mesmo tempo — era
+  // o bug dos "dois velocímetros" relatado antes). Os dois componentes
+  // ficam sempre montados (só escondidos via CSS enquanto não selecionados)
+  // pra não perder o que o ADM já tinha preenchido/escaneado ao trocar de
+  // aba e voltar.
+  const [dsmSubMode, setDsmSubMode] = useState<'planilha' | 'imagem'>('planilha');
   const [dsmSheetCentral, setDsmSheetCentral] = useState<CentralImportacaoData | null>(null);
   const [dsmImageCentral, setDsmImageCentral] = useState<CentralImportacaoData | null>(null);
+  const dsmSheetRef = useRef<DsmImportSectionHandle>(null);
+  const uvcRef = useRef<ClientServiceImportSectionHandle>(null);
+  const [uvcCentral, setUvcCentral] = useState<CentralImportacaoData | null>(null);
   const [sheets, setSheets] = useState<ParsedSheet[]>([]);
   const [fileName, setFileName] = useState('');
   const [fileHash, setFileHash] = useState('');
@@ -553,14 +554,14 @@ export function ImportarPage() {
 
   const vendasCentral = buildVendasEtapas({ step, fileName, readPct, progress, error, sheets, summary, writeProgress, confirmResult });
 
-  // Qual dos dois painéis de DSM mostrar: o de imagem assume que o ADM está
-  // usando o caminho dela assim que ela sai do estado parado (qualquer
-  // etapa não mais "aguardando" — imagem colada, escaneando, etc.) ou já
-  // avançou de etapa; parado (nada colado/selecionado ainda), mostra o de
-  // planilha por padrão, já que é o primeiro card da tela. Nunca os dois ao
-  // mesmo tempo (pedido explícito do usuário, 2026-10-29).
-  const dsmImageActive = !!dsmImageCentral && (dsmImageStep !== 'input' || dsmImageCentral.etapas.some((e) => e.status !== 'aguardando'));
-  const dsmCentral = dsmImageActive ? dsmImageCentral : (dsmSheetCentral ?? dsmImageCentral);
+  // Qual dos dois painéis de DSM mostrar: decidido pelo toggle manual
+  // dsmSubMode (ver seu comentário acima) — nunca os dois ao mesmo tempo.
+  const dsmCentral = dsmSubMode === 'imagem' ? dsmImageCentral : dsmSheetCentral;
+  // Só mostra o botão externo "Importar planilha de DSM" (embaixo das 3
+  // colunas) enquanto a planilha ainda não foi selecionada/processada —
+  // uma vez que a etapa 1 já concluiu, o próprio card de conferência (3ª
+  // coluna) já assume o fluxo.
+  const dsmSheetNaEtapaInicial = !dsmSheetCentral || dsmSheetCentral.etapas[0]?.status !== 'concluido';
 
   return (
     <div className="flex flex-col gap-6">
@@ -595,10 +596,41 @@ export function ImportarPage() {
         etapas={vendasCentral.etapas}
         progressoPct={vendasCentral.pct}
         terceiraColuna={
-          step === 'map'
+          step === 'pick'
             ? {
-                titulo: 'O que a 2ª verificação deve analisar antes de gravar:',
+                semMoldura: true,
                 children: (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+                    <div className="flex items-start justify-between gap-3 mb-1">
+                      <h3 className="font-semibold text-sm flex items-center gap-1.5">
+                        Importar planilha de vendas
+                        <HelpTip
+                          helpKey="importar.botao_importar"
+                          fallback="Envie a planilha de vendas do dia (.xlsx, .xls, .csv ou .ods) para atualizar o sistema."
+                        />
+                      </h3>
+                      <Link
+                        to="/admin/configuracoes"
+                        className="shrink-0 rounded-lg border border-slate-700 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-slate-800"
+                        title="Editar quais nomes de coluna o sistema reconhece na planilha"
+                      >
+                        ⚙️ Configurar colunas
+                      </Link>
+                    </div>
+                    <p className="text-xs text-slate-500 mb-3">
+                      Formatos aceitos: .xlsx, .xls, .xlsm, .csv, .ods — até 50MB. O sistema varre as 15 primeiras
+                      linhas de cada aba procurando o cabeçalho (data, matrícula, vendedor, produto, qtd, valor) e
+                      mapeia as colunas automaticamente — se não encontrar, usa o layout padrão. Você pode revisar e
+                      ajustar antes de confirmar. Todas as abas do arquivo são processadas.
+                    </p>
+                    <ExpectedColumnsBar />
+                  </div>
+                ),
+              }
+            : step === 'map'
+              ? {
+                  titulo: 'O que a 2ª verificação deve analisar antes de gravar:',
+                  children: (
                   <div className="flex flex-col gap-2">
                     <label className="flex items-center gap-2 text-xs text-slate-300">
                       <input
@@ -630,33 +662,13 @@ export function ImportarPage() {
             : undefined
         }
       />
+      {/* Pedido explícito do usuário, 2026-10-29: o botão de importar fica
+          embaixo das 3 colunas (não dentro de nenhuma delas) — a descrição
+          e o "Quais colunas o sistema procura?" continuam na 3ª coluna
+          (ver terceiraColuna acima), só o botão de ação + progresso de
+          leitura ficam aqui, abaixo, ocupando a largura toda da página. */}
       {step === 'pick' && (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-          <div className="flex items-start justify-between gap-3 mb-1">
-            <h3 className="font-semibold text-sm flex items-center gap-1.5">
-              Importar planilha de vendas
-              <HelpTip
-                helpKey="importar.botao_importar"
-                fallback="Envie a planilha de vendas do dia (.xlsx, .xls, .csv ou .ods) para atualizar o sistema."
-              />
-            </h3>
-            <Link
-              to="/admin/configuracoes"
-              className="shrink-0 rounded-lg border border-slate-700 px-2.5 py-1 text-[11px] text-slate-300 hover:bg-slate-800"
-              title="Editar quais nomes de coluna o sistema reconhece na planilha"
-            >
-              ⚙️ Configurar colunas
-            </Link>
-          </div>
-          <p className="text-xs text-slate-500 mb-3">
-            Formatos aceitos: .xlsx, .xls, .xlsm, .csv, .ods — até 50MB. O sistema varre as 15 primeiras linhas de
-            cada aba procurando o cabeçalho (data, matrícula, vendedor, produto, qtd, valor) e mapeia as colunas
-            automaticamente — se não encontrar, usa o layout padrão. Você pode revisar e ajustar antes de confirmar.
-            Todas as abas do arquivo são processadas.
-          </p>
-
-          <ExpectedColumnsBar />
-
+        <div className="flex flex-col items-center gap-2">
           <input
             ref={fileInputRef}
             type="file"
@@ -673,7 +685,6 @@ export function ImportarPage() {
               justifyContent: 'center',
               gap: 10,
               width: '100%',
-              maxWidth: 420,
               padding: '14px 20px',
               borderRadius: 14,
               border: 'none',
@@ -692,7 +703,7 @@ export function ImportarPage() {
           </button>
 
           {readPct !== null && (
-            <div style={{ marginTop: 14 }}>
+            <div style={{ width: '100%' }}>
               <div style={{ width: '100%', height: 14, borderRadius: 8, background: '#080818', border: '1px solid #212948', overflow: 'hidden' }}>
                 <div
                   style={{
@@ -709,7 +720,7 @@ export function ImportarPage() {
                   }}
                 />
               </div>
-              {progress && <p className="text-xs text-slate-500 mt-1">{progress}</p>}
+              {progress && <p className="text-xs text-slate-500 mt-1 text-center">{progress}</p>}
             </div>
           )}
           {readPct === null && progress && <p className="text-xs text-cyan-400 mt-2">{progress}</p>}
@@ -797,28 +808,18 @@ export function ImportarPage() {
 
       {step === 'done' && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+          {/* Pedido explícito do usuário, 2026-10-29: durante a gravação,
+              nada de um 2º velocímetro aqui — o progresso de gravação já
+              aparece no velocímetro da 1ª coluna do CentralImportacaoPanel
+              (buildVendasEtapas soma a fração de writeProgress ao %
+              quando a etapa "Gravação no sistema" está em andamento). Aqui
+              embaixo só o texto, sempre com o mesmo spinner das outras
+              fases de progresso. */}
           {progress && (
-            <>
-              {writeProgress ? (
-                <div className="flex flex-col items-center gap-2 py-2">
-                  <div style={{ width: 96, height: 96 }}>
-                    <CircularGauge
-                      pct={writeProgress.total > 0 ? Math.round((writeProgress.inserted / writeProgress.total) * 100) : 0}
-                      color={NEON_CYAN}
-                      trackColor="#212948"
-                      strokeWidth={9}
-                      label={`${writeProgress.total > 0 ? Math.round((writeProgress.inserted / writeProgress.total) * 100) : 0}%`}
-                    />
-                  </div>
-                  <p className="text-sm text-cyan-400">{progress}</p>
-                </div>
-              ) : (
-                <p className="text-sm text-cyan-400 flex items-center gap-2">
-                  <Spinner size={16} color={NEON_CYAN} />
-                  {progress}
-                </p>
-              )}
-            </>
+            <p className="text-sm text-cyan-400 flex items-center gap-2">
+              <Spinner size={16} color={NEON_CYAN} />
+              {progress}
+            </p>
           )}
           {confirmResult && (
             <>
@@ -889,10 +890,66 @@ export function ImportarPage() {
     {mode === 'dsm' && (
     <div className="flex flex-col gap-4">
     <div className="flex flex-col lg:flex-row gap-4 items-start">
-      <div className="flex flex-col gap-4 flex-1 min-w-0 w-full">
-        {dsmCentral && <CentralImportacaoPanel titulo={dsmCentral.titulo} subtitulo={dsmCentral.subtitulo} etapas={dsmCentral.etapas} progressoPct={dsmCentral.pct} />}
-        {dsmImageStep === 'input' && <DsmImportSection onCentralChange={setDsmSheetCentral} />}
-        <DsmImageImportSection onStepChange={setDsmImageStep} onCentralChange={setDsmImageCentral} />
+      <div className="flex flex-col gap-3 flex-1 min-w-0 w-full">
+        <CentralImportacaoPanel
+          titulo={dsmCentral?.titulo ?? 'CENTRAL DE IMPORTAÇÃO — DSM'}
+          subtitulo={dsmCentral?.subtitulo ?? 'Análise, validação e gravação segura do DSM.'}
+          etapas={dsmCentral?.etapas ?? []}
+          progressoPct={dsmCentral?.pct ?? 0}
+          terceiraColuna={{
+            semMoldura: true,
+            children: (
+              <>
+                {/* Pedido explícito do usuário, 2026-10-29: a tela de DSM é
+                    3 colunas, com a 3ª variável entre "Importar imagem" e
+                    "Importar planilha de DSM" — nunca as duas juntas. Os
+                    dois sub-fluxos continuam montados (só escondidos) pra
+                    não perder o que já foi preenchido/escaneado ao trocar
+                    de aba e voltar. */}
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setDsmSubMode('planilha')}
+                    className={`w-full rounded-lg px-3 py-1.5 text-xs font-medium ${dsmSubMode === 'planilha' ? 'bg-cyan-500 text-slate-950' : 'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}
+                  >
+                    📄 Importar planilha de DSM
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDsmSubMode('imagem')}
+                    className={`w-full rounded-lg px-3 py-1.5 text-xs font-medium ${dsmSubMode === 'imagem' ? 'bg-cyan-500 text-slate-950' : 'border border-slate-700 text-slate-300 hover:bg-slate-800'}`}
+                  >
+                    🖼️ Importar imagem
+                  </button>
+                </div>
+                <div className={dsmSubMode === 'planilha' ? undefined : 'hidden'}>
+                  <DsmImportSection ref={dsmSheetRef} onCentralChange={setDsmSheetCentral} />
+                </div>
+                <div className={dsmSubMode === 'imagem' ? undefined : 'hidden'}>
+                  <DsmImageImportSection onCentralChange={setDsmImageCentral} />
+                </div>
+              </>
+            ),
+          }}
+        />
+        {/* Pedido explícito do usuário, 2026-10-29: "o primeiro botão
+            inicial de importação... deverá ficar... embaixo das três
+            colunas" — só enquanto a planilha de DSM ainda não foi
+            selecionada/processada (depois disso, a própria 3ª coluna já
+            assume: conferência, salvar, etc.). O sub-fluxo de imagem não
+            tem um "primeiro botão" único — a área de colar/selecionar já É
+            a interação principal — então continua inteira na 3ª coluna. */}
+        {dsmSubMode === 'planilha' && dsmSheetNaEtapaInicial && (
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={() => dsmSheetRef.current?.abrirSeletor()}
+              className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800"
+            >
+              Importar planilha de DSM
+            </button>
+          </div>
+        )}
       </div>
       <DsmImportHistoryPanel imports={pastDsmImports ?? []} />
     </div>
@@ -901,8 +958,27 @@ export function ImportarPage() {
 
     {mode === 'uvc' && (
     <div className="flex flex-col lg:flex-row gap-4 items-start">
-      <div className="flex flex-col gap-4 flex-1 min-w-0 w-full">
-        <ClientServiceImportSection />
+      <div className="flex flex-col gap-3 flex-1 min-w-0 w-full">
+        <CentralImportacaoPanel
+          titulo={uvcCentral?.titulo ?? 'CENTRAL DE IMPORTAÇÃO — UVC'}
+          subtitulo={uvcCentral?.subtitulo ?? 'Análise, validação e gravação segura de Vendas por Clientes.'}
+          etapas={uvcCentral?.etapas ?? []}
+          progressoPct={uvcCentral?.pct ?? 0}
+          terceiraColuna={{ semMoldura: true, children: <ClientServiceImportSection ref={uvcRef} onCentralChange={setUvcCentral} /> }}
+        />
+        {/* Mesmo pedido do botão embaixo das 3 colunas, aplicado aqui —
+            some assim que a planilha já foi selecionada/processada. */}
+        {(!uvcCentral || uvcCentral.etapas[0]?.status !== 'concluido') && (
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={() => uvcRef.current?.abrirSeletor()}
+              className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800"
+            >
+              Importar planilha de Vendas por Clientes
+            </button>
+          </div>
+        )}
       </div>
       <ClientServiceImportHistoryPanel imports={pastClientServiceImports ?? []} />
     </div>

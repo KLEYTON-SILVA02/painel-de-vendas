@@ -88,12 +88,17 @@ export function CentralImportacaoPanel({
   etapas: ImportStepInfo[];
   progressoPct: number;
   progressoLabel?: string;
-  /** 3ª coluna opcional (ex.: "funções de relatórios" — pedido explícito do
-   * usuário, 2026-10-29: "serão 3 colunas... a terceira terá as funções de
-   * relatórios"). Sem essa prop o painel continua com 2 colunas (velocímetro
-   * | etapas), exatamente como nas outras telas que não têm nada pra
-   * colocar numa 3ª coluna. */
-  terceiraColuna?: { titulo: string; children: ReactNode };
+  /** 3ª coluna opcional — hoje usada pelo conteúdo de verdade de cada etapa
+   * (seletor/área de arquivo, prévia, texto extraído, tabela de conferência,
+   * "funções de relatórios" etc. — pedido explícito do usuário, 2026-10-29:
+   * "serão 3 colunas", com a 3ª "variável" conforme o que a tela estiver
+   * fazendo). Sem essa prop o painel continua com 2 colunas (velocímetro |
+   * etapas). `titulo` é opcional — quando o próprio conteúdo já tem seu
+   * título (ex.: um card de upload com `<h3>` próprio), não precisa de outro
+   * por cima. `semMoldura` evita desenhar a borda/fundo padrão da 3ª coluna
+   * quando o conteúdo já traz a própria (ex.: os cards de step que cada tela
+   * já tinha, reaproveitados aqui dentro em vez de reescritos). */
+  terceiraColuna?: { titulo?: string; children: ReactNode; semMoldura?: boolean };
 }) {
   const temErro = etapas.some((e) => e.status === 'erro');
   const temAtencao = etapas.some((e) => e.status === 'atencao');
@@ -110,15 +115,16 @@ export function CentralImportacaoPanel({
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-      {/* Grid de 2 ou 3 colunas (velocímetro | etapas | [funções de
-          relatórios]) a partir de lg; empilha em 1 coluna abaixo disso —
-          pedido explícito do usuário, 2026-10-29 (2 colunas) e depois
-          (3 colunas, com a 3ª pra "funções de relatórios" quando
-          `terceiraColuna` é passada) — sempre responsivo, "tudo numa única
-          visualização". */}
+      {/* Grid de 2 ou 3 colunas (velocímetro | etapas | [conteúdo da etapa
+          atual]) a partir de lg; empilha em 1 coluna abaixo disso — pedido
+          explícito do usuário, 2026-10-29. A 3ª coluna é a que EXPANDE
+          (1fr) — é ela que carrega o conteúdo de verdade (área de arquivo,
+          prévia, texto, tabela de conferência); velocímetro e etapas têm
+          largura fixa, já que só precisam caber o próprio conteúdo. Sempre
+          responsivo, "tudo numa única visualização". */}
       <div
         className={`grid grid-cols-1 gap-4 lg:gap-6 items-start ${
-          terceiraColuna ? 'lg:grid-cols-[minmax(0,14rem)_1fr_minmax(0,16rem)]' : 'lg:grid-cols-[minmax(0,15rem)_1fr]'
+          terceiraColuna ? 'lg:grid-cols-[minmax(0,13rem)_minmax(0,18rem)_1fr]' : 'lg:grid-cols-[minmax(0,15rem)_1fr]'
         }`}
       >
         <div className="flex flex-row lg:flex-col items-center gap-4 lg:gap-3 lg:text-center lg:sticky lg:top-4">
@@ -158,12 +164,15 @@ export function CentralImportacaoPanel({
           })}
         </ol>
 
-        {terceiraColuna && (
-          <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2.5 min-w-0">
-            <p className="text-xs text-slate-400 mb-2">{terceiraColuna.titulo}</p>
-            {terceiraColuna.children}
-          </div>
-        )}
+        {terceiraColuna &&
+          (terceiraColuna.semMoldura ? (
+            <div className="min-w-0 flex flex-col gap-3">{terceiraColuna.children}</div>
+          ) : (
+            <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2.5 min-w-0">
+              {terceiraColuna.titulo && <p className="text-xs text-slate-400 mb-2">{terceiraColuna.titulo}</p>}
+              {terceiraColuna.children}
+            </div>
+          ))}
       </div>
       <style>{`
         .central-importacao-gauge-glow {
