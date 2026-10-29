@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { CircularGauge } from '../CircularGauge';
 
 /** "Pele" visual compartilhada pelas quatro telas de importação (Importar
@@ -66,12 +66,19 @@ export function CentralImportacaoPanel({
   etapas,
   progressoPct,
   progressoLabel,
+  terceiraColuna,
 }: {
   titulo?: string;
   subtitulo?: string;
   etapas: ImportStepInfo[];
   progressoPct: number;
   progressoLabel?: string;
+  /** 3ª coluna opcional (ex.: "funções de relatórios" — pedido explícito do
+   * usuário, 2026-10-29: "serão 3 colunas... a terceira terá as funções de
+   * relatórios"). Sem essa prop o painel continua com 2 colunas (velocímetro
+   * | etapas), exatamente como nas outras telas que não têm nada pra
+   * colocar numa 3ª coluna. */
+  terceiraColuna?: { titulo: string; children: ReactNode };
 }) {
   const temErro = etapas.some((e) => e.status === 'erro');
   const temAtencao = etapas.some((e) => e.status === 'atencao');
@@ -88,12 +95,17 @@ export function CentralImportacaoPanel({
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-      {/* Grid de 2 colunas (velocímetro | etapas) a partir de lg; empilha em
-          1 coluna abaixo disso — pedido explícito do usuário, 2026-10-29:
-          "o velocímetro... em um lado... as barras de estágios em outro,
-          fazendo em duas colunas", responsivo "onde tudo fique em uma única
+      {/* Grid de 2 ou 3 colunas (velocímetro | etapas | [funções de
+          relatórios]) a partir de lg; empilha em 1 coluna abaixo disso —
+          pedido explícito do usuário, 2026-10-29 (2 colunas) e depois
+          (3 colunas, com a 3ª pra "funções de relatórios" quando
+          `terceiraColuna` é passada) — sempre responsivo, "tudo numa única
           visualização". */}
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,15rem)_1fr] gap-4 lg:gap-6 items-start">
+      <div
+        className={`grid grid-cols-1 gap-4 lg:gap-6 items-start ${
+          terceiraColuna ? 'lg:grid-cols-[minmax(0,14rem)_1fr_minmax(0,16rem)]' : 'lg:grid-cols-[minmax(0,15rem)_1fr]'
+        }`}
+      >
         <div className="flex flex-row lg:flex-col items-center gap-4 lg:gap-3 lg:text-center lg:sticky lg:top-4">
           <div
             className="w-24 h-24 sm:w-32 sm:h-32 lg:w-48 lg:h-48 shrink-0 central-importacao-gauge-glow"
@@ -130,6 +142,13 @@ export function CentralImportacaoPanel({
             );
           })}
         </ol>
+
+        {terceiraColuna && (
+          <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2.5 min-w-0">
+            <p className="text-xs text-slate-400 mb-2">{terceiraColuna.titulo}</p>
+            {terceiraColuna.children}
+          </div>
+        )}
       </div>
       <style>{`
         .central-importacao-gauge-glow {

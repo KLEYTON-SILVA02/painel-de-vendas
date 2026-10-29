@@ -574,7 +574,45 @@ export function ImportarPage() {
     {mode === 'vendas' && (
     <div className="flex flex-col lg:flex-row gap-4 items-start">
       <div className="flex flex-col gap-3 flex-1 min-w-0 w-full">
-      <CentralImportacaoPanel etapas={vendasCentral.etapas} progressoPct={vendasCentral.pct} />
+      <CentralImportacaoPanel
+        etapas={vendasCentral.etapas}
+        progressoPct={vendasCentral.pct}
+        terceiraColuna={
+          step === 'map'
+            ? {
+                titulo: 'O que a 2ª verificação deve analisar antes de gravar:',
+                children: (
+                  <div className="flex flex-col gap-2">
+                    <label className="flex items-center gap-2 text-xs text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={analysisOptions.produtos}
+                        onChange={(e) => setAnalysisOptions((o) => ({ ...o, produtos: e.target.checked }))}
+                      />
+                      Identificação e categorização de produtos (recomendado)
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={analysisOptions.vendedores}
+                        onChange={(e) => setAnalysisOptions((o) => ({ ...o, vendedores: e.target.checked }))}
+                      />
+                      Vendedores encontrados na planilha
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={analysisOptions.listaVendas}
+                        onChange={(e) => setAnalysisOptions((o) => ({ ...o, listaVendas: e.target.checked }))}
+                      />
+                      Pré-visualizar lista de vendas antes de salvar
+                    </label>
+                  </div>
+                ),
+              }
+            : undefined
+        }
+      />
       {step === 'pick' && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <div className="flex items-start justify-between gap-3 mb-1">
@@ -703,36 +741,6 @@ export function ImportarPage() {
               </div>
             </div>
           ))}
-
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-            <p className="text-xs text-slate-400 mb-2">O que a 2ª verificação deve analisar antes de gravar:</p>
-            <div className="flex flex-col gap-2">
-              <label className="flex items-center gap-2 text-xs text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={analysisOptions.produtos}
-                  onChange={(e) => setAnalysisOptions((o) => ({ ...o, produtos: e.target.checked }))}
-                />
-                Identificação e categorização de produtos (recomendado)
-              </label>
-              <label className="flex items-center gap-2 text-xs text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={analysisOptions.vendedores}
-                  onChange={(e) => setAnalysisOptions((o) => ({ ...o, vendedores: e.target.checked }))}
-                />
-                Vendedores encontrados na planilha
-              </label>
-              <label className="flex items-center gap-2 text-xs text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={analysisOptions.listaVendas}
-                  onChange={(e) => setAnalysisOptions((o) => ({ ...o, listaVendas: e.target.checked }))}
-                />
-                Pré-visualizar lista de vendas antes de salvar
-              </label>
-            </div>
-          </div>
 
           <div className="flex gap-2">
             <button onClick={reset} className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300">
