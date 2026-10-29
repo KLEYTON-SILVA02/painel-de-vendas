@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../auth/AuthContext';
 import { DsmReviewTable } from '../../components/dsm/DsmReviewTable';
@@ -33,12 +33,29 @@ type Step = 'pick' | 'review' | 'done';
  * ImportarPage, que decide ali fora qual dos dois painéis de DSM (este ou o
  * de DsmImageImportSection) mostrar — este componente não desenha mais seu
  * próprio `CentralImportacaoPanel` (pedido explícito do usuário, 2026-10-29:
- * só pode haver UM velocímetro visível por vez na tela de DSM). */
-export function DsmImportSection({ onCentralChange }: { onCentralChange?: (central: CentralImportacaoData) => void }) {
+ * só pode haver UM velocímetro visível por vez na tela de DSM).
+ *
+ * `ref.abrirSeletor()` abre o seletor de arquivo — o botão que dispara isso
+ * não é mais desenhado aqui dentro: ImportarPage o desenha como um botão à
+ * parte, embaixo das 3 colunas do painel (pedido explícito do usuário,
+ * 2026-10-29: "o primeiro botão inicial de importação... deverá ficar na
+ * parte de baixo... embaixo das três colunas"). Este componente continua
+ * dono do `<input type="file">` e do parse — só a parte clicável do
+ * primeiro passo saiu daqui. */
+export interface DsmImportSectionHandle {
+  abrirSeletor: () => void;
+}
+
+export const DsmImportSection = forwardRef<DsmImportSectionHandle, { onCentralChange?: (central: CentralImportacaoData) => void }>(function DsmImportSection(
+  { onCentralChange },
+  ref,
+) {
   const { profile } = useAuth();
   const { data: collaborators } = useCollaborators();
   const { data: existingRecords, refetch: refetchDsmRecords } = useDsmRecords();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useImperativeHandle(ref, () => ({ abrirSeletor: () => fileInputRef.current?.click() }), []);
 
   const [step, setStep] = useState<Step>('pick');
   const [fileName, setFileName] = useState('');
@@ -231,13 +248,6 @@ export function DsmImportSection({ onCentralChange }: { onCentralChange?: (centr
               onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
               style={{ display: 'none' }}
             />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800"
-            >
-              Importar planilha de DSM
-            </button>
             {error && <p className="text-xs text-rose-400 mt-2">{error}</p>}
           </div>
         )}
@@ -281,4 +291,4 @@ export function DsmImportSection({ onCentralChange }: { onCentralChange?: (centr
         )}
     </div>
   );
-}
+});

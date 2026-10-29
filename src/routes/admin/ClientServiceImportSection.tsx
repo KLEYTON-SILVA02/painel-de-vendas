@@ -1,8 +1,8 @@
-import { useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../auth/AuthContext';
 import { DsmReviewTable } from '../../components/dsm/DsmReviewTable';
-import { CentralImportacaoPanel, type ImportStepInfo, type ImportStepStatus } from '../../components/import/CentralImportacaoPanel';
+import type { CentralImportacaoData, ImportStepInfo, ImportStepStatus } from '../../components/import/CentralImportacaoPanel';
 import { Spinner } from '../../components/Spinner';
 import { aggregateClientServiceRows, buildClientServiceReviewRows } from '../../lib/business/clientServiceImport';
 import { autoMapColumns, detectHeaderRow } from '../../lib/business/importMapping';
@@ -42,10 +42,25 @@ const CLIENT_SERVICE_FIELD_OVERRIDES = { qtd: ['qtde cliente venda liquida'] };
  * confirmada pelo usuário, nunca a FIXED_COLS.qtd global (que é da
  * planilha de vendas comum, coluna L). */
 const CLIENT_SERVICE_QTD_FALLBACK_COL = 10;
-export function ClientServiceImportSection() {
+
+/** `onCentralChange` reporta o estado atual (etapas + % de progresso) pro
+ * ImportarPage, que desenha o único CentralImportacaoPanel da tela (pedido
+ * explícito do usuário, 2026-10-29: 3 colunas — velocímetro, etapas e esta
+ * tela como 3ª coluna). `ref.abrirSeletor()` abre o seletor de arquivo — o
+ * botão que dispara isso é desenhado pelo ImportarPage, embaixo das 3
+ * colunas (mesmo pedido: "o primeiro botão inicial de importação... deverá
+ * ficar... embaixo das três colunas"). */
+export interface ClientServiceImportSectionHandle {
+  abrirSeletor: () => void;
+}
+
+export const ClientServiceImportSection = forwardRef<ClientServiceImportSectionHandle, { onCentralChange?: (central: CentralImportacaoData) => void }>(
+  function ClientServiceImportSection({ onCentralChange }, ref) {
   const { profile } = useAuth();
   const { data: collaborators } = useCollaborators();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useImperativeHandle(ref, () => ({ abrirSeletor: () => fileInputRef.current?.click() }), []);
 
   const [step, setStep] = useState<Step>('pick');
   const [fileName, setFileName] = useState('');
@@ -203,15 +218,23 @@ export function ClientServiceImportSection() {
     },
   ];
   const uvcConcluded = [etapa1Status, etapa2Status, etapa3Status, etapa4Status, etapa5Status].filter((s) => s === 'concluido').length;
+  const uvcPct = (uvcConcluded / uvcEtapas.length) * 100;
+
+  // Dependências são os estados reais (não o array `uvcEtapas` em si, que é
+  // um literal novo a cada render) — evita disparar o efeito em todo render
+  // sem uma mudança de verdade (mesmo princípio de DsmImportSection.tsx).
+  useEffect(() => {
+    onCentralChange?.({
+      titulo: 'CENTRAL DE IMPORTAÇÃO — UVC',
+      subtitulo: 'Análise, validação e gravação segura de Vendas por Clientes.',
+      etapas: uvcEtapas,
+      pct: uvcPct,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, fileName, error, saving, result, rows]);
 
   return (
     <div className="flex flex-col gap-3">
-      <CentralImportacaoPanel
-        titulo="CENTRAL DE IMPORTAÇÃO — UVC"
-        subtitulo="Análise, validação e gravação segura de Vendas por Clientes."
-        etapas={uvcEtapas}
-        progressoPct={(uvcConcluded / uvcEtapas.length) * 100}
-      />
       {step === 'pick' && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <h3 className="font-semibold text-sm mb-1">Importar planilha de Vendas por Clientes</h3>
@@ -226,13 +249,6 @@ export function ClientServiceImportSection() {
             onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
             style={{ display: 'none' }}
           />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800"
-          >
-            Importar planilha de Vendas por Clientes
-          </button>
           {error && <p className="text-xs text-rose-400 mt-2">{error}</p>}
         </div>
       )}
@@ -275,7 +291,8 @@ export function ClientServiceImportSection() {
       )}
     </div>
   );
-}
+  },
+);
 
 export interface ClientServiceImportHistoryItem {
   id: string;
