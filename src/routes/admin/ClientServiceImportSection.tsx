@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../auth/AuthContext';
 import { DsmReviewTable } from '../../components/dsm/DsmReviewTable';
+import { CentralImportacaoPanel, type ImportStepInfo, type ImportStepStatus } from '../../components/import/CentralImportacaoPanel';
 import { Spinner } from '../../components/Spinner';
 import { aggregateClientServiceRows, buildClientServiceReviewRows } from '../../lib/business/clientServiceImport';
 import { autoMapColumns, detectHeaderRow } from '../../lib/business/importMapping';
@@ -149,8 +150,68 @@ export function ClientServiceImportSection() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
+  // Mesmo princípio de buildVendasEtapas (ImportarPage.tsx) e do painel do
+  // DSM planilha (DsmImportSection.tsx): só traduz o `step`/`error`/`rows`/
+  // `saving`/`result` que já existem acima — sem indicador próprio de
+  // leitura (o parse é rápido o bastante pra não precisar de um hoje).
+  const etapa1Status: ImportStepStatus = step !== 'pick' ? 'concluido' : error ? 'erro' : 'aguardando';
+  const etapa2Status: ImportStepStatus = step === 'review' || step === 'done' ? 'concluido' : 'aguardando';
+  const etapa3Status: ImportStepStatus = step === 'review' || step === 'done' ? 'concluido' : 'aguardando';
+  const etapa4Status: ImportStepStatus =
+    step === 'done' ? 'concluido' : step === 'review' ? (error ? 'erro' : saving ? 'concluido' : 'andamento') : 'aguardando';
+  const etapa5Status: ImportStepStatus = step === 'done' ? 'concluido' : step === 'review' && saving ? 'andamento' : 'aguardando';
+  const uvcEtapas: ImportStepInfo[] = [
+    {
+      key: 'arquivo',
+      numero: '01',
+      titulo: 'Arquivo recebido',
+      descricao: 'Seleção da planilha de Vendas por Clientes (.xlsx, .xls, .xlsm, .csv, .ods).',
+      status: etapa1Status,
+      resultado: fileName || undefined,
+      mensagem: step === 'pick' && error ? error : undefined,
+    },
+    {
+      key: 'identificacao',
+      numero: '02',
+      titulo: 'Identificação de colunas',
+      descricao: 'Detecção do cabeçalho e das colunas de data, matrícula e atendimentos (QTDE Cliente Venda Líquida).',
+      status: etapa2Status,
+    },
+    {
+      key: 'leitura',
+      numero: '03',
+      titulo: 'Leitura e classificação dos dados',
+      descricao: 'Soma dos atendimentos por colaborador e por dia, associados pela matrícula.',
+      status: etapa3Status,
+      resultado: rows.length > 0 ? `${rows.length} linha(s)` : undefined,
+    },
+    {
+      key: 'validacao',
+      numero: '04',
+      titulo: 'Validação e conferência',
+      descricao: 'Conferência de data e atendimentos de cada linha antes de salvar.',
+      status: etapa4Status,
+      mensagem: etapa4Status === 'erro' ? (error ?? undefined) : undefined,
+    },
+    {
+      key: 'gravacao',
+      numero: '05',
+      titulo: 'Gravação no sistema',
+      descricao: 'Substitui o valor já salvo para cada colaborador/dia — nunca soma.',
+      status: etapa5Status,
+      resultado: result ? `${result.count} gravado(s)` : undefined,
+    },
+  ];
+  const uvcConcluded = [etapa1Status, etapa2Status, etapa3Status, etapa4Status, etapa5Status].filter((s) => s === 'concluido').length;
+
   return (
     <div className="flex flex-col gap-3">
+      <CentralImportacaoPanel
+        titulo="CENTRAL DE IMPORTAÇÃO — UVC"
+        subtitulo="Análise, validação e gravação segura de Vendas por Clientes."
+        etapas={uvcEtapas}
+        progressoPct={(uvcConcluded / uvcEtapas.length) * 100}
+      />
       {step === 'pick' && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
           <h3 className="font-semibold text-sm mb-1">Importar planilha de Vendas por Clientes</h3>
