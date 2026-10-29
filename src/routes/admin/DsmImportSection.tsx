@@ -1,8 +1,8 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../auth/AuthContext';
 import { DsmReviewTable } from '../../components/dsm/DsmReviewTable';
-import { CentralImportacaoPanel, type ImportStepInfo, type ImportStepStatus } from '../../components/import/CentralImportacaoPanel';
+import type { CentralImportacaoData, ImportStepInfo, ImportStepStatus } from '../../components/import/CentralImportacaoPanel';
 import { Spinner } from '../../components/Spinner';
 import {
   buildDsmReviewRows,
@@ -27,8 +27,14 @@ type Step = 'pick' | 'review' | 'done';
  * de vendas em ImportarPage. Reaproveita SheetJS (já usado pela importação
  * de vendas) mas com um parser próprio (dsmImport.ts) — o formato real da
  * planilha (colunas mescladas, subtotal por colaborador, total geral no
- * fim) é bem diferente do da planilha de vendas. */
-export function DsmImportSection() {
+ * fim) é bem diferente do da planilha de vendas.
+ *
+ * `onCentralChange` reporta o estado atual (etapas + % de progresso) pro
+ * ImportarPage, que decide ali fora qual dos dois painéis de DSM (este ou o
+ * de DsmImageImportSection) mostrar — este componente não desenha mais seu
+ * próprio `CentralImportacaoPanel` (pedido explícito do usuário, 2026-10-29:
+ * só pode haver UM velocímetro visível por vez na tela de DSM). */
+export function DsmImportSection({ onCentralChange }: { onCentralChange?: (central: CentralImportacaoData) => void }) {
   const { profile } = useAuth();
   const { data: collaborators } = useCollaborators();
   const { data: existingRecords, refetch: refetchDsmRecords } = useDsmRecords();
@@ -199,15 +205,18 @@ export function DsmImportSection() {
     },
   ];
   const dsmConcluded = [etapa1Status, etapa2Status, etapa3Status, etapa4Status, etapa5Status].filter((s) => s === 'concluido').length;
+  const dsmPct = (dsmConcluded / dsmEtapas.length) * 100;
+
+  // Dependências são os estados reais (não o array `dsmEtapas` em si, que é
+  // um literal novo a cada render) — evita disparar o efeito (e o
+  // onCentralChange pro pai) em todo render sem uma mudança de verdade.
+  useEffect(() => {
+    onCentralChange?.({ titulo: 'CENTRAL DE IMPORTAÇÃO — DSM', subtitulo: 'Análise, validação e gravação segura do DSM.', etapas: dsmEtapas, pct: dsmPct });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, fileName, error, saving, result, rows]);
 
   return (
     <div className="flex flex-col gap-3">
-        <CentralImportacaoPanel
-          titulo="CENTRAL DE IMPORTAÇÃO — DSM"
-          subtitulo="Análise, validação e gravação segura do DSM."
-          etapas={dsmEtapas}
-          progressoPct={(dsmConcluded / dsmEtapas.length) * 100}
-        />
         {step === 'pick' && (
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
             <h3 className="font-semibold text-sm mb-1">Importar planilha de DSM</h3>

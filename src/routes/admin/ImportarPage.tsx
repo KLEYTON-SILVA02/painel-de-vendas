@@ -8,7 +8,7 @@ import { ClientServiceImportHistoryPanel, ClientServiceImportSection } from './C
 import { DsmImageImportSection } from './DsmImageImportSection';
 import { DsmImportSection } from './DsmImportSection';
 import { DsmImportHistoryPanel } from '../../components/dsm/DsmImportHistoryPanel';
-import { CentralImportacaoPanel, type ImportStepInfo, type ImportStepStatus } from '../../components/import/CentralImportacaoPanel';
+import { CentralImportacaoPanel, type CentralImportacaoData, type ImportStepInfo, type ImportStepStatus } from '../../components/import/CentralImportacaoPanel';
 import { CircularGauge } from '../../components/CircularGauge';
 import { HelpTip } from '../../components/HelpTip';
 import { Spinner } from '../../components/Spinner';
@@ -126,6 +126,14 @@ export function ImportarPage() {
   // barra "Importar planilha de DSM" aparece (só na 1ª etapa, 'input';
   // pedido do usuário, 2026-10-24: some depois que o OCR já processou algo).
   const [dsmImageStep, setDsmImageStep] = useState<'input' | 'review' | 'done'>('input');
+  // Os dois sub-fluxos de DSM (planilha e imagem) reportam seu próprio
+  // painel (etapas + %) aqui pro pai em vez de desenhar cada um o seu — só
+  // um CentralImportacaoPanel fica visível por vez na tela de DSM (pedido
+  // explícito do usuário, 2026-10-29: "está apresentando dois tipos de
+  // velocímetro... precisa ser mantido apenas um"). Ver dsmCentral abaixo
+  // pra qual dos dois é escolhido.
+  const [dsmSheetCentral, setDsmSheetCentral] = useState<CentralImportacaoData | null>(null);
+  const [dsmImageCentral, setDsmImageCentral] = useState<CentralImportacaoData | null>(null);
   const [sheets, setSheets] = useState<ParsedSheet[]>([]);
   const [fileName, setFileName] = useState('');
   const [fileHash, setFileHash] = useState('');
@@ -545,6 +553,15 @@ export function ImportarPage() {
 
   const vendasCentral = buildVendasEtapas({ step, fileName, readPct, progress, error, sheets, summary, writeProgress, confirmResult });
 
+  // Qual dos dois painéis de DSM mostrar: o de imagem assume que o ADM está
+  // usando o caminho dela assim que ela sai do estado parado (qualquer
+  // etapa não mais "aguardando" — imagem colada, escaneando, etc.) ou já
+  // avançou de etapa; parado (nada colado/selecionado ainda), mostra o de
+  // planilha por padrão, já que é o primeiro card da tela. Nunca os dois ao
+  // mesmo tempo (pedido explícito do usuário, 2026-10-29).
+  const dsmImageActive = !!dsmImageCentral && (dsmImageStep !== 'input' || dsmImageCentral.etapas.some((e) => e.status !== 'aguardando'));
+  const dsmCentral = dsmImageActive ? dsmImageCentral : (dsmSheetCentral ?? dsmImageCentral);
+
   return (
     <div className="flex flex-col gap-6">
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
@@ -873,8 +890,9 @@ export function ImportarPage() {
     <div className="flex flex-col gap-4">
     <div className="flex flex-col lg:flex-row gap-4 items-start">
       <div className="flex flex-col gap-4 flex-1 min-w-0 w-full">
-        {dsmImageStep === 'input' && <DsmImportSection />}
-        <DsmImageImportSection onStepChange={setDsmImageStep} />
+        {dsmCentral && <CentralImportacaoPanel titulo={dsmCentral.titulo} subtitulo={dsmCentral.subtitulo} etapas={dsmCentral.etapas} progressoPct={dsmCentral.pct} />}
+        {dsmImageStep === 'input' && <DsmImportSection onCentralChange={setDsmSheetCentral} />}
+        <DsmImageImportSection onStepChange={setDsmImageStep} onCentralChange={setDsmImageCentral} />
       </div>
       <DsmImportHistoryPanel imports={pastDsmImports ?? []} />
     </div>
