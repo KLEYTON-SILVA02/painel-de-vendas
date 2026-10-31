@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { DsmReviewTable } from '../../components/dsm/DsmReviewTable';
-import type { CentralImportacaoData, ImportStepInfo, ImportStepStatus } from '../../components/import/CentralImportacaoPanel';
+import type { CentralImportacaoData, ImportAcaoBotoes, ImportStepInfo, ImportStepStatus } from '../../components/import/CentralImportacaoPanel';
 import { Spinner } from '../../components/Spinner';
 import { detectClientesColumnValues, findClientesColumnCropRange, matchColumnLinesToRows } from '../../lib/business/dsmImageColumns';
 import {
@@ -82,19 +82,41 @@ type Step = 'input' | 'review' | 'done';
  * ImportarPage, que decide ali fora qual dos dois painéis de DSM (este ou o
  * de DsmImportSection) mostrar — este componente não desenha mais seu
  * próprio `CentralImportacaoPanel` (pedido explícito do usuário, 2026-10-29:
- * só pode haver UM velocímetro visível por vez na tela de DSM). */
-export function DsmImageImportSection({
-  onStepChange,
-  onCentralChange,
-}: {
-  onStepChange?: (step: Step) => void;
-  onCentralChange?: (central: CentralImportacaoData) => void;
-}) {
+ * só pode haver UM velocímetro visível por vez na tela de DSM).
+ *
+ * `ref.voltar()`/`ref.confirmar()` e `onAcaoChange` seguem o mesmo princípio
+ * pros botões das etapas 'review'/'done' — pedido explícito do usuário,
+ * 2026-10-31: "as configurações de botões também devem seguir para as
+ * outras funções de DSM e UVC" (ver `ImportAcaoBotoesBar`). A etapa 'input'
+ * continua sem botão externo — a área de colar/selecionar já É a interação
+ * principal (decisão já tomada nesta sessão: não há um "primeiro botão"
+ * único extraível dela). */
+export interface DsmImageImportSectionHandle {
+  voltar: () => void;
+  confirmar: () => void;
+}
+
+export const DsmImageImportSection = forwardRef<
+  DsmImageImportSectionHandle,
+  {
+    onStepChange?: (step: Step) => void;
+    onCentralChange?: (central: CentralImportacaoData) => void;
+    onAcaoChange?: (acao: ImportAcaoBotoes) => void;
+  }
+>(function DsmImageImportSection({ onStepChange, onCentralChange, onAcaoChange }, ref) {
   const { profile } = useAuth();
   const { data: collaborators } = useCollaborators();
   const { data: existingRecords, refetch: refetchDsmRecords } = useDsmRecords();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pasteAreaRef = useRef<HTMLDivElement>(null);
+
+  // `voltar` serve dois botões diferentes conforme a etapa: na 'review' é
+  // "← Voltar" (só volta pra 'input', mantém imagem/texto já lidos); na
+  // 'done' é o botão de resultado "Importar outra imagem de DSM" (precisa
+  // limpar tudo, daí `reset()` em vez de só trocar de etapa). Sem array de
+  // dependências — mesmo motivo de DsmImportSection.tsx: não pode ficar
+  // presa ao closure do 1º render (aqui inclusive o próprio `step`).
+  useImperativeHandle(ref, () => ({ voltar: () => (step === 'done' ? reset() : setStep('input')), confirmar: handleConfirm }));
 
   const [step, setStep] = useState<Step>('input');
   const [imageBlob, setImageBlob] = useState<Blob | null>(null);
@@ -439,6 +461,18 @@ export function DsmImageImportSection({
       etapas: dsmImagemEtapas,
       pct: dsmImagemPct,
     });
+    onAcaoChange?.(
+      step === 'review'
+        ? {
+            tipo: 'voltarConfirmar',
+            voltarLabel: '← Voltar',
+            confirmarLabel: saving ? 'Gravando…' : `Salvar dados de DSM (${rows.filter((r) => r.collaboratorId && r.dataISO).length})`,
+            confirmando: saving,
+          }
+        : step === 'done' && result
+          ? { tipo: 'resultado', label: 'Importar outra imagem de DSM' }
+          : { tipo: 'nenhuma' },
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, imageBlob, text, error, scanning, clientesColumnMatches, matches, rows, completenessWarning, saving, result]);
 
@@ -619,34 +653,18 @@ export function DsmImageImportSection({
           {completenessWarning && <p className="text-xs text-amber-400 mb-3">⚠️ {completenessWarning}</p>}
           <DsmReviewTable rows={rows} collaboratorsById={collaboratorsById} onChangeRow={updateRow} onRemoveRow={removeRow} />
           {error && <p className="text-xs text-rose-400 mt-3">{error}</p>}
-          <div className="flex gap-2 mt-3">
-            <button onClick={() => setStep('input')} className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300">
-              ← Voltar
-            </button>
-            <button
-              onClick={handleConfirm}
-              disabled={saving}
-              className="rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm disabled:opacity-60 flex items-center gap-2"
-            >
-              {saving && <Spinner size={14} color="#04121a" />}
-              {saving ? 'Gravando…' : `Salvar dados de DSM (${rows.filter((r) => r.collaboratorId && r.dataISO).length})`}
-            </button>
-          </div>
         </div>
       )}
 
       {step === 'done' && result && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-          <p className="text-sm text-green-400 mb-2">
+          <p className="text-sm text-green-400">
             {result.count} registro(s) de DSM importado(s)
             {result.duplicateCount ? ` · ${result.duplicateCount} duplicado(s) ignorado(s)` : ''}
             {result.unregisteredCount ? ` · ${result.unregisteredCount} de colaborador não cadastrado (não incluído)` : ''}
           </p>
-          <button onClick={reset} className="rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm">
-            Importar outra imagem de DSM
-          </button>
         </div>
       )}
     </div>
   );
-}
+});

@@ -45,6 +45,22 @@ export interface CentralImportacaoData {
   pct: number;
 }
 
+/** Descreve quais botões a barra fixa (`ImportActionBar`) deve mostrar AGORA
+ * pra um sub-fluxo de importação (DSM planilha, DSM imagem, UVC) — pedido
+ * explícito do usuário, 2026-10-31: "as configurações de botões também
+ * devem seguir para as outras funções de DSM e UVC", generalizando o mesmo
+ * padrão (barra fixa, botões de largura igual, limitada à área das 3
+ * colunas) já usado em Importar Vendas. Cada sub-componente
+ * (`DsmImportSection`, `DsmImageImportSection`, `ClientServiceImportSection`)
+ * reporta isso via `onAcaoChange` e expõe os métodos correspondentes
+ * (`voltar`/`confirmar`) no próprio ref — `ImportarPage` só decide ONDE
+ * desenhar a `ImportActionBar` (ver `ImportAcaoBotoesBar` em
+ * `ImportActionBar.tsx`), nunca inventa rótulo/estado por conta própria. */
+export type ImportAcaoBotoes =
+  | { tipo: 'nenhuma' }
+  | { tipo: 'voltarConfirmar'; voltarLabel: string; confirmarLabel: string; confirmando?: boolean }
+  | { tipo: 'resultado'; label: string };
+
 const STATUS_STYLE: Record<ImportStepStatus, { dot: string; text: string; border: string }> = {
   aguardando: { dot: 'bg-slate-600', text: 'text-slate-500', border: 'border-slate-800' },
   andamento: { dot: 'bg-cyan-400 animate-pulse motion-reduce:animate-none', text: 'text-cyan-300', border: 'border-cyan-500/40' },

@@ -1,4 +1,5 @@
 import { Children, type ReactNode } from 'react';
+import type { ImportAcaoBotoes } from './CentralImportacaoPanel';
 
 /** Barra de ações fixa no rodapé da tela — pedido explícito do usuário,
  * 2026-10-31: "as barras que mencionei[os botões de Importar/Cancelar/
@@ -65,5 +66,57 @@ export function ImportActionBar({ children }: { children: ReactNode }) {
         }
       `}</style>
     </>
+  );
+}
+
+const NEON_CYAN = '#00f0ff';
+const NEON_PURPLE = '#a82bff';
+
+/** Desenha a `ImportActionBar` certa a partir de um `ImportAcaoBotoes`
+ * reportado por um sub-fluxo de importação (DSM planilha/imagem, UVC) —
+ * pedido explícito do usuário, 2026-10-31: generaliza pra esses sub-fluxos o
+ * mesmo padrão de botões (fixo, largura igual, limitado à área das 3
+ * colunas) já usado em Importar Vendas, sem repetir o JSX em cada tela.
+ * `onVoltar`/`onConfirmar` são os métodos que o próprio sub-componente expõe
+ * no seu ref (`voltar`/`confirmar`) — este componente não decide nenhuma
+ * lógica de negócio, só traduz o `acao` recebido em botões. */
+export function ImportAcaoBotoesBar({
+  acao,
+  onVoltar,
+  onConfirmar,
+}: {
+  acao: ImportAcaoBotoes;
+  onVoltar: () => void;
+  onConfirmar: () => void;
+}) {
+  if (acao.tipo === 'nenhuma') return null;
+  if (acao.tipo === 'resultado') {
+    return (
+      <ImportActionBar>
+        <button onClick={onVoltar} className="rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm">
+          {acao.label}
+        </button>
+      </ImportActionBar>
+    );
+  }
+  return (
+    <ImportActionBar>
+      <button onClick={onVoltar} className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300">
+        {acao.voltarLabel}
+      </button>
+      <button
+        onClick={onConfirmar}
+        disabled={acao.confirmando}
+        className="rounded-lg font-bold px-4 py-2 text-sm disabled:opacity-60 flex items-center justify-center gap-2"
+        style={{
+          background: `linear-gradient(90deg, ${NEON_CYAN}, ${NEON_PURPLE})`,
+          color: '#04121a',
+          textTransform: 'uppercase',
+          letterSpacing: '.03em',
+        }}
+      >
+        {acao.confirmarLabel}
+      </button>
+    </ImportActionBar>
   );
 }
