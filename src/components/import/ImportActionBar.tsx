@@ -14,9 +14,18 @@ import { Children, type ReactNode } from 'react';
  * baixo das três colunas, indo de um lado ao outro do espaço da página" —
  * cada botão filho vira uma célula flex de largura igual (`flex-1`) que
  * preenche a largura toda da barra; com 1 filho isso já o estica de ponta a
- * ponta sozinho, sem precisar de um caso especial. Puramente posicional —
- * não contém nenhuma lógica, só embrulha e redimensiona os botões que cada
- * tela já desenha. */
+ * ponta sozinho, sem precisar de um caso especial.
+ *
+ * Pedido explícito do usuário, 2026-10-31 (nova rodada): a barra "não
+ * precisa ficar esticada até onde é exibido a lista de planilhas já
+ * importadas" — a partir de `lg` (quando o painel de histórico deixa de
+ * empilhar embaixo e passa a ficar do lado, `lg:w-80` + `gap-4` no
+ * container das 3 colunas em ImportarPage.tsx/DsmImportHistoryPanel/
+ * ClientServiceImportSection), a barra para antes dele em vez de continuar
+ * até a borda direita da tela. Abaixo de `lg` o histórico empilha embaixo
+ * (sem concorrer horizontalmente), então a barra volta a ir de ponta a
+ * ponta. Puramente posicional — não contém nenhuma lógica, só embrulha e
+ * redimensiona os botões que cada tela já desenha. */
 export function ImportActionBar({ children }: { children: ReactNode }) {
   const items = Children.toArray(children).filter(Boolean);
   return (
@@ -50,6 +59,9 @@ export function ImportActionBar({ children }: { children: ReactNode }) {
         @media (min-width: 641px) {
           .import-action-bar { left: var(--sb-w, 220px); transition: left .22s ease; }
           .app-shell.is-collapsed .import-action-bar { left: var(--sb-w-collapsed, 68px); }
+        }
+        @media (min-width: 1024px) {
+          .import-action-bar { right: calc(320px + 1rem); }
         }
       `}</style>
     </>
