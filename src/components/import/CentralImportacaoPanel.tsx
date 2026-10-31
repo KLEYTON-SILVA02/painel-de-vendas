@@ -188,22 +188,24 @@ export function CentralImportacaoPanel({
   // que já vem de fora (ver comentário do componente acima: zero progresso
   // inventado). drop-shadow em vez de box-shadow porque o CircularGauge é
   // um <svg> com fundo transparente — box-shadow desenharia um quadrado ao
-  // redor do SVG em vez de contornar o anel.
+  // redor do SVG em vez de contornar o anel. Intensidade reduzida a pedido
+  // explícito do usuário, 2026-10-31 ("diminua o neon que fica atrás do
+  // velocímetro") — mesma proporcionalidade, blur bem mais discreto.
   const clampedPct = Math.max(0, Math.min(100, progressoPct));
-  const glowBlur = 10 + (clampedPct / 100) * 22;
+  const glowBlur = 5 + (clampedPct / 100) * 10;
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
       {/* Grid de 2 ou 3 colunas (velocímetro | etapas | [conteúdo da etapa
           atual]) a partir de lg; empilha em 1 coluna abaixo disso — pedido
-          explícito do usuário, 2026-10-29. A 3ª coluna é a que EXPANDE
-          (1fr) — é ela que carrega o conteúdo de verdade (área de arquivo,
-          prévia, texto, tabela de conferência); velocímetro e etapas têm
-          largura fixa, já que só precisam caber o próprio conteúdo. Sempre
+          explícito do usuário, 2026-10-29. As 3 colunas têm LARGURA IGUAL
+          (pedido explícito do usuário, 2026-10-31: "deveriam ser inseridas
+          3 colunas de larguras iguais") — nenhuma delas fixa/encolhida, cada
+          uma ocupa exatamente 1/3 do espaço a partir de lg. Sempre
           responsivo, "tudo numa única visualização". */}
       <div
         className={`grid grid-cols-1 gap-4 lg:gap-6 items-start ${
-          terceiraColuna ? 'lg:grid-cols-[minmax(0,13rem)_minmax(0,18rem)_1fr]' : 'lg:grid-cols-[minmax(0,15rem)_1fr]'
+          terceiraColuna ? 'lg:grid-cols-3' : 'lg:grid-cols-2'
         }`}
       >
         <div className="flex flex-row lg:flex-col items-center gap-4 lg:gap-3 lg:text-center lg:sticky lg:top-4">
@@ -260,12 +262,12 @@ export function CentralImportacaoPanel({
       </div>
       <style>{`
         .central-importacao-gauge-glow {
-          filter: drop-shadow(0 0 var(--glow-blur) var(--glow-color)) drop-shadow(0 0 calc(var(--glow-blur) / 2.2) var(--glow-color));
+          filter: drop-shadow(0 0 var(--glow-blur) var(--glow-color));
           animation: central-importacao-glow-pulse 2.4s ease-in-out infinite;
         }
         @keyframes central-importacao-glow-pulse {
-          0%, 100% { filter: drop-shadow(0 0 var(--glow-blur) var(--glow-color)) drop-shadow(0 0 calc(var(--glow-blur) / 2.2) var(--glow-color)); }
-          50% { filter: drop-shadow(0 0 calc(var(--glow-blur) * 1.35)) drop-shadow(0 0 calc(var(--glow-blur) * 1.35) var(--glow-color)) drop-shadow(0 0 calc(var(--glow-blur) / 1.8) var(--glow-color)); }
+          0%, 100% { filter: drop-shadow(0 0 var(--glow-blur) var(--glow-color)); }
+          50% { filter: drop-shadow(0 0 calc(var(--glow-blur) * 1.2) var(--glow-color)); }
         }
         @media (prefers-reduced-motion: reduce) {
           .central-importacao-gauge-glow { animation: none; }

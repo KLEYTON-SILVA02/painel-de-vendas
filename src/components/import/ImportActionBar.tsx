@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { Children, type ReactNode } from 'react';
 
 /** Barra de ações fixa no rodapé da tela — pedido explícito do usuário,
  * 2026-10-31: "as barras que mencionei[os botões de Importar/Cancelar/
@@ -8,9 +8,17 @@ import type { ReactNode } from 'react';
  * --sb-w-collapsed, definidas em `.app-shell` — ver Sidebar.css) pra nunca
  * ficar por baixo da barra lateral, recolhida ou não, e soma `env(safe-area-
  * inset-bottom)` pra não ficar colada atrás da barra de gestos em celular.
- * Puramente posicional — não contém nenhuma lógica, só embrulha os botões
- * que cada tela já desenha. */
+ *
+ * Pedido explícito do usuário, 2026-10-31: "quando se tratar de um botão...
+ * e quando forem dois botões deverá ser tamanhos iguais centralizados em
+ * baixo das três colunas, indo de um lado ao outro do espaço da página" —
+ * cada botão filho vira uma célula flex de largura igual (`flex-1`) que
+ * preenche a largura toda da barra; com 1 filho isso já o estica de ponta a
+ * ponta sozinho, sem precisar de um caso especial. Puramente posicional —
+ * não contém nenhuma lógica, só embrulha e redimensiona os botões que cada
+ * tela já desenha. */
 export function ImportActionBar({ children }: { children: ReactNode }) {
+  const items = Children.toArray(children).filter(Boolean);
   return (
     <>
       {/* Reserva o espaço que a barra fixa ocupa, pra ela não cobrir o
@@ -19,7 +27,13 @@ export function ImportActionBar({ children }: { children: ReactNode }) {
           sobreponha algo por cima). */}
       <div className="h-20 shrink-0" aria-hidden="true" />
       <div className="import-action-bar">
-        <div className="flex items-center justify-center gap-2 flex-wrap max-w-5xl mx-auto">{children}</div>
+        <div className="flex items-stretch gap-3 w-full">
+          {items.map((child, i) => (
+            <div key={i} className="flex-1 min-w-0 [&>*]:w-full [&>*]:h-full">
+              {child}
+            </div>
+          ))}
+        </div>
       </div>
       <style>{`
         .import-action-bar {
