@@ -75,12 +75,85 @@ function StepStatusIcon({ status }: { status: ImportStepStatus }) {
   return <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${style.dot}`} aria-hidden="true" />;
 }
 
+// Quantos quadradinhos por barra de etapa — só visual, não representa uma
+// contagem real (a maioria das etapas não tem um número de sub-progresso
+// próprio, ex. "identificação de colunas") — só o status real (aguardando/
+// andamento/concluído/atenção/erro) decide o preenchimento.
+const ETAPA_SQUARES = 14;
+
+/** Barra de quadradinhos por etapa — pedido explícito do usuário,
+ * 2026-10-31: "quadrados que exemplificam uma barra de processamento... vai
+ * de zero quadrados cheios a 100% quadrados cheios... exibido em loop até
+ * que a etapa seja concluída, onde ela deverá ficar completamente cheia".
+ * Nunca finge uma porcentagem que não existe: "aguardando" fica vazia,
+ * "andamento" faz uma onda em loop (comunica "trabalhando", não um número
+ * inventado), "concluído"/"atenção"/"erro" ficam estáticas e cheias na cor
+ * do status — sempre derivado do `status` real já computado por cada tela,
+ * nunca um timer. */
+function EtapaSquareBar({ status }: { status: ImportStepStatus }) {
+  const style = STATUS_STYLE[status];
+  const squares = Array.from({ length: ETAPA_SQUARES });
+  return (
+    <div className="flex gap-[3px] mt-1.5" aria-hidden="true">
+      {squares.map((_, i) =>
+        status === 'andamento' ? (
+          <span
+            key={i}
+            className="h-1.5 flex-1 rounded-sm central-importacao-square-loop"
+            style={{ '--i': i } as CSSProperties}
+          />
+        ) : (
+          <span key={i} className={`h-1.5 flex-1 rounded-sm ${status === 'aguardando' ? 'bg-slate-800' : style.dot}`} />
+        ),
+      )}
+    </div>
+  );
+}
+
+/** Barra de quadradinhos "grande", com preenchimento PROPORCIONAL a um %
+ * real (ex.: gravação em lote — inserted/total) — diferente da
+ * `EtapaSquareBar` acima (que é só indeterminada/loop): aqui o número de
+ * quadrados cheios é sempre `pct` de verdade, nunca uma animação solta.
+ * Reaproveitada pelas telas que precisam mostrar esse tipo de progresso
+ * (ex.: ImportarPage.tsx na gravação de vendas) em vez de um 2º velocímetro
+ * (pedido explícito do usuário, 2026-10-29: só um velocímetro por tela). */
+export function ImportSquareProgressBar({
+  pct,
+  label,
+  color = '#00f0ff',
+  count = 30,
+}: {
+  pct: number;
+  label?: string;
+  color?: string;
+  count?: number;
+}) {
+  const clamped = Math.max(0, Math.min(100, pct));
+  const filled = Math.round((clamped / 100) * count);
+  return (
+    <div>
+      {label && <p className="text-xs text-slate-400 mb-1.5">{label}</p>}
+      <div className="flex gap-[3px]">
+        {Array.from({ length: count }).map((_, i) => (
+          <span
+            key={i}
+            className="h-3 flex-1 rounded-sm transition-colors duration-200"
+            style={{ background: i < filled ? color : '#1e293b' }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function CentralImportacaoPanel({
   titulo = 'CENTRAL DE IMPORTAÇÃO',
   subtitulo = 'Análise, validação e gravação segura de vendas.',
   etapas,
   progressoPct,
   progressoLabel,
+  conteudoAcimaEtapas,
+  conteudoAbaixoEtapas,
   terceiraColuna,
 }: {
   titulo?: string;
@@ -88,6 +161,12 @@ export function CentralImportacaoPanel({
   etapas: ImportStepInfo[];
   progressoPct: number;
   progressoLabel?: string;
+  /** Conteúdo extra opcional dentro da MESMA coluna das etapas (2ª coluna),
+   * antes/depois da lista — ex.: resumo/estatísticas acima, ou um bloco de
+   * opções abaixo (pedido explícito do usuário, 2026-10-31, pro layout da
+   * etapa de mapeamento de Importar Vendas). */
+  conteudoAcimaEtapas?: ReactNode;
+  conteudoAbaixoEtapas?: ReactNode;
   /** 3ª coluna opcional — hoje usada pelo conteúdo de verdade de cada etapa
    * (seletor/área de arquivo, prévia, texto extraído, tabela de conferência,
    * "funções de relatórios" etc. — pedido explícito do usuário, 2026-10-29:
@@ -142,27 +221,32 @@ export function CentralImportacaoPanel({
           </div>
         </div>
 
-        <ol className="flex flex-col gap-1.5 min-w-0">
-          {etapas.map((etapa) => {
-            const style = STATUS_STYLE[etapa.status];
-            return (
-              <li key={etapa.key} className={`rounded-xl border ${style.border} bg-slate-950/40 px-3 py-2`}>
-                <div className="flex items-start gap-2.5">
-                  <StepStatusIcon status={etapa.status} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline gap-1.5 flex-wrap">
-                      <span className="text-[10px] font-mono text-slate-600">{etapa.numero}</span>
-                      <span className={`text-xs font-semibold ${style.text}`}>{etapa.titulo}</span>
-                      {etapa.resultado && <span className="text-[11px] text-slate-400 font-mono">{etapa.resultado}</span>}
+        <div className="flex flex-col gap-3 min-w-0">
+          {conteudoAcimaEtapas}
+          <ol className="flex flex-col gap-1.5 min-w-0">
+            {etapas.map((etapa) => {
+              const style = STATUS_STYLE[etapa.status];
+              return (
+                <li key={etapa.key} className={`rounded-xl border ${style.border} bg-slate-950/40 px-3 py-2`}>
+                  <div className="flex items-start gap-2.5">
+                    <StepStatusIcon status={etapa.status} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline gap-1.5 flex-wrap">
+                        <span className="text-[10px] font-mono text-slate-600">{etapa.numero}</span>
+                        <span className={`text-xs font-semibold ${style.text}`}>{etapa.titulo}</span>
+                        {etapa.resultado && <span className="text-[11px] text-slate-400 font-mono">{etapa.resultado}</span>}
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">{etapa.descricao}</p>
+                      {etapa.mensagem && <p className={`text-[11px] mt-1 ${style.text}`}>{etapa.mensagem}</p>}
+                      <EtapaSquareBar status={etapa.status} />
                     </div>
-                    <p className="text-[11px] text-slate-500 mt-0.5">{etapa.descricao}</p>
-                    {etapa.mensagem && <p className={`text-[11px] mt-1 ${style.text}`}>{etapa.mensagem}</p>}
                   </div>
-                </div>
-              </li>
-            );
-          })}
-        </ol>
+                </li>
+              );
+            })}
+          </ol>
+          {conteudoAbaixoEtapas}
+        </div>
 
         {terceiraColuna &&
           (terceiraColuna.semMoldura ? (
@@ -185,6 +269,17 @@ export function CentralImportacaoPanel({
         }
         @media (prefers-reduced-motion: reduce) {
           .central-importacao-gauge-glow { animation: none; }
+        }
+        .central-importacao-square-loop {
+          animation: central-importacao-square-pulse 1.2s ease-in-out infinite;
+          animation-delay: calc(var(--i) * 0.07s);
+        }
+        @keyframes central-importacao-square-pulse {
+          0%, 100% { background: #1e293b; }
+          40% { background: #22d3ee; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .central-importacao-square-loop { animation: none; background: #164e63; }
         }
       `}</style>
     </div>
