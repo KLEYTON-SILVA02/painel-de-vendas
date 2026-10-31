@@ -70,6 +70,28 @@ um estilo novo a cada tela.
 - Ajustes de densidade/espaçamento em mobile costumam levar 2-3 rodadas de
   feedback curto até "assentar" — normal, não é sinal de que a primeira
   tentativa estava errada.
+- **Textos informativos/explicativos devem ser curtos por padrão** — o
+  usuário pede repetidamente pra encurtar/resumir/simplificar parágrafos de
+  ajuda, legendas e descrições em troca de mais espaço pros cards e dados em
+  si. Ao desenhar uma tela nova, preferir uma frase curta a um parágrafo
+  explicativo, mesmo que isso pareça "menos didático" à primeira vista —
+  informação essencial cabe em poucas palavras; o resto vira tooltip/ajuda
+  expansível (`HelpTip`) se for preciso.
+- **"Uma única visualização sem rolar" é um objetivo ativo, não só um
+  ideal** — quando colunas/listas de alturas diferentes deixam espaço vazio
+  ou obrigam a rolar mais que o necessário, o usuário pede pra esticar as
+  menores pra preencher o espaço (`items-stretch` na grade + `flex-1` +
+  `overflow-y-auto` na lista/tabela de cada coluna) em vez de deixar
+  alturas soltas — isso também serve como forma prática de "alinhar
+  horizontalmente" os cards/listas entre colunas vizinhas (o fim de uma
+  lista bate com o fim da outra).
+- **Uma barra de ação fixa (rodapé) respeita a largura do conteúdo
+  principal, não da tela inteira** — quando existe um painel lateral fixo
+  ao lado do conteúdo (ex.: histórico de importações, `lg:w-80`), a barra
+  fixa para antes dele (calcula o `right` a partir da largura desse painel +
+  o gap), em vez de esticar por baixo dele até a borda da janela. Abaixo do
+  breakpoint em que esse painel lateral empilha (deixa de ficar do lado), a
+  barra volta a ir de ponta a ponta normalmente.
 
 ## Publicação / Deploy
 
