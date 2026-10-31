@@ -142,9 +142,10 @@ export function MobileInicioPage() {
         </div>
         <div className="mv2-metric-card mv2-saldo">
           <div className="mv2-label">Saldo</div>
-          {/* Sign hidden by design (visual only) — the underlying `saldo`
-              stays negative for every calculation elsewhere. */}
-          <div className="mv2-value">{fmtMoney(Math.abs(saldo))}</div>
+          {/* Saldo só existe quando a meta já foi superada — pedido
+              explícito do usuário, 2026-10-31: antes disso mostra 0, nunca
+              o quanto falta (já mostrado no card "Falta p/ Meta"). */}
+          <div className="mv2-value">{fmtMoney(Math.max(0, saldo))}</div>
         </div>
         <div className="mv2-metric-card mv2-itens">
           <div className="mv2-label">Itens vendidos</div>
