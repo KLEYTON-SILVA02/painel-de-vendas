@@ -668,10 +668,8 @@ export function ImportarPage() {
                       </Link>
                     </div>
                     <p className="text-xs text-slate-500 mb-3">
-                      Formatos aceitos: .xlsx, .xls, .xlsm, .csv, .ods — até 50MB. O sistema varre as 15 primeiras
-                      linhas de cada aba procurando o cabeçalho (data, matrícula, vendedor, produto, qtd, valor) e
-                      mapeia as colunas automaticamente — se não encontrar, usa o layout padrão. Você pode revisar e
-                      ajustar antes de confirmar. Todas as abas do arquivo são processadas.
+                      .xlsx, .xls, .xlsm, .csv, .ods — até 50MB. Colunas mapeadas automaticamente, revisáveis na
+                      próxima etapa.
                     </p>
                     <ExpectedColumnsBar />
                   </div>
@@ -684,8 +682,7 @@ export function ImportarPage() {
                     <div className="flex flex-col gap-3">
                       <p className="text-xs text-slate-500 flex items-start gap-1.5">
                         <span>
-                          {sheets.length} aba(s), {sheets.reduce((a, s) => a + s.rows.length, 0)} linhas encontradas.
-                          Colunas mapeadas automaticamente — confira abaixo (uma seção por aba):
+                          {sheets.length} aba(s), {sheets.reduce((a, s) => a + s.rows.length, 0)} linhas.
                         </span>
                         <HelpTip
                           helpKey="importar.mapeamento_colunas"
@@ -1248,7 +1245,7 @@ function buildVendasEtapas(args: {
       key: 'arquivo',
       numero: '01',
       titulo: 'Arquivo recebido',
-      descricao: 'Seleção e verificação de identidade do arquivo (.xlsx, .xls, .xlsm, .csv, .ods).',
+      descricao: 'Seleção e verificação do arquivo.',
       status: etapa1Status,
       resultado: fileName || undefined,
       mensagem: step === 'pick' && error ? error : undefined,
@@ -1257,7 +1254,7 @@ function buildVendasEtapas(args: {
       key: 'identificacao',
       numero: '02',
       titulo: 'Identificação de abas e colunas',
-      descricao: 'Varredura das 15 primeiras linhas de cada aba e mapeamento automático das colunas.',
+      descricao: 'Varredura e mapeamento automático das colunas.',
       status: etapa2Status,
       resultado: sheets.length > 0 ? `${sheets.length} aba(s)` : undefined,
     },
@@ -1265,7 +1262,7 @@ function buildVendasEtapas(args: {
       key: 'leitura',
       numero: '03',
       titulo: 'Leitura e classificação dos dados',
-      descricao: 'Reclassificação de cada produto e conferência do nível de confiança.',
+      descricao: 'Reclassificação e conferência de confiança.',
       status: etapa3Status,
       resultado: summary ? `${summary.total} linha(s)` : undefined,
     },
@@ -1273,7 +1270,7 @@ function buildVendasEtapas(args: {
       key: 'validacao',
       numero: '04',
       titulo: 'Validação e conferência',
-      descricao: 'Comparação com os dados já registrados nas mesmas datas e revisão antes de gravar.',
+      descricao: 'Comparação com vendas já registradas.',
       status: etapa4Status,
       mensagem: etapa4Status === 'erro' ? (error ?? undefined) : undefined,
     },
@@ -1281,7 +1278,7 @@ function buildVendasEtapas(args: {
       key: 'gravacao',
       numero: '05',
       titulo: 'Gravação no sistema',
-      descricao: 'Gravação em lotes no banco e atualização do Dashboard, Ranking e Categorias.',
+      descricao: 'Gravação em lotes e atualização dos painéis.',
       status: etapa5Status,
       resultado: writeProgress
         ? `${writeProgress.inserted}/${writeProgress.total}`
@@ -1313,48 +1310,44 @@ function VerifyStepColuna2({
   const [showVendedores, setShowVendedores] = useState(false);
 
   return (
-    <div>
+    <div className="h-full flex flex-col min-h-0">
       <h3 className="font-semibold mb-1 text-sm">🔍 2ª releitura — verificação de classificação</h3>
-      <p className="text-xs text-slate-500 mb-3">
-        Antes de gravar, o sistema reclassificou todos os {s.total} produtos e conferiu o nível de confiança de cada
-        um, pra reduzir o risco de categoria errada.
-      </p>
+      <p className="text-xs text-slate-500 mb-3">{s.total} produtos reclassificados e conferidos.</p>
 
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-          <div className="text-xs text-slate-400">Classificação de alta confiança</div>
+          <div className="text-xs text-slate-400">Alta confiança</div>
           <div className="text-lg font-mono font-semibold text-green-400">{s.total - s.baixaConfianca}</div>
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-          <div className="text-xs text-slate-400">Baixa confiança (heurística/padrão)</div>
+          <div className="text-xs text-slate-400">Baixa confiança</div>
           <div className="text-lg font-mono font-semibold text-amber-400">{s.baixaConfianca}</div>
         </div>
       </div>
 
-      <p className="text-xs text-slate-500 mb-2">Detalhamento da planilha:</p>
       <div className="grid grid-cols-2 gap-3 mb-3">
         {options.vendedores ? (
           <button onClick={() => setShowVendedores((v) => !v)} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-left hover:border-cyan-500">
-            <div className="text-xs text-slate-400">Vendedores encontrados</div>
+            <div className="text-xs text-slate-400">Vendedores</div>
             <div className="text-lg font-mono font-semibold text-cyan-400">{s.vendedores.length}</div>
-            <div className="text-[10px] text-slate-500">{showVendedores ? 'ocultar nomes ▲' : 'ver nomes ▼'}</div>
+            <div className="text-[10px] text-slate-500">{showVendedores ? 'ocultar ▲' : 'ver nomes ▼'}</div>
           </button>
         ) : (
           <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-            <div className="text-xs text-slate-400">Vendedores encontrados</div>
+            <div className="text-xs text-slate-400">Vendedores</div>
             <div className="text-lg font-mono font-semibold text-cyan-400">{s.vendedores.length}</div>
           </div>
         )}
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-          <div className="text-xs text-slate-400">Itens totais</div>
+          <div className="text-xs text-slate-400">Itens</div>
           <div className="text-lg font-mono font-semibold">{s.itensTotais}</div>
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-          <div className="text-xs text-slate-400">Dias na planilha</div>
+          <div className="text-xs text-slate-400">Dias</div>
           <div className="text-lg font-mono font-semibold">{s.diasDistintos}</div>
         </div>
         <div className="rounded-xl border border-amber-700/60 bg-slate-950/60 p-3">
-          <div className="text-xs text-slate-400">Produtos não reconhecidos</div>
+          <div className="text-xs text-slate-400">Não reconhecidos</div>
           <div className="text-lg font-mono font-semibold text-amber-400">{s.produtosNovos}</div>
         </div>
       </div>
@@ -1377,12 +1370,12 @@ function VerifyStepColuna2({
       )}
 
       {options.produtos && s.produtosNovos > 0 && (
-        <>
+        <div className="flex-1 min-h-0 flex flex-col">
           <p className="text-xs text-slate-500 mb-2">
-            {s.produtosNovos} produto(s) sem regra de classificação cadastrada (prévia de até {RECLASSIFICATION_PREVIEW_LIMIT}) — serão
-            importados com a categoria padrão e ficarão sinalizados em <b>ADM → Auditoria → Pendentes de Revisão</b>:
+            {s.produtosNovos} sem regra (prévia de {RECLASSIFICATION_PREVIEW_LIMIT}) — categoria padrão, sinalizados em{' '}
+            <b>Auditoria → Pendentes</b>:
           </p>
-          <div className="rounded-xl border border-amber-700/40 bg-slate-950/60 p-3 h-56 overflow-y-auto mb-3">
+          <div className="flex-1 min-h-14 rounded-xl border border-amber-700/40 bg-slate-950/60 p-3 overflow-y-auto">
             <div className="flex flex-wrap gap-1.5">
               {s.produtosNovosNomes.map((p) => (
                 <span key={p} className="text-xs bg-amber-900/40 text-amber-200 rounded-full px-2.5 py-1">
@@ -1391,10 +1384,10 @@ function VerifyStepColuna2({
               ))}
             </div>
           </div>
-        </>
+        </div>
       )}
 
-      {error && <p className="text-xs text-rose-400">{error}</p>}
+      {error && <p className="text-xs text-rose-400 mt-3">{error}</p>}
     </div>
   );
 }
@@ -1403,7 +1396,7 @@ function VerifyStepColuna3({ summary: s }: { summary: SheetSummary }) {
   const labelMap = useCategoryLabelMap();
 
   return (
-    <div>
+    <div className="h-full flex flex-col min-h-0">
       <p className="text-xs text-slate-500 mb-2">Resumo por categoria:</p>
       <div className="grid grid-cols-2 gap-3 mb-3">
         {CAT_KEYS.map((key) => (
@@ -1419,12 +1412,9 @@ function VerifyStepColuna3({ summary: s }: { summary: SheetSummary }) {
       </div>
 
       {s.amostras.length > 0 && (
-        <>
-          <p className="text-xs text-slate-500 mb-2">
-            Produtos já reclassificados, com a categoria estipulada (prévia de até {RECLASSIFICATION_PREVIEW_LIMIT}) — revise depois em
-            Auditoria se necessário:
-          </p>
-          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 h-56 overflow-y-auto">
+        <div className="flex-1 min-h-0 flex flex-col">
+          <p className="text-xs text-slate-500 mb-2">Já reclassificados (prévia de {RECLASSIFICATION_PREVIEW_LIMIT}):</p>
+          <div className="flex-1 min-h-14 rounded-xl border border-slate-800 bg-slate-950/60 p-3 overflow-y-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-left text-slate-400 border-b border-slate-800">
@@ -1444,7 +1434,7 @@ function VerifyStepColuna3({ summary: s }: { summary: SheetSummary }) {
               </tbody>
             </table>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
@@ -1461,19 +1451,19 @@ function VerifyStepColuna3({ summary: s }: { summary: SheetSummary }) {
  * `ImportActionBar` de sempre. */
 function RevisaoFinalStepConteudo({ summary: s, options }: { summary: SheetSummary; options: AnalysisOptions }) {
   return (
-    <div>
+    <div className="h-full flex flex-col min-h-0">
       <h3 className="font-semibold mb-1 text-sm">✅ Revisão final</h3>
       <p className="text-xs text-slate-500 mb-3">
-        Última conferência antes de gravar {s.total} venda(s) no sistema — depois de confirmar, a gravação não pode
-        ser desfeita por aqui (só reimportando a mesma data, que substitui o que já foi gravado).
+        Última conferência antes de gravar {s.total} venda(s) — depois de confirmar só reimportando a mesma data pra
+        desfazer.
       </p>
 
       {options.listaVendas && s.previewRows.length > 0 ? (
-        <>
+        <div className="flex-1 min-h-0 flex flex-col">
           <p className="text-xs text-slate-500 mb-2">
-            Lista de vendas (prévia das primeiras {s.previewRows.length} de {s.total}):
+            Prévia das primeiras {s.previewRows.length} de {s.total}:
           </p>
-          <div className="overflow-x-auto max-h-64 overflow-y-auto rounded-xl border border-slate-800">
+          <div className="flex-1 min-h-14 overflow-x-auto overflow-y-auto rounded-xl border border-slate-800">
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-slate-950">
                 <tr className="text-left text-slate-400 border-b border-slate-800">
@@ -1497,11 +1487,10 @@ function RevisaoFinalStepConteudo({ summary: s, options }: { summary: SheetSumma
               </tbody>
             </table>
           </div>
-        </>
+        </div>
       ) : (
         <p className="text-xs text-slate-600">
-          Pré-visualização da lista de vendas desligada — ative "Pré-visualizar lista de vendas antes de salvar" na
-          etapa de mapeamento se quiser revisar linha a linha antes de gravar.
+          Pré-visualização desligada — ative "Pré-visualizar lista de vendas antes de salvar" na etapa de mapeamento.
         </p>
       )}
     </div>

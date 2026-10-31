@@ -150,7 +150,7 @@ type ColunaExtra = { titulo?: string; children: ReactNode; semMoldura?: boolean 
 
 function ColunaExtraBloco({ coluna }: { coluna: ColunaExtra }) {
   return coluna.semMoldura ? (
-    <div className="min-w-0 flex flex-col gap-3">{coluna.children}</div>
+    <div className="min-w-0 h-full flex flex-col gap-3">{coluna.children}</div>
   ) : (
     <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2.5 min-w-0">
       {coluna.titulo && <p className="text-xs text-slate-400 mb-2">{coluna.titulo}</p>}
@@ -276,6 +276,15 @@ export function CentralImportacaoPanel({
   // ambos os modos o total de colunas é sempre o mesmo: 3 quando
   // `terceiraColuna` está definida, 2 quando não está.
   const gridColsClass = terceiraColuna ? 'lg:grid-cols-3' : 'lg:grid-cols-2';
+  // Pedido explícito do usuário, 2026-10-31 ("os cards possam ser alinhados
+  // horizontalmente" + "a lista de produtos... o fim delas possa ficar de
+  // acordo com o fim da lista dos produtos sem regra"): no modo colunas
+  // fundidas, as colunas esticam pra mesma altura (items-stretch) — cada
+  // bloco que usa `flex-1` (as listas com scroll, ver VerifyStepColuna2/3 em
+  // ImportarPage.tsx) aí preenche o espaço até a base comum, alinhando o fim
+  // das colunas. No modo "3 colunas" tradicional (pick/map/DSM/UVC)
+  // continua `items-start`, sem mudança de comportamento.
+  const itemsClass = segundaColuna ? 'items-stretch' : 'items-start';
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
@@ -285,7 +294,7 @@ export function CentralImportacaoPanel({
           "deveriam ser inseridas 3 colunas de larguras iguais") — nenhuma
           delas fixa/encolhida. Sempre responsivo, "tudo numa única
           visualização". */}
-      <div className={`grid grid-cols-1 gap-4 lg:gap-6 items-start ${gridColsClass}`}>
+      <div className={`grid grid-cols-1 gap-4 lg:gap-6 ${itemsClass} ${gridColsClass}`}>
         {segundaColuna ? (
           <div className="flex flex-col gap-4 lg:gap-6 min-w-0 lg:sticky lg:top-4">
             {gaugeBloco}
