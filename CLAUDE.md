@@ -8,6 +8,69 @@ direta, evitando jargão sem explicar. Vale pra explicações, análises e
 planejamentos; não muda nada em código/nomes técnicos reais (esses
 continuam em português técnico normal).
 
+## Padrão de design/layout preferido pelo usuário (memorizado, 2026-10-31)
+
+Pedido explícito do usuário: antes de qualquer edição futura de visual/layout
+(neste projeto ou em outros), levar em conta este padrão — extraído de uma
+varredura do histórico de commits deste repositório — em vez de reinventar
+um estilo novo a cada tela.
+
+- **Tema escuro fixo**: fundo `slate-900/950` (`bg-slate-900/60`,
+  `bg-slate-950/40`), bordas `border-slate-800`, texto claro. Nenhuma tela
+  clara no histórico.
+- **Paleta neon fixa**: ciano `#00f0ff`/`#00e5ff`, roxo `#a82bff`, verde
+  `#14ff00`, rosa `#ff3df0`, âmbar `#fbbf24`/`#ffb700`, laranja `#ff6a00`,
+  vermelho/erro `#fb7185` — mesmas cores reaproveitadas entre componentes
+  (`CircularGauge`, `CentralImportacaoPanel`, `categoryLabels.ts`), nunca
+  uma paleta nova por tela.
+- **Botões de aba/filtro/ação sempre esticados, largura igual, sem espaço
+  sobrando** — regra geral do sistema inteiro (não só de uma tela): 1 botão
+  ocupa 100% da largura, 2 botões ficam do mesmo tamanho dividindo o espaço
+  igualmente, nunca centralizados com gap sobrando nas pontas.
+- **Múltiplas colunas lado a lado = larguras iguais** por padrão, nunca uma
+  maior que a outra sem pedido explícito.
+- **Cards/métricas em grid esticam para a mesma altura** (`items-stretch`);
+  texto longo usa `nowrap` + reticências (`…`) em vez de quebrar ou
+  espremer o layout.
+- **Barras de ação de rodapé tendem a virar barra fixa/sticky**, alinhada
+  com a largura do conteúdo (nunca por baixo do menu lateral) — ver
+  `ImportActionBar` (`position: fixed`, variáveis `--sb-w`/`--sb-w-collapsed`
+  do `AppShell`/`Sidebar.css`).
+- **Barras de progresso/velocímetro nunca mostram valor inventado** — sempre
+  atreladas a um estado real (`%`/contagem real), nunca um timer ou
+  animação solta fingindo progresso.
+- **Efeitos neon/glow devem ser discretos**, não exagerados — blur pequeno
+  (~5-15px) e baixa amplitude de pulso (~1.2x), nunca algo chamativo demais.
+- **Barras "quadriculadas"** (quadradinhos em fileira) como indicador visual
+  de progresso — tanto indeterminado (loop/onda) quanto determinado (%
+  real preenchido).
+- **Responsividade mobile-first com fallback de 1 coluna**: `grid-cols-1`
+  como base, breakpoint `lg:` pra expandir em colunas.
+- **Meta recorrente de "tudo em uma única visualização, sem scroll"** —
+  evitar que o usuário precise rolar a página pra ver o fluxo inteiro.
+- **Telas mobile usam CSS separado** (`.mv2-*`, `mobile-v2.css`), desacoplado
+  do desktop — um ajuste visual no desktop não se propaga sozinho ao mobile.
+- **Ícones/emojis em títulos de seção** fazem parte da identidade visual do
+  projeto (🔍 ✅ 📊 🎟️ 📈 💾 ⚙️) — manter em redesenhos, não remover.
+- **Glassmorphism leve em overlays/barras sticky**:
+  `background: rgba(2,6,23,.94)` + `backdrop-filter: blur(6px)`.
+- **Bordas arredondadas grandes e consistentes** (`rounded-xl`/`rounded-2xl`)
+  em quase todo card — evitar cantos retos em containers de conteúdo.
+- **Cor/emoji por categoria são fixos e centralizados**
+  (`CATEGORY_COLOR`/`CATEGORY_EMOJI` em `categoryLabels.ts`) — só o nome é
+  editável pelo ADM; nunca hardcodear cor de categoria de novo numa tela.
+- **Componentes muito reaproveitados visualmente** (ex. `PodiumSplit`) devem
+  ganhar um ajuste via prop nova, nunca ser duplicados — qualquer mudança
+  neles se propaga a várias telas de uma vez (Dashboard, DSM, UVC,
+  Categoria, Bio).
+- **Ao aprovar um padrão novo numa tela, é comum o usuário depois pedir pra
+  generalizar pro resto do sistema** — ao implementar um ajuste visual que
+  parece de bom senso geral, vale propor proativamente aplicar o mesmo
+  padrão nas telas equivalentes, em vez de deixar só numa tela.
+- Ajustes de densidade/espaçamento em mobile costumam levar 2-3 rodadas de
+  feedback curto até "assentar" — normal, não é sinal de que a primeira
+  tentativa estava errada.
+
 ## Publicação / Deploy
 
 - Este projeto está conectado a três deploys automáticos a partir de `main`: **Vercel** e dois sites Netlify (`gestaodevendasks`, `painel-de-vendas-kms`).
