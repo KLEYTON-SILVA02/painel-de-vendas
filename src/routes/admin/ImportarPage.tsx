@@ -8,10 +8,12 @@ import { ClientServiceImportHistoryPanel, ClientServiceImportSection, type Clien
 import { DsmImageImportSection } from './DsmImageImportSection';
 import { DsmImportSection, type DsmImportSectionHandle } from './DsmImportSection';
 import { DsmImportHistoryPanel } from '../../components/dsm/DsmImportHistoryPanel';
-import { CentralImportacaoPanel, type CentralImportacaoData, type ImportStepInfo, type ImportStepStatus } from '../../components/import/CentralImportacaoPanel';
+import { CentralImportacaoPanel, type CentralImportacaoData, type ImportStepInfo, type ImportStepStatus, ImportSquareProgressBar } from '../../components/import/CentralImportacaoPanel';
+import { ImportActionBar } from '../../components/import/ImportActionBar';
 import { HelpTip } from '../../components/HelpTip';
 import { Spinner } from '../../components/Spinner';
-import { classifyProductTier } from '../../lib/business/classification';
+import { CAT_KEYS, classifyProductTier, type CategoryKey } from '../../lib/business/classification';
+import { CATEGORY_COLOR, CATEGORY_EMOJI, useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { autoMapColumns, detectHeaderRow, type ColumnMap, type ImportField } from '../../lib/business/importMapping';
 import { firstName, normalize } from '../../lib/business/normalize';
 import { dateFromCell, idFromCell, normalizeMatricula, parseNumeroBR } from '../../lib/business/parsing';
@@ -93,7 +95,7 @@ interface ParsedSheet {
 }
 
 
-type Step = 'pick' | 'map' | 'analyze' | 'verify' | 'done';
+type Step = 'pick' | 'map' | 'analyze' | 'verify' | 'revisaoFinal' | 'done';
 
 interface AnalysisOptions {
   produtos: boolean;
@@ -629,37 +631,83 @@ export function ImportarPage() {
               }
             : step === 'map'
               ? {
-                  titulo: 'O que a 2ª verificação deve analisar antes de gravar:',
+                  titulo: 'RELATÓRIO ONLINE — mapeamento de colunas por aba:',
                   children: (
-                  <div className="flex flex-col gap-2">
-                    <label className="flex items-center gap-2 text-xs text-slate-300">
-                      <input
-                        type="checkbox"
-                        checked={analysisOptions.produtos}
-                        onChange={(e) => setAnalysisOptions((o) => ({ ...o, produtos: e.target.checked }))}
-                      />
-                      Identificação e categorização de produtos (recomendado)
-                    </label>
-                    <label className="flex items-center gap-2 text-xs text-slate-300">
-                      <input
-                        type="checkbox"
-                        checked={analysisOptions.vendedores}
-                        onChange={(e) => setAnalysisOptions((o) => ({ ...o, vendedores: e.target.checked }))}
-                      />
-                      Vendedores encontrados na planilha
-                    </label>
-                    <label className="flex items-center gap-2 text-xs text-slate-300">
-                      <input
-                        type="checkbox"
-                        checked={analysisOptions.listaVendas}
-                        onChange={(e) => setAnalysisOptions((o) => ({ ...o, listaVendas: e.target.checked }))}
-                      />
-                      Pré-visualizar lista de vendas antes de salvar
-                    </label>
-                  </div>
-                ),
-              }
+                    <div className="flex flex-col gap-3">
+                      <p className="text-xs text-slate-500 flex items-start gap-1.5">
+                        <span>
+                          {sheets.length} aba(s), {sheets.reduce((a, s) => a + s.rows.length, 0)} linhas encontradas.
+                          Colunas mapeadas automaticamente — confira abaixo (uma seção por aba):
+                        </span>
+                        <HelpTip
+                          helpKey="importar.mapeamento_colunas"
+                          fallback="Confira se cada coluna da sua planilha foi identificada corretamente antes de confirmar."
+                        />
+                      </p>
+                      {sheets.map((sheet, si) => (
+                        <div key={sheet.name} className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <b className="text-xs">{sheet.name}</b>
+                            <span className="text-[11px] text-slate-500">{sheet.rows.length} linhas</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            {FIELDS.map((field) => (
+                              <div key={field}>
+                                <label className="block text-[11px] text-slate-400 mb-1 capitalize">{field}</label>
+                                <select
+                                  value={sheet.map[field]}
+                                  onChange={(e) => updateMap(si, field, Number(e.target.value))}
+                                  className="input text-xs"
+                                >
+                                  <option value={-1}>(ignorar)</option>
+                                  {sheet.headers.map((h, i) => (
+                                    <option key={i} value={i}>
+                                      {String(h || `coluna ${i + 1}`)}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ),
+                }
             : undefined
+        }
+        conteudoAbaixoEtapas={
+          step === 'map' ? (
+            <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2.5">
+              <p className="text-xs text-slate-400 mb-2">O que a 2ª verificação deve analisar antes de gravar:</p>
+              <div className="flex flex-col gap-2">
+                <label className="flex items-center gap-2 text-xs text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={analysisOptions.produtos}
+                    onChange={(e) => setAnalysisOptions((o) => ({ ...o, produtos: e.target.checked }))}
+                  />
+                  Identificação e categorização de produtos (recomendado)
+                </label>
+                <label className="flex items-center gap-2 text-xs text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={analysisOptions.vendedores}
+                    onChange={(e) => setAnalysisOptions((o) => ({ ...o, vendedores: e.target.checked }))}
+                  />
+                  Vendedores encontrados na planilha
+                </label>
+                <label className="flex items-center gap-2 text-xs text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={analysisOptions.listaVendas}
+                    onChange={(e) => setAnalysisOptions((o) => ({ ...o, listaVendas: e.target.checked }))}
+                  />
+                  Pré-visualizar lista de vendas antes de salvar
+                </label>
+              </div>
+            </div>
+          ) : undefined
         }
       />
       {/* Pedido explícito do usuário, 2026-10-29: o botão de importar fica
@@ -676,32 +724,6 @@ export function ImportarPage() {
             onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
             style={{ display: 'none' }}
           />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 10,
-              width: '100%',
-              padding: '14px 20px',
-              borderRadius: 14,
-              border: 'none',
-              cursor: 'pointer',
-              background: `linear-gradient(90deg, ${NEON_CYAN}, ${NEON_PURPLE})`,
-              color: '#fff',
-              fontWeight: 800,
-              fontSize: 14,
-              textTransform: 'uppercase',
-              letterSpacing: '.03em',
-              boxShadow: '0 0 18px rgba(0,240,255,.35)',
-            }}
-          >
-            <UploadGlyph />
-            <span>Importar Planilha de Vendas</span>
-          </button>
-
           {readPct !== null && (
             <div style={{ width: '100%' }}>
               <div style={{ width: '100%', height: 14, borderRadius: 8, background: '#080818', border: '1px solid #212948', overflow: 'hidden' }}>
@@ -725,60 +747,44 @@ export function ImportarPage() {
           )}
           {readPct === null && progress && <p className="text-xs text-cyan-400 mt-2">{progress}</p>}
           {error && <p className="text-xs text-rose-400 mt-2">{error}</p>}
+          <ImportActionBar>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 10,
+                padding: '14px 28px',
+                borderRadius: 14,
+                border: 'none',
+                cursor: 'pointer',
+                background: `linear-gradient(90deg, ${NEON_CYAN}, ${NEON_PURPLE})`,
+                color: '#fff',
+                fontWeight: 800,
+                fontSize: 14,
+                textTransform: 'uppercase',
+                letterSpacing: '.03em',
+                boxShadow: '0 0 18px rgba(0,240,255,.35)',
+              }}
+            >
+              <UploadGlyph />
+              <span>Importar Planilha de Vendas</span>
+            </button>
+          </ImportActionBar>
         </div>
       )}
 
       {step === 'map' && (
-        <>
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-            <p className="text-xs text-slate-500 flex items-start gap-1.5">
-              <span>
-                {sheets.length} aba(s), {sheets.reduce((a, s) => a + s.rows.length, 0)} linhas encontradas. Colunas
-                mapeadas automaticamente — confira abaixo (uma seção por aba):
-              </span>
-              <HelpTip
-                helpKey="importar.mapeamento_colunas"
-                fallback="Confira se cada coluna da sua planilha foi identificada corretamente antes de confirmar."
-              />
-            </p>
-          </div>
-          {sheets.map((sheet, si) => (
-            <div key={sheet.name} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <b className="text-sm">{sheet.name}</b>
-                <span className="text-xs text-slate-500">{sheet.rows.length} linhas</span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {FIELDS.map((field) => (
-                  <div key={field}>
-                    <label className="block text-xs text-slate-400 mb-1 capitalize">{field}</label>
-                    <select
-                      value={sheet.map[field]}
-                      onChange={(e) => updateMap(si, field, Number(e.target.value))}
-                      className="input"
-                    >
-                      <option value={-1}>(ignorar)</option>
-                      {sheet.headers.map((h, i) => (
-                        <option key={i} value={i}>
-                          {String(h || `coluna ${i + 1}`)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-
-          <div className="flex gap-2">
-            <button onClick={reset} className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300">
-              Cancelar
-            </button>
-            <button onClick={runAnalysis} className="rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm">
-              Analisar e revisar classificação
-            </button>
-          </div>
-        </>
+        <ImportActionBar>
+          <button onClick={reset} className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300">
+            Cancelar
+          </button>
+          <button onClick={runAnalysis} className="rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm">
+            Analisar e revisar classificação
+          </button>
+        </ImportActionBar>
       )}
 
       {step === 'analyze' && (
@@ -803,7 +809,17 @@ export function ImportarPage() {
       )}
 
       {step === 'verify' && summary && (
-        <VerifyStep summary={summary} options={analysisOptions} onBack={() => setStep('map')} onConfirm={handleConfirm} error={error} />
+        <VerifyStep
+          summary={summary}
+          options={analysisOptions}
+          onBack={() => setStep('map')}
+          onRevisaoFinal={() => setStep('revisaoFinal')}
+          error={error}
+        />
+      )}
+
+      {step === 'revisaoFinal' && summary && (
+        <RevisaoFinalStep summary={summary} options={analysisOptions} onBack={() => setStep('verify')} onConfirm={handleConfirm} />
       )}
 
       {step === 'done' && (
@@ -813,13 +829,26 @@ export function ImportarPage() {
               aparece no velocímetro da 1ª coluna do CentralImportacaoPanel
               (buildVendasEtapas soma a fração de writeProgress ao %
               quando a etapa "Gravação no sistema" está em andamento). Aqui
-              embaixo só o texto, sempre com o mesmo spinner das outras
-              fases de progresso. */}
+              embaixo, uma vez que a gravação em lote já tem um número real
+              (writeProgress.inserted/total), usa a barra quadriculada de %
+              real (pedido explícito do usuário, 2026-10-31) em vez de só
+              texto; antes disso (ex.: "Verificando planilha…", sem
+              contagem ainda) continua o spinner+texto de sempre. */}
           {progress && (
-            <p className="text-sm text-cyan-400 flex items-center gap-2">
-              <Spinner size={16} color={NEON_CYAN} />
-              {progress}
-            </p>
+            writeProgress && writeProgress.total > 0 ? (
+              <div className="mb-3">
+                <ImportSquareProgressBar
+                  pct={(writeProgress.inserted / writeProgress.total) * 100}
+                  label={progress}
+                  color={NEON_CYAN}
+                />
+              </div>
+            ) : (
+              <p className="text-sm text-cyan-400 flex items-center gap-2">
+                <Spinner size={16} color={NEON_CYAN} />
+                {progress}
+              </p>
+            )
           )}
           {confirmResult && (
             <>
@@ -874,9 +903,11 @@ export function ImportarPage() {
                   </ul>
                 </div>
               )}
-              <button onClick={reset} className="rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm">
-                Importar outra planilha
-              </button>
+              <ImportActionBar>
+                <button onClick={reset} className="rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm">
+                  Importar outra planilha
+                </button>
+              </ImportActionBar>
             </>
           )}
         </div>
@@ -1073,6 +1104,13 @@ interface SheetSummary {
   vendedores: { chave: string; nome: string }[];
   amostras: { produto: string; categoria: string; tier: number }[];
   previewRows: { data: string; vendedor: string; produto: string; qtd: number; valor: number }[];
+  /** Quantas linhas (já reclassificadas, inclusive as de baixa confiança)
+   * caíram em cada uma das 4 categorias de venda — pedido explícito do
+   * usuário, 2026-10-31 ("resumo por categoria"), mantido ao lado das duas
+   * listas que já existiam (produtos sem regra / já reclassificados), não
+   * no lugar delas. Conta todo `categoria` não-nulo que `classifyProductTier`
+   * devolveu nesta mesma passada — nenhuma reclassificação extra. */
+  categoriaContagem: Record<CategoryKey, number>;
 }
 
 const PREVIEW_ROWS_LIMIT = 200;
@@ -1095,6 +1133,7 @@ async function summarize(
   const vendedoresMap = new Map<string, string>();
   const amostras: { produto: string; categoria: string; tier: number }[] = [];
   const previewRows: { data: string; vendedor: string; produto: string; qtd: number; valor: number }[] = [];
+  const categoriaContagem: Record<CategoryKey, number> = { DERM: 0, GEN: 0, MP: 0, MER: 0 };
 
   let processedRows = 0;
   for (const sheet of sheets) {
@@ -1118,6 +1157,7 @@ async function summarize(
         if (amostras.length < RECLASSIFICATION_PREVIEW_LIMIT) amostras.push({ produto, categoria: categoria!, tier });
       }
       if (tier === 5 && categoria !== 'MP') produtosNovosSet.add(produto.toLowerCase());
+      if (categoria) categoriaContagem[categoria]++;
 
       const qtd = map.qtd >= 0 ? parseNumeroBR(r[map.qtd]) : 0;
       const valor = map.valor >= 0 ? parseNumeroBR(r[map.valor]) : 0;
@@ -1158,6 +1198,7 @@ async function summarize(
     vendedores: Array.from(vendedoresMap.entries()).map(([chave, nome]) => ({ chave, nome })),
     amostras,
     previewRows,
+    categoriaContagem,
   };
 }
 
@@ -1187,13 +1228,19 @@ function buildVendasEtapas(args: {
     step === 'analyze' || step === 'verify' || step === 'done' ? 'concluido' : step === 'map' ? 'andamento' : 'aguardando';
 
   const etapa3Status: ImportStepStatus =
-    step === 'verify' || step === 'done' ? (summary ? 'concluido' : 'aguardando') : step === 'analyze' ? 'andamento' : 'aguardando';
+    step === 'verify' || step === 'revisaoFinal' || step === 'done'
+      ? summary
+        ? 'concluido'
+        : 'aguardando'
+      : step === 'analyze'
+        ? 'andamento'
+        : 'aguardando';
 
-  const etapa4Blocked = step === 'verify' && !!error;
+  const etapa4Blocked = (step === 'verify' || step === 'revisaoFinal') && !!error;
   const gravacaoJaComecou = step === 'done' && (!!writeProgress || !!confirmResult);
   const etapa4Status: ImportStepStatus = gravacaoJaComecou
     ? 'concluido'
-    : step === 'verify'
+    : step === 'verify' || step === 'revisaoFinal'
       ? etapa4Blocked
         ? 'erro'
         : 'andamento'
@@ -1270,16 +1317,17 @@ function VerifyStep({
   summary: s,
   options,
   onBack,
-  onConfirm,
+  onRevisaoFinal,
   error,
 }: {
   summary: SheetSummary;
   options: AnalysisOptions;
   onBack: () => void;
-  onConfirm: () => void;
+  onRevisaoFinal: () => void;
   error: string | null;
 }) {
   const [showVendedores, setShowVendedores] = useState(false);
+  const labelMap = useCategoryLabelMap();
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
@@ -1298,6 +1346,20 @@ function VerifyStep({
           <div className="text-xs text-slate-400">Baixa confiança (heurística/padrão)</div>
           <div className="text-lg font-mono font-semibold text-amber-400">{s.baixaConfianca}</div>
         </div>
+      </div>
+
+      <p className="text-xs text-slate-500 mb-2">Resumo por categoria:</p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+        {CAT_KEYS.map((key) => (
+          <div key={key} className="rounded-xl border bg-slate-950/60 p-3" style={{ borderColor: `${CATEGORY_COLOR[key]}40` }}>
+            <div className="text-xs text-slate-400">
+              {CATEGORY_EMOJI[key]} {labelMap[key]}
+            </div>
+            <div className="text-lg font-mono font-semibold" style={{ color: CATEGORY_COLOR[key] }}>
+              {s.categoriaContagem[key]}
+            </div>
+          </div>
+        ))}
       </div>
 
       <p className="text-xs text-slate-500 mb-2">Detalhamento da planilha:</p>
@@ -1401,7 +1463,56 @@ function VerifyStep({
         </div>
       )}
 
-      {options.listaVendas && s.previewRows.length > 0 && (
+      {error && <p className="text-xs text-rose-400 mb-3">{error}</p>}
+
+      <ImportActionBar>
+        <button onClick={onBack} className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300">
+          ← Voltar ao mapeamento
+        </button>
+        <button
+          onClick={onRevisaoFinal}
+          style={{
+            background: `linear-gradient(90deg, ${NEON_CYAN}, ${NEON_PURPLE})`,
+            color: '#04121a',
+            textTransform: 'uppercase',
+            letterSpacing: '.03em',
+          }}
+          className="rounded-lg font-bold px-4 py-2 text-sm"
+        >
+          Revisão Final de Categorias →
+        </button>
+      </ImportActionBar>
+    </div>
+  );
+}
+
+/** Novo estágio pedido explicitamente pelo usuário, 2026-10-31 ("um estágio
+ * onde teremos uma revisão rápida antes de prosseguir para as últimas
+ * etapas"): fica entre a verificação de classificação (VerifyStep) e a
+ * gravação de fato (step 'done') — mostra a prévia da lista de vendas (o
+ * mesmo checkbox "Pré-visualizar lista de vendas antes de salvar" da etapa
+ * de mapeamento já controla isso) como a última conferência antes de
+ * `onConfirm` (handleConfirm, inalterado) gravar de verdade no banco. */
+function RevisaoFinalStep({
+  summary: s,
+  options,
+  onBack,
+  onConfirm,
+}: {
+  summary: SheetSummary;
+  options: AnalysisOptions;
+  onBack: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+      <h3 className="font-semibold mb-1 text-sm">✅ Revisão final</h3>
+      <p className="text-xs text-slate-500 mb-3">
+        Última conferência antes de gravar {s.total} venda(s) no sistema — depois de confirmar, a gravação não pode
+        ser desfeita por aqui (só reimportando a mesma data, que substitui o que já foi gravado).
+      </p>
+
+      {options.listaVendas && s.previewRows.length > 0 ? (
         <>
           <p className="text-xs text-slate-500 mb-2">
             Lista de vendas (prévia das primeiras {s.previewRows.length} de {s.total}):
@@ -1431,19 +1542,16 @@ function VerifyStep({
             </table>
           </div>
         </>
+      ) : (
+        <p className="text-xs text-slate-600 mb-3">
+          Pré-visualização da lista de vendas desligada — ative "Pré-visualizar lista de vendas antes de salvar" na
+          etapa de mapeamento se quiser revisar linha a linha antes de gravar.
+        </p>
       )}
 
-      {error && <p className="text-xs text-rose-400 mb-3">{error}</p>}
-      {/* Fica na mesma posição de sempre dentro do card, mas gruda no rodapé
-          da tela (position: sticky) enquanto a revisão é rolada pra cima ou
-          pra baixo — assim os dois botões continuam alcançáveis mesmo numa
-          planilha grande, sem precisar rolar até o final da página. */}
-      <div
-        className="flex gap-2 sticky bottom-0 py-2 -mx-4 px-4 rounded-b-2xl border-t border-slate-800"
-        style={{ background: 'rgba(15,23,42,.97)', backdropFilter: 'blur(4px)' }}
-      >
+      <ImportActionBar>
         <button onClick={onBack} className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300">
-          ← Voltar ao mapeamento
+          ← Voltar à revisão de categorias
         </button>
         <button
           onClick={onConfirm}
@@ -1457,7 +1565,7 @@ function VerifyStep({
         >
           💾 Salvar Dados de Venda ({s.total})
         </button>
-      </div>
+      </ImportActionBar>
     </div>
   );
 }
