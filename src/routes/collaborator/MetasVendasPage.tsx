@@ -213,8 +213,10 @@ function MetricsGrid({
       <Metric label="Itens" value={`${itens} un.`} color="#a82bff" />
       <Metric label="Meta Geral" value={fmtMoney(meta)} color="#ffd700" />
       <Metric label="Super Meta" value={fmtMoney(superMeta)} color="#ff3df0" />
-      {/* Sign hidden by design (visual only) — `saldo` itself stays negative for every calculation elsewhere. */}
-      <Metric label="Saldo" value={fmtMoney(Math.abs(saldo))} color={saldo >= 0 ? '#14ff00' : '#ff3df0'} />
+      {/* Saldo só existe quando a meta já foi superada — pedido explícito
+          do usuário, 2026-10-31: antes disso mostra 0, nunca o quanto
+          falta (já mostrado no card "Valor restante"). */}
+      <Metric label="Saldo" value={fmtMoney(Math.max(0, saldo))} color={saldo > 0 ? '#14ff00' : '#ff3df0'} />
       <Metric label="Atingimento" value={atingimento !== null ? `${atingimento.toFixed(0)}%` : '—'} color="#00f0ff" />
       <Metric label="Dias restantes" value={`${diasRestantes} dia(s)`} color="#14ff00" />
       <Metric label="Valor restante" value={fmtMoney(falta)} color="#ff6a00" />

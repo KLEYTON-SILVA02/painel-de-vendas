@@ -1038,8 +1038,11 @@ export function DashboardPage() {
             value={isDsmMode || isUvcMode ? String(rankingFiltered.length) : formatChartValue(faltaValor, isUnitRanking)}
             color="#a82bff"
           />
-          {/* Sign hidden by design (visual only) — `saldo` itself stays negative for every calculation elsewhere. */}
-          <StatCard label="Saldo" value={fmtValue(Math.abs(saldo))} color={saldo >= 0 ? '#ffb700' : '#ff3df0'} />
+          {/* Saldo só existe quando a meta já foi superada (barValor >
+              barMetaBase) — pedido explícito do usuário, 2026-10-31: antes
+              disso mostra 0, nunca o quanto falta (que já é o card "Falta
+              p/ Meta" ao lado). */}
+          <StatCard label="Saldo" value={fmtValue(Math.max(0, saldo))} color={saldo > 0 ? '#ffb700' : '#64748b'} />
           {/* "Itens Vendidos" é sempre uma contagem de unidades, nunca um
               valor em R$ — fmtValue (R$ pras categorias monetárias) não
               fazia sentido aqui mesmo antes do UVC existir (correção
