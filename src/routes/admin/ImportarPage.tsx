@@ -597,6 +597,54 @@ export function ImportarPage() {
       <CentralImportacaoPanel
         etapas={vendasCentral.etapas}
         progressoPct={vendasCentral.pct}
+        segundaColuna={
+          step === 'analyze'
+            ? {
+                semMoldura: true,
+                children: (
+                  <div>
+                    <h3 className="font-semibold mb-1 text-sm">🔍 Analisando produtos…</h3>
+                    <p className="text-xs text-slate-500 mb-3">
+                      {progress || 'Conferindo a categorização de cada produto e preparando a pré-visualização.'}
+                    </p>
+                    <div style={{ width: '100%', height: 14, borderRadius: 8, background: '#080818', border: '1px solid #212948', overflow: 'hidden' }}>
+                      <div
+                        style={{
+                          height: '100%',
+                          width: '100%',
+                          borderRadius: 8,
+                          background: `linear-gradient(90deg, ${NEON_CYAN}, ${NEON_PURPLE})`,
+                          animation: 'importar-analyze-pulse 1s ease-in-out infinite',
+                        }}
+                      />
+                    </div>
+                    <style>{`@keyframes importar-analyze-pulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }`}</style>
+                  </div>
+                ),
+              }
+            : step === 'verify' && summary
+              ? {
+                  semMoldura: true,
+                  children: <VerifyStepColuna2 summary={summary} options={analysisOptions} error={error} />,
+                }
+              : step === 'revisaoFinal' && summary
+                ? {
+                    semMoldura: true,
+                    children: <RevisaoFinalStepConteudo summary={summary} options={analysisOptions} />,
+                  }
+                : step === 'done'
+                  ? {
+                      semMoldura: true,
+                      children: (
+                        <DoneStepConteudo
+                          progress={progress}
+                          writeProgress={writeProgress}
+                          confirmResult={confirmResult}
+                        />
+                      ),
+                    }
+                  : undefined
+        }
         terceiraColuna={
           step === 'pick'
             ? {
@@ -674,7 +722,12 @@ export function ImportarPage() {
                     </div>
                   ),
                 }
-            : undefined
+            : step === 'verify' && summary
+              ? {
+                  semMoldura: true,
+                  children: <VerifyStepColuna3 summary={summary} />,
+                }
+              : undefined
         }
         conteudoAbaixoEtapas={
           step === 'map' ? (
@@ -787,130 +840,58 @@ export function ImportarPage() {
         </ImportActionBar>
       )}
 
-      {step === 'analyze' && (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-          <h3 className="font-semibold mb-1 text-sm">🔍 Analisando produtos…</h3>
-          <p className="text-xs text-slate-500 mb-3">
-            {progress || 'Conferindo a categorização de cada produto e preparando a pré-visualização.'}
-          </p>
-          <div style={{ width: '100%', height: 14, borderRadius: 8, background: '#080818', border: '1px solid #212948', overflow: 'hidden' }}>
-            <div
-              style={{
-                height: '100%',
-                width: '100%',
-                borderRadius: 8,
-                background: `linear-gradient(90deg, ${NEON_CYAN}, ${NEON_PURPLE})`,
-                animation: 'importar-analyze-pulse 1s ease-in-out infinite',
-              }}
-            />
-          </div>
-          <style>{`@keyframes importar-analyze-pulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }`}</style>
-        </div>
-      )}
-
+      {/* Pedido explícito do usuário, 2026-10-31 (print em mãos): nas etapas
+          de analisar/verificar/revisão final/gravação, o conteúdo de cada
+          etapa não fica mais empilhado embaixo do painel inteiro — agora
+          mora DENTRO da grade (segundaColuna/terceiraColuna acima), igual
+          às etapas de seleção/mapeamento. Aqui embaixo só sobram os botões
+          de ação de cada etapa, no mesmo padrão fixo no rodapé das demais. */}
       {step === 'verify' && summary && (
-        <VerifyStep
-          summary={summary}
-          options={analysisOptions}
-          onBack={() => setStep('map')}
-          onRevisaoFinal={() => setStep('revisaoFinal')}
-          error={error}
-        />
+        <ImportActionBar>
+          <button onClick={() => setStep('map')} className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300">
+            ← Voltar ao mapeamento
+          </button>
+          <button
+            onClick={() => setStep('revisaoFinal')}
+            style={{
+              background: `linear-gradient(90deg, ${NEON_CYAN}, ${NEON_PURPLE})`,
+              color: '#04121a',
+              textTransform: 'uppercase',
+              letterSpacing: '.03em',
+            }}
+            className="rounded-lg font-bold px-4 py-2 text-sm"
+          >
+            Revisão Final de Categorias →
+          </button>
+        </ImportActionBar>
       )}
 
       {step === 'revisaoFinal' && summary && (
-        <RevisaoFinalStep summary={summary} options={analysisOptions} onBack={() => setStep('verify')} onConfirm={handleConfirm} />
+        <ImportActionBar>
+          <button onClick={() => setStep('verify')} className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300">
+            ← Voltar à revisão de categorias
+          </button>
+          <button
+            onClick={handleConfirm}
+            style={{
+              background: `linear-gradient(90deg, ${NEON_CYAN}, ${NEON_PURPLE})`,
+              color: '#04121a',
+              textTransform: 'uppercase',
+              letterSpacing: '.03em',
+            }}
+            className="rounded-lg font-bold px-4 py-2 text-sm"
+          >
+            💾 Salvar Dados de Venda ({summary.total})
+          </button>
+        </ImportActionBar>
       )}
 
-      {step === 'done' && (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-          {/* Pedido explícito do usuário, 2026-10-29: durante a gravação,
-              nada de um 2º velocímetro aqui — o progresso de gravação já
-              aparece no velocímetro da 1ª coluna do CentralImportacaoPanel
-              (buildVendasEtapas soma a fração de writeProgress ao %
-              quando a etapa "Gravação no sistema" está em andamento). Aqui
-              embaixo, uma vez que a gravação em lote já tem um número real
-              (writeProgress.inserted/total), usa a barra quadriculada de %
-              real (pedido explícito do usuário, 2026-10-31) em vez de só
-              texto; antes disso (ex.: "Verificando planilha…", sem
-              contagem ainda) continua o spinner+texto de sempre. */}
-          {progress && (
-            writeProgress && writeProgress.total > 0 ? (
-              <div className="mb-3">
-                <ImportSquareProgressBar
-                  pct={(writeProgress.inserted / writeProgress.total) * 100}
-                  label={progress}
-                  color={NEON_CYAN}
-                />
-              </div>
-            ) : (
-              <p className="text-sm text-cyan-400 flex items-center gap-2">
-                <Spinner size={16} color={NEON_CYAN} />
-                {progress}
-              </p>
-            )
-          )}
-          {confirmResult && (
-            <>
-              <p className="text-sm text-green-400 mb-3">
-                {confirmResult.count} vendas importadas
-                {confirmResult.duplicateCount ? ` · ${confirmResult.duplicateCount} duplicada(s) ignorada(s)` : ''}
-                {confirmResult.invalidDate ? ` · ${confirmResult.invalidDate} com data inválida` : ''}
-                {confirmResult.noProduto ? ` · ${confirmResult.noProduto} sem produto` : ''}
-                {confirmResult.footerRowSkipped ? ` · ${confirmResult.footerRowSkipped} linha(s) de total ignorada(s)` : ''}
-                {confirmResult.unmatchedSeller ? ` · ${confirmResult.unmatchedSeller} de vendedor não cadastrado` : ''}
-                {confirmResult.nameMismatch ? ` · ${confirmResult.nameMismatch} com nome divergente da matrícula` : ''}
-                {confirmResult.unclassified ? ` · ${confirmResult.unclassified} de produto não classificado` : ''}
-              </p>
-              {confirmResult.replacedDates.length > 0 && (
-                <p className="text-xs text-amber-400 mb-3">
-                  {confirmResult.replacedDates.length === 1 ? 'A data' : 'As datas'}{' '}
-                  {confirmResult.replacedDates.map((d) => fmtDateBR(d)).join(', ')} {confirmResult.replacedDates.length === 1 ? 'foi' : 'foram'} substituída(s):
-                  as vendas antigas dessa(s) data(s) foram apagadas e regravadas a partir desta planilha.
-                </p>
-              )}
-              {confirmResult.duplicateCount > 0 && (
-                <p className="text-xs text-slate-500 mb-3">
-                  {confirmResult.duplicateCount} venda(s) da planilha já existiam no sistema (mesma data, matrícula, produto,
-                  quantidade e valor) e não foram gravadas de novo.
-                </p>
-              )}
-              {confirmResult.unmatchedSeller > 0 && (
-                <p className="text-xs text-slate-500 mb-3">
-                  {confirmResult.unmatchedSeller} venda(s) têm matrícula que não corresponde a nenhum colaborador cadastrado —
-                  foram importadas normalmente, mas vale cadastrar esses vendedores em <b>ADM → Colaboradores</b>.
-                </p>
-              )}
-              {confirmResult.nameMismatch > 0 && (
-                <p className="text-xs text-amber-400 mb-3">
-                  {confirmResult.nameMismatch} venda(s) foram vinculadas por matrícula a um colaborador cujo nome cadastrado não
-                  bate com o nome da planilha para aquela linha — foram importadas normalmente (a matrícula continua sendo o
-                  identificador principal), mas vale conferir se não houve troca de matrícula entre colaboradores.
-                </p>
-              )}
-              {confirmResult.rejected.length > 0 && (
-                <div className="rounded-xl border border-rose-700/50 bg-rose-950/30 p-3 mb-3">
-                  <p className="text-xs text-rose-300 mb-1">
-                    {confirmResult.rejected.length} linha(s) não puderam ser gravadas mesmo após tentar de novo — o restante da
-                    planilha foi importado normalmente. Corrija e reenvie só essas vendas:
-                  </p>
-                  <ul className="text-[11px] text-rose-400 list-disc pl-4 max-h-32 overflow-y-auto">
-                    {confirmResult.rejected.slice(0, 20).map((r, i) => (
-                      <li key={i}>
-                        {String(r.row.data_raw ?? '—')} · {String(r.row.produto ?? '—')} — {r.error}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              <ImportActionBar>
-                <button onClick={reset} className="rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm">
-                  Importar outra planilha
-                </button>
-              </ImportActionBar>
-            </>
-          )}
-        </div>
+      {step === 'done' && confirmResult && (
+        <ImportActionBar>
+          <button onClick={reset} className="rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm">
+            Importar outra planilha
+          </button>
+        </ImportActionBar>
       )}
       </div>
 
@@ -1313,24 +1294,26 @@ function buildVendasEtapas(args: {
   return { etapas, pct };
 }
 
-function VerifyStep({
+/** Pedido explícito do usuário, 2026-10-31 (print em mãos): na etapa de
+ * verificação de classificação, velocímetro+etapas viram uma única coluna
+ * fundida (ver `segundaColuna` em CentralImportacaoPanel), e o conteúdo que
+ * antes era um card só agora se divide em 2 colunas de verdade — esta é a
+ * 2ª (estatísticas de confiança + detalhamento + produtos sem regra), a
+ * `VerifyStepColuna3` abaixo é a 3ª (resumo por categoria + já
+ * reclassificados). Juntas substituem o antigo `VerifyStep`. */
+function VerifyStepColuna2({
   summary: s,
   options,
-  onBack,
-  onRevisaoFinal,
   error,
 }: {
   summary: SheetSummary;
   options: AnalysisOptions;
-  onBack: () => void;
-  onRevisaoFinal: () => void;
   error: string | null;
 }) {
   const [showVendedores, setShowVendedores] = useState(false);
-  const labelMap = useCategoryLabelMap();
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+    <div>
       <h3 className="font-semibold mb-1 text-sm">🔍 2ª releitura — verificação de classificação</h3>
       <p className="text-xs text-slate-500 mb-3">
         Antes de gravar, o sistema reclassificou todos os {s.total} produtos e conferiu o nível de confiança de cada
@@ -1348,22 +1331,8 @@ function VerifyStep({
         </div>
       </div>
 
-      <p className="text-xs text-slate-500 mb-2">Resumo por categoria:</p>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-        {CAT_KEYS.map((key) => (
-          <div key={key} className="rounded-xl border bg-slate-950/60 p-3" style={{ borderColor: `${CATEGORY_COLOR[key]}40` }}>
-            <div className="text-xs text-slate-400">
-              {CATEGORY_EMOJI[key]} {labelMap[key]}
-            </div>
-            <div className="text-lg font-mono font-semibold" style={{ color: CATEGORY_COLOR[key] }}>
-              {s.categoriaContagem[key]}
-            </div>
-          </div>
-        ))}
-      </div>
-
       <p className="text-xs text-slate-500 mb-2">Detalhamento da planilha:</p>
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
+      <div className="grid grid-cols-2 gap-3 mb-3">
         {options.vendedores ? (
           <button onClick={() => setShowVendedores((v) => !v)} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-left hover:border-cyan-500">
             <div className="text-xs text-slate-400">Vendedores encontrados</div>
@@ -1381,10 +1350,6 @@ function VerifyStep({
           <div className="text-lg font-mono font-semibold">{s.itensTotais}</div>
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-          <div className="text-xs text-slate-400">Valor total</div>
-          <div className="text-lg font-mono font-semibold">{fmtMoney(s.valorTotal)}</div>
-        </div>
-        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
           <div className="text-xs text-slate-400">Dias na planilha</div>
           <div className="text-lg font-mono font-semibold">{s.diasDistintos}</div>
         </div>
@@ -1394,62 +1359,10 @@ function VerifyStep({
         </div>
       </div>
 
-      {options.produtos && (s.produtosNovos > 0 || s.amostras.length > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-          {/* Lado esquerdo: sem categoria definida (nenhuma regra bateu). */}
-          <div>
-            <p className="text-xs text-slate-500 mb-2">
-              {s.produtosNovos} produto(s) sem regra de classificação cadastrada (prévia de até {RECLASSIFICATION_PREVIEW_LIMIT}) — serão
-              importados com a categoria padrão e ficarão sinalizados em <b>ADM → Auditoria → Pendentes de Revisão</b>:
-            </p>
-            <div className="rounded-xl border border-amber-700/40 bg-slate-950/60 p-3 h-56 overflow-y-auto">
-              {s.produtosNovosNomes.length === 0 ? (
-                <div className="text-xs text-slate-600 text-center py-4">Nenhum produto sem categoria.</div>
-              ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  {s.produtosNovosNomes.map((p) => (
-                    <span key={p} className="text-xs bg-amber-900/40 text-amber-200 rounded-full px-2.5 py-1">
-                      {p}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Lado direito: já reclassificados, com a categoria estipulada. */}
-          <div>
-            <p className="text-xs text-slate-500 mb-2">
-              Produtos já reclassificados, com a categoria estipulada (prévia de até {RECLASSIFICATION_PREVIEW_LIMIT}) — revise depois em
-              Auditoria se necessário:
-            </p>
-            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 h-56 overflow-y-auto">
-              {s.amostras.length === 0 ? (
-                <div className="text-xs text-slate-600 text-center py-4">Nenhum produto reclassificado.</div>
-              ) : (
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-left text-slate-400 border-b border-slate-800">
-                      <th className="py-1.5 pr-3">Produto</th>
-                      <th className="py-1.5 pr-3">Categoria</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {s.amostras.map((a, i) => (
-                      <tr key={i} className="border-b border-slate-900">
-                        <td className="py-1.5 pr-3">{a.produto}</td>
-                        <td className="py-1.5 pr-3">
-                          <span className="bg-slate-800 rounded-full px-2 py-0.5">{a.categoria}</span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 mb-3">
+        <div className="text-xs text-slate-400">Valor total</div>
+        <div className="text-lg font-mono font-semibold">{fmtMoney(s.valorTotal)}</div>
+      </div>
 
       {showVendedores && options.vendedores && (
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 mb-3 max-h-48 overflow-y-auto">
@@ -1463,49 +1376,92 @@ function VerifyStep({
         </div>
       )}
 
-      {error && <p className="text-xs text-rose-400 mb-3">{error}</p>}
+      {options.produtos && s.produtosNovos > 0 && (
+        <>
+          <p className="text-xs text-slate-500 mb-2">
+            {s.produtosNovos} produto(s) sem regra de classificação cadastrada (prévia de até {RECLASSIFICATION_PREVIEW_LIMIT}) — serão
+            importados com a categoria padrão e ficarão sinalizados em <b>ADM → Auditoria → Pendentes de Revisão</b>:
+          </p>
+          <div className="rounded-xl border border-amber-700/40 bg-slate-950/60 p-3 h-56 overflow-y-auto mb-3">
+            <div className="flex flex-wrap gap-1.5">
+              {s.produtosNovosNomes.map((p) => (
+                <span key={p} className="text-xs bg-amber-900/40 text-amber-200 rounded-full px-2.5 py-1">
+                  {p}
+                </span>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
 
-      <ImportActionBar>
-        <button onClick={onBack} className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300">
-          ← Voltar ao mapeamento
-        </button>
-        <button
-          onClick={onRevisaoFinal}
-          style={{
-            background: `linear-gradient(90deg, ${NEON_CYAN}, ${NEON_PURPLE})`,
-            color: '#04121a',
-            textTransform: 'uppercase',
-            letterSpacing: '.03em',
-          }}
-          className="rounded-lg font-bold px-4 py-2 text-sm"
-        >
-          Revisão Final de Categorias →
-        </button>
-      </ImportActionBar>
+      {error && <p className="text-xs text-rose-400">{error}</p>}
+    </div>
+  );
+}
+
+function VerifyStepColuna3({ summary: s }: { summary: SheetSummary }) {
+  const labelMap = useCategoryLabelMap();
+
+  return (
+    <div>
+      <p className="text-xs text-slate-500 mb-2">Resumo por categoria:</p>
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        {CAT_KEYS.map((key) => (
+          <div key={key} className="rounded-xl border bg-slate-950/60 p-3" style={{ borderColor: `${CATEGORY_COLOR[key]}40` }}>
+            <div className="text-xs text-slate-400">
+              {CATEGORY_EMOJI[key]} {labelMap[key]}
+            </div>
+            <div className="text-lg font-mono font-semibold" style={{ color: CATEGORY_COLOR[key] }}>
+              {s.categoriaContagem[key]}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {s.amostras.length > 0 && (
+        <>
+          <p className="text-xs text-slate-500 mb-2">
+            Produtos já reclassificados, com a categoria estipulada (prévia de até {RECLASSIFICATION_PREVIEW_LIMIT}) — revise depois em
+            Auditoria se necessário:
+          </p>
+          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 h-56 overflow-y-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-slate-400 border-b border-slate-800">
+                  <th className="py-1.5 pr-3">Produto</th>
+                  <th className="py-1.5 pr-3">Categoria</th>
+                </tr>
+              </thead>
+              <tbody>
+                {s.amostras.map((a, i) => (
+                  <tr key={i} className="border-b border-slate-900">
+                    <td className="py-1.5 pr-3">{a.produto}</td>
+                    <td className="py-1.5 pr-3">
+                      <span className="bg-slate-800 rounded-full px-2 py-0.5">{a.categoria}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
 /** Novo estágio pedido explicitamente pelo usuário, 2026-10-31 ("um estágio
  * onde teremos uma revisão rápida antes de prosseguir para as últimas
- * etapas"): fica entre a verificação de classificação (VerifyStep) e a
- * gravação de fato (step 'done') — mostra a prévia da lista de vendas (o
- * mesmo checkbox "Pré-visualizar lista de vendas antes de salvar" da etapa
- * de mapeamento já controla isso) como a última conferência antes de
- * `onConfirm` (handleConfirm, inalterado) gravar de verdade no banco. */
-function RevisaoFinalStep({
-  summary: s,
-  options,
-  onBack,
-  onConfirm,
-}: {
-  summary: SheetSummary;
-  options: AnalysisOptions;
-  onBack: () => void;
-  onConfirm: () => void;
-}) {
+ * etapas"): fica entre a verificação de classificação e a gravação de fato
+ * (step 'done') — mostra a prévia da lista de vendas (o mesmo checkbox
+ * "Pré-visualizar lista de vendas antes de salvar" da etapa de mapeamento
+ * já controla isso) como a última conferência antes de `handleConfirm`
+ * (inalterado) gravar de verdade no banco. Vira o conteúdo da `segundaColuna`
+ * (modo colunas fundidas) — os botões de ação ficam fora, no padrão
+ * `ImportActionBar` de sempre. */
+function RevisaoFinalStepConteudo({ summary: s, options }: { summary: SheetSummary; options: AnalysisOptions }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+    <div>
       <h3 className="font-semibold mb-1 text-sm">✅ Revisão final</h3>
       <p className="text-xs text-slate-500 mb-3">
         Última conferência antes de gravar {s.total} venda(s) no sistema — depois de confirmar, a gravação não pode
@@ -1517,7 +1473,7 @@ function RevisaoFinalStep({
           <p className="text-xs text-slate-500 mb-2">
             Lista de vendas (prévia das primeiras {s.previewRows.length} de {s.total}):
           </p>
-          <div className="overflow-x-auto mb-3 max-h-64 overflow-y-auto rounded-xl border border-slate-800">
+          <div className="overflow-x-auto max-h-64 overflow-y-auto rounded-xl border border-slate-800">
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-slate-950">
                 <tr className="text-left text-slate-400 border-b border-slate-800">
@@ -1543,29 +1499,120 @@ function RevisaoFinalStep({
           </div>
         </>
       ) : (
-        <p className="text-xs text-slate-600 mb-3">
+        <p className="text-xs text-slate-600">
           Pré-visualização da lista de vendas desligada — ative "Pré-visualizar lista de vendas antes de salvar" na
           etapa de mapeamento se quiser revisar linha a linha antes de gravar.
         </p>
       )}
+    </div>
+  );
+}
 
-      <ImportActionBar>
-        <button onClick={onBack} className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300">
-          ← Voltar à revisão de categorias
-        </button>
-        <button
-          onClick={onConfirm}
-          style={{
-            background: `linear-gradient(90deg, ${NEON_CYAN}, ${NEON_PURPLE})`,
-            color: '#04121a',
-            textTransform: 'uppercase',
-            letterSpacing: '.03em',
-          }}
-          className="rounded-lg font-bold px-4 py-2 text-sm"
-        >
-          💾 Salvar Dados de Venda ({s.total})
-        </button>
-      </ImportActionBar>
+/** Conteúdo da etapa de gravação (step 'done'), agora vivendo como
+ * `segundaColuna` do painel em vez de um card empilhado embaixo — mesma
+ * lógica de sempre (spinner/barra quadriculada real + mensagens de
+ * resultado), só a posição mudou. */
+function DoneStepConteudo({
+  progress,
+  writeProgress,
+  confirmResult,
+}: {
+  progress: string | null;
+  writeProgress: { inserted: number; total: number } | null;
+  confirmResult: {
+    count: number;
+    invalidDate: number;
+    noProduto: number;
+    duplicateCount: number;
+    footerRowSkipped: number;
+    unmatchedSeller: number;
+    nameMismatch: number;
+    unclassified: number;
+    replacedDates: string[];
+    rejected: { row: Record<string, unknown>; error: string }[];
+  } | null;
+}) {
+  return (
+    <div>
+      {/* Pedido explícito do usuário, 2026-10-29: durante a gravação, nada
+          de um 2º velocímetro aqui — o progresso de gravação já aparece no
+          velocímetro da 1ª coluna do CentralImportacaoPanel (buildVendasEtapas
+          soma a fração de writeProgress ao % quando a etapa "Gravação no
+          sistema" está em andamento). Aqui embaixo, uma vez que a gravação
+          em lote já tem um número real (writeProgress.inserted/total), usa
+          a barra quadriculada de % real (pedido explícito do usuário,
+          2026-10-31) em vez de só texto; antes disso (ex.: "Verificando
+          planilha…", sem contagem ainda) continua o spinner+texto de sempre. */}
+      {progress &&
+        (writeProgress && writeProgress.total > 0 ? (
+          <div className="mb-3">
+            <ImportSquareProgressBar
+              pct={(writeProgress.inserted / writeProgress.total) * 100}
+              label={progress}
+              color={NEON_CYAN}
+            />
+          </div>
+        ) : (
+          <p className="text-sm text-cyan-400 flex items-center gap-2">
+            <Spinner size={16} color={NEON_CYAN} />
+            {progress}
+          </p>
+        ))}
+      {confirmResult && (
+        <>
+          <p className="text-sm text-green-400 mb-3">
+            {confirmResult.count} vendas importadas
+            {confirmResult.duplicateCount ? ` · ${confirmResult.duplicateCount} duplicada(s) ignorada(s)` : ''}
+            {confirmResult.invalidDate ? ` · ${confirmResult.invalidDate} com data inválida` : ''}
+            {confirmResult.noProduto ? ` · ${confirmResult.noProduto} sem produto` : ''}
+            {confirmResult.footerRowSkipped ? ` · ${confirmResult.footerRowSkipped} linha(s) de total ignorada(s)` : ''}
+            {confirmResult.unmatchedSeller ? ` · ${confirmResult.unmatchedSeller} de vendedor não cadastrado` : ''}
+            {confirmResult.nameMismatch ? ` · ${confirmResult.nameMismatch} com nome divergente da matrícula` : ''}
+            {confirmResult.unclassified ? ` · ${confirmResult.unclassified} de produto não classificado` : ''}
+          </p>
+          {confirmResult.replacedDates.length > 0 && (
+            <p className="text-xs text-amber-400 mb-3">
+              {confirmResult.replacedDates.length === 1 ? 'A data' : 'As datas'}{' '}
+              {confirmResult.replacedDates.map((d) => fmtDateBR(d)).join(', ')} {confirmResult.replacedDates.length === 1 ? 'foi' : 'foram'} substituída(s):
+              as vendas antigas dessa(s) data(s) foram apagadas e regravadas a partir desta planilha.
+            </p>
+          )}
+          {confirmResult.duplicateCount > 0 && (
+            <p className="text-xs text-slate-500 mb-3">
+              {confirmResult.duplicateCount} venda(s) da planilha já existiam no sistema (mesma data, matrícula, produto,
+              quantidade e valor) e não foram gravadas de novo.
+            </p>
+          )}
+          {confirmResult.unmatchedSeller > 0 && (
+            <p className="text-xs text-slate-500 mb-3">
+              {confirmResult.unmatchedSeller} venda(s) têm matrícula que não corresponde a nenhum colaborador cadastrado —
+              foram importadas normalmente, mas vale cadastrar esses vendedores em <b>ADM → Colaboradores</b>.
+            </p>
+          )}
+          {confirmResult.nameMismatch > 0 && (
+            <p className="text-xs text-amber-400 mb-3">
+              {confirmResult.nameMismatch} venda(s) foram vinculadas por matrícula a um colaborador cujo nome cadastrado não
+              bate com o nome da planilha para aquela linha — foram importadas normalmente (a matrícula continua sendo o
+              identificador principal), mas vale conferir se não houve troca de matrícula entre colaboradores.
+            </p>
+          )}
+          {confirmResult.rejected.length > 0 && (
+            <div className="rounded-xl border border-rose-700/50 bg-rose-950/30 p-3 mb-3">
+              <p className="text-xs text-rose-300 mb-1">
+                {confirmResult.rejected.length} linha(s) não puderam ser gravadas mesmo após tentar de novo — o restante da
+                planilha foi importado normalmente. Corrija e reenvie só essas vendas:
+              </p>
+              <ul className="text-[11px] text-rose-400 list-disc pl-4 max-h-32 overflow-y-auto">
+                {confirmResult.rejected.slice(0, 20).map((r, i) => (
+                  <li key={i}>
+                    {String(r.row.data_raw ?? '—')} · {String(r.row.produto ?? '—')} — {r.error}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

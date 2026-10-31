@@ -146,6 +146,19 @@ export function ImportSquareProgressBar({
   );
 }
 
+type ColunaExtra = { titulo?: string; children: ReactNode; semMoldura?: boolean };
+
+function ColunaExtraBloco({ coluna }: { coluna: ColunaExtra }) {
+  return coluna.semMoldura ? (
+    <div className="min-w-0 flex flex-col gap-3">{coluna.children}</div>
+  ) : (
+    <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2.5 min-w-0">
+      {coluna.titulo && <p className="text-xs text-slate-400 mb-2">{coluna.titulo}</p>}
+      {coluna.children}
+    </div>
+  );
+}
+
 export function CentralImportacaoPanel({
   titulo = 'CENTRAL DE IMPORTAÇÃO',
   subtitulo = 'Análise, validação e gravação segura de vendas.',
@@ -155,6 +168,7 @@ export function CentralImportacaoPanel({
   conteudoAcimaEtapas,
   conteudoAbaixoEtapas,
   terceiraColuna,
+  segundaColuna,
 }: {
   titulo?: string;
   subtitulo?: string;
@@ -164,7 +178,9 @@ export function CentralImportacaoPanel({
   /** Conteúdo extra opcional dentro da MESMA coluna das etapas (2ª coluna),
    * antes/depois da lista — ex.: resumo/estatísticas acima, ou um bloco de
    * opções abaixo (pedido explícito do usuário, 2026-10-31, pro layout da
-   * etapa de mapeamento de Importar Vendas). */
+   * etapa de mapeamento de Importar Vendas). Ignorado quando `segundaColuna`
+   * está definida (ver abaixo) — nesse modo a coluna de etapas já não existe
+   * mais sozinha, foi fundida com o velocímetro. */
   conteudoAcimaEtapas?: ReactNode;
   conteudoAbaixoEtapas?: ReactNode;
   /** 3ª coluna opcional — hoje usada pelo conteúdo de verdade de cada etapa
@@ -177,7 +193,21 @@ export function CentralImportacaoPanel({
    * por cima. `semMoldura` evita desenhar a borda/fundo padrão da 3ª coluna
    * quando o conteúdo já traz a própria (ex.: os cards de step que cada tela
    * já tinha, reaproveitados aqui dentro em vez de reescritos). */
-  terceiraColuna?: { titulo?: string; children: ReactNode; semMoldura?: boolean };
+  terceiraColuna?: ColunaExtra;
+  /** Ativa o layout "colunas fundidas" — pedido explícito do usuário,
+   * 2026-10-31, com print em mãos mostrando o que esperava: velocímetro e
+   * etapas deixam de ser 2 colunas separadas e passam a ficar EMPILHADOS
+   * dentro da 1ª coluna, abrindo espaço pro conteúdo da etapa atual (hoje
+   * empilhado embaixo do painel inteiro, fora da grade) virar 2 colunas
+   * de verdade ao lado — usado pelas etapas que têm dois blocos de
+   * conteúdo relacionados mas distintos (ex.: na verificação de
+   * classificação, estatísticas de um lado e resumo por categoria do
+   * outro). Com `segundaColuna` definida e `terceiraColuna` ausente, o
+   * painel mostra 2 colunas iguais (velocímetro+etapas | segundaColuna).
+   * Com as duas definidas, mostra 3 colunas iguais (velocímetro+etapas |
+   * segundaColuna | terceiraColuna) — sempre larguras iguais entre si,
+   * igual ao resto do painel. */
+  segundaColuna?: ColunaExtra;
 }) {
   const temErro = etapas.some((e) => e.status === 'erro');
   const temAtencao = etapas.some((e) => e.status === 'atencao');
@@ -194,71 +224,82 @@ export function CentralImportacaoPanel({
   const clampedPct = Math.max(0, Math.min(100, progressoPct));
   const glowBlur = 5 + (clampedPct / 100) * 10;
 
+  const gaugeBloco = (
+    <div className="flex flex-row lg:flex-col items-center gap-4 lg:gap-3 lg:text-center">
+      <div
+        className="w-24 h-24 sm:w-32 sm:h-32 lg:w-44 lg:h-44 shrink-0 central-importacao-gauge-glow"
+        style={{ '--glow-color': gaugeColor, '--glow-blur': `${glowBlur}px` } as CSSProperties}
+      >
+        <CircularGauge pct={progressoPct} color={gaugeColor} label={progressoLabel ?? `${Math.round(progressoPct)}%`} />
+      </div>
+      <div className="min-w-0">
+        <h3 className="font-semibold text-xs sm:text-sm tracking-wide text-slate-100" translate="no">
+          {titulo}
+        </h3>
+        <p className="text-[11px] sm:text-xs text-slate-500">{subtitulo}</p>
+      </div>
+    </div>
+  );
+
+  const etapasBloco = (
+    <div className="flex flex-col gap-3 min-w-0">
+      {conteudoAcimaEtapas}
+      <ol className="flex flex-col gap-1.5 min-w-0">
+        {etapas.map((etapa) => {
+          const style = STATUS_STYLE[etapa.status];
+          return (
+            <li key={etapa.key} className={`rounded-xl border ${style.border} bg-slate-950/40 px-3 py-2`}>
+              <div className="flex items-start gap-2.5">
+                <StepStatusIcon status={etapa.status} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-1.5 flex-wrap">
+                    <span className="text-[10px] font-mono text-slate-600">{etapa.numero}</span>
+                    <span className={`text-xs font-semibold ${style.text}`}>{etapa.titulo}</span>
+                    {etapa.resultado && <span className="text-[11px] text-slate-400 font-mono">{etapa.resultado}</span>}
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">{etapa.descricao}</p>
+                  {etapa.mensagem && <p className={`text-[11px] mt-1 ${style.text}`}>{etapa.mensagem}</p>}
+                  <EtapaSquareBar status={etapa.status} />
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+      {conteudoAbaixoEtapas}
+    </div>
+  );
+
+  // Modo "colunas fundidas" (segundaColuna definida): velocímetro + etapas
+  // empilhados numa única 1ª coluna, sobrando 2 colunas de verdade pro
+  // conteúdo da etapa atual — pedido explícito do usuário, 2026-10-31. Em
+  // ambos os modos o total de colunas é sempre o mesmo: 3 quando
+  // `terceiraColuna` está definida, 2 quando não está.
+  const gridColsClass = terceiraColuna ? 'lg:grid-cols-3' : 'lg:grid-cols-2';
+
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-      {/* Grid de 2 ou 3 colunas (velocímetro | etapas | [conteúdo da etapa
-          atual]) a partir de lg; empilha em 1 coluna abaixo disso — pedido
-          explícito do usuário, 2026-10-29. As 3 colunas têm LARGURA IGUAL
-          (pedido explícito do usuário, 2026-10-31: "deveriam ser inseridas
-          3 colunas de larguras iguais") — nenhuma delas fixa/encolhida, cada
-          uma ocupa exatamente 1/3 do espaço a partir de lg. Sempre
-          responsivo, "tudo numa única visualização". */}
-      <div
-        className={`grid grid-cols-1 gap-4 lg:gap-6 items-start ${
-          terceiraColuna ? 'lg:grid-cols-3' : 'lg:grid-cols-2'
-        }`}
-      >
-        <div className="flex flex-row lg:flex-col items-center gap-4 lg:gap-3 lg:text-center lg:sticky lg:top-4">
-          <div
-            className="w-24 h-24 sm:w-32 sm:h-32 lg:w-48 lg:h-48 shrink-0 central-importacao-gauge-glow"
-            style={{ '--glow-color': gaugeColor, '--glow-blur': `${glowBlur}px` } as CSSProperties}
-          >
-            <CircularGauge pct={progressoPct} color={gaugeColor} label={progressoLabel ?? `${Math.round(progressoPct)}%`} />
+      {/* Grid de 2 ou 3 colunas a partir de lg; empilha em 1 coluna abaixo
+          disso — pedido explícito do usuário, 2026-10-29. As colunas têm
+          LARGURA IGUAL entre si (pedido explícito do usuário, 2026-10-31:
+          "deveriam ser inseridas 3 colunas de larguras iguais") — nenhuma
+          delas fixa/encolhida. Sempre responsivo, "tudo numa única
+          visualização". */}
+      <div className={`grid grid-cols-1 gap-4 lg:gap-6 items-start ${gridColsClass}`}>
+        {segundaColuna ? (
+          <div className="flex flex-col gap-4 lg:gap-6 min-w-0 lg:sticky lg:top-4">
+            {gaugeBloco}
+            {etapasBloco}
           </div>
-          <div className="min-w-0">
-            <h3 className="font-semibold text-xs sm:text-sm tracking-wide text-slate-100" translate="no">
-              {titulo}
-            </h3>
-            <p className="text-[11px] sm:text-xs text-slate-500">{subtitulo}</p>
-          </div>
-        </div>
+        ) : (
+          <>
+            <div className="lg:sticky lg:top-4">{gaugeBloco}</div>
+            {etapasBloco}
+          </>
+        )}
 
-        <div className="flex flex-col gap-3 min-w-0">
-          {conteudoAcimaEtapas}
-          <ol className="flex flex-col gap-1.5 min-w-0">
-            {etapas.map((etapa) => {
-              const style = STATUS_STYLE[etapa.status];
-              return (
-                <li key={etapa.key} className={`rounded-xl border ${style.border} bg-slate-950/40 px-3 py-2`}>
-                  <div className="flex items-start gap-2.5">
-                    <StepStatusIcon status={etapa.status} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline gap-1.5 flex-wrap">
-                        <span className="text-[10px] font-mono text-slate-600">{etapa.numero}</span>
-                        <span className={`text-xs font-semibold ${style.text}`}>{etapa.titulo}</span>
-                        {etapa.resultado && <span className="text-[11px] text-slate-400 font-mono">{etapa.resultado}</span>}
-                      </div>
-                      <p className="text-[11px] text-slate-500 mt-0.5">{etapa.descricao}</p>
-                      {etapa.mensagem && <p className={`text-[11px] mt-1 ${style.text}`}>{etapa.mensagem}</p>}
-                      <EtapaSquareBar status={etapa.status} />
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-          {conteudoAbaixoEtapas}
-        </div>
-
-        {terceiraColuna &&
-          (terceiraColuna.semMoldura ? (
-            <div className="min-w-0 flex flex-col gap-3">{terceiraColuna.children}</div>
-          ) : (
-            <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2.5 min-w-0">
-              {terceiraColuna.titulo && <p className="text-xs text-slate-400 mb-2">{terceiraColuna.titulo}</p>}
-              {terceiraColuna.children}
-            </div>
-          ))}
+        {segundaColuna && <ColunaExtraBloco coluna={segundaColuna} />}
+        {terceiraColuna && <ColunaExtraBloco coluna={terceiraColuna} />}
       </div>
       <style>{`
         .central-importacao-gauge-glow {
