@@ -5,11 +5,18 @@ import { PageLoading } from '../../components/PageLoading';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../auth/AuthContext';
 import { ClientServiceImportHistoryPanel, ClientServiceImportSection, type ClientServiceImportSectionHandle } from './ClientServiceImportSection';
-import { DsmImageImportSection } from './DsmImageImportSection';
+import { DsmImageImportSection, type DsmImageImportSectionHandle } from './DsmImageImportSection';
 import { DsmImportSection, type DsmImportSectionHandle } from './DsmImportSection';
 import { DsmImportHistoryPanel } from '../../components/dsm/DsmImportHistoryPanel';
-import { CentralImportacaoPanel, type CentralImportacaoData, type ImportStepInfo, type ImportStepStatus, ImportSquareProgressBar } from '../../components/import/CentralImportacaoPanel';
-import { ImportActionBar } from '../../components/import/ImportActionBar';
+import {
+  CentralImportacaoPanel,
+  type CentralImportacaoData,
+  type ImportAcaoBotoes,
+  type ImportStepInfo,
+  type ImportStepStatus,
+  ImportSquareProgressBar,
+} from '../../components/import/CentralImportacaoPanel';
+import { ImportAcaoBotoesBar, ImportActionBar } from '../../components/import/ImportActionBar';
 import { HelpTip } from '../../components/HelpTip';
 import { Spinner } from '../../components/Spinner';
 import { CAT_KEYS, classifyProductTier, type CategoryKey } from '../../lib/business/classification';
@@ -135,8 +142,16 @@ export function ImportarPage() {
   const [dsmSheetCentral, setDsmSheetCentral] = useState<CentralImportacaoData | null>(null);
   const [dsmImageCentral, setDsmImageCentral] = useState<CentralImportacaoData | null>(null);
   const dsmSheetRef = useRef<DsmImportSectionHandle>(null);
+  const dsmImageRef = useRef<DsmImageImportSectionHandle>(null);
   const uvcRef = useRef<ClientServiceImportSectionHandle>(null);
   const [uvcCentral, setUvcCentral] = useState<CentralImportacaoData | null>(null);
+  // Pedido explícito do usuário, 2026-10-31: "as configurações de botões
+  // também devem seguir para as outras funções de DSM e UVC" — generaliza o
+  // padrão de ImportActionBar/ImportAcaoBotoesBar já usado em Importar
+  // Vendas pros botões de revisão/resultado de cada sub-fluxo.
+  const [dsmSheetAcao, setDsmSheetAcao] = useState<ImportAcaoBotoes>({ tipo: 'nenhuma' });
+  const [dsmImageAcao, setDsmImageAcao] = useState<ImportAcaoBotoes>({ tipo: 'nenhuma' });
+  const [uvcAcao, setUvcAcao] = useState<ImportAcaoBotoes>({ tipo: 'nenhuma' });
   const [sheets, setSheets] = useState<ParsedSheet[]>([]);
   const [fileName, setFileName] = useState('');
   const [fileHash, setFileHash] = useState('');
@@ -932,10 +947,10 @@ export function ImportarPage() {
                   </button>
                 </div>
                 <div className={dsmSubMode === 'planilha' ? undefined : 'hidden'}>
-                  <DsmImportSection ref={dsmSheetRef} onCentralChange={setDsmSheetCentral} />
+                  <DsmImportSection ref={dsmSheetRef} onCentralChange={setDsmSheetCentral} onAcaoChange={setDsmSheetAcao} />
                 </div>
                 <div className={dsmSubMode === 'imagem' ? undefined : 'hidden'}>
-                  <DsmImageImportSection onCentralChange={setDsmImageCentral} />
+                  <DsmImageImportSection ref={dsmImageRef} onCentralChange={setDsmImageCentral} onAcaoChange={setDsmImageAcao} />
                 </div>
               </>
             ),
@@ -945,19 +960,46 @@ export function ImportarPage() {
             inicial de importação... deverá ficar... embaixo das três
             colunas" — só enquanto a planilha de DSM ainda não foi
             selecionada/processada (depois disso, a própria 3ª coluna já
-            assume: conferência, salvar, etc.). O sub-fluxo de imagem não
-            tem um "primeiro botão" único — a área de colar/selecionar já É
-            a interação principal — então continua inteira na 3ª coluna. */}
-        {dsmSubMode === 'planilha' && dsmSheetNaEtapaInicial && (
-          <div className="flex justify-center">
-            <button
-              type="button"
-              onClick={() => dsmSheetRef.current?.abrirSeletor()}
-              className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800"
-            >
-              Importar planilha de DSM
-            </button>
-          </div>
+            assume: conferência, salvar, etc., agora através da
+            ImportAcaoBotoesBar abaixo). O sub-fluxo de imagem não tem um
+            "primeiro botão" único — a área de colar/selecionar já É a
+            interação principal — então continua inteira na 3ª coluna, sem
+            nada aqui embaixo na etapa 'input' (ImportAcaoBotoesBar retorna
+            null quando `acao.tipo === 'nenhuma'`). Pedido explícito do
+            usuário, 2026-10-31: "as configurações de botões também devem
+            seguir para as outras funções de DSM e UVC" — mesmo padrão de
+            botão (fixo, largura cheia) já usado em Importar Vendas. */}
+        {dsmSubMode === 'planilha' ? (
+          dsmSheetNaEtapaInicial ? (
+            <ImportActionBar>
+              <button
+                type="button"
+                onClick={() => dsmSheetRef.current?.abrirSeletor()}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 10,
+                  padding: '14px 28px',
+                  borderRadius: 14,
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: `linear-gradient(90deg, ${NEON_CYAN}, ${NEON_PURPLE})`,
+                  color: '#fff',
+                  fontWeight: 800,
+                  fontSize: 14,
+                  textTransform: 'uppercase',
+                  letterSpacing: '.03em',
+                }}
+              >
+                Importar Planilha de DSM
+              </button>
+            </ImportActionBar>
+          ) : (
+            <ImportAcaoBotoesBar acao={dsmSheetAcao} onVoltar={() => dsmSheetRef.current?.voltar()} onConfirmar={() => dsmSheetRef.current?.confirmar()} />
+          )
+        ) : (
+          <ImportAcaoBotoesBar acao={dsmImageAcao} onVoltar={() => dsmImageRef.current?.voltar()} onConfirmar={() => dsmImageRef.current?.confirmar()} />
         )}
       </div>
       <DsmImportHistoryPanel imports={pastDsmImports ?? []} />
@@ -973,20 +1015,42 @@ export function ImportarPage() {
           subtitulo={uvcCentral?.subtitulo ?? 'Análise, validação e gravação segura de Vendas por Clientes.'}
           etapas={uvcCentral?.etapas ?? []}
           progressoPct={uvcCentral?.pct ?? 0}
-          terceiraColuna={{ semMoldura: true, children: <ClientServiceImportSection ref={uvcRef} onCentralChange={setUvcCentral} /> }}
+          terceiraColuna={{
+            semMoldura: true,
+            children: <ClientServiceImportSection ref={uvcRef} onCentralChange={setUvcCentral} onAcaoChange={setUvcAcao} />,
+          }}
         />
         {/* Mesmo pedido do botão embaixo das 3 colunas, aplicado aqui —
-            some assim que a planilha já foi selecionada/processada. */}
-        {(!uvcCentral || uvcCentral.etapas[0]?.status !== 'concluido') && (
-          <div className="flex justify-center">
+            some assim que a planilha já foi selecionada/processada, e dá
+            lugar à ImportAcaoBotoesBar (pedido explícito do usuário,
+            2026-10-31: mesmo padrão de botões de Importar Vendas). */}
+        {!uvcCentral || uvcCentral.etapas[0]?.status !== 'concluido' ? (
+          <ImportActionBar>
             <button
               type="button"
               onClick={() => uvcRef.current?.abrirSeletor()}
-              className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 10,
+                padding: '14px 28px',
+                borderRadius: 14,
+                border: 'none',
+                cursor: 'pointer',
+                background: `linear-gradient(90deg, ${NEON_CYAN}, ${NEON_PURPLE})`,
+                color: '#fff',
+                fontWeight: 800,
+                fontSize: 14,
+                textTransform: 'uppercase',
+                letterSpacing: '.03em',
+              }}
             >
-              Importar planilha de Vendas por Clientes
+              Importar Planilha de Vendas por Clientes
             </button>
-          </div>
+          </ImportActionBar>
+        ) : (
+          <ImportAcaoBotoesBar acao={uvcAcao} onVoltar={() => uvcRef.current?.voltar()} onConfirmar={() => uvcRef.current?.confirmar()} />
         )}
       </div>
       <ClientServiceImportHistoryPanel imports={pastClientServiceImports ?? []} />

@@ -2,8 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../auth/AuthContext';
 import { DsmReviewTable } from '../../components/dsm/DsmReviewTable';
-import type { CentralImportacaoData, ImportStepInfo, ImportStepStatus } from '../../components/import/CentralImportacaoPanel';
-import { Spinner } from '../../components/Spinner';
+import type { CentralImportacaoData, ImportAcaoBotoes, ImportStepInfo, ImportStepStatus } from '../../components/import/CentralImportacaoPanel';
 import { aggregateClientServiceRows, buildClientServiceReviewRows } from '../../lib/business/clientServiceImport';
 import { autoMapColumns, detectHeaderRow } from '../../lib/business/importMapping';
 import { normalizeMatricula } from '../../lib/business/parsing';
@@ -49,18 +48,29 @@ const CLIENT_SERVICE_QTD_FALLBACK_COL = 10;
  * tela como 3ª coluna). `ref.abrirSeletor()` abre o seletor de arquivo — o
  * botão que dispara isso é desenhado pelo ImportarPage, embaixo das 3
  * colunas (mesmo pedido: "o primeiro botão inicial de importação... deverá
- * ficar... embaixo das três colunas"). */
+ * ficar... embaixo das três colunas").
+ *
+ * `ref.voltar()`/`ref.confirmar()` e `onAcaoChange` seguem o mesmo princípio
+ * pros botões das etapas 'review'/'done' — pedido explícito do usuário,
+ * 2026-10-31: "as configurações de botões também devem seguir para as
+ * outras funções de DSM e UVC" (ver `ImportAcaoBotoesBar`). */
 export interface ClientServiceImportSectionHandle {
   abrirSeletor: () => void;
+  voltar: () => void;
+  confirmar: () => void;
 }
 
-export const ClientServiceImportSection = forwardRef<ClientServiceImportSectionHandle, { onCentralChange?: (central: CentralImportacaoData) => void }>(
-  function ClientServiceImportSection({ onCentralChange }, ref) {
+export const ClientServiceImportSection = forwardRef<
+  ClientServiceImportSectionHandle,
+  { onCentralChange?: (central: CentralImportacaoData) => void; onAcaoChange?: (acao: ImportAcaoBotoes) => void }
+>(function ClientServiceImportSection({ onCentralChange, onAcaoChange }, ref) {
   const { profile } = useAuth();
   const { data: collaborators } = useCollaborators();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useImperativeHandle(ref, () => ({ abrirSeletor: () => fileInputRef.current?.click() }), []);
+  // Sem array de dependências — mesmo motivo de DsmImportSection.tsx:
+  // `voltar`/`confirmar` não podem ficar presos ao closure do 1º render.
+  useImperativeHandle(ref, () => ({ abrirSeletor: () => fileInputRef.current?.click(), voltar: reset, confirmar: handleConfirm }));
 
   const [step, setStep] = useState<Step>('pick');
   const [fileName, setFileName] = useState('');
@@ -230,6 +240,18 @@ export const ClientServiceImportSection = forwardRef<ClientServiceImportSectionH
       etapas: uvcEtapas,
       pct: uvcPct,
     });
+    onAcaoChange?.(
+      step === 'review'
+        ? {
+            tipo: 'voltarConfirmar',
+            voltarLabel: 'Cancelar',
+            confirmarLabel: saving ? 'Gravando…' : `Salvar atendimentos (${rows.filter((r) => r.collaboratorId && r.dataISO).length})`,
+            confirmando: saving,
+          }
+        : step === 'done' && result
+          ? { tipo: 'resultado', label: 'Importar outra planilha de Vendas por Clientes' }
+          : { tipo: 'nenhuma' },
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, fileName, error, saving, result, rows]);
 
@@ -262,31 +284,15 @@ export const ClientServiceImportSection = forwardRef<ClientServiceImportSectionH
           </p>
           <DsmReviewTable rows={rows} collaboratorsById={collaboratorsById} onChangeRow={updateRow} onRemoveRow={removeRow} />
           {error && <p className="text-xs text-rose-400 mt-3">{error}</p>}
-          <div className="flex gap-2 mt-3">
-            <button onClick={reset} className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300">
-              Cancelar
-            </button>
-            <button
-              onClick={handleConfirm}
-              disabled={saving}
-              className="rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm disabled:opacity-60 flex items-center gap-2"
-            >
-              {saving && <Spinner size={14} color="#04121a" />}
-              {saving ? 'Gravando…' : `Salvar atendimentos (${rows.filter((r) => r.collaboratorId && r.dataISO).length})`}
-            </button>
-          </div>
         </div>
       )}
 
       {step === 'done' && result && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-          <p className="text-sm text-green-400 mb-2">
+          <p className="text-sm text-green-400">
             {result.count} registro(s) de atendimentos salvo(s) (dias já existentes foram substituídos)
             {result.unregisteredCount ? ` · ${result.unregisteredCount} de colaborador não cadastrado (não incluído)` : ''}
           </p>
-          <button onClick={reset} className="rounded-lg bg-cyan-500 text-slate-950 font-medium px-4 py-2 text-sm">
-            Importar outra planilha de Vendas por Clientes
-          </button>
         </div>
       )}
     </div>
