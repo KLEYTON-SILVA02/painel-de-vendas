@@ -822,8 +822,8 @@ export function useReclassifyProdutos(storeId: string | undefined) {
     }: {
       produtos: string[];
       categoria: CategoryKey;
-      catalog: { id: string; nome: string }[];
-      sales: { id: string; produto: string; dataISO?: string | null }[];
+      catalog: { id: string; nome: string; codigo?: string | null }[];
+      sales: { id: string; produto: string; dataISO?: string | null; codigo?: string | null }[];
       /** Optional — when set, the retroactive `sales.grupo` update only
        * touches sales within this window instead of the product's entire
        * history (the `catalog` upsert above still always applies store-
@@ -840,12 +840,44 @@ export function useReclassifyProdutos(storeId: string | undefined) {
     }) => {
       if (!storeId) throw new Error('store not loaded');
       for (const nome of produtos) {
-        const existing = catalog.find((c) => normalize(c.nome) === normalize(nome));
+        const n = normalize(nome);
+
+        // Código do produto — pedido explícito do usuário, 2026-11-01
+        // (diagnóstico de leitura de planilha): o motor de classificação já
+        // prioriza código antes de qualquer busca por texto (tier 1), mas o
+        // catálogo nunca guardava o código que a própria planilha de vendas
+        // já trazia — toda reclassificação jogava isso fora. Reaproveita
+        // `sales` (já recebido por todo chamador, nenhuma tela precisa
+        // mudar) pra achar o código mais frequente associado a este nome
+        // nas vendas que estão sendo reclassificadas agora. Normalmente só
+        // existe um código por nome; em caso raro de divergência, fica com
+        // o mais frequente — nunca trava a reclassificação por causa disso.
+        const codigoCounts = new Map<string, number>();
+        for (const s of sales) {
+          if (normalize(s.produto) !== n) continue;
+          const c = (s.codigo ?? '').trim();
+          if (c) codigoCounts.set(c, (codigoCounts.get(c) ?? 0) + 1);
+        }
+        let codigo: string | null = null;
+        let melhorContagem = 0;
+        codigoCounts.forEach((count, c) => {
+          if (count > melhorContagem) {
+            melhorContagem = count;
+            codigo = c;
+          }
+        });
+
+        const existing = catalog.find((c) => normalize(c.nome) === n);
         if (existing) {
-          const { error } = await supabase.from('catalog').update({ categoria }).eq('id', existing.id);
+          // Só preenche o código se o catálogo ainda não tinha um — nunca
+          // sobrescreve um código já gravado (manualmente ou por uma
+          // reclassificação anterior).
+          const patch: { categoria: CategoryKey; codigo?: string } =
+            codigo && !existing.codigo ? { categoria, codigo } : { categoria };
+          const { error } = await supabase.from('catalog').update(patch).eq('id', existing.id);
           if (error) throw error;
         } else {
-          const { error } = await supabase.from('catalog').insert({ store_id: storeId, nome, codigo: null, categoria, origem });
+          const { error } = await supabase.from('catalog').insert({ store_id: storeId, nome, codigo, categoria, origem });
           if (error) throw error;
         }
       }
