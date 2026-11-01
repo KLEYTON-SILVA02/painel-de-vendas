@@ -839,6 +839,14 @@ export function useReclassifyProdutos(storeId: string | undefined) {
       origem?: 'manual' | 'substancia';
     }) => {
       if (!storeId) throw new Error('store not loaded');
+
+      // Biblioteca compartilhada por modelo_catalogo (PLANO B/MONITORAMENTO
+      // DE LOJAS): buscado antes do laço (não depois, como antes) porque
+      // agora a contribuição por produto acontece dentro do mesmo laço —
+      // ver comentário mais abaixo.
+      const { data: storeRow } = await supabase.from('stores').select('modelo_catalogo').eq('id', storeId).single();
+      const modeloCatalogo = storeRow?.modelo_catalogo ?? null;
+
       for (const nome of produtos) {
         const n = normalize(nome);
 
@@ -880,26 +888,40 @@ export function useReclassifyProdutos(storeId: string | undefined) {
           const { error } = await supabase.from('catalog').insert({ store_id: storeId, nome, codigo, categoria, origem });
           if (error) throw error;
         }
-      }
 
-      // Biblioteca compartilhada por modelo_catalogo (PLANO B/MONITORAMENTO
-      // DE LOJAS, "consultar a biblioteca compartilhada" — decisão desta
-      // sessão): quando a loja se identificou com um modelo_catalogo (Minha
-      // Loja), toda classificação também contribui aqui, pra que outra loja
-      // do mesmo grupo possa consultar como sugestão ao encontrar um
-      // produto não classificado. Nunca escreve nos dados de outra loja
-      // diretamente — só neste pool neutro do próprio grupo. Melhor-esforço:
-      // uma falha aqui não deve derrubar a reclassificação em si (o efeito
-      // principal, catalog + sales, já foi aplicado acima).
-      const { data: storeRow } = await supabase.from('stores').select('modelo_catalogo').eq('id', storeId).single();
-      if (storeRow?.modelo_catalogo) {
-        const modeloCatalogo = storeRow.modelo_catalogo;
-        await supabase
-          .from('catalog_shared_library')
-          .upsert(
-            produtos.map((nome) => ({ modelo_catalogo: modeloCatalogo, nome, nome_normalizado: normalize(nome), categoria })),
-            { onConflict: 'modelo_catalogo,nome_normalizado' },
-          );
+        // Contribuição pra Biblioteca Compartilhada (PLANO B/MONITORAMENTO
+        // DE LOJAS, "consultar a biblioteca compartilhada" — decisão de uma
+        // sessão anterior): quando a loja se identificou com um
+        // modelo_catalogo (Minha Loja), toda classificação também contribui
+        // aqui, pra que outra loja do mesmo grupo possa consultar como
+        // sugestão ao encontrar um produto não classificado. Nunca escreve
+        // nos dados de outra loja diretamente — só neste pool neutro do
+        // próprio grupo. Melhor-esforço: uma falha aqui não deve derrubar a
+        // reclassificação em si (o efeito principal, catalog + sales, já
+        // foi aplicado acima).
+        //
+        // Código do produto entra numa chamada separada e condicional
+        // (`.is('codigo', null)`), pedido explícito do usuário, 2026-11-01:
+        // o upsert de cima nunca inclui a coluna `codigo` no payload — se
+        // incluísse, uma reclassificação sem código conhecido desta vez
+        // (ex.: produto reclassificado manualmente, sem nenhuma venda no
+        // lote atual) sobrescreveria com null um código que outra loja do
+        // grupo já tinha contribuído antes. A atualização condicional abaixo
+        // só grava quando (a) temos um código agora e (b) a biblioteca
+        // ainda não tinha nenhum pra esse nome — nunca sobrescreve.
+        if (modeloCatalogo) {
+          const { error: sharedError } = await supabase
+            .from('catalog_shared_library')
+            .upsert({ modelo_catalogo: modeloCatalogo, nome, nome_normalizado: n, categoria }, { onConflict: 'modelo_catalogo,nome_normalizado' });
+          if (!sharedError && codigo) {
+            await supabase
+              .from('catalog_shared_library')
+              .update({ codigo })
+              .eq('modelo_catalogo', modeloCatalogo)
+              .eq('nome_normalizado', n)
+              .is('codigo', null);
+          }
+        }
       }
 
       const targets = new Set(produtos.map((p) => normalize(p)));
@@ -939,27 +961,77 @@ export function useReclassifyProdutos(storeId: string | undefined) {
 export function useBulkPromoteFromSales(storeId: string | undefined, modeloCatalogo: string | null | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ produtos, categoria }: { produtos: string[]; categoria: CategoryKey }) => {
+    mutationFn: async ({
+      produtos,
+      categoria,
+    }: {
+      /** `codigo` opcional por produto — pedido explícito do usuário,
+       * 2026-11-01: vem direto de `sales.codigo` (o caller já tem a venda
+       * que resolveu esse produto em mãos), mesmo raciocínio de
+       * useReclassifyProdutos — grava junto da categoria em vez de
+       * descartar um código que a própria planilha de vendas já trazia. */
+      produtos: { nome: string; codigo?: string | null }[];
+      categoria: CategoryKey;
+    }) => {
       if (!storeId) throw new Error('store not loaded');
       const { error } = await supabase
         .from('catalog')
-        .insert(produtos.map((nome) => ({ store_id: storeId, nome, codigo: null, categoria, origem: 'vendas' })));
+        .insert(produtos.map(({ nome, codigo }) => ({ store_id: storeId, nome, codigo: codigo ?? null, categoria, origem: 'vendas' })));
       if (error) throw error;
 
       if (modeloCatalogo) {
         const { error: sharedError } = await supabase
           .from('catalog_shared_library')
           .upsert(
-            produtos.map((nome) => ({ modelo_catalogo: modeloCatalogo, nome, nome_normalizado: normalize(nome), categoria })),
+            produtos.map(({ nome }) => ({ modelo_catalogo: modeloCatalogo, nome, nome_normalizado: normalize(nome), categoria })),
             { onConflict: 'modelo_catalogo,nome_normalizado' },
           );
         if (sharedError) throw sharedError;
+
+        // Código em chamada separada condicional (`.is('codigo', null)`) —
+        // mesmo motivo de useReclassifyProdutos: o upsert acima nunca inclui
+        // a coluna `codigo`, pra nunca sobrescrever com null um código que
+        // outra loja do grupo já tinha contribuído antes.
+        for (const { nome, codigo } of produtos) {
+          if (!codigo) continue;
+          // eslint-disable-next-line no-await-in-loop
+          await supabase
+            .from('catalog_shared_library')
+            .update({ codigo })
+            .eq('modelo_catalogo', modeloCatalogo)
+            .eq('nome_normalizado', normalize(nome))
+            .is('codigo', null);
+        }
       }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['catalog'] });
       qc.invalidateQueries({ queryKey: ['catalog_shared_library'] });
     },
+  });
+}
+
+/** Aplica, em massa, sugestões de código vindas da Biblioteca Compartilhada
+ * (catalog_shared_library) para produtos que esta loja já tem cadastrados
+ * mas sem código — pedido explícito do usuário, 2026-11-01: "a loja que já
+ * possui esse produto receber a atualização de código" vinda de outra loja
+ * do mesmo modelo_catalogo. Sempre uma ação manual do ADM (nunca aplicado
+ * sozinho) — ver painel "Sugestões de código do grupo" em Produtos >
+ * Catálogo (aba Multilojas). `.is('codigo', null)` garante que nunca
+ * sobrescreve um código que, por qualquer motivo, já tenha sido gravado
+ * entre a sugestão aparecer na tela e o clique de confirmar. */
+export function useApplySharedCodigo(storeId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (itens: { catalogId: string; codigo: string }[]) => {
+      if (!storeId) throw new Error('store not loaded');
+      for (const { catalogId, codigo } of itens) {
+        // eslint-disable-next-line no-await-in-loop
+        const { error } = await supabase.from('catalog').update({ codigo }).eq('id', catalogId).eq('store_id', storeId).is('codigo', null);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['catalog'] }),
   });
 }
 

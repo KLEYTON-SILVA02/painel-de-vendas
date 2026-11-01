@@ -23,6 +23,7 @@ import { buildClassificationInputs } from '../../lib/mappers';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { isMobileDevice } from '../../lib/whatsapp';
 import {
+  useApplySharedCodigo,
   useBulkInsertGenericSubstances,
   useBulkInsertProducts,
   useBulkPromoteFromSales,
@@ -35,6 +36,7 @@ import {
 import {
   useBrandKeywords,
   useCatalog,
+  useCatalogSharedLibrary,
   useExclusiveBrands,
   useGenericSubstances,
   useProducts,
@@ -328,6 +330,15 @@ function CatalogoTab() {
   const insertCatalog = useInsertRow('catalog', profile?.store_id, 'catalog');
   const deleteCatalog = useDeleteRow('catalog', 'catalog');
   const promoteFromSales = useBulkPromoteFromSales(profile?.store_id, store?.modelo_catalogo);
+  // Sugestões de código do grupo — pedido explícito do usuário, 2026-11-01:
+  // quando outra loja do mesmo modelo_catalogo já identificou o código de
+  // um produto que esta loja também tem cadastrado (mas sem código), vira
+  // uma sugestão aqui — nunca aplicada sozinha, ver painel na aba
+  // Multilojas. `useCatalogSharedLibrary` já é lida sob RLS restrita ao
+  // próprio grupo, então não há vazamento entre grupos.
+  const { data: sharedLibrary } = useCatalogSharedLibrary(store?.modelo_catalogo);
+  const applySharedCodigo = useApplySharedCodigo(profile?.store_id);
+  const [selectedCodigoSugestoes, setSelectedCodigoSugestoes] = useState<Set<string>>(new Set());
   const [nome, setNome] = useState('');
   const [codigo, setCodigo] = useState('');
   const [categoria, setCategoria] = useState<CategoryKey>('DERM');
@@ -343,6 +354,21 @@ function CatalogoTab() {
   const [vendasCategoria, setVendasCategoria] = useState<CategoryKey>('DERM');
   const [candidatos, setCandidatos] = useState<Set<string>>(new Set());
 
+  // Código por produto (normalizado) — pedido explícito do usuário,
+  // 2026-11-01: `sales` já carrega o código de cada venda; capturado aqui
+  // junto da varredura de candidatos pra ser usado em handlePromote, sem
+  // mudar a forma de candidatosVendas/candidatos (ainda uma lista/Set de
+  // nomes — nenhuma outra parte da tela precisa mudar).
+  const codigoPorNomeVendas = useMemo(() => {
+    const map = new Map<string, string | null>();
+    (sales ?? []).forEach((s) => {
+      if (!s.produto || !s.codigo) return;
+      const n = normalize(s.produto);
+      if (!map.has(n)) map.set(n, s.codigo);
+    });
+    return map;
+  }, [sales]);
+
   const candidatosVendas = useMemo(() => {
     if (!sales || !catalog) return [];
     const known = new Set(catalog.map((c) => normalize(c.nome)));
@@ -357,6 +383,24 @@ function CatalogoTab() {
     });
     return result.sort((a, b) => a.localeCompare(b));
   }, [sales, catalog, vendasCategoria]);
+
+  // Sugestões de código do grupo (painel na aba Multilojas) — produtos que
+  // ESTA loja já tem no Catálogo (qualquer origem) mas sem código, casados
+  // por nome contra a Biblioteca Compartilhada do mesmo modelo_catalogo,
+  // onde outra loja do grupo já identificou um código. Nunca aplicado
+  // sozinho — só vira a lista que o ADM confirma manualmente abaixo.
+  const sugestoesCodigo = useMemo(() => {
+    if (!catalog || !sharedLibrary) return [];
+    const codigoPorNomeGrupo = new Map<string, string>();
+    sharedLibrary.forEach((row) => {
+      if (row.codigo) codigoPorNomeGrupo.set(row.nome_normalizado, row.codigo);
+    });
+    return catalog
+      .filter((c) => !c.codigo)
+      .map((c) => ({ id: c.id, nome: c.nome, codigoSugerido: codigoPorNomeGrupo.get(normalize(c.nome)) }))
+      .filter((c): c is { id: string; nome: string; codigoSugerido: string } => !!c.codigoSugerido)
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  }, [catalog, sharedLibrary]);
 
   if (!catalog) return <PageLoading />;
   const counts = {
@@ -394,8 +438,27 @@ function CatalogoTab() {
 
   async function handlePromote() {
     if (candidatos.size === 0) return;
-    await promoteFromSales.mutateAsync({ produtos: Array.from(candidatos), categoria: vendasCategoria });
+    const produtos = Array.from(candidatos).map((nome) => ({ nome, codigo: codigoPorNomeVendas.get(normalize(nome)) ?? null }));
+    await promoteFromSales.mutateAsync({ produtos, categoria: vendasCategoria });
     setCandidatos(new Set());
+  }
+
+  function toggleSugestaoCodigo(id: string) {
+    setSelectedCodigoSugestoes((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleApplySugestoesCodigo() {
+    if (selectedCodigoSugestoes.size === 0) return;
+    const itens = sugestoesCodigo
+      .filter((s) => selectedCodigoSugestoes.has(s.id))
+      .map((s) => ({ catalogId: s.id, codigo: s.codigoSugerido }));
+    await applySharedCodigo.mutateAsync(itens);
+    setSelectedCodigoSugestoes(new Set());
   }
 
   return (
@@ -551,6 +614,61 @@ function CatalogoTab() {
                 </table>
               </div>
             )}
+          </div>
+        )}
+        {origemTab === 'multilojas' && sugestoesCodigo.length > 0 && (
+          <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3 mb-3">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <span className="text-xs text-slate-400">Sugestões de código do grupo</span>
+              <button
+                onClick={() =>
+                  setSelectedCodigoSugestoes((prev) =>
+                    prev.size === sugestoesCodigo.length ? new Set() : new Set(sugestoesCodigo.map((s) => s.id)),
+                  )
+                }
+                className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300"
+              >
+                {selectedCodigoSugestoes.size === sugestoesCodigo.length ? 'Desmarcar todos' : 'Selecionar todos'}
+              </button>
+              <button
+                onClick={handleApplySugestoesCodigo}
+                disabled={selectedCodigoSugestoes.size === 0 || applySharedCodigo.isPending}
+                className="rounded-lg bg-amber-500 text-slate-950 px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+              >
+                Aplicar selecionados ({selectedCodigoSugestoes.size})
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mb-2">
+              Produtos que esta loja já tem cadastrados mas sem código, e que outra loja do mesmo grupo já identificou. Nunca
+              aplicado sozinho — confirme abaixo quais quer atualizar.
+            </p>
+            <MutationError error={applySharedCodigo.error} />
+            <div className="max-h-64 overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left text-slate-400 border-b border-slate-800">
+                    <th className="py-1 pr-3 w-6" />
+                    <th className="py-1 pr-3">Produto</th>
+                    <th className="py-1 pr-3">Código sugerido</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sugestoesCodigo.map((s) => (
+                    <tr key={s.id} className="border-b border-slate-900">
+                      <td className="py-1 pr-3 w-6">
+                        <input
+                          type="checkbox"
+                          checked={selectedCodigoSugestoes.has(s.id)}
+                          onChange={() => toggleSugestaoCodigo(s.id)}
+                        />
+                      </td>
+                      <td className="py-1 pr-3">{s.nome}</td>
+                      <td className="py-1 pr-3 font-mono text-slate-400">{s.codigoSugerido}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
         {selectMode && selected.size > 0 && (
