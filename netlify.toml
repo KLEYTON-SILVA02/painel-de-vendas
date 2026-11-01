@@ -6,3 +6,20 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Cabeçalhos de segurança básicos (achado V9 da auditoria de 2026-11-01).
+# A CSP vai em Report-Only de propósito: o app tem 1 handler inline
+# (onload= no <link> de fonte em index.html) e usa bastante style inline do
+# React (style={{...}}), então uma CSP já bloqueando quebraria algo sem
+# aviso — Report-Only só loga no console do navegador, nunca bloqueia nada,
+# servindo pra enxergar o que precisaria mudar antes de um dia aplicar de
+# verdade.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+    Strict-Transport-Security = "max-age=63072000"
+    Content-Security-Policy-Report-Only = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
