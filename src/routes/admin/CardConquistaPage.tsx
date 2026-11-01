@@ -459,7 +459,7 @@ export function CardConquistaPage() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 min-[520px]:grid-cols-2 min-[860px]:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 min-[520px]:grid-cols-2 min-[860px]:grid-cols-3 min-[1180px]:grid-cols-4 gap-4">
             <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 flex flex-col gap-2">
               <TemplateThumb template={BUILT_IN_TEMPLATE} logoUrl={store?.logo_url} />
               <div className="text-sm font-semibold">{BUILT_IN_TEMPLATE.name}</div>
