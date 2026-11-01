@@ -19,7 +19,7 @@ import {
 import { ImportAcaoBotoesBar, ImportActionBar } from '../../components/import/ImportActionBar';
 import { HelpTip } from '../../components/HelpTip';
 import { Spinner } from '../../components/Spinner';
-import { CAT_KEYS, classifyProductTier, type CategoryKey } from '../../lib/business/classification';
+import { CAT_KEYS, classifyProductTier, type CategoryKey, type ClassificationResult } from '../../lib/business/classification';
 import { CATEGORY_COLOR, CATEGORY_EMOJI, useCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { autoMapColumns, detectHeaderRow, type ColumnMap, type ImportField } from '../../lib/business/importMapping';
 import { firstName, normalize } from '../../lib/business/normalize';
@@ -181,6 +181,22 @@ export function ImportarPage() {
   // setImportProgress (lib/importProgress.ts), que é o que alimenta a
   // barrinha do topo quando o ADM sai desta tela no meio da gravação.
   const [writeProgress, setWriteProgress] = useState<{ inserted: number; total: number } | null>(null);
+  // Mesma ideia de writeProgress, mas pra passada de reclassificação que
+  // roda logo depois de clicar "Confirmar" (dentro de handleConfirm, via
+  // buildSaleCandidates) — sem isso, o velocímetro ficava parado em 60%
+  // durante essa passada inteira (nenhuma das 5 etapas tinha progresso
+  // fracionário pra ela, só "concluído"/"em andamento"). Diagnóstico e
+  // correção pedidos explicitamente pelo usuário, 2026-11-01.
+  const [classifyProgress, setClassifyProgress] = useState<{ processed: number; total: number } | null>(null);
+  // Cache de classificação (produto+código → categoria/tier), preenchido
+  // pela mesma reclassificação que a etapa de Verificação (summarize) já
+  // faz pra esta planilha — handleConfirm (via buildSaleCandidates)
+  // reaproveita em vez de rodar classifyProductTier (a parte mais cara da
+  // importação, varre catálogo/palavras-chave inteiros) uma segunda vez do
+  // zero pra cada linha. Limpo a cada nova análise (runAnalysis) e a cada
+  // reset — nunca atravessa pra uma planilha diferente. Pedido explícito
+  // do usuário, 2026-11-01 (diagnóstico de lentidão real na gravação).
+  const classificationCacheRef = useRef<Map<string, ClassificationResult>>(new Map());
 
   if (!catalog || !products || !brandKeywords || !exclusiveBrands) {
     return <PageLoading />;
@@ -287,158 +303,90 @@ export function ImportarPage() {
     setError(null);
     setStep('done');
     setProgress('Verificando planilha…');
+    setClassifyProgress(null);
     const startedAt = performance.now();
 
-    // Both dedup layers below (per-date aggregate and per-row composite key)
-    // only protect against what THIS snapshot of `sales` already contains —
-    // and `existingSales` is whatever React Query happened to have cached
-    // from whenever the screen last fetched it, which can be stale by the
-    // time an ADM actually clicks "confirmar" (they may have reviewed the
-    // analysis screen for a while, or just finished a previous import in
-    // the same session a moment ago). A stale snapshot makes both layers
-    // blind to sales written since it was fetched, letting a second
-    // back-to-back import of overlapping data slip past as "new" instead of
-    // being caught as a duplicate or a full resend. Refetching right here,
-    // synchronously before either layer runs, closes that window.
-    const { data: freshExistingSales } = await refetchSales();
-    const existingSalesNow = freshExistingSales ?? existingSales ?? [];
+    // Pedido explícito do usuário, 2026-11-01 (diagnóstico de "travamento
+    // em 60%"): a reclassificação + checagem de datas abaixo agora vive
+    // dentro do mesmo try/catch que já protegia só a gravação — se algo
+    // inesperado falhar aqui (ex.: a rede cair bem nessa hora), cai no
+    // mesmo catch de sempre (mostra erro, volta pra 'verify') em vez de
+    // deixar a tela presa pra sempre em 'done' sem nenhum aviso.
+    try {
+      // Both dedup layers below (per-date aggregate and per-row composite key)
+      // only protect against what THIS snapshot of `sales` already contains —
+      // and `existingSales` is whatever React Query happened to have cached
+      // from whenever the screen last fetched it, which can be stale by the
+      // time an ADM actually clicks "confirmar" (they may have reviewed the
+      // analysis screen for a while, or just finished a previous import in
+      // the same session a moment ago). A stale snapshot makes both layers
+      // blind to sales written since it was fetched, letting a second
+      // back-to-back import of overlapping data slip past as "new" instead of
+      // being caught as a duplicate or a full resend. Refetching right here,
+      // synchronously before either layer runs, closes that window.
+      const { data: freshExistingSales } = await refetchSales();
+      const existingSalesNow = freshExistingSales ?? existingSales ?? [];
 
-    // Matrícula is the primary identifier — normalized on both sides (see
-    // normalizeMatricula) so a collaborator record typed with leading
-    // zeros still matches a spreadsheet that isn't, or vice versa.
-    const collaboratorByMatricula = new Map((collaborators ?? []).map((c) => [normalizeMatricula(c.matricula), c]));
+      // Matrícula is the primary identifier — normalized on both sides (see
+      // normalizeMatricula) so a collaborator record typed with leading
+      // zeros still matches a spreadsheet that isn't, or vice versa.
+      const collaboratorByMatricula = new Map((collaborators ?? []).map((c) => [normalizeMatricula(c.matricula), c]));
 
-    // First pass: parse every row (same field extraction as before) into a
-    // flat candidate list, without yet deciding what to insert — the
-    // per-date safety check right below needs the *whole* file's contents
-    // per date, not the post-dedup subset.
-    type Candidate = {
-      store_id: string;
-      data_raw: string;
-      data_iso: string | null;
-      matricula: string;
-      vendedor: string;
-      produto: string;
-      codigo: string | null;
-      qtd: number;
-      valor: number;
-      grupo: string | null;
-      classification_tier: number;
-    };
-    const candidates: Candidate[] = [];
-    let invalidDate = 0;
-    let noProduto = 0;
-    let footerRowSkipped = 0;
-    let unmatchedSeller = 0;
-    let nameMismatch = 0;
-    let unclassified = 0;
-
-    let processedRows = 0;
-    for (const sheet of sheets) {
-      for (const [ri, r] of sheet.rows.entries()) {
-        const rr = sheet.rawRows[ri] ?? [];
-        const dataStr = sheet.map.data >= 0 ? String(r[sheet.map.data] ?? '').trim() : '';
-        if (FOOTER_ROW_PATTERN.test(dataStr)) {
-          footerRowSkipped++;
-          continue;
-        }
-        const produto = sheet.map.produto >= 0 ? String(r[sheet.map.produto] ?? '').trim() : '';
-        if (!produto) {
-          noProduto++;
-          continue;
-        }
-        const dataISO = sheet.map.data >= 0 ? dateFromCell(rr[sheet.map.data], dataStr) : null;
-        if (!dataISO) invalidDate++;
-        const codigo = sheet.map.codigo >= 0 ? idFromCell(rr[sheet.map.codigo], r[sheet.map.codigo]) : '';
-        const matricula = sheet.map.matricula >= 0 ? normalizeMatricula(idFromCell(rr[sheet.map.matricula], r[sheet.map.matricula])) : '';
-        const vendedorRaw = sheet.map.vendedor >= 0 ? String(r[sheet.map.vendedor] ?? '').trim() : '';
-        // First verification: matrícula → colaborador (primary identifier).
-        // Second verification: does the sheet's own name text for this row
-        // plausibly agree with that collaborator's registered name? A
-        // divergence is only ever flagged for review — matrícula still
-        // decides who the sale belongs to, this never silently reassigns it.
-        if (matricula && collaboratorByMatricula.size > 0) {
-          const matched = collaboratorByMatricula.get(matricula);
-          if (!matched) unmatchedSeller++;
-          else if (sellerNameDiverges(vendedorRaw, matched)) nameMismatch++;
-        }
-        const qtd = sheet.map.qtd >= 0 ? parseNumeroBR(r[sheet.map.qtd]) : 0;
-        const valor = sheet.map.valor >= 0 ? parseNumeroBR(r[sheet.map.valor]) : 0;
-
-        // Classifying is the most expensive step per row (scans the whole
-        // catalog/keyword lists) — call it once and derive "sem regra
-        // nenhuma bateu" (tier 5 with no exclusive-brand override) from that
-        // single result instead of running the whole classification a
-        // second time with useFallback=false just to check that.
-        const { categoria, tier } = classifyProductTier(produto, codigo, inputs);
-        if (tier === 5 && categoria !== 'MP') unclassified++;
-
-        candidates.push({
-          store_id: profile.store_id,
-          data_raw: dataStr,
-          data_iso: dataISO,
-          matricula,
-          vendedor: vendedorRaw,
-          produto,
-          codigo: codigo || null,
-          qtd,
-          valor,
-          grupo: categoria,
-          classification_tier: tier,
-        });
-
-        // Yields to the browser every ~250 rows so a large spreadsheet keeps
-        // the tab responsive (repaints, doesn't look frozen) while this pass
-        // runs, instead of blocking the main thread until every row is done.
-        processedRows++;
-        if (processedRows % 250 === 0) {
-          setProgress(`Classificando vendas… ${processedRows} linha(s)`);
-          // eslint-disable-next-line no-await-in-loop
-          await yieldToMain();
-        }
-      }
-    }
-
-    // Per-date safety net (complements the row-level dedup below): compare
-    // what this file has for each date against what's already recorded for
-    // that date in this store. A date with strictly less data than what's
-    // already there is a partial resend — blocking the whole import rather
-    // than silently under-writing it. A date with at least as much data is
-    // a full resend — offered as a delete-and-rewrite of just that date so
-    // re-uploading the same (or a corrected) file never creates duplicates.
-    const incomingByDate = aggregateByDate(candidates.map((c) => ({ dataISO: c.data_iso, valor: c.valor })));
-    const existingByDate = aggregateByDate(existingSalesNow.map((s) => ({ dataISO: s.dataISO, valor: s.valor })));
-    const blockedDates: string[] = [];
-    const replaceDates: string[] = [];
-    incomingByDate.forEach((incoming, date) => {
-      const cmp = compareDateAggregate(incoming, existingByDate.get(date));
-      if (cmp === 'blocked') blockedDates.push(date);
-      else if (cmp === 'replace') replaceDates.push(date);
-    });
-
-    if (blockedDates.length > 0) {
-      const list = blockedDates.sort().map(fmtDateBR).join(', ');
-      setError(
-        `Importação bloqueada: a planilha tem menos vendas ou valor total menor do que o já registrado para ${blockedDates.length === 1 ? 'a data' : 'as datas'} ${list}. Nada foi gravado. Confira se a planilha está completa antes de tentar novamente.`,
+      // First pass: parse every row (same field extraction as before) into a
+      // flat candidate list, without yet deciding what to insert — the
+      // per-date safety check right below needs the *whole* file's contents
+      // per date, not the post-dedup subset. Reclassificação reaproveita o
+      // cache já preenchido pela etapa de Verificação — ver buildSaleCandidates.
+      const { candidates, invalidDate, noProduto, footerRowSkipped, unmatchedSeller, nameMismatch, unclassified } = await buildSaleCandidates(
+        profile.store_id,
+        sheets,
+        inputs,
+        classificationCacheRef.current,
+        collaboratorByMatricula,
+        (processed, total) => {
+          setProgress(`Classificando vendas… ${processed} linha(s)`);
+          setClassifyProgress({ processed, total });
+        },
       );
-      setStep('verify');
-      setProgress(null);
-      return;
-    }
 
-    if (replaceDates.length > 0) {
-      const list = replaceDates.sort().map(fmtDateBR).join(', ');
-      const proceed = window.confirm(
-        `Esta planilha cobre ${replaceDates.length === 1 ? 'a data' : 'as datas'} ${list}, que já ${replaceDates.length === 1 ? 'tem vendas registradas' : 'têm vendas registradas'} com quantidade/valor igual ou menor ao da planilha. Isso parece uma reimportação — o sistema vai apagar as vendas já registradas ${replaceDates.length === 1 ? 'nessa data' : 'nessas datas'} e regravar a partir da planilha, pra não duplicar nada. Deseja continuar?`,
-      );
-      if (!proceed) {
+      // Per-date safety net (complements the row-level dedup below): compare
+      // what this file has for each date against what's already recorded for
+      // that date in this store. A date with strictly less data than what's
+      // already there is a partial resend — blocking the whole import rather
+      // than silently under-writing it. A date with at least as much data is
+      // a full resend — offered as a delete-and-rewrite of just that date so
+      // re-uploading the same (or a corrected) file never creates duplicates.
+      const incomingByDate = aggregateByDate(candidates.map((c) => ({ dataISO: c.data_iso, valor: c.valor })));
+      const existingByDate = aggregateByDate(existingSalesNow.map((s) => ({ dataISO: s.dataISO, valor: s.valor })));
+      const blockedDates: string[] = [];
+      const replaceDates: string[] = [];
+      incomingByDate.forEach((incoming, date) => {
+        const cmp = compareDateAggregate(incoming, existingByDate.get(date));
+        if (cmp === 'blocked') blockedDates.push(date);
+        else if (cmp === 'replace') replaceDates.push(date);
+      });
+
+      if (blockedDates.length > 0) {
+        const list = blockedDates.sort().map(fmtDateBR).join(', ');
+        setError(
+          `Importação bloqueada: a planilha tem menos vendas ou valor total menor do que o já registrado para ${blockedDates.length === 1 ? 'a data' : 'as datas'} ${list}. Nada foi gravado. Confira se a planilha está completa antes de tentar novamente.`,
+        );
         setStep('verify');
         setProgress(null);
         return;
       }
-    }
 
-    try {
+      if (replaceDates.length > 0) {
+        const list = replaceDates.sort().map(fmtDateBR).join(', ');
+        const proceed = window.confirm(
+          `Esta planilha cobre ${replaceDates.length === 1 ? 'a data' : 'as datas'} ${list}, que já ${replaceDates.length === 1 ? 'tem vendas registradas' : 'têm vendas registradas'} com quantidade/valor igual ou menor ao da planilha. Isso parece uma reimportação — o sistema vai apagar as vendas já registradas ${replaceDates.length === 1 ? 'nessa data' : 'nessas datas'} e regravar a partir da planilha, pra não duplicar nada. Deseja continuar?`,
+        );
+        if (!proceed) {
+          setStep('verify');
+          setProgress(null);
+          return;
+        }
+      }
       if (replaceDates.length > 0) {
         setProgress('Substituindo vendas das datas reenviadas…');
         await deleteSalesForDates(profile.store_id, replaceDates);
@@ -537,6 +485,7 @@ export function ImportarPage() {
     } finally {
       setProgress(null);
       setWriteProgress(null);
+      setClassifyProgress(null);
       setImportProgress(null);
     }
   }
@@ -551,25 +500,32 @@ export function ImportarPage() {
     setReadPct(null);
     setProgress(null);
     setSummary(null);
+    setClassifyProgress(null);
+    classificationCacheRef.current = new Map();
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
   function runAnalysis() {
     setStep('analyze');
     setProgress('Analisando planilha…');
+    // Planilha nova sendo analisada — limpa o cache antes de preenchê-lo de
+    // novo, pra nunca reaproveitar classificação de uma planilha anterior.
+    classificationCacheRef.current = new Map();
     // Same brief-pause pattern as the file read step: lets the "Analisando…"
     // bar paint before the reclassification pass starts. The pass itself
     // now yields to the browser every ~250 rows (see summarize), so a large
     // file no longer freezes the tab while it classifies every row.
     setTimeout(async () => {
-      const result = await summarize(sheets, inputs, (processed) => setProgress(`Analisando planilha… ${processed} linha(s)`));
+      const result = await summarize(sheets, inputs, classificationCacheRef.current, (processed) =>
+        setProgress(`Analisando planilha… ${processed} linha(s)`),
+      );
       setSummary(result);
       setProgress(null);
       setStep('verify');
     }, 250);
   }
 
-  const vendasCentral = buildVendasEtapas({ step, fileName, readPct, progress, error, sheets, summary, writeProgress, confirmResult });
+  const vendasCentral = buildVendasEtapas({ step, fileName, readPct, progress, error, sheets, summary, writeProgress, classifyProgress, confirmResult });
 
   // Qual dos dois painéis de DSM mostrar: decidido pelo toggle manual
   // dsmSubMode (ver seu comentário acima) — nunca os dois ao mesmo tempo.
@@ -1135,6 +1091,14 @@ function UploadGlyph() {
   );
 }
 
+// produto+código juntos são tudo que classifyProductTier olha pra decidir a
+// categoria (nenhum outro campo da linha influencia) — então essa chave
+// identifica exatamente um resultado de classificação, sem risco de um
+// "acerto" de cache devolver a resposta errada pra outra linha.
+function classificationCacheKey(produto: string, codigo: string): string {
+  return `${codigo}\u0000${produto}`;
+}
+
 interface SheetSummary {
   total: number;
   baixaConfianca: number;
@@ -1161,9 +1125,132 @@ const PREVIEW_ROWS_LIMIT = 200;
 // review screen growing unbounded on a large file.
 const RECLASSIFICATION_PREVIEW_LIMIT = 20;
 
+type SaleCandidate = {
+  store_id: string;
+  data_raw: string;
+  data_iso: string | null;
+  matricula: string;
+  vendedor: string;
+  produto: string;
+  codigo: string | null;
+  qtd: number;
+  valor: number;
+  grupo: string | null;
+  classification_tier: number;
+};
+
+interface BuildSaleCandidatesResult {
+  candidates: SaleCandidate[];
+  invalidDate: number;
+  noProduto: number;
+  footerRowSkipped: number;
+  unmatchedSeller: number;
+  nameMismatch: number;
+  unclassified: number;
+}
+
+/** Segunda metade do que antes vivia direto dentro de handleConfirm — extraída
+ * pra função própria (mesmo padrão de `summarize` acima) por dois motivos,
+ * ambos do diagnóstico de travamento/lentidão pedido pelo usuário,
+ * 2026-11-01: (1) reaproveita `classificationCache`, já preenchido pela
+ * mesma reclassificação que a etapa de Verificação (summarize) fez pra esta
+ * planilha, evitando rodar `classifyProductTier` — a parte mais cara da
+ * importação, varre catálogo/palavras-chave inteiros — uma segunda vez do
+ * zero pra cada linha; um cache sem acerto (planilha trocada sem reanalisar,
+ * por exemplo) simplesmente classifica na hora, nunca trava por isso. (2)
+ * isolada assim, `handleConfirm` consegue envolver esta passada (e a
+ * checagem de datas logo depois) no mesmo try/catch que já protege a
+ * gravação, em vez de deixar essa parte sem nenhum tratamento de erro. */
+async function buildSaleCandidates(
+  storeId: string,
+  sheets: ParsedSheet[],
+  inputs: ReturnType<typeof buildClassificationInputs>,
+  classificationCache: Map<string, ClassificationResult>,
+  collaboratorByMatricula: Map<string, { nome: string; apelido: string | null }>,
+  onProgress: (processed: number, total: number) => void,
+): Promise<BuildSaleCandidatesResult> {
+  const candidates: SaleCandidate[] = [];
+  let invalidDate = 0;
+  let noProduto = 0;
+  let footerRowSkipped = 0;
+  let unmatchedSeller = 0;
+  let nameMismatch = 0;
+  let unclassified = 0;
+
+  const totalRows = sheets.reduce((acc, s) => acc + s.rows.length, 0);
+  let processedRows = 0;
+  for (const sheet of sheets) {
+    for (const [ri, r] of sheet.rows.entries()) {
+      const rr = sheet.rawRows[ri] ?? [];
+      const dataStr = sheet.map.data >= 0 ? String(r[sheet.map.data] ?? '').trim() : '';
+      if (FOOTER_ROW_PATTERN.test(dataStr)) {
+        footerRowSkipped++;
+        continue;
+      }
+      const produto = sheet.map.produto >= 0 ? String(r[sheet.map.produto] ?? '').trim() : '';
+      if (!produto) {
+        noProduto++;
+        continue;
+      }
+      const dataISO = sheet.map.data >= 0 ? dateFromCell(rr[sheet.map.data], dataStr) : null;
+      if (!dataISO) invalidDate++;
+      const codigo = sheet.map.codigo >= 0 ? idFromCell(rr[sheet.map.codigo], r[sheet.map.codigo]) : '';
+      const matricula = sheet.map.matricula >= 0 ? normalizeMatricula(idFromCell(rr[sheet.map.matricula], r[sheet.map.matricula])) : '';
+      const vendedorRaw = sheet.map.vendedor >= 0 ? String(r[sheet.map.vendedor] ?? '').trim() : '';
+      // First verification: matrícula → colaborador (primary identifier).
+      // Second verification: does the sheet's own name text for this row
+      // plausibly agree with that collaborator's registered name? A
+      // divergence is only ever flagged for review — matrícula still
+      // decides who the sale belongs to, this never silently reassigns it.
+      if (matricula && collaboratorByMatricula.size > 0) {
+        const matched = collaboratorByMatricula.get(matricula);
+        if (!matched) unmatchedSeller++;
+        else if (sellerNameDiverges(vendedorRaw, matched)) nameMismatch++;
+      }
+      const qtd = sheet.map.qtd >= 0 ? parseNumeroBR(r[sheet.map.qtd]) : 0;
+      const valor = sheet.map.valor >= 0 ? parseNumeroBR(r[sheet.map.valor]) : 0;
+
+      // Reaproveita a classificação já feita na etapa de Verificação — ver
+      // comentário da função acima.
+      const cacheKey = classificationCacheKey(produto, codigo);
+      const cached = classificationCache.get(cacheKey);
+      const { categoria, tier } = cached ?? classifyProductTier(produto, codigo, inputs);
+      if (!cached) classificationCache.set(cacheKey, { categoria, tier });
+      if (tier === 5 && categoria !== 'MP') unclassified++;
+
+      candidates.push({
+        store_id: storeId,
+        data_raw: dataStr,
+        data_iso: dataISO,
+        matricula,
+        vendedor: vendedorRaw,
+        produto,
+        codigo: codigo || null,
+        qtd,
+        valor,
+        grupo: categoria,
+        classification_tier: tier,
+      });
+
+      // Yields to the browser every ~250 rows so a large spreadsheet keeps
+      // the tab responsive (repaints, doesn't look frozen) while this pass
+      // runs, instead of blocking the main thread until every row is done.
+      processedRows++;
+      if (processedRows % 250 === 0) {
+        onProgress(processedRows, totalRows);
+        // eslint-disable-next-line no-await-in-loop
+        await yieldToMain();
+      }
+    }
+  }
+
+  return { candidates, invalidDate, noProduto, footerRowSkipped, unmatchedSeller, nameMismatch, unclassified };
+}
+
 async function summarize(
   sheets: ParsedSheet[],
   inputs: ReturnType<typeof buildClassificationInputs>,
+  classificationCache: Map<string, ClassificationResult>,
   onProgress?: (processed: number) => void,
 ): Promise<SheetSummary> {
   let total = 0;
@@ -1194,6 +1281,10 @@ async function summarize(
       // with no exclusive-brand override) instead of classifying again with
       // useFallback=false just to check it.
       const { categoria, tier } = classifyProductTier(produto, codigo, inputs);
+      // Preenche o cache compartilhado com handleConfirm (buildSaleCandidates)
+      // — ele reaproveita esta mesma reclassificação em vez de refazer tudo
+      // do zero na hora de gravar. Ver comentário de classificationCacheRef.
+      classificationCache.set(classificationCacheKey(produto, codigo), { categoria, tier });
       if (tier >= 4) {
         baixaConfianca++;
         if (amostras.length < RECLASSIFICATION_PREVIEW_LIMIT) amostras.push({ produto, categoria: categoria!, tier });
@@ -1260,9 +1351,10 @@ function buildVendasEtapas(args: {
   sheets: ParsedSheet[];
   summary: SheetSummary | null;
   writeProgress: { inserted: number; total: number } | null;
+  classifyProgress: { processed: number; total: number } | null;
   confirmResult: { count: number } | null;
 }): { etapas: ImportStepInfo[]; pct: number } {
-  const { step, fileName, readPct, progress, error, sheets, summary, writeProgress, confirmResult } = args;
+  const { step, fileName, readPct, progress, error, sheets, summary, writeProgress, classifyProgress, confirmResult } = args;
 
   const etapa1Status: ImportStepStatus = step !== 'pick' ? 'concluido' : readPct !== null ? 'andamento' : error ? 'erro' : 'aguardando';
 
@@ -1280,13 +1372,23 @@ function buildVendasEtapas(args: {
 
   const etapa4Blocked = (step === 'verify' || step === 'revisaoFinal') && !!error;
   const gravacaoJaComecou = step === 'done' && (!!writeProgress || !!confirmResult);
+  // Antes, só a string exata "Verificando planilha…" marcava esta etapa como
+  // "em andamento" — assim que a reclassificação começava e `progress`
+  // mudava pra "Classificando vendas… N linha(s)", essa comparação parava de
+  // bater e a etapa caía de volta pra "aguardando" (sem afetar o status
+  // visual, já que nenhum dos dois conta como "concluído" — mas também sem
+  // nenhum progresso fracionário pra preencher esse intervalo, deixando o %
+  // visivelmente parado). Corrigido, pedido explícito do usuário, 2026-11-01
+  // (diagnóstico de "travamento em 60%"): basta estar na etapa de gravação
+  // (`step === 'done'`) e a gravação em si ainda não ter começado.
+  const emClassificacao = step === 'done' && !gravacaoJaComecou;
   const etapa4Status: ImportStepStatus = gravacaoJaComecou
     ? 'concluido'
     : step === 'verify' || step === 'revisaoFinal'
       ? etapa4Blocked
         ? 'erro'
         : 'andamento'
-      : step === 'done' && progress === 'Verificando planilha…'
+      : emClassificacao
         ? 'andamento'
         : 'aguardando';
 
@@ -1299,6 +1401,15 @@ function buildVendasEtapas(args: {
   const statuses = [etapa1Status, etapa2Status, etapa3Status, etapa4Status, etapa5Status];
   let pct = (statuses.filter((s) => s === 'concluido').length / statuses.length) * 100;
   if (etapa1Status === 'andamento' && readPct !== null) pct += (readPct / 100) * (100 / statuses.length);
+  // Preenche o % durante a reclassificação (etapa "Validação e conferência"
+  // em andamento, dentro do passo 'done', antes da gravação em lote
+  // começar) com o progresso real de buildSaleCandidates — sem isso o
+  // velocímetro ficava parado exatamente em 60% (3 das 5 etapas) durante
+  // essa passada inteira. Mesmo padrão já usado acima pra leitura do
+  // arquivo e abaixo pra gravação em lote.
+  if (etapa4Status === 'andamento' && emClassificacao && classifyProgress && classifyProgress.total > 0) {
+    pct += (classifyProgress.processed / classifyProgress.total) * (100 / statuses.length);
+  }
   if (etapa5Status === 'andamento' && writeProgress && writeProgress.total > 0) {
     pct += (writeProgress.inserted / writeProgress.total) * (100 / statuses.length);
   }
