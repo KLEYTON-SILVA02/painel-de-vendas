@@ -83,6 +83,13 @@ export const DEFAULT_PODIUM_SPOTS: PodiumSpots = {
 
 const MAX_LISTED = 15;
 const PILL_HEIGHT = 38;
+// Pedido explícito do usuário (2026-11-01, com referência visual): a foto do
+// colaborador nas barras 4+ deixa de ser um círculo e vira um octógono, ~15%
+// maior que a própria altura da barra — de propósito maior que PILL_HEIGHT,
+// pra "estourar" por cima/embaixo da barra em vez de ficar contida nela
+// (a barra em si não muda de altura, só a foto passa por cima dela).
+const AVATAR_SIZE = Math.round(PILL_HEIGHT * 1.15);
+const AVATAR_CLIP = 'polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 30%, 0% 70%)';
 
 interface PillSlot<T> {
   row: T | null;
@@ -455,7 +462,17 @@ function PillColumn<T extends StaircaseRow>({
             <span style={{ fontFamily: "'Orbitron', sans-serif", fontWeight: 800, fontSize: 13, color: '#fff', width: 20, textAlign: 'center', flexShrink: 0 }}>
               {slot.pos}
             </span>
-            <span style={{ width: 26, height: 26, borderRadius: '50%', border: '2px solid #8A2BE2', background: '#0b0e1d', overflow: 'hidden', flexShrink: 0 }}>
+            <span
+              style={{
+                width: AVATAR_SIZE,
+                height: AVATAR_SIZE,
+                clipPath: AVATAR_CLIP,
+                border: '2px solid #8A2BE2',
+                background: '#0b0e1d',
+                overflow: 'hidden',
+                flexShrink: 0,
+              }}
+            >
               {slot.row.foto && <img src={slot.row.foto} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
             </span>
             <span
