@@ -22,6 +22,45 @@ export async function hashBytes(bytes: Uint8Array): Promise<string> {
     .join('');
 }
 
+// ---- Layer 3: cross-tab/device concurrency lock ----
+//
+// Layers 1/2 above only protect against what the current snapshot of
+// `sales` already contains at the moment they run — they do nothing when
+// TWO confirmações rodam quase ao mesmo tempo (duas abas, dois
+// dispositivos, ou confirmar de novo achando que a primeira travou): ambas
+// buscam o snapshot de `sales` antes de qualquer uma ter gravado algo,
+// nenhuma enxerga a outra, e as duas gravam o mesmo conjunto de vendas
+// inteiro. Causa raiz CONFIRMADA de um caso real em produção (758 vendas da
+// loja SHOPPING BOULEVARD em 31/10/2026 gravadas duas vezes, R$ 30.972,53
+// duplicados — corrigido manualmente no banco e motivou esta trava,
+// 2026-11-01). A trava em si fica no banco (migration 0106), não em memória
+// do navegador, justamente para cobrir o caso de duas abas/dispositivos.
+
+/** Tenta tomar a trava de importação desta loja — ver try_acquire_sales_import_lock
+ * (migration 0106_sales_import_locks.sql) para a semântica exata (atômica,
+ * via `on conflict ... do update ... where`, inclusive a retomada de uma
+ * trava "velha" de uma tentativa anterior travada/abandonada). Devolve o
+ * token da trava quando consegue, `null` quando já existe uma importação
+ * real em andamento. */
+export async function acquireSalesImportLock(storeId: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc('try_acquire_sales_import_lock', { p_store_id: storeId });
+  if (error) throw error;
+  return data ?? null;
+}
+
+/** Libera a trava — só se `token` ainda bater com a trava atual (nunca
+ * derruba uma trava que outra tentativa já retomou por estar velha).
+ * Best-effort: uma falha aqui não deve impedir o resultado da importação já
+ * concluída de ser mostrado — na pior hipótese a trava expira sozinha
+ * depois de 10 minutos. */
+export async function releaseSalesImportLock(storeId: string, token: string): Promise<void> {
+  try {
+    await supabase.from('sales_import_locks').delete().eq('store_id', storeId).eq('token', token);
+  } catch {
+    // best-effort — see comment above
+  }
+}
+
 export interface SaleImportRow {
   dataISO: string | null;
   matricula: string;

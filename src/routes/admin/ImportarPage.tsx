@@ -41,6 +41,7 @@ import {
   useSalesImports,
 } from '../../lib/queries';
 import {
+  acquireSalesImportLock,
   aggregateByDate,
   compareDateAggregate,
   deleteSalesForDates,
@@ -49,6 +50,7 @@ import {
   hashBytes,
   insertSalesInBatches,
   recordSalesImport,
+  releaseSalesImportLock,
   saleImportKey,
   translateDbError,
   updateSalesImportProgress,
@@ -301,6 +303,29 @@ export function ImportarPage() {
   async function handleConfirm() {
     if (!profile?.store_id) return;
     setError(null);
+
+    // Trava por loja no banco — pedido explícito do usuário, 2026-11-01,
+    // depois de confirmar num caso real que duas confirmações rodando quase
+    // ao mesmo tempo (duas abas, dois dispositivos, ou confirmar de novo
+    // achando que travou) gravavam a MESMA planilha duas vezes: cada uma
+    // checava duplicidade contra o banco antes de qualquer uma ter gravado
+    // algo, nenhuma enxergava a outra. Ver acquireSalesImportLock
+    // (lib/salesImport.ts) — se não conseguir a trava, nem entra na etapa
+    // 'done'; o ADM ainda está em 'verify'/'revisaoFinal' e só vê o erro.
+    let lockToken: string | null = null;
+    try {
+      lockToken = await acquireSalesImportLock(profile.store_id);
+    } catch (err) {
+      setError(translateDbError(err));
+      return;
+    }
+    if (!lockToken) {
+      setError(
+        'Já existe uma importação de vendas em andamento para esta loja (pode ser outra aba ou outro dispositivo). Aguarde ela terminar antes de confirmar de novo — se a outra tentativa travou, tente novamente em alguns minutos.',
+      );
+      return;
+    }
+
     setStep('done');
     setProgress('Verificando planilha…');
     setClassifyProgress(null);
@@ -487,6 +512,7 @@ export function ImportarPage() {
       setWriteProgress(null);
       setClassifyProgress(null);
       setImportProgress(null);
+      await releaseSalesImportLock(profile.store_id, lockToken);
     }
   }
 
