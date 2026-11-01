@@ -1570,6 +1570,32 @@ export type Database = {
           },
         ]
       }
+      sales_import_locks: {
+        Row: {
+          locked_at: string
+          store_id: string
+          token: string
+        }
+        Insert: {
+          locked_at?: string
+          store_id: string
+          token?: string
+        }
+        Update: {
+          locked_at?: string
+          store_id?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_import_locks_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: true
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sales_imports: {
         Row: {
           created_at: string
@@ -2078,6 +2104,10 @@ export type Database = {
       transfer_administration: {
         Args: { p_collaborator_id: string }
         Returns: undefined
+      }
+      try_acquire_sales_import_lock: {
+        Args: { p_store_id: string }
+        Returns: string
       }
       update_own_admin_username: {
         Args: { new_username: string }
