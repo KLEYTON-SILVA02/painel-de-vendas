@@ -663,12 +663,15 @@ export function useCatalog() {
  * grupo, usadas em Auditoria > Pendentes. RLS já restringe ao próprio
  * grupo (catalog_shared_library_select), então não há filtro extra aqui;
  * `enabled` só evita a consulta para lojas sem modelo_catalogo, que nunca
- * teriam linha nenhuma mesmo. */
+ * teriam linha nenhuma mesmo. `codigo` incluído a partir de 2026-11-01
+ * (pedido explícito do usuário) — mesma sugestão do grupo, agora também
+ * usada pra sugerir código em Produtos > Catálogo quando a loja já tem o
+ * produto cadastrado mas sem código (ver useSharedLibraryCodigoSuggestions). */
 export function useCatalogSharedLibrary(modeloCatalogo: string | null | undefined) {
   return useQuery({
     queryKey: ['catalog_shared_library', modeloCatalogo],
     queryFn: async () => {
-      const { data, error } = await supabase.from('catalog_shared_library').select('nome_normalizado, categoria');
+      const { data, error } = await supabase.from('catalog_shared_library').select('nome_normalizado, categoria, codigo');
       if (error) throw error;
       return data;
     },

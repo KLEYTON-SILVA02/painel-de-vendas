@@ -280,6 +280,7 @@ export type Database = {
         Row: {
           atualizado_em: string
           categoria: string
+          codigo: string | null
           contribuicoes: number
           id: string
           modelo_catalogo: string
@@ -289,6 +290,7 @@ export type Database = {
         Insert: {
           atualizado_em?: string
           categoria: string
+          codigo?: string | null
           contribuicoes?: number
           id?: string
           modelo_catalogo: string
@@ -298,6 +300,7 @@ export type Database = {
         Update: {
           atualizado_em?: string
           categoria?: string
+          codigo?: string | null
           contribuicoes?: number
           id?: string
           modelo_catalogo?: string
