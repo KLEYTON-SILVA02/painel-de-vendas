@@ -83,13 +83,20 @@ export const DEFAULT_PODIUM_SPOTS: PodiumSpots = {
 
 const MAX_LISTED = 15;
 const PILL_HEIGHT = 38;
-// Pedido explícito do usuário (2026-11-01, com referência visual): a foto do
-// colaborador nas barras 4+ deixa de ser um círculo e vira um octógono, ~15%
-// maior que a própria altura da barra — de propósito maior que PILL_HEIGHT,
-// pra "estourar" por cima/embaixo da barra em vez de ficar contida nela
-// (a barra em si não muda de altura, só a foto passa por cima dela).
-const AVATAR_SIZE = Math.round(PILL_HEIGHT * 1.15);
-const AVATAR_CLIP = 'polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 30%, 0% 70%)';
+// Pedido explícito do usuário (2026-11-01, com referência visual e, numa 2ª
+// rodada, a geometria exata): a foto do colaborador nas barras 4+ deixa de
+// ser um círculo e vira um HEXÁGONO regular (6 lados iguais, ângulos
+// internos de 120°, raio circunscrito = lado) — não um octógono, erro da
+// 1ª tentativa. Orientação "horizontal": pontas à esquerda/direita, arestas
+// retas em cima/embaixo (mesmo formato da moldura de avatar da referência
+// original). Um hexágono regular nessa orientação tem largura:altura =
+// 2:√3 — por isso width/height são calculados separadamente a partir da
+// altura (não é um clip-path quadrado). A altura continua ~15% maior que
+// PILL_HEIGHT de propósito, pra "estourar" por cima/embaixo da barra em vez
+// de ficar contida nela (a barra em si não muda de altura).
+const AVATAR_HEIGHT = Math.round(PILL_HEIGHT * 1.15);
+const AVATAR_WIDTH = Math.round(AVATAR_HEIGHT * (2 / Math.sqrt(3)));
+const AVATAR_CLIP = 'polygon(100% 50%, 75% 0%, 25% 0%, 0% 50%, 25% 100%, 75% 100%)';
 
 interface PillSlot<T> {
   row: T | null;
@@ -464,8 +471,8 @@ function PillColumn<T extends StaircaseRow>({
             </span>
             <span
               style={{
-                width: AVATAR_SIZE,
-                height: AVATAR_SIZE,
+                width: AVATAR_WIDTH,
+                height: AVATAR_HEIGHT,
                 clipPath: AVATAR_CLIP,
                 border: '2px solid #8A2BE2',
                 background: '#0b0e1d',
