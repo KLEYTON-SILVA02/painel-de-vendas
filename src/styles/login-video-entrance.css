@@ -18,10 +18,10 @@
       própria do card desaparece — dá a sensação de fusão das duas.
 
    Só `opacity`/`transform`/`clip-path` são animados (GPU, sem
-   recalcular layout) — nunca a largura das colunas. O play() dos
-   vídeos é disparado via JS (ver LoginVideoPanel) só depois da etapa
-   1, escondido atrás da máscara, pra não competir com o primeiro
-   desenho da tela nem travar quando a máscara abre.
+   recalcular layout) — nunca a largura das colunas. Os vídeos usam
+   autoPlay nativo (ver LoginVideoPanel) — já começam a decodificar no
+   carregamento, mas ficam escondidos atrás da máscara até a etapa 3,
+   então não competem com o primeiro desenho da tela.
    ============================================================ */
 
 .lve-frame,
@@ -107,6 +107,7 @@
 .lve-video-panel {
   position: relative;
   display: none;
+  overflow: hidden;
   min-height: 520px;
   background: #050514;
 }

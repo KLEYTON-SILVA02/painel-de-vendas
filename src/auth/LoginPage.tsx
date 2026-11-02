@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PASSWORD_HINT, PASSWORD_MIN_LENGTH, validatePassword } from '../lib/passwordPolicy';
 import { supabase } from '../lib/supabase';
@@ -97,37 +97,22 @@ export function LoginPage() {
 }
 
 // Dois <video> empilhados (fundo desfocado ampliado + principal inteiro
-// por cima, ver login-video-entrance.css) tocando o mesmo arquivo. O
-// play() real só é disparado 500ms depois do mount — não no carregamento
-// da página — porque nesse momento o card ainda está atrás da máscara
-// (clip-path, ver CSS): decodificar o vídeo escondido dá tempo dele
-// estabilizar antes da revelação em ~1,4s, em vez de começar a decodificar
-// bem na hora em que fica visível, que é quando mais daria pra notar um
-// engasgo. autoplay fica de fora de propósito — play() é feito aqui.
+// por cima, ver login-video-entrance.css) tocando o mesmo arquivo, com
+// autoPlay nativo do navegador (muted + playsInline, a combinação que
+// todo navegador libera sem gesto do usuário) — mais confiável que
+// disparar play() via JS, que pode falhar silenciosamente conforme o
+// navegador. Mesmo começando a decodificar no carregamento, fica
+// visualmente escondido atrás da máscara (clip-path, ver CSS) até a
+// revelação em ~1,4s, então não compete com o primeiro desenho da tela.
 const LOGIN_VIDEO_SRC = '/media/login-video.mp4';
 
 function LoginVideoPanel() {
-  const bgRef = useRef<HTMLVideoElement>(null);
-  const fgRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const t = window.setTimeout(
-      () => {
-        bgRef.current?.play().catch(() => {});
-        fgRef.current?.play().catch(() => {});
-      },
-      reduced ? 0 : 500,
-    );
-    return () => window.clearTimeout(t);
-  }, []);
-
   return (
     <div className="lve-video-panel">
-      <video ref={bgRef} className="lve-video-bg" loop muted playsInline preload="auto" aria-hidden="true">
+      <video className="lve-video-bg" autoPlay loop muted playsInline preload="auto" aria-hidden="true">
         <source src={LOGIN_VIDEO_SRC} type="video/mp4" />
       </video>
-      <video ref={fgRef} className="lve-video-fg" loop muted playsInline preload="auto">
+      <video className="lve-video-fg" autoPlay loop muted playsInline preload="auto">
         <source src={LOGIN_VIDEO_SRC} type="video/mp4" />
       </video>
     </div>
