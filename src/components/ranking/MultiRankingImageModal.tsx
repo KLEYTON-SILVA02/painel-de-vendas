@@ -18,11 +18,18 @@ type CopyState = 'idle' | 'copying' | 'copied' | 'failed';
 export function MultiRankingImageModal({ images, text, onClose }: { images: MultiImageResult[]; text: string; onClose: () => void }) {
   const { data: store } = useStore();
   const [copyState, setCopyState] = useState<Record<string, CopyState>>({});
+  // Conjunto que só CRESCE (nunca perde uma chave) — pedido explícito do
+  // usuário: copiar de novo um card que já foi copiado não pode fazer a
+  // barra de progresso (nem o "X/Y copiadas") recuar, mesmo que o estado
+  // daquele card volte brevemente para 'copying' durante a nova cópia.
+  // `copyState` continua guiando só o rótulo/disabled de cada botão
+  // individual; este conjunto é a única fonte do progresso geral.
+  const [everCopied, setEverCopied] = useState<Set<string>>(new Set());
   const [opened, setOpened] = useState(false);
 
-  const currentIndex = useMemo(() => images.findIndex((img) => copyState[img.key] !== 'copied'), [images, copyState]);
+  const currentIndex = useMemo(() => images.findIndex((img) => !everCopied.has(img.key)), [images, everCopied]);
   const current = currentIndex >= 0 ? images[currentIndex] : null;
-  const doneCount = images.filter((img) => copyState[img.key] === 'copied').length;
+  const doneCount = everCopied.size;
 
   async function handleCopy(key: string, url: string) {
     setCopyState((s) => ({ ...s, [key]: 'copying' }));
@@ -30,6 +37,7 @@ export function MultiRankingImageModal({ images, text, onClose }: { images: Mult
       const blob = await fetch(url).then((r) => r.blob());
       const ok = await tryCopyImage(blob);
       setCopyState((s) => ({ ...s, [key]: ok ? 'copied' : 'failed' }));
+      if (ok) setEverCopied((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
     } catch {
       setCopyState((s) => ({ ...s, [key]: 'failed' }));
     }
@@ -68,12 +76,27 @@ export function MultiRankingImageModal({ images, text, onClose }: { images: Mult
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50" onClick={onClose}>
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-5" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-[96vw] max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-2">
           <h3 className="font-semibold text-sm">Imagens de todas as categorias ({images.length})</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-200">
             ✕
           </button>
+        </div>
+
+        {/* Barra de progresso de cópia — pedido explícito do usuário: só
+            avança conforme `everCopied` cresce, nunca recua, mesmo copiando
+            de novo um card que já estava verde. */}
+        <div className="mb-3">
+          <div className="h-2 rounded-full bg-slate-950 border border-slate-800 overflow-hidden">
+            <div
+              className="h-full rounded-full transition-[width] duration-300"
+              style={{ width: `${(doneCount / images.length) * 100}%`, background: 'linear-gradient(90deg,#14ff00,#00df59)' }}
+            />
+          </div>
+          <div className="text-[11px] text-slate-500 mt-1">
+            {doneCount}/{images.length} copiadas
+          </div>
         </div>
 
         {!opened ? (
@@ -94,9 +117,7 @@ export function MultiRankingImageModal({ images, text, onClose }: { images: Mult
         ) : (
           <div className="mb-3 rounded-lg border border-slate-800 bg-slate-950/60 p-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-slate-400">
-                {doneCount}/{images.length} copiadas — próxima:
-              </span>
+              <span className="text-xs text-slate-400">Próxima:</span>
               <span className="text-xs font-medium text-cyan-400">{current!.title}</span>
             </div>
             <img src={current!.url} alt={current!.title} className="w-full rounded-lg border border-slate-800 mb-2" />
@@ -116,14 +137,19 @@ export function MultiRankingImageModal({ images, text, onClose }: { images: Mult
           </div>
         )}
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {/* Pedido explícito do usuário: todos os cards lado a lado numa
+            única linha (não mais quebrando em várias linhas) — flex com
+            largura mínima por card; se não couberem todos (tela estreita ou
+            muitas categorias), a linha rola horizontalmente em vez de
+            quebrar. */}
+        <div className="flex gap-3 overflow-x-auto pb-1">
           {images.map((img, i) => {
             const state = copyState[img.key] ?? 'idle';
             const isCurrent = i === currentIndex;
             return (
               <div
                 key={img.key}
-                className={`rounded-lg border overflow-hidden ${isCurrent ? 'border-amber-500' : 'border-slate-800'}`}
+                className={`flex-1 min-w-[150px] rounded-lg border overflow-hidden ${isCurrent ? 'border-amber-500' : 'border-slate-800'}`}
               >
                 <img src={img.url} alt={img.title} className="w-full" />
                 <div className="p-2 flex flex-col gap-1.5">
