@@ -66,8 +66,18 @@
   }
 
   /* moldura própria do card durante as etapas 1-2 (ver cima) — some
-     exatamente quando a da .lve-frame aparece. */
+     exatamente quando a da .lve-frame aparece.
+     width/margin: a .mv2-login-card base (mobile-v2.css) tem largura
+     fixa de 410px e margin:auto — pensada pra ela se autocentralizar
+     sozinha na tela. Dentro da moldura com vídeo ela precisa preencher
+     a célula da grade inteira, encostada nas bordas da moldura (pedido
+     explícito do usuário — sem isso ela fica pequena, flutuando com um
+     vão em volta em vez de grudada no contorno). */
   .mv2-login-page .mv2-login-card {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    justify-content: center;
     border-radius: 0 var(--mv2-radius-lg) var(--mv2-radius-lg) 0;
     z-index: 5;
     will-change: transform, opacity;
