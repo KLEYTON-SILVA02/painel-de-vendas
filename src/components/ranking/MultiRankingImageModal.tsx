@@ -74,9 +74,16 @@ export function MultiRankingImageModal({ images, text, onClose }: { images: Mult
 
   const allDone = doneCount === images.length;
 
+  // z-[200] (não z-50): a sidebar fixa usa z-index:90 (Sidebar.css) — um
+  // z-index menor que isso faz o menu lateral ficar por cima do modal,
+  // cortando os primeiros cards (bug relatado pelo usuário com print).
+  // Mesmo valor já usado pelos outros overlays de tela cheia do sistema
+  // (ChampionOfDay, BirthdayCelebration, ConquistaCelebration) para
+  // garantir que fiquem acima de tudo, inclusive da sidebar. Largura um
+  // pouco menor (92vw, não 96vw) por pedido explícito do usuário.
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50" onClick={onClose}>
-      <div className="w-full max-w-[96vw] max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-5" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[200]" onClick={onClose}>
+      <div className="w-full max-w-[92vw] max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-2">
           <h3 className="font-semibold text-sm">Imagens de todas as categorias ({images.length})</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-200">

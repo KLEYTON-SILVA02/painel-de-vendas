@@ -267,10 +267,13 @@ export interface MultiImageResult {
 
 /** Generates one ranking-image PNG per category — for the "todas as
  * categorias" choice on the ranking image-share flow, used by both the
- * Início and Ranking screens. Categories with no sales
- * (generateRankingImageBlob's own `ranking.length === 0` case still draws
- * an empty-state image, so every spec produces a result) are included; a
- * spec is only dropped if canvas.toBlob itself fails.
+ * Início and Ranking screens. Pedido explícito do usuário (2026-11-02):
+ * uma categoria sem nenhuma movimentação no período (`spec.rows.length
+ * === 0`) nem entra no lote — antes toda categoria virava uma imagem,
+ * inclusive um estado vazio "Sem vendas registradas no período" pras que
+ * não tiveram venda nenhuma. Filtrado aqui (fonte única, usada pelas duas
+ * telas) antes de qualquer trabalho de canvas. Fora isso, uma spec só é
+ * descartada do resultado se canvas.toBlob em si falhar.
  *
  * Runs every category in parallel (`Promise.all`) instead of one at a time.
  * Each category's dominant cost is awaiting up to 10 collaborator-avatar
@@ -280,7 +283,11 @@ export interface MultiImageResult {
  * which is what read as the UI having frozen on the "Gerar imagem → Todas
  * as categorias" click. `onProgress` (optional) is called after every
  * category finishes so a caller can show real "3/6" progress instead of a
- * single static "gerando…" label for however long the whole batch takes. */
+ * single static "gerando…" label for however long the whole batch takes;
+ * it's also called once up front with the already-filtered total, so a
+ * caller that set its "X/Y" display from the unfiltered spec count (before
+ * this call even started) corrects itself immediately instead of only
+ * after the first category finishes. */
 export async function generateAllCategoryImages(
   specs: CategoryImageSpec[],
   fromDate: string,
@@ -288,9 +295,11 @@ export async function generateAllCategoryImages(
   storeName?: string,
   onProgress?: (done: number, total: number) => void,
 ): Promise<MultiImageResult[]> {
+  const withMovement = specs.filter((spec) => spec.rows.length > 0);
   let done = 0;
+  onProgress?.(0, withMovement.length);
   const settled = await Promise.all(
-    specs.map(async (spec) => {
+    withMovement.map(async (spec) => {
       const blob = await generateRankingImageBlob(
         spec.rows,
         spec.titulo,
