@@ -1,9 +1,11 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PASSWORD_HINT, PASSWORD_MIN_LENGTH, validatePassword } from '../lib/passwordPolicy';
 import { supabase } from '../lib/supabase';
 import { buildWhatsAppLink } from '../lib/whatsapp';
+import { useIsMobileV2 } from '../lib/useIsMobileV2';
 import '../styles/login-retro-future.css';
+import '../styles/login-video-entrance.css';
 import gvLogo from '../assets/brand/gv-logo.png';
 import whatsappQr from '../assets/brand/whatsapp-qr.jpg';
 import instagramQr from '../assets/brand/instagram-qr.jpg';
@@ -28,49 +30,60 @@ const EMAIL_ADDRESS = 'kleyton.silva.celular@gmail.com';
 export function LoginPage() {
   const [tab, setTab] = useState<Tab>('admin');
   const [socialModal, setSocialModal] = useState<SocialModal>(null);
+  // Vídeo institucional só em desktop — pedido explícito do usuário
+  // ("essa animação em vídeo será apenas para a versão desktop"). Mesmo
+  // breakpoint de useIsMobileV2 (1024px), e o painel nem é renderizado
+  // no mobile (não só escondido por CSS) pra não baixar os 7MB do vídeo
+  // à toa em celular.
+  const showVideo = !useIsMobileV2();
 
   return (
     <div className="mv2 mv2-login-page" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div className="mv2-login-card">
-        <div className="mv2-login-header">
-          <div className="mv2-logo-ring">
-            <img src={gvLogo} alt="Gestão de Vendas" />
+      <div className="lve-frame">
+        <div className="lve-frame-grid">
+          {showVideo && <LoginVideoPanel />}
+          <div className="mv2-login-card">
+            <div className="mv2-login-header">
+              <div className="mv2-logo-ring">
+                <img src={gvLogo} alt="Gestão de Vendas" />
+              </div>
+              <h1>GESTÃO DE VENDAS</h1>
+              <div className="mv2-subtitle">Entre para continuar</div>
+            </div>
+
+            <div className="mv2-role-toggle">
+              <button type="button" className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}>
+                Administrador
+              </button>
+              <button type="button" className={tab === 'colaborador' ? 'active' : ''} onClick={() => setTab('colaborador')}>
+                Colaborador
+              </button>
+              <button type="button" className={tab === 'construtor' ? 'active' : ''} onClick={() => setTab('construtor')}>
+                Construtor
+              </button>
+            </div>
+
+            {tab === 'admin' ? <AdminLoginForm /> : tab === 'colaborador' ? <CollaboratorLoginForm /> : <ConstrutorLoginForm />}
+
+            <div className="mv2-divider">ou</div>
+
+            <div className="mv2-social-row">
+              <button type="button" className="mv2-whatsapp" title="WhatsApp" onClick={() => setSocialModal('whatsapp')}>
+                <WhatsAppIcon />
+              </button>
+              <button type="button" title="E-mail" onClick={() => setSocialModal('email')}>
+                <EmailIcon />
+              </button>
+              <button type="button" className="mv2-instagram" title="Instagram" onClick={() => setSocialModal('instagram')}>
+                <InstagramIcon />
+              </button>
+            </div>
+
+            <Link to="/privacidade" style={{ display: 'block', textAlign: 'center', marginTop: 14, fontSize: 11, color: 'var(--mv2-texto-2, #94a3b8)' }}>
+              Política de Privacidade
+            </Link>
           </div>
-          <h1>GESTÃO DE VENDAS</h1>
-          <div className="mv2-subtitle">Entre para continuar</div>
         </div>
-
-        <div className="mv2-role-toggle">
-          <button type="button" className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}>
-            Administrador
-          </button>
-          <button type="button" className={tab === 'colaborador' ? 'active' : ''} onClick={() => setTab('colaborador')}>
-            Colaborador
-          </button>
-          <button type="button" className={tab === 'construtor' ? 'active' : ''} onClick={() => setTab('construtor')}>
-            Construtor
-          </button>
-        </div>
-
-        {tab === 'admin' ? <AdminLoginForm /> : tab === 'colaborador' ? <CollaboratorLoginForm /> : <ConstrutorLoginForm />}
-
-        <div className="mv2-divider">ou</div>
-
-        <div className="mv2-social-row">
-          <button type="button" className="mv2-whatsapp" title="WhatsApp" onClick={() => setSocialModal('whatsapp')}>
-            <WhatsAppIcon />
-          </button>
-          <button type="button" title="E-mail" onClick={() => setSocialModal('email')}>
-            <EmailIcon />
-          </button>
-          <button type="button" className="mv2-instagram" title="Instagram" onClick={() => setSocialModal('instagram')}>
-            <InstagramIcon />
-          </button>
-        </div>
-
-        <Link to="/privacidade" style={{ display: 'block', textAlign: 'center', marginTop: 14, fontSize: 11, color: 'var(--mv2-texto-2, #94a3b8)' }}>
-          Política de Privacidade
-        </Link>
       </div>
 
       {socialModal && (
@@ -79,6 +92,44 @@ export function LoginPage() {
           onClose={() => setSocialModal(null)}
         />
       )}
+    </div>
+  );
+}
+
+// Dois <video> empilhados (fundo desfocado ampliado + principal inteiro
+// por cima, ver login-video-entrance.css) tocando o mesmo arquivo. O
+// play() real só é disparado 500ms depois do mount — não no carregamento
+// da página — porque nesse momento o card ainda está atrás da máscara
+// (clip-path, ver CSS): decodificar o vídeo escondido dá tempo dele
+// estabilizar antes da revelação em ~1,4s, em vez de começar a decodificar
+// bem na hora em que fica visível, que é quando mais daria pra notar um
+// engasgo. autoplay fica de fora de propósito — play() é feito aqui.
+const LOGIN_VIDEO_SRC = '/media/login-video.mp4';
+
+function LoginVideoPanel() {
+  const bgRef = useRef<HTMLVideoElement>(null);
+  const fgRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const t = window.setTimeout(
+      () => {
+        bgRef.current?.play().catch(() => {});
+        fgRef.current?.play().catch(() => {});
+      },
+      reduced ? 0 : 500,
+    );
+    return () => window.clearTimeout(t);
+  }, []);
+
+  return (
+    <div className="lve-video-panel">
+      <video ref={bgRef} className="lve-video-bg" loop muted playsInline preload="auto" aria-hidden="true">
+        <source src={LOGIN_VIDEO_SRC} type="video/mp4" />
+      </video>
+      <video ref={fgRef} className="lve-video-fg" loop muted playsInline preload="auto">
+        <source src={LOGIN_VIDEO_SRC} type="video/mp4" />
+      </video>
     </div>
   );
 }
