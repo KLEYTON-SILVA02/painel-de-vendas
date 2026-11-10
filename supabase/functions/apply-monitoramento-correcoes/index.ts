@@ -24,6 +24,7 @@
 // retorna cedo sem fazer nada — seguro deixar o cron agendado e rodando
 // desde já.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { checkCronSecret } from '../_shared/cronAuth.ts';
 
 interface CorrecaoPendente {
   id: string;
@@ -39,7 +40,10 @@ function jsonResponse(body: unknown, status: number): Response {
   });
 }
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
+  const unauthorized = checkCronSecret(req);
+  if (unauthorized) return unauthorized;
+
   const baseUrl = Deno.env.get('MONITORAMENTO_BASE_URL');
   const secret = Deno.env.get('MONITORAMENTO_SYNC_SECRET');
   if (!baseUrl || !secret) {
