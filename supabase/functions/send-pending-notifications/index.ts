@@ -15,6 +15,7 @@
 // processa uma fila que ela mesma já confia (nada vindo do chamador é
 // usado), então isso é aceitável.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { checkCronSecret } from '../_shared/cronAuth.ts';
 
 const FCM_SCOPE = 'https://www.googleapis.com/auth/firebase.messaging';
 const MAX_PER_RUN = 200;
@@ -84,7 +85,10 @@ async function getAccessToken(sa: ServiceAccount): Promise<string> {
   return json.access_token as string;
 }
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
+  const unauthorized = checkCronSecret(req);
+  if (unauthorized) return unauthorized;
+
   const saRaw = Deno.env.get('FIREBASE_SERVICE_ACCOUNT_JSON');
   if (!saRaw) {
     return new Response(JSON.stringify({ error: 'FIREBASE_SERVICE_ACCOUNT_JSON não configurado' }), { status: 500 });
