@@ -27,7 +27,7 @@ import { generateDinamicaCardBlob } from '../../lib/dinamicaImage';
 import { fmtDateBR, fmtDateShortBR, fmtMoney } from '../../lib/format';
 import { useCreateDynamic, useDeleteDynamic, useUpdateDynamic } from '../../lib/mutations';
 import { tryCopyImage } from '../../lib/rankingImage';
-import { useCollaborators, useDynamics, useSales, useStore } from '../../lib/queries';
+import { useCollaborators, useDistinctProductsInSales, useDynamics, useSalesForDynamics, useStore } from '../../lib/queries';
 import type { Json } from '../../types/database';
 import { useDateRange } from '../DateRangeContext';
 import { EditDynamicModal } from '../dinamicas/DinamicasPage';
@@ -48,9 +48,9 @@ function setorAlvoLabel(setorAlvo: Dynamic['setorAlvo']): string {
 export function MobileDinamicasPage() {
   const { profile } = useAuth();
   const { data: dynamics } = useDynamics();
-  const { data: sales } = useSales();
   const { data: collaborators } = useCollaborators();
   const { data: store } = useStore();
+  const { data: produtos } = useDistinctProductsInSales();
   const [tab, setTab] = useState<'ativas' | 'galeria'>('ativas');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [editing, setEditing] = useState<Dynamic | null>(null);
@@ -59,15 +59,28 @@ export function MobileDinamicasPage() {
   const deleteDynamic = useDeleteDynamic();
   const { guard, reauthModal } = useReauthGuard();
 
-  // Real product names as they appear in the sales history — see the same
-  // comment on DinamicasPage.tsx's desktop counterpart.
+  // Só as vendas do período das dinâmicas que a aba mostra (+ as ativas, que
+  // alimentam o "Atingimento Atual" no topo) — nunca o histórico inteiro.
+  const today = todayISO();
+  const dynamicsParaVendas = useMemo(
+    () =>
+      dynamics?.filter((d) => {
+        const st = dynamicStatus(d, today);
+        return tab === 'ativas' ? st !== 'encerrada' : st !== 'agendada';
+      }),
+    [dynamics, tab, today],
+  );
+  const sales = useSalesForDynamics(dynamicsParaVendas);
+
+  // Nomes reais de produto como aparecem nas vendas (função do banco que só
+  // devolve os nomes distintos) — ver o mesmo comentário em DinamicasPage.tsx.
   const productNames = useMemo(() => {
     const set = new Set<string>();
-    (sales ?? []).forEach((s) => {
-      if (s.produto) set.add(s.produto);
+    (produtos ?? []).forEach((p) => {
+      if (p.produto) set.add(p.produto);
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  }, [sales]);
+  }, [produtos]);
 
   if (!dynamics || !sales || !collaborators) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
@@ -78,7 +91,6 @@ export function MobileDinamicasPage() {
   const participantCollaborators = collaborators.filter((c) => c.setor !== VISITANTE_SETOR);
   const setorOptions = dynamicSetorOptions(participantCollaborators);
 
-  const today = todayISO();
   const list = dynamics.slice().sort((a, b) => (b.dataInicio || '').localeCompare(a.dataInicio || ''));
   const ativas = list.filter((d) => dynamicStatus(d, today) === 'ativa');
   const agendadas = list.filter((d) => dynamicStatus(d, today) === 'agendada');

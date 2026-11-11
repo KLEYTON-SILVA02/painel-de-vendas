@@ -68,7 +68,7 @@ export function MobileSellerAccordion({
           </button>
           {collaborators.filter((c) => c.setor !== VISITANTE_SETOR).map((c) => (
             <button key={c.id} className={`mv2-seller ${selected === c.matricula ? 'active' : ''}`} onClick={() => onSelect(c.matricula)}>
-              {c.foto ? <img src={c.foto} alt="" className="mv2-avatar" /> : <div className="mv2-avatar" />}
+              {c.foto ? <img src={c.foto} alt="" className="mv2-avatar" loading="lazy" decoding="async" /> : <div className="mv2-avatar" />}
               <span className="mv2-name">{c.apelido || c.nome}</span>
             </button>
           ))}
@@ -133,9 +133,12 @@ export function MobileSalesTable({
   const TIPO_LABEL = useCategoryLabelMap();
   const { profile } = useAuth();
   const { data: catalog } = useCatalog();
-  const { data: allSales } = useSales();
-  const reclassify = useReclassifyProdutos(profile?.store_id);
   const [reclassifyMode, setReclassifyMode] = useState(false);
+  // O histórico inteiro (dezenas de milhares de linhas, ~100 requisições) só é
+  // necessário pra reclassificar — baixa só quando o ADM liga esse modo, igual
+  // às telas de categoria (salesListEnabled).
+  const { data: allSales, isFetching: loadingAllSales } = useSales(reclassifyMode);
+  const reclassify = useReclassifyProdutos(profile?.store_id);
   const [selectedProdutos, setSelectedProdutos] = useState<Set<string>>(new Set());
   const [bulkCat, setBulkCat] = useState<CategoryKey>('DERM');
   const [reclassifyFrom, setReclassifyFrom] = useState('');
@@ -181,7 +184,7 @@ export function MobileSalesTable({
           categoria={bulkCat}
           onCategoriaChange={setBulkCat}
           onApply={applyReclassify}
-          applying={reclassify.isPending}
+          applying={reclassify.isPending || (reclassifyMode && loadingAllSales)}
           dateFrom={reclassifyFrom}
           dateTo={reclassifyTo}
           onDateFromChange={setReclassifyFrom}

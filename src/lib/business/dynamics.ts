@@ -405,3 +405,16 @@ export function intersectDynamicPeriod(
   const to = din.dataFim < filterTo ? din.dataFim : filterTo;
   return { from, to };
 }
+
+/**
+ * Menor `dataInicio` e maior `dataFim` entre as dinâmicas — o período de
+ * vendas que elas precisam para calcular progresso/ranking (todo cálculo de
+ * dinâmica já ignora venda fora do próprio período, ver `computeDinamica*`).
+ * Datas vazias são ignoradas; sem nenhum período válido devolve null.
+ */
+export function dynamicsDateSpan(dyns: Pick<Dynamic, 'dataInicio' | 'dataFim'>[]): { from: string; to: string } | null {
+  const inicios = dyns.map((d) => d.dataInicio).filter(Boolean);
+  const fins = dyns.map((d) => d.dataFim).filter(Boolean);
+  if (inicios.length === 0 || fins.length === 0) return null;
+  return { from: inicios.reduce((a, b) => (b < a ? b : a)), to: fins.reduce((a, b) => (b > a ? b : a)) };
+}

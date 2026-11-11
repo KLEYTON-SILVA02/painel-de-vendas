@@ -8,6 +8,7 @@ import {
   dinamicaUnidadeLabel,
   dynamicAllowsCollaborator,
   dynamicSetorOptions,
+  dynamicsDateSpan,
   dynamicStatus,
   intersectDynamicPeriod,
   isDynamicActive,
@@ -275,5 +276,21 @@ describe('intersectDynamicPeriod', () => {
   it('clamps to the tighter bound on each side', () => {
     expect(intersectDynamicPeriod(din, '2026-08-03', '2026-08-20')).toEqual({ from: '2026-08-03', to: '2026-08-10' });
     expect(intersectDynamicPeriod(din, '2026-07-01', '2026-08-05')).toEqual({ from: '2026-08-01', to: '2026-08-05' });
+  });
+});
+
+describe('dynamicsDateSpan', () => {
+  it('pega o menor início e o maior fim', () => {
+    expect(
+      dynamicsDateSpan([
+        { dataInicio: '2026-10-05', dataFim: '2026-10-20' },
+        { dataInicio: '2026-09-01', dataFim: '2026-09-30' },
+        { dataInicio: '2026-11-01', dataFim: '2026-11-30' },
+      ]),
+    ).toEqual({ from: '2026-09-01', to: '2026-11-30' });
+  });
+  it('sem dinâmicas ou sem datas válidas devolve null', () => {
+    expect(dynamicsDateSpan([])).toBeNull();
+    expect(dynamicsDateSpan([{ dataInicio: '', dataFim: '' }])).toBeNull();
   });
 });

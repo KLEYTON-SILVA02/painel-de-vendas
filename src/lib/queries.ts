@@ -1,11 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { BioGroupKey, GoalCategoryKey } from './business/classification';
-import type { BioGroupGoal, CommissionRate, Goal } from './business/types';
+import { dynamicsDateSpan } from './business/dynamics';
+import type { BioGroupGoal, CommissionRate, Dynamic, Goal } from './business/types';
 import type { GenericConquistaConfig } from './business/conquistas';
 import type { CategoryTotalRow, SpecialListItem } from './business/summary';
 import type { CardTextLayer, CardZone, ConquistaCardTemplate } from './conquistaCardRender';
 import { monthFirstISO, monthLastISO } from './dateRange';
+import { mapWithConcurrency, splitDateRange } from './dateWindows';
 import { mapBioGroupGoal, mapClientServiceRecord, mapCollaborator, mapCommissionRate, mapDsmRecord, mapDynamic, mapGoal, mapSale, mapSpecialListItem, SALE_COLUMNS, type SaleRow } from './mappers';
 import type { BulkDeletableTable } from './mutations';
 import { supabase } from './supabase';
@@ -40,6 +42,10 @@ const SALES_PAGE_SIZE = 1000;
 // always-full-page response looping forever, same role the old
 // doubling-batch cap played.
 const SALES_MAX_PAGES = 500;
+// Download por janelas de datas, várias ao mesmo tempo. Seguro agora que a página
+// de 1.000 vendas custa ~1 ms no banco (regras de acesso em initplan, migration 0114).
+const SALES_WINDOW_DAYS = 7;
+const SALES_FETCH_CONCURRENCY = 6;
 
 /** Pages through `sales` via keyset (cursor) pagination on `id` — each page
  * is a plain `.gt('id', cursor).limit(1000)`, not `.range()` (OFFSET/LIMIT).
@@ -53,31 +59,71 @@ const SALES_MAX_PAGES = 500;
  * because it already has a unique index (the primary key) and no caller
  * needs the returned array pre-sorted by date — every consumer that cares
  * about order (computeSummary, computeVendorExtract, ListaVendasPage's
- * day/month grouping) already sorts its own output. Pages run sequentially
- * (each needs the previous page's cursor) rather than the old growing-
+ * day/month grouping) already sorts its own output. Dentro de uma janela de
+ * datas as páginas rodam em série (cada uma precisa do cursor da anterior);
+ * as janelas (semanas) rodam em paralelo, no máximo SALES_FETCH_CONCURRENCY.
+ * Antes: the old growing-
  * parallel-batches scheme — that scheme made sense to front-load cheap
  * OFFSET pages, but firing many *expensive* deep OFFSET pages at once was
  * exactly what made them compete for the same DB connections and blow up
  * total load time; flat-cost keyset pages don't need that workaround. */
 async function fetchSalesPages(range?: { fromISO: string; toISO: string }, onPage?: (loadedSoFar: number) => void) {
-  const pages: SaleRow[][] = [];
-  let cursor: string | null = null;
   let loaded = 0;
-  for (let iteration = 0; iteration < SALES_MAX_PAGES; iteration++) {
-    let query = supabase.from('sales').select(SALE_COLUMNS).order('id', { ascending: true }).limit(SALES_PAGE_SIZE);
-    if (range) query = query.gte('data_iso', range.fromISO).lte('data_iso', range.toISO);
-    if (cursor) query = query.gt('id', cursor);
-    // eslint-disable-next-line no-await-in-loop
-    const { data, error } = await query;
-    if (error) throw error;
-    if (!data || data.length === 0) break;
-    pages.push(data);
-    loaded += data.length;
-    onPage?.(loaded);
-    if (data.length < SALES_PAGE_SIZE) break;
-    cursor = data[data.length - 1].id;
+  type DateFilter = { kind: 'range'; from: string; to: string } | { kind: 'nulls' };
+
+  // Uma "janela" é paginada em série por keyset (cada página precisa do cursor
+  // da anterior); várias janelas rodam ao mesmo tempo.
+  // Ordem (data_iso desc, id desc) casa com o índice (store_id, data_iso): cada
+  // página custa ~2-20 ms. Ordenar só por id obrigava o banco a varrer a chave
+  // primária inteira filtrando por data (medido: 1,6 s por página de 1.000).
+  async function fetchWindow(f: DateFilter): Promise<SaleRow[]> {
+    const rows: SaleRow[] = [];
+    let last: SaleRow | null = null;
+    for (let iteration = 0; iteration < SALES_MAX_PAGES; iteration++) {
+      let query = supabase.from('sales').select(SALE_COLUMNS).limit(SALES_PAGE_SIZE);
+      if (f.kind === 'range') {
+        query = query.gte('data_iso', f.from).lte('data_iso', f.to).order('data_iso', { ascending: false }).order('id', { ascending: false });
+        if (last?.data_iso) query = query.or(`data_iso.lt.${last.data_iso},and(data_iso.eq.${last.data_iso},id.lt.${last.id})`);
+      } else {
+        query = query.is('data_iso', null).order('id', { ascending: true });
+        if (last) query = query.gt('id', last.id);
+      }
+      // eslint-disable-next-line no-await-in-loop
+      const { data, error } = await query;
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      rows.push(...data);
+      loaded += data.length;
+      onPage?.(loaded);
+      if (data.length < SALES_PAGE_SIZE) break;
+      last = data[data.length - 1];
+    }
+    return rows;
   }
-  return pages.flat();
+
+  let from = range?.fromISO;
+  let to = range?.toISO;
+  const filters: DateFilter[] = [];
+  if (!range) {
+    // Histórico inteiro: descobre a primeira e a última data (2 consultas
+    // baratas) para fatiar em semanas, e faz uma passada à parte para vendas
+    // sem data (data_iso nulo), que nenhuma janela pegaria.
+    const [first, last] = await Promise.all([
+      supabase.from('sales').select('data_iso').not('data_iso', 'is', null).order('data_iso', { ascending: true }).limit(1),
+      supabase.from('sales').select('data_iso').not('data_iso', 'is', null).order('data_iso', { ascending: false }).limit(1),
+    ]);
+    if (first.error) throw first.error;
+    if (last.error) throw last.error;
+    from = first.data?.[0]?.data_iso ?? undefined;
+    to = last.data?.[0]?.data_iso ?? undefined;
+    filters.push({ kind: 'nulls' });
+  }
+  if (from && to) {
+    const windows = splitDateRange(from, to, SALES_WINDOW_DAYS).map((w): DateFilter => ({ kind: 'range', from: w.from, to: w.to }));
+    filters.unshift(...windows);
+  }
+  const parts = await mapWithConcurrency(filters, SALES_FETCH_CONCURRENCY, fetchWindow);
+  return parts.flat();
 }
 
 /** All sales for the store. Filtering by date range happens client-side in
@@ -177,6 +223,12 @@ export function useCurrentMonthSales() {
   });
 }
 
+/** Busca direta (sem cache) das vendas de um intervalo — usada na importação,
+ * que precisa do retrato mais fresco possível só das datas da planilha. */
+export async function fetchSalesInRange(fromISO: string, toISO: string) {
+  return (await fetchSalesPages({ fromISO, toISO })).map(mapSale);
+}
+
 /** Same date-ranged fetch as useCurrentMonthSales(), for an arbitrary
  * [fromISO, toISO] window instead of always "this calendar month" — for a
  * caller that needs actual item-level sales (not just the aggregated
@@ -190,6 +242,19 @@ export function useSalesInRange(fromISO: string, toISO: string, enabled = true) 
     enabled,
     queryFn: async () => (await fetchSalesPages({ fromISO, toISO })).map(mapSale),
   });
+}
+
+/** Vendas só do período coberto pelas dinâmicas informadas (menor início →
+ * maior fim). Todo cálculo de dinâmica (progresso, ranking, vendas) já ignora
+ * venda fora do próprio período, então o resultado é idêntico ao de usar o
+ * histórico inteiro — sem baixar dezenas de milhares de linhas só pra isso.
+ * `undefined` = dinâmicas ainda carregando OU vendas ainda a caminho; `[]` =
+ * há dinâmicas carregadas mas nenhuma tem período (nada a buscar). */
+export function useSalesForDynamics(dynamics: Pick<Dynamic, 'dataInicio' | 'dataFim'>[] | undefined) {
+  const span = useMemo(() => (dynamics ? dynamicsDateSpan(dynamics) : null), [dynamics]);
+  const { data } = useSalesInRange(span?.from ?? '', span?.to ?? '', span !== null);
+  if (!dynamics) return undefined;
+  return span ? data : [];
 }
 
 /** Per-(matricula, categoria) totals for a date range, from the
