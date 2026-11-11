@@ -118,6 +118,7 @@ export function PodiumSplit<T extends StaircaseRow>({
   getPreviousValue,
   columns = 2,
   layout = 'cards',
+  cardColumns,
   footer,
 }: {
   ranking: T[];
@@ -139,6 +140,10 @@ export function PodiumSplit<T extends StaircaseRow>({
    * progresso; 'pills' = as barras horizontais de antes (com `columns`),
    * mantidas pra telas estreitas como a Tela Inicial do mobile. */
   layout?: 'cards' | 'pills';
+  /** Só no layout 'cards': fixa quantos cards cabem por linha. A versão mobile
+   * passa 2 (dois lado a lado, pedido do usuário 2026-11-11); omitido, a grade
+   * escolhe sozinha (5/3/2) pela largura. */
+  cardColumns?: 2;
   /** Optional second metric shown in a smaller font right below the main
    * value (e.g. Biosintética's "quantidade vendida" alongside its "pts")
    * — omitted entirely when not passed, so every other PodiumSplit caller
@@ -249,6 +254,7 @@ export function PodiumSplit<T extends StaircaseRow>({
           formatSecondaryValue={formatSecondaryValue}
           getPreviousValue={getPreviousValue}
           reservePagerRow={Boolean(footer)}
+          fixedColumns={cardColumns}
         />
       )}
 

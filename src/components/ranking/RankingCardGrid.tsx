@@ -100,6 +100,7 @@ export function RankingCardGrid<T extends StaircaseRow>({
   formatSecondaryValue,
   getPreviousValue,
   reservePagerRow,
+  fixedColumns,
 }: {
   slots: RankingCardSlot<T>[];
   leaderValue: number;
@@ -112,6 +113,9 @@ export function RankingCardGrid<T extends StaircaseRow>({
    * altura sob a grade — assim a paginação fica alinhada com eles e a grade
    * termina junto com o quadro do pódio. */
   reservePagerRow?: boolean;
+  /** Fixa o número de cards por linha (a versão mobile usa 2). Sem isso a grade
+   * escolhe sozinha (5/3/2) pela largura do quadro. */
+  fixedColumns?: 2;
 }) {
   const [page, setPage] = useState(0);
   const pages = pageCount(slots.length);
@@ -120,7 +124,7 @@ export function RankingCardGrid<T extends StaircaseRow>({
 
   return (
     <div className="rc-wrap">
-      <div className="rc-grid">
+      <div className={`rc-grid${fixedColumns ? ` rc-grid--cols-${fixedColumns}` : ''}`}>
         {visible.map((slot) => (
           <RankingCard
             key={slot.row.matricula}

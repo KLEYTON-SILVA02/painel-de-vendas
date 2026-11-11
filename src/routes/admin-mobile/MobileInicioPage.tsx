@@ -164,8 +164,8 @@ export function MobileInicioPage() {
           formatValue={(v) => (isUnitFilter ? `${v} un.` : fmtMoney(v))}
           bgUrl={storeSettings.ranking_podium_bg_url}
           spots={storeSettings.ranking_podium_spots as unknown as PodiumSpots | null}
-          columns={1}
-          layout="pills"
+          layout="cards"
+          cardColumns={2}
         />
       </div>
 
