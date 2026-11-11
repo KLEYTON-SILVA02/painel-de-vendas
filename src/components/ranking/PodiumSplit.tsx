@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import podiumPremiumBg from '../../assets/ranking/podium-premium-bg.jpg';
 import { TrendArrow } from '../TrendArrow';
 import type { StaircaseRow } from './PodiumStaircase';
+import { RankingCardGrid } from './RankingCardGrid';
 
 // "Ranking Geral de Vendas" — new split layout (top-3 over the ADM-supplied
 // podium artwork on the left, positions 4-15 as a 1- or 2-column pill grid
@@ -82,6 +83,9 @@ export const DEFAULT_PODIUM_SPOTS: PodiumSpots = {
 };
 
 const MAX_LISTED = 15;
+// No layout de cards o limite sobe: a grade é paginada (10 por página), então
+// não precisa mais caber tudo de uma vez como as pílulas.
+const MAX_CARDS = 50;
 const PILL_HEIGHT = 38;
 // Pedido explícito do usuário (2026-11-01, com referência visual e, numa 2ª
 // rodada, a geometria exata): a foto do colaborador nas barras 4+ deixa de
@@ -113,6 +117,7 @@ export function PodiumSplit<T extends StaircaseRow>({
   formatSecondaryValue,
   getPreviousValue,
   columns = 2,
+  layout = 'cards',
   footer,
 }: {
   ranking: T[];
@@ -129,6 +134,11 @@ export function PodiumSplit<T extends StaircaseRow>({
    * única linha sem cortar o nome, sem precisar empilhar nome/valor nem
    * aumentar a altura da barra. */
   columns?: 1 | 2;
+  /** Como mostrar as colocações 4+: 'cards' (padrão, pedido do usuário em
+   * 2026-11-10) = grade paginada de cards retangulares com arco de
+   * progresso; 'pills' = as barras horizontais de antes (com `columns`),
+   * mantidas pra telas estreitas como a Tela Inicial do mobile. */
+  layout?: 'cards' | 'pills';
   /** Optional second metric shown in a smaller font right below the main
    * value (e.g. Biosintética's "quantidade vendida" alongside its "pts")
    * — omitted entirely when not passed, so every other PodiumSplit caller
@@ -179,6 +189,8 @@ export function PodiumSplit<T extends StaircaseRow>({
   const col2: PillSlot<T>[] = rest.slice(col1Count).map((row, i) => ({ row, pos: 4 + col1Count + i }));
   while (col1.length < col2.length) col1.push({ row: null, pos: -1 });
   while (col2.length < col1.length) col2.push({ row: null, pos: -1 });
+  const cardSlots = ranking.slice(3, MAX_CARDS).map((row, i) => ({ row, pos: 4 + i }));
+  const leaderValue = Math.max(...ranking.map(getValue));
 
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'stretch' }}>
@@ -227,7 +239,20 @@ export function PodiumSplit<T extends StaircaseRow>({
         {footer}
       </div>
 
-      {rest.length > 0 && (
+      {layout === 'cards' && cardSlots.length > 0 && (
+        <RankingCardGrid
+          slots={cardSlots}
+          leaderValue={leaderValue}
+          getValue={getValue}
+          formatValue={formatValue}
+          getSecondaryValue={getSecondaryValue}
+          formatSecondaryValue={formatSecondaryValue}
+          getPreviousValue={getPreviousValue}
+          reservePagerRow={Boolean(footer)}
+        />
+      )}
+
+      {layout === 'pills' && rest.length > 0 && (
         <div style={{ flex: '2 1 380px', display: 'flex', gap: 16, minWidth: 0 }}>
           {columns === 1 ? (
             <PillColumn

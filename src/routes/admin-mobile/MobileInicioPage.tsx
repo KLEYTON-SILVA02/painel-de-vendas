@@ -165,6 +165,7 @@ export function MobileInicioPage() {
           bgUrl={storeSettings.ranking_podium_bg_url}
           spots={storeSettings.ranking_podium_spots as unknown as PodiumSpots | null}
           columns={1}
+          layout="pills"
         />
       </div>
 

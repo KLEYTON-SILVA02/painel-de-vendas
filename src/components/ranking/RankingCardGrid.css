@@ -1,0 +1,124 @@
+/* Cards de colocação (posições 4+ do ranking "Premium") — modelo retangular
+   vertical enviado pelo usuário (2026-11-10): proporção 214,68 × 269, arco
+   de progresso em volta da foto, nome/valor embaixo, seta de tendência no
+   canto. Todas as medidas internas são % ou cqw do PRÓPRIO card, então o
+   desenho inteiro escala junto com a largura da coluna. */
+
+.rc-wrap {
+  container: rc-wrap / inline-size;
+  flex: 2 1 380px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 5 colunas × 2 linhas por página. As linhas se distribuem pela altura que
+   sobrar (mesma altura do quadro do pódio ao lado) em vez de colar no topo. */
+.rc-grid {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  column-gap: 2.4%;
+  row-gap: 12px;
+  align-content: space-between;
+  align-items: start;
+}
+@container rc-wrap (max-width: 639px) {
+  .rc-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@container rc-wrap (max-width: 399px) {
+  .rc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.rc-card {
+  position: relative;
+  container-type: inline-size;
+  aspect-ratio: 214.68 / 269;
+  /* Atenção: unidades cqw NÃO funcionam nas propriedades do próprio
+     container (elas resolvem contra o container de fora) — por isso o raio
+     é em % da caixa (22,64 de 214,68 na largura e de 269 na altura). */
+  border-radius: 10.55% / 8.42%;
+  background: #0a1024;
+  box-shadow: inset 0 0 0 1.5px #21336a;
+  overflow: hidden;
+  font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif;
+  font-weight: 700;
+  color: #fff;
+  min-width: 0;
+}
+.rc-card > * { position: absolute; }
+
+.rc-gauge { inset: 0; width: 100%; height: 100%; }
+
+.rc-pos {
+  left: 5.77%;
+  top: 3.1%;
+  font-size: 9.29cqw;
+  line-height: 1;
+}
+
+.rc-photo {
+  left: 26.63%;
+  top: 22.5%;
+  width: 46.74%;
+  aspect-ratio: 1 / 1;
+  box-sizing: border-box;
+  border: 0.65cqw solid #a94dc1;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #0b0e1d;
+}
+.rc-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+.rc-name,
+.rc-sec,
+.rc-value {
+  left: 22.04%;
+  right: 6%;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rc-name { top: 73.2%; font-size: 9.29cqw; text-transform: uppercase; right: 24%; }
+.rc-card--no-trend .rc-name { right: 6%; }
+.rc-sec { top: 78.6%; font-size: 7.2cqw; font-weight: 600; color: #94a3b8; }
+.rc-value { top: 86.2%; }
+
+/* Com valor secundário (ex.: "12 un."), o nome sobe um pouco pra abrir uma
+   linha entre ele e o valor. */
+.rc-card--sec .rc-name { top: 67.6%; }
+.rc-card--sec .rc-trend { top: 65.4%; }
+
+.rc-trend {
+  left: 87.2%;
+  top: 69.5%;
+  transform: translateX(-50%);
+  line-height: 0;
+}
+
+/* Paginação (1, 2, …) no canto inferior direito, na linha dos botões de
+   ação do pódio. */
+.rc-pager {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+}
+.rc-pager--reserve { min-height: 34px; }
+.rc-pager button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid #e5e7eb;
+  border-radius: 3px;
+  background: transparent;
+  color: #fff;
+  font: 700 12px/1 Arial, 'Helvetica Neue', Helvetica, sans-serif;
+  cursor: pointer;
+}
+.rc-pager button[aria-current='page'] {
+  background: #0ea5e9;
+  border-color: #0ea5e9;
+}

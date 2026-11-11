@@ -93,6 +93,17 @@ um estilo novo a cada tela.
   breakpoint em que esse painel lateral empilha (deixa de ficar do lado), a
   barra volta a ir de ponta a ponta normalmente.
 
+- **Colocações 4+ do ranking Premium são cards retangulares em grade** (pedido
+  do usuário, 2026-11-10, com modelo SVG): `RankingCardGrid` (dentro de
+  `PodiumSplit`, prop `layout`, padrão `'cards'`) — 5 colunas × 2 linhas por
+  página, paginação numérica no canto inferior direito alinhada aos botões
+  do pódio, arco de progresso em volta da foto (gradiente vermelho→verde
+  fixo; o preenchimento = valor ÷ valor do 1º colocado, nunca inventado),
+  seta de tendência no canto. A Tela Inicial do mobile continua com as
+  pílulas (`layout="pills"`) até o usuário pedir o contrário. Lição: unidades
+  `cqw` não valem nas propriedades do próprio container (resolvem contra o
+  container de fora) — usar % ali.
+
 ## Publicação / Deploy
 
 - Este projeto está conectado a três deploys automáticos a partir de `main`: **Vercel** e dois sites Netlify (`gestaodevendasks`, `painel-de-vendas-kms`).
