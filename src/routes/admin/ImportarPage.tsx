@@ -2,7 +2,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PageLoading } from '../../components/PageLoading';
-import * as XLSX from 'xlsx';
 import { useAuth } from '../../auth/AuthContext';
 import { ClientServiceImportHistoryPanel, ClientServiceImportSection, type ClientServiceImportSectionHandle } from './ClientServiceImportSection';
 import { DsmImageImportSection, type DsmImageImportSectionHandle } from './DsmImageImportSection';
@@ -37,7 +36,7 @@ import {
   useExclusiveBrands,
   useImportFieldOverrides,
   useProducts,
-  useSales,
+  fetchSalesInRange,
   useSalesImports,
 } from '../../lib/queries';
 import {
@@ -119,7 +118,6 @@ export function ImportarPage() {
   const { data: products } = useProducts();
   const { data: brandKeywords } = useBrandKeywords();
   const { data: exclusiveBrands } = useExclusiveBrands();
-  const { data: existingSales, refetch: refetchSales } = useSales();
   const { data: pastImports } = useSalesImports();
   const { data: pastDsmImports } = useDsmImports();
   const { data: pastClientServiceImports } = useClientServiceImports();
@@ -255,6 +253,8 @@ export function ImportarPage() {
         setFileName(file.name);
         setFileHash(hash);
 
+        const XLSX = await import('xlsx');
+
         const wb = XLSX.read(data, { type: 'array', cellDates: true });
         const parsed: ParsedSheet[] = wb.SheetNames.map((name) => {
           const sheet = wb.Sheets[name];
@@ -338,20 +338,6 @@ export function ImportarPage() {
     // mesmo catch de sempre (mostra erro, volta pra 'verify') em vez de
     // deixar a tela presa pra sempre em 'done' sem nenhum aviso.
     try {
-      // Both dedup layers below (per-date aggregate and per-row composite key)
-      // only protect against what THIS snapshot of `sales` already contains —
-      // and `existingSales` is whatever React Query happened to have cached
-      // from whenever the screen last fetched it, which can be stale by the
-      // time an ADM actually clicks "confirmar" (they may have reviewed the
-      // analysis screen for a while, or just finished a previous import in
-      // the same session a moment ago). A stale snapshot makes both layers
-      // blind to sales written since it was fetched, letting a second
-      // back-to-back import of overlapping data slip past as "new" instead of
-      // being caught as a duplicate or a full resend. Refetching right here,
-      // synchronously before either layer runs, closes that window.
-      const { data: freshExistingSales } = await refetchSales();
-      const existingSalesNow = freshExistingSales ?? existingSales ?? [];
-
       // Matrícula is the primary identifier — normalized on both sides (see
       // normalizeMatricula) so a collaborator record typed with leading
       // zeros still matches a spreadsheet that isn't, or vice versa.
@@ -373,6 +359,23 @@ export function ImportarPage() {
           setClassifyProgress({ processed, total });
         },
       );
+
+      // As duas camadas de dedup abaixo só protegem contra o que este retrato
+      // das vendas já contém, e um retrato antigo (cache) deixaria uma segunda
+      // importação seguida passar como "nova". Por isso busca aqui, na hora,
+      // direto do banco — mas só o intervalo de datas da planilha: venda de
+      // outra data nunca entra na comparação (as duas camadas casam por data).
+      let existingSalesNow: Awaited<ReturnType<typeof fetchSalesInRange>> = [];
+      const datas = candidates.map((c) => c.data_iso).filter((d): d is string => !!d);
+      if (datas.length > 0) {
+        let minDate = datas[0];
+        let maxDate = datas[0];
+        for (const d of datas) {
+          if (d < minDate) minDate = d;
+          if (d > maxDate) maxDate = d;
+        }
+        existingSalesNow = await fetchSalesInRange(minDate, maxDate);
+      }
 
       // Per-date safety net (complements the row-level dedup below): compare
       // what this file has for each date against what's already recorded for

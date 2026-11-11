@@ -609,7 +609,7 @@ function VendorGalleryModal({
                 className="flex flex-col items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-950/60 p-3 hover:border-cyan-500"
               >
                 {r.foto ? (
-                  <img src={r.foto} alt="" className="w-10 h-10 rounded-full object-cover" />
+                  <img src={r.foto} alt="" className="w-10 h-10 rounded-full object-cover" loading="lazy" decoding="async" />
                 ) : (
                   <div className="w-10 h-10 rounded-full bg-slate-700" />
                 )}

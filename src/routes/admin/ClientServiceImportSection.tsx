@@ -1,5 +1,4 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import * as XLSX from 'xlsx';
 import { useAuth } from '../../auth/AuthContext';
 import { DsmReviewTable } from '../../components/dsm/DsmReviewTable';
 import type { CentralImportacaoData, ImportAcaoBotoes, ImportStepInfo, ImportStepStatus } from '../../components/import/CentralImportacaoPanel';
@@ -132,6 +131,8 @@ export const ClientServiceImportSection = forwardRef<
         finishParsing(grid, grid);
         return;
       }
+
+      const XLSX = await import('xlsx');
 
       const wb = XLSX.read(data, { type: 'array', cellDates: true });
       const ws = wb.Sheets[wb.SheetNames[0]];

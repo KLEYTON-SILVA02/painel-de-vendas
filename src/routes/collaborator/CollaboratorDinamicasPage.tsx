@@ -1,10 +1,11 @@
+import { useMemo } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { computeDinamicaColaboradorVendas, computeDinamicaProgresso, dynamicAllowsCollaborator, dynamicStatus } from '../../lib/business/dynamics';
 import { normalize } from '../../lib/business/normalize';
-import type { Collaborator, Dynamic } from '../../lib/business/types';
+import type { Collaborator, Dynamic, Sale } from '../../lib/business/types';
 import { todayISO } from '../../lib/dateRange';
 import { fmtDateBR, fmtDateShortBR, fmtMoney } from '../../lib/format';
-import { useCollaborators, useDynamics, useSales } from '../../lib/queries';
+import { useCollaborators, useDynamics, useSalesForDynamics } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 
 // Collaborators see only their own standing within each dynamic — never the
@@ -13,18 +14,24 @@ import { useDateRange } from '../DateRangeContext';
 export function CollaboratorDinamicasPage() {
   const { profile } = useAuth();
   const { data: dynamics } = useDynamics();
-  const { data: sales } = useSales();
   const { data: collaborators } = useCollaborators();
 
   const me = collaborators?.find((c) => c.id === profile?.collaborator_id);
 
-  if (!dynamics || !sales || !collaborators) {
+  const minhas = useMemo(
+    () =>
+      dynamics?.filter(
+        (d) => (d.participantes.length === 0 || (me && d.participantes.includes(me.matricula))) && (!me || dynamicAllowsCollaborator(d, me)),
+      ),
+    [dynamics, me],
+  );
+  // Só as vendas do período das minhas dinâmicas — nunca o histórico inteiro.
+  const sales = useSalesForDynamics(minhas);
+
+  if (!dynamics || !minhas || !sales || !collaborators) {
     return <div style={{ padding: 24, fontSize: 12, color: 'var(--mv2-texto-2)' }}>Carregando…</div>;
   }
 
-  const minhas = dynamics.filter(
-    (d) => (d.participantes.length === 0 || (me && d.participantes.includes(me.matricula))) && (!me || dynamicAllowsCollaborator(d, me)),
-  );
   const today = todayISO();
   const ativas = minhas.filter((d) => dynamicStatus(d, today) !== 'encerrada').sort((a, b) => a.dataFim.localeCompare(b.dataFim));
   const encerradas = minhas.filter((d) => dynamicStatus(d, today) === 'encerrada').sort((a, b) => b.dataFim.localeCompare(a.dataFim));
@@ -93,7 +100,7 @@ function MyDinamicaCard({
 }: {
   d: Dynamic;
   status: 'ativa' | 'agendada' | 'encerrada';
-  sales: ReturnType<typeof useSales>['data'];
+  sales: Sale[];
   collaborators: Collaborator[];
   matricula: string | undefined;
 }) {

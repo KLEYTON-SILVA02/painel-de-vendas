@@ -221,7 +221,7 @@ export function MobileBioPage() {
               <span className="mv2-pos" style={{ color: 'var(--mv2-rosa)' }}>
                 {i + 1}
               </span>
-              {r.foto ? <img src={r.foto} alt="" className="mv2-avatar" /> : <div className="mv2-avatar" />}
+              {r.foto ? <img src={r.foto} alt="" className="mv2-avatar" loading="lazy" decoding="async" /> : <div className="mv2-avatar" />}
               <span className="mv2-name">{r.apelido || r.nome}</span>
               <span className="mv2-qty">
                 {r.itens} un. · {r.pontos.toFixed(1)} pts

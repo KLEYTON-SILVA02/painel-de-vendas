@@ -179,7 +179,7 @@ export function MobileCategoryScreen({
               <span className="mv2-pos" style={{ color: accent }}>
                 {i + 1}
               </span>
-              {r.foto ? <img src={r.foto} alt="" className="mv2-avatar" /> : <div className="mv2-avatar" />}
+              {r.foto ? <img src={r.foto} alt="" className="mv2-avatar" loading="lazy" decoding="async" /> : <div className="mv2-avatar" />}
               <span className="mv2-name">{r.apelido || r.nome}</span>
               <span className="mv2-qty">{fmtMoney(r.valor)}</span>
             </div>

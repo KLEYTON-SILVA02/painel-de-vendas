@@ -123,7 +123,7 @@ export function CollaboratorShell() {
       <header className="mv2-collab-header">
         <div className="mv2-collab-menu-wrap">
           <button className="mv2-collab-user-btn" onClick={() => setMenuOpen((v) => !v)}>
-            {me?.foto ? <img src={me.foto} alt="" className="mv2-avatar" /> : <div className="mv2-avatar" />}
+            {me?.foto ? <img src={me.foto} alt="" className="mv2-avatar" loading="lazy" decoding="async" /> : <div className="mv2-avatar" />}
             <div style={{ minWidth: 0 }}>
               <div className="mv2-collab-name">{me?.apelido || me?.nome || 'Minhas vendas'}</div>
               <div className="mv2-collab-role">Colaborador{me?.setor ? ` · ${me.setor}` : ''}</div>

@@ -22,14 +22,14 @@ import { VISITANTE_SETOR } from '../../lib/business/types';
 import { fmtDateBR, fmtMoney } from '../../lib/format';
 import { todayISO } from '../../lib/dateRange';
 import { useCreateDynamic, useDeleteDynamic, useUpdateDynamic } from '../../lib/mutations';
-import { useCollaborators, useDynamics, useSales } from '../../lib/queries';
+import { useCollaborators, useDistinctProductsInSales, useDynamics, useSalesForDynamics } from '../../lib/queries';
 import type { Json, TablesUpdate } from '../../types/database';
 
 export function DinamicasPage() {
   const { profile } = useAuth();
   const { data: dynamics } = useDynamics();
-  const { data: sales } = useSales();
   const { data: collaborators } = useCollaborators();
+  const { data: produtos } = useDistinctProductsInSales();
   const [tab, setTab] = useState<'ativas' | 'galeria'>('ativas');
   const [editing, setEditing] = useState<Dynamic | null>(null);
   const createDynamic = useCreateDynamic(profile?.store_id);
@@ -37,18 +37,32 @@ export function DinamicasPage() {
   const deleteDynamic = useDeleteDynamic();
   const { guard, reauthModal } = useReauthGuard();
 
-  // Real product names as they appear in the sales history — the same
-  // strings computeDinamicaProgresso/computeDinamicaRanking match against
-  // (via normalize()) — so a suggestion picked here is guaranteed to
-  // actually match sales, unlike names pulled from the separate
-  // keyword-classification `products` table.
+  // Só as vendas do período das dinâmicas que a aba mostra (+ as ativas) —
+  // nunca o histórico inteiro. Todo cálculo de dinâmica já ignora venda fora
+  // do próprio período, então o resultado é o mesmo.
+  const today = todayISO();
+  const dynamicsParaVendas = useMemo(
+    () =>
+      dynamics?.filter((d) => {
+        const st = dynamicStatus(d, today);
+        return tab === 'ativas' ? st !== 'encerrada' : st !== 'agendada';
+      }),
+    [dynamics, tab, today],
+  );
+  const sales = useSalesForDynamics(dynamicsParaVendas);
+
+  // Nomes reais de produto como aparecem nas vendas — as mesmas strings que
+  // computeDinamicaProgresso/computeDinamicaRanking comparam (via normalize())
+  // — então uma sugestão escolhida aqui sempre casa com as vendas, ao
+  // contrário dos nomes da tabela `products` (classificação por palavra-chave).
+  // Vem de uma função do banco que devolve só os nomes distintos.
   const productNames = useMemo(() => {
     const set = new Set<string>();
-    (sales ?? []).forEach((s) => {
-      if (s.produto) set.add(s.produto);
+    (produtos ?? []).forEach((p) => {
+      if (p.produto) set.add(p.produto);
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  }, [sales]);
+  }, [produtos]);
 
   if (!dynamics || !sales || !collaborators) {
     return <PageLoading />;
@@ -62,7 +76,6 @@ export function DinamicasPage() {
   const participantCollaborators = collaborators.filter((c) => c.setor !== VISITANTE_SETOR);
   const setorOptions = dynamicSetorOptions(participantCollaborators);
 
-  const today = todayISO();
   const list = dynamics.slice().sort((a, b) => (b.dataInicio || '').localeCompare(a.dataInicio || ''));
   const ativas = list.filter((d) => dynamicStatus(d, today) === 'ativa');
   const agendadas = list.filter((d) => dynamicStatus(d, today) === 'agendada');

@@ -7,9 +7,9 @@ import { useIsMobileV2 } from '../lib/useIsMobileV2';
 import '../styles/login-retro-future.css';
 import '../styles/login-video-entrance.css';
 import gvLogo from '../assets/brand/gv-logo.png';
-import whatsappQr from '../assets/brand/whatsapp-qr.jpg';
-import instagramQr from '../assets/brand/instagram-qr.jpg';
-import emailQr from '../assets/brand/email-qr.jpg';
+import whatsappQr from '../assets/brand/whatsapp-qr.webp';
+import instagramQr from '../assets/brand/instagram-qr.webp';
+import emailQr from '../assets/brand/email-qr.webp';
 
 type Tab = 'admin' | 'colaborador' | 'construtor';
 type SocialModal = 'whatsapp' | 'instagram' | 'email' | null;
@@ -138,7 +138,7 @@ function SocialQrModal({ kind, onClose }: { kind: 'whatsapp' | 'instagram' | 'em
         <button type="button" className="mv2-qr-modal-close" onClick={onClose} aria-label="Fechar">
           ×
         </button>
-        {qrImage && <img src={qrImage} alt={`QR Code do ${label}`} className="mv2-qr-modal-image" />}
+        {qrImage && <img src={qrImage} alt={`QR Code do ${label}`} className="mv2-qr-modal-image" decoding="async" />}
         <a href={url} target={kind === 'email' ? undefined : '_blank'} rel="noopener noreferrer" className="mv2-qr-modal-link">
           Abrir {label}
         </a>
