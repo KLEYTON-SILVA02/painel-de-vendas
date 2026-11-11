@@ -99,8 +99,10 @@ um estilo novo a cada tela.
   página, paginação numérica no canto inferior direito alinhada aos botões
   do pódio, arco de progresso em volta da foto (gradiente vermelho→verde
   fixo; o preenchimento = valor ÷ valor do 1º colocado, nunca inventado),
-  seta de tendência no canto. A Tela Inicial do mobile continua com as
-  pílulas (`layout="pills"`) até o usuário pedir o contrário. Lição: unidades
+  seta de tendência no canto. No mobile (pedido do usuário, 2026-11-11) os
+  mesmos cards aparecem **2 por linha** (`cardColumns={2}` em `PodiumSplit`,
+  usado na Tela Inicial e em `CategoryTypePage` quando `useIsMobileV2()`);
+  as telas mobile que não usam `PodiumSplit` seguem com o formato delas. Lição: unidades
   `cqw` não valem nas propriedades do próprio container (resolvem contra o
   container de fora) — usar % ali.
 

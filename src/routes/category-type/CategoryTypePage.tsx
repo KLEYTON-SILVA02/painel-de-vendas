@@ -9,6 +9,7 @@ import { SalesListLockedNotice } from '../../components/SalesListLockedNotice';
 import { PodiumSplit, type PodiumSpots } from '../../components/ranking/PodiumSplit';
 import { PodiumStaircase } from '../../components/ranking/PodiumStaircase';
 import { RankingModeToggle } from '../../components/ranking/RankingModeToggle';
+import { useIsMobileV2 } from '../../lib/useIsMobileV2';
 import { auditBioOutsideBalcao, computeBioSummary, groupBioRows, type BioSummaryRow } from '../../lib/business/bio';
 import { classifyBio } from '../../lib/business/classification';
 import { diasRestantesNoMes } from '../../lib/business/goals';
@@ -29,6 +30,9 @@ import { useDateRange } from '../DateRangeContext';
  * unlike Biosintética's store_settings.bio_weights (see migration 0028).
  */
 export function CategoryTypePage() {
+  // Esta tela é compartilhada entre desktop e mobile: no mobile os cards de
+  // colocação ficam sempre 2 por linha.
+  const isMobile = useIsMobileV2();
   const { chave } = useParams<{ chave: string }>();
   const { profile } = useAuth();
   const { data: collaborators } = useCollaborators();
@@ -262,6 +266,7 @@ export function CategoryTypePage() {
             formatValue={(v) => `${v.toFixed(1)} pts`}
             bgUrl={storeSettings.ranking_podium_bg_url}
             spots={storeSettings.ranking_podium_spots as unknown as PodiumSpots | null}
+            cardColumns={isMobile ? 2 : undefined}
           />
         ) : (
           <PodiumStaircase
