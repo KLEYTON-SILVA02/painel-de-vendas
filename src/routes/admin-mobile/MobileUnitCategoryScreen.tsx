@@ -8,7 +8,7 @@ import type { Collaborator } from '../../lib/business/types';
 import { copyText, formatRankingText } from '../../lib/clipboard';
 import { todayISO } from '../../lib/dateRange';
 import { generateRankingImageBlob, tryCopyImage } from '../../lib/rankingImage';
-import { useCollaborators, useGoals, useMobileCategoryTotals, useSales, useSpecialLists, useStore } from '../../lib/queries';
+import { useCollaborators, useGoals, useMobileCategoryTotals, useSalesInRange, useSpecialLists, useStore } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { MobileDateFilter } from './MobileDateFilter';
 import { MobileSalesListLockedNotice, MobileSalesTable, MobileSellerAccordion } from './MobileSellerDetail';
@@ -48,7 +48,7 @@ export function MobileUnitCategoryScreen({
   // Item-level sales only fetched once "Lista de vendas detalhada" is
   // unlocked — the ranking/today counters above come from
   // mobile_category_totals() instead.
-  const { data: sales } = useSales(salesListEnabled);
+  const { data: sales } = useSalesInRange(dashFrom, dashTo, salesListEnabled);
   const { data: categoryTotals } = useMobileCategoryTotals(dashFrom, dashTo);
   const { data: todayTotals } = useMobileCategoryTotals(today, today);
 

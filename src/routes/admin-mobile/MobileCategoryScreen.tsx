@@ -7,7 +7,7 @@ import { summaryFromCategoryTotals } from '../../lib/business/summary';
 import type { Collaborator } from '../../lib/business/types';
 import { fmtMoney } from '../../lib/format';
 import { monthFirstISO, todayISO } from '../../lib/dateRange';
-import { useCollaborators, useCommissionRates, useGoals, useMobileCategoryTotals, useSales } from '../../lib/queries';
+import { useCollaborators, useCommissionRates, useGoals, useMobileCategoryTotals, useSalesInRange } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { MobileDateFilter } from './MobileDateFilter';
 import { MobileSalesListLockedNotice, MobileSalesTable, MobileSellerAccordion } from './MobileSellerDetail';
@@ -41,7 +41,7 @@ export function MobileCategoryScreen({
   // detalhada" for this screen — the ranking/goal totals above come from
   // mobile_category_totals() instead, so a locked screen never downloads a
   // single raw sale.
-  const { data: sales } = useSales(salesListEnabled);
+  const { data: sales } = useSalesInRange(dashFrom, dashTo, salesListEnabled);
   const { data: categoryTotals } = useMobileCategoryTotals(dashFrom, dashTo);
   const needsMonthToDate = !!(goals?.[catKey]?.autoRedistribuir || goals?.[catKey]?.superMetaAuto);
   const now = new Date();

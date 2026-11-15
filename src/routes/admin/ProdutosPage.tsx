@@ -1908,10 +1908,17 @@ function PalavrasColumn({ categoria }: { categoria: CategoryKey }) {
         { produto: string; categoriaAtual: CategoryKey; palavrasBatidas: string[]; precisaCorrigir: boolean }
       >();
       if (keywords.length > 0) {
+        // O mesmo produto aparece em milhares de vendas: as palavras que batem são
+        // calculadas uma vez por nome, não uma vez por venda.
+        const batidasPorNome = new Map<string, string[]>();
         sales.forEach((s) => {
           if (!s.produto) return;
           const n = normalize(s.produto);
-          const palavrasBatidas = keywords.filter((kwItem) => n.includes(kwItem.normalizada)).map((kwItem) => kwItem.original);
+          let palavrasBatidas = batidasPorNome.get(n);
+          if (!palavrasBatidas) {
+            palavrasBatidas = keywords.filter((kwItem) => n.includes(kwItem.normalizada)).map((kwItem) => kwItem.original);
+            batidasPorNome.set(n, palavrasBatidas);
+          }
           if (palavrasBatidas.length === 0) return;
           if (categoria === 'GEN' && !GENERIC_MARKERS.some((m) => n.includes(m.trim()))) return;
           const existing = porProduto.get(n);

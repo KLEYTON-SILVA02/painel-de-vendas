@@ -114,6 +114,12 @@ um estilo novo a cada tela.
 - Toda tabela de rotas de shell precisa de `<Route path="*" element={<NotFoundPage />} />`; rota que existe no desktop e é linkada no mobile (cards do ADM, menu) precisa existir também em `MobileAdminShell`.
 - Hooks nunca depois de `return` antecipado (3 seções de importação já quebraram por isso; `oxlint` aponta como `rules-of-hooks`).
 
+## Desempenho de telas que processam vendas (2026-11-15)
+
+- Auditoria levou +5 min com ~100 mil vendas: `classifyProductTier` normalizava ~10 mil textos (catálogo + palavras de produto) **a cada venda**, e o cache do `normalize()` (8 mil) era esvaziado no meio de cada chamada. Agora as regras são preparadas uma vez por conjunto de entradas (`prepareInputs`, índice por 3 letras) — ~330x mais rápido, idêntico ao antigo (`classification.equivalence.test.ts` compara com a versão antiga em milhares de casos; ao mexer na classificação, rodar esse teste).
+- Regras para qualquer tela nova: nunca normalizar/classificar dentro de laço que percorre o histórico inteiro sem índice ou cache por nome; telas de lista devem buscar só o período visível (`useSalesInRange`), não `useSales()`; `useReclassifyProdutos` indexa as vendas uma vez.
+- Ainda baixam o histórico inteiro (`useSales()`): Auditoria e as 4 abas de Produtos (precisam das vendas para a reclassificação retroativa), e os modos "reclassificar" opcionais. Proposta pendente: mover a reclassificação retroativa para uma função do banco, aí essas telas só precisariam de agregados.
+
 ## Publicação / Deploy
 
 - Este projeto está conectado a três deploys automáticos a partir de `main`: **Vercel** e dois sites Netlify (`gestaodevendasks`, `painel-de-vendas-kms`).

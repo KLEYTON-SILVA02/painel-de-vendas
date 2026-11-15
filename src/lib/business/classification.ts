@@ -64,7 +64,8 @@ export const EXCLUSIVE_BRANDS_DEFAULT = [
 // — sem isso, um marcador novo adicionado aqui não seria refletido lá.
 export const GENERIC_MARKERS = ['generico', 'genérico', 'similar', ' gen ', ' gn ', 'g-ems', 'gn-med'];
 
-const HEURISTICS: Record<CategoryKey, string[]> = {
+/** @internal exportado só para o teste de equivalência */
+export const HEURISTICS: Record<CategoryKey, string[]> = {
   MP: ['needs', 'sensi', 'genyo', 'farma22', 'nutrissi'],
   DERM: [
     'la roche', 'vichy', 'eucerin', 'avene', 'cerave', 'bioderma', 'isdin',
@@ -119,7 +120,8 @@ export interface ClassificationResult {
  * exactly equals the category/group code it's filed under is never a real
  * product identifier, so it's discarded here and the product's own name is
  * used instead — the same fallback used when `palavras` is empty. */
-function keywordsOf(item: KeywordItem, categoryCode?: string): string[] {
+/** @internal exportado só para o teste de equivalência */
+export function keywordsOf(item: KeywordItem, categoryCode?: string): string[] {
   const raw = item.palavras && item.palavras.length ? item.palavras : [item.padrao || item.nome];
   if (!categoryCode) return raw;
   const codeNorm = normalize(categoryCode);
@@ -132,6 +134,115 @@ function keywordsOf(item: KeywordItem, categoryCode?: string): string[] {
  * priority order and the exclusive-brands override as the legacy system.
  * Returns tier=5 whenever nothing matched and MER was used as universal fallback.
  */
+interface PreparedKeyword {
+  k: CategoryKey;
+  len: number;
+  /** Posição na ordem original de varredura — desempata (o 1º vence) como o `sort` estável fazia. */
+  idx: number;
+  pad: string;
+}
+
+/** Tudo que `classifyProductTier` precisava recalcular a CADA venda (normalizar
+ * 1.600 nomes do catálogo, ~9.000 palavras de produto, as marcas...) é feito uma
+ * única vez por conjunto de regras. Com a loja grande, o cache do normalize()
+ * (8 mil entradas) estourava no meio de cada chamada e era esvaziado — o que
+ * deixava cada classificação em ~3 ms e a Auditoria em mais de 5 minutos para
+ * 100 mil vendas. O resultado é idêntico ao do cálculo antigo (ver teste). */
+interface PreparedInputs {
+  catalogByCode: Map<string, number>;
+  catalogByName: Map<string, number>;
+  catalogCats: CategoryKey[];
+  /** palavras de produto (tier 2, >= 3 letras) indexadas pelas 3 primeiras letras */
+  productByTrigram: Map<string, PreparedKeyword[]>;
+  /** palavras de marca (tier 3) com >= 3 letras, idem */
+  brandByTrigram: Map<string, PreparedKeyword[]>;
+  /** palavras de marca com 1-2 letras (raras): varridas uma a uma */
+  brandShort: PreparedKeyword[];
+  exclusive: string[];
+}
+
+const preparedCache = new WeakMap<ClassificationInputs, PreparedInputs>();
+
+function addToIndex(index: Map<string, PreparedKeyword[]>, kw: PreparedKeyword) {
+  const key = kw.pad.slice(0, 3);
+  const list = index.get(key);
+  if (list) list.push(kw);
+  else index.set(key, [kw]);
+}
+
+function prepareInputs(inputs: ClassificationInputs): PreparedInputs {
+  const cached = preparedCache.get(inputs);
+  if (cached) return cached;
+
+  const catalogByCode = new Map<string, number>();
+  const catalogByName = new Map<string, number>();
+  const catalogCats: CategoryKey[] = [];
+  inputs.catalog.forEach((c, i) => {
+    catalogCats.push(c.categoria);
+    if (c.codigo) {
+      const code = c.codigo.toString().trim();
+      if (code && !catalogByCode.has(code)) catalogByCode.set(code, i);
+    }
+    if (c.nome) {
+      const nn = normalize(c.nome);
+      if (nn && !catalogByName.has(nn)) catalogByName.set(nn, i);
+    }
+  });
+
+  const productByTrigram = new Map<string, PreparedKeyword[]>();
+  let idx = 0;
+  CAT_KEYS.forEach((k) => {
+    (inputs.productsByCategory[k] || []).forEach((p) => {
+      keywordsOf(p, k).forEach((kw) => {
+        const pad = normalize(kw);
+        if (pad && pad.length >= 3) addToIndex(productByTrigram, { k, len: pad.length, idx: idx++, pad });
+      });
+    });
+  });
+
+  const brandByTrigram = new Map<string, PreparedKeyword[]>();
+  const brandShort: PreparedKeyword[] = [];
+  let bidx = 0;
+  CAT_KEYS.forEach((k) => {
+    (inputs.brandKeywordsByCategory[k] || []).forEach((kw) => {
+      const pad = normalize(kw);
+      if (!pad) return;
+      const entry = { k, len: pad.length, idx: bidx++, pad };
+      if (pad.length >= 3) addToIndex(brandByTrigram, entry);
+      else brandShort.push(entry);
+    });
+  });
+
+  const brands = inputs.exclusiveBrands.length ? inputs.exclusiveBrands : EXCLUSIVE_BRANDS_DEFAULT;
+  const prepared: PreparedInputs = {
+    catalogByCode,
+    catalogByName,
+    catalogCats,
+    productByTrigram,
+    brandByTrigram,
+    brandShort,
+    exclusive: brands.map((b) => normalize(b)),
+  };
+  preparedCache.set(inputs, prepared);
+  return prepared;
+}
+
+/** Entre as palavras que aparecem em `n`, a mais longa (empate: a 1ª na ordem original). */
+function bestKeywordIn(n: string, index: Map<string, PreparedKeyword[]>, accept?: (k: PreparedKeyword) => boolean): PreparedKeyword | null {
+  let best: PreparedKeyword | null = null;
+  for (let i = 0; i + 3 <= n.length; i++) {
+    const list = index.get(n.slice(i, i + 3));
+    if (!list) continue;
+    for (const kw of list) {
+      if (best && (kw.len < best.len || (kw.len === best.len && kw.idx > best.idx))) continue;
+      if (!n.includes(kw.pad)) continue;
+      if (accept && !accept(kw)) continue;
+      best = kw;
+    }
+  }
+  return best;
+}
+
 export function classifyProductTier(
   nome: string,
   codigo: string | null | undefined,
@@ -144,55 +255,47 @@ export function classifyProductTier(
 ): ClassificationResult {
   const n = normalize(nome);
   if (!n) return { categoria: null, tier: 5 };
+  const prep = prepareInputs(inputs);
 
   let result: CategoryKey | null = null;
   let tier: 1 | 2 | 3 | 4 | 5 = 5;
 
-  // Tier 1 — exact catalog match by code or name (highest priority)
+  // Tier 1 — exact catalog match by code or name (highest priority). When both
+  // a code and a name hit different rows, the row that comes first in the
+  // catalog wins (same as the old `.find`).
   const codN = (codigo || '').toString().trim();
-  const cat = inputs.catalog.find(
-    (c) => (codN && c.codigo && c.codigo.toString().trim() === codN) || (c.nome && normalize(c.nome) === n),
-  );
-  if (cat) {
-    result = cat.categoria;
+  const byCode = codN ? prep.catalogByCode.get(codN) : undefined;
+  const byName = prep.catalogByName.get(n);
+  const catIdx = byCode !== undefined && byName !== undefined ? Math.min(byCode, byName) : (byCode ?? byName);
+  if (catIdx !== undefined) {
+    result = prep.catalogCats[catIdx];
     tier = 1;
   }
 
   // Tier 2 — per-product keywords across all categories (longest match wins)
   if (!result) {
-    const matches: { k: CategoryKey; len: number }[] = [];
-    CAT_KEYS.forEach((k) => {
-      (inputs.productsByCategory[k] || []).forEach((p) => {
-        keywordsOf(p, k).forEach((kw) => {
-          const pad = normalize(kw);
-          if (pad && pad.length >= 3 && n.includes(pad)) matches.push({ k, len: pad.length });
-        });
-      });
-    });
-    if (matches.length) {
-      matches.sort((a, b) => b.len - a.len);
-      result = matches[0].k;
+    const best = bestKeywordIn(n, prep.productByTrigram);
+    if (best) {
+      result = best.k;
       tier = 2;
     }
   }
 
   // Tier 3 — brand keywords per category (GEN requires a generic marker too)
   if (!result) {
-    const kwMatches: { k: CategoryKey; len: number }[] = [];
-    CAT_KEYS.forEach((k) => {
-      (inputs.brandKeywordsByCategory[k] || []).forEach((kw) => {
-        const kwn = normalize(kw);
-        if (!kwn || !n.includes(kwn)) return;
-        if (k === 'GEN') {
-          const hasMarker = GENERIC_MARKERS.some((m) => n.includes(m.trim()));
-          if (!hasMarker) return;
-        }
-        kwMatches.push({ k, len: kwn.length });
-      });
-    });
-    if (kwMatches.length) {
-      kwMatches.sort((a, b) => b.len - a.len);
-      result = kwMatches[0].k;
+    let hasMarker: boolean | null = null;
+    const accept = (kw: PreparedKeyword) => {
+      if (kw.k !== 'GEN') return true;
+      if (hasMarker === null) hasMarker = GENERIC_MARKERS.some((m) => n.includes(m.trim()));
+      return hasMarker;
+    };
+    let best = bestKeywordIn(n, prep.brandByTrigram, accept);
+    for (const kw of prep.brandShort) {
+      if (best && (kw.len < best.len || (kw.len === best.len && kw.idx > best.idx))) continue;
+      if (n.includes(kw.pad) && accept(kw)) best = kw;
+    }
+    if (best) {
+      result = best.k;
       tier = 3;
     }
   }
@@ -217,8 +320,7 @@ export function classifyProductTier(
 
   // Exclusive-brand rule: always recategorizes to MP, even over a match found
   // above — and even over an unclassified (useFallback=false) result.
-  const brands = inputs.exclusiveBrands.length ? inputs.exclusiveBrands : EXCLUSIVE_BRANDS_DEFAULT;
-  if (brands.some((b) => n.includes(normalize(b)))) {
+  if (prep.exclusive.some((b) => n.includes(b))) {
     result = 'MP';
   }
 
