@@ -3,6 +3,7 @@ import { PageLoading } from '../../components/PageLoading';
 import { useAuth } from '../../auth/AuthContext';
 import { HelpTip } from '../../components/HelpTip';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
+import { SubstanciasBarra, SubstanciasColunas } from '../../components/admin/SubstanciasPanel';
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
 import { DateRangeProvider, useDateRange } from '../DateRangeContext';
 import { todayISO } from '../../lib/dateRange';
@@ -2115,6 +2116,8 @@ function SubstanciasTab() {
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleteError, setBulkDeleteError] = useState<string | null>(null);
+  // Qual área extra da barra única está aberta (só uma por vez).
+  const [painel, setPainel] = useState<'lista' | 'planilha' | null>(null);
 
   if (!substances || !sales || !catalog || !products || !brandKeywords || !exclusiveBrands) return <PageLoading />;
 
@@ -2177,71 +2180,38 @@ function SubstanciasTab() {
 
   return (
     <>
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <h3 className="font-semibold mb-1 text-sm">Substâncias — Genéricos</h3>
-        <p className="text-xs text-slate-500">
-          Cadastre nomes de substâncias (ex.: Dipirona, Paracetamol, Losartana). Depois use "Aplicar / Escanear"
-          para identificar, entre os produtos já vendidos, quais contêm alguma dessas substâncias no nome e ainda
-          não estão classificados como Genéricos — eles são inseridos automaticamente no Catálogo, isolados na aba
-          "Via Substância" (dentro de Catálogo), e as vendas já importadas desses produtos são reclassificadas.
-          Além do botão manual, o sistema também roda essa varredura sozinho 5x por dia (07h, 10h, 15h, 18h, 22h).
-        </p>
-        <p className="text-xs text-cyan-400 mt-2">
-          {storeSettings?.substances_scan_last_run
-            ? `Última varredura: ${new Date(storeSettings.substances_scan_last_run).toLocaleString('pt-BR', {
-                day: '2-digit',
-                month: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-              })} — ${storeSettings.substances_scan_last_count} produto(s) identificado(s)`
-            : 'Nenhuma varredura rodou ainda.'}
-        </p>
-      </div>
-
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <h3 className="font-semibold mb-3 text-sm">Adicionar substância</h3>
-        <div className="flex gap-2 mb-3 max-w-md">
-          <input
-            value={nome}
-            onChange={(e) => setNome(e.target.value)}
-            placeholder="ex: Dipirona"
-            className="input flex-1"
-            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-          />
-          <button onClick={handleAdd} className="rounded-md bg-amber-500 text-slate-950 px-4 py-1.5 text-sm font-medium">
-            + Adicionar
-          </button>
-        </div>
-        <MutationError error={insertSubstance.error} />
-        <label className="block text-xs text-slate-400 mb-1 mt-3">Colar lista (uma substância por linha)</label>
-        <textarea
-          value={bulkText}
-          onChange={(e) => setBulkText(e.target.value)}
-          rows={4}
-          placeholder={'Dipirona\nParacetamol\nLosartana'}
-          className="input w-full max-w-md"
-        />
-        <div className="mt-2">
-          <button
-            onClick={handleBulkAdd}
-            disabled={!bulkText.trim() || bulkInsertSubstances.isPending}
-            className="rounded-md border border-slate-700 px-3 py-1.5 text-xs text-slate-300 disabled:opacity-50"
-          >
-            {bulkInsertSubstances.isPending ? 'Adicionando…' : '+ Adicionar lista'}
-          </button>
-        </div>
-        <MutationError error={bulkInsertSubstances.error} />
-      </div>
-
-      <SimpleSheetImportPanel
-        title="Importar planilha de substâncias"
-        columns={['Nome da substância']}
-        onConfirm={async (rows) => {
+      <SubstanciasBarra
+        nome={nome}
+        setNome={setNome}
+        onAdd={handleAdd}
+        painel={painel}
+        setPainel={setPainel}
+        bulkText={bulkText}
+        setBulkText={setBulkText}
+        onBulkAdd={handleBulkAdd}
+        bulkPending={bulkInsertSubstances.isPending}
+        onImport={async (rows) => {
           const nomes = rows.map((r) => r[0]?.trim()).filter((n): n is string => !!n);
           if (nomes.length === 0) return { count: 0, skipped: rows.length };
           await bulkInsertSubstances.mutateAsync(nomes);
           return { count: nomes.length, skipped: rows.length - nomes.length };
         }}
+        ultimaVarredura={
+          storeSettings?.substances_scan_last_run
+            ? `Última varredura: ${new Date(storeSettings.substances_scan_last_run).toLocaleString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+              })} · ${storeSettings.substances_scan_last_count} identificado(s)`
+            : 'Nenhuma varredura rodou ainda.'
+        }
+        erros={
+          <>
+            <MutationError error={insertSubstance.error} />
+            <MutationError error={bulkInsertSubstances.error} />
+          </>
+        }
       />
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
@@ -2284,32 +2254,20 @@ function SubstanciasTab() {
         {substances.length === 0 ? (
           <span className="text-xs text-slate-500">Nenhuma substância cadastrada.</span>
         ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {substances.map((s) => (
-              <span key={s.id} className="text-xs bg-slate-800 rounded-full px-2 py-1 flex items-center gap-1.5">
-                {selectMode && (
-                  <input
-                    type="checkbox"
-                    checked={selected.has(s.id)}
-                    onChange={() =>
-                      setSelected((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(s.id)) next.delete(s.id);
-                        else next.add(s.id);
-                        return next;
-                      })
-                    }
-                  />
-                )}
-                {s.nome}
-                {!selectMode && (
-                  <button onClick={() => deleteSubstance.mutate(s.id)} className="text-slate-500 hover:text-rose-400">
-                    ✕
-                  </button>
-                )}
-              </span>
-            ))}
-          </div>
+          <SubstanciasColunas
+            substancias={substances}
+            selectMode={selectMode}
+            selected={selected}
+            onToggle={(id) =>
+              setSelected((prev) => {
+                const next = new Set(prev);
+                if (next.has(id)) next.delete(id);
+                else next.add(id);
+                return next;
+              })
+            }
+            onDelete={(id) => deleteSubstance.mutate(id)}
+          />
         )}
       </div>
 
