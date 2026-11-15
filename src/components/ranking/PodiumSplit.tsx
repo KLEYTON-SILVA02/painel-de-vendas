@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import podiumPremiumBg from '../../assets/ranking/podium-premium-bg.jpg';
+import podiumPremiumBg from '../../assets/ranking/podium-premium-bg.webp';
 import { TrendArrow } from '../TrendArrow';
 import type { StaircaseRow } from './PodiumStaircase';
 import { RankingCardGrid } from './RankingCardGrid';

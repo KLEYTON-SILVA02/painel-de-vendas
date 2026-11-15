@@ -29,7 +29,7 @@ import {
   useStoreSettings,
 } from '../../lib/queries';
 import { uploadRankingPodiumBackground } from '../../lib/storage';
-import podiumPremiumBg from '../../assets/ranking/podium-premium-bg.jpg';
+import podiumPremiumBg from '../../assets/ranking/podium-premium-bg.webp';
 import {
   DEFAULT_PODIUM_SPOTS,
   PODIUM_BG_RATIO,
