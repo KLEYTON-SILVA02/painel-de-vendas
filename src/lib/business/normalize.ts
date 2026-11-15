@@ -12,7 +12,9 @@ const DIACRITICS_RE = /[̀-ͯ]/g;
 // instead of left unbounded, since a session can in principle touch a lot of
 // distinct product-name text over its lifetime.
 const normalizeCache = new Map<string, string>();
-const NORMALIZE_CACHE_LIMIT = 8000;
+// 8.000 ficou pequeno quando o catálogo + palavras de produto passaram de 10 mil
+// textos: o cache era esvaziado no meio de cada passada e deixava de ajudar.
+const NORMALIZE_CACHE_LIMIT = 60000;
 
 export function normalize(s: string | null | undefined): string {
   const raw = (s ?? '').toString();

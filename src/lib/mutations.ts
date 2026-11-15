@@ -847,6 +847,17 @@ export function useReclassifyProdutos(storeId: string | undefined) {
       const { data: storeRow } = await supabase.from('stores').select('modelo_catalogo').eq('id', storeId).single();
       const modeloCatalogo = storeRow?.modelo_catalogo ?? null;
 
+      // Índice das vendas por nome normalizado, montado UMA vez. Antes, cada produto
+      // reclassificado percorria o histórico inteiro normalizando cada venda (80 produtos
+      // x 100 mil vendas = 8 milhões de normalizações) e, de novo, ao juntar os ids no fim.
+      const salesByNorm = new Map<string, typeof sales>();
+      for (const s of sales) {
+        const key = normalize(s.produto);
+        const bucket = salesByNorm.get(key);
+        if (bucket) bucket.push(s);
+        else salesByNorm.set(key, [s]);
+      }
+
       for (const nome of produtos) {
         const n = normalize(nome);
 
@@ -861,8 +872,7 @@ export function useReclassifyProdutos(storeId: string | undefined) {
         // existe um código por nome; em caso raro de divergência, fica com
         // o mais frequente — nunca trava a reclassificação por causa disso.
         const codigoCounts = new Map<string, number>();
-        for (const s of sales) {
-          if (normalize(s.produto) !== n) continue;
+        for (const s of salesByNorm.get(n) ?? []) {
           const c = (s.codigo ?? '').trim();
           if (c) codigoCounts.set(c, (codigoCounts.get(c) ?? 0) + 1);
         }
@@ -925,8 +935,8 @@ export function useReclassifyProdutos(storeId: string | undefined) {
       }
 
       const targets = new Set(produtos.map((p) => normalize(p)));
-      const ids = sales
-        .filter((s) => targets.has(normalize(s.produto)))
+      const ids = Array.from(targets)
+        .flatMap((t) => salesByNorm.get(t) ?? [])
         .filter((s) => {
           if (!dateRange) return true;
           if (dateRange.from && (!s.dataISO || s.dataISO < dateRange.from)) return false;

@@ -6,7 +6,7 @@ import { summaryFromCategoryTotals } from '../../lib/business/summary';
 import type { Collaborator } from '../../lib/business/types';
 import { fmtMoney } from '../../lib/format';
 import { monthFirstISO, todayISO } from '../../lib/dateRange';
-import { useCollaborators, useGoals, useMobileCategoryTotals, useSales } from '../../lib/queries';
+import { useCollaborators, useGoals, useMobileCategoryTotals, useSalesInRange } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 import { MobileDateFilter } from './MobileDateFilter';
 import { MobileSalesListLockedNotice, MobileSalesTable, MobileSellerAccordion } from './MobileSellerDetail';
@@ -37,7 +37,7 @@ export function MobileMercadoriaGeralPage() {
   // Item-level sales only fetched once "Lista de vendas detalhada" is
   // unlocked — the ranking/goal totals below come from
   // mobile_category_totals() instead.
-  const { data: sales } = useSales(salesListEnabled);
+  const { data: sales } = useSalesInRange(dashFrom, dashTo, salesListEnabled);
   const { data: categoryTotals } = useMobileCategoryTotals(dashFrom, dashTo);
   const needsMonthToDate = !!(goals?.MER?.autoRedistribuir || goals?.MER?.superMetaAuto);
   const now = new Date();
