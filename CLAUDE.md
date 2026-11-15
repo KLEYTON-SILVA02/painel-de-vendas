@@ -106,6 +106,14 @@ um estilo novo a cada tela.
   `cqw` não valem nas propriedades do próprio container (resolvem contra o
   container de fora) — usar % ali.
 
+## App Android (APK) e versão mobile — como funciona (2026-11-15)
+
+- O APK **não embute o site**: `capacitor.config.ts` aponta `server.url` para o deploy de produção da Vercel. Por isso toda melhoria de velocidade/tela publicada em `main` chega ao app já instalado na próxima abertura (e ao voltar do segundo plano, ver `main.tsx`). Só mudança **nativa** (plugin Capacitor novo, manifesto, ícone) exige gerar e instalar um APK novo.
+- **Lembrar-me** (`lib/rememberedLogin.ts`): no app instalado guarda usuário + senha (senha cifrada com AES-GCM, chave não exportável no IndexedDB); no navegador comum guarda só o usuário e deixa a senha para o gerenciador do navegador. Desmarcar e entrar apaga tudo. Um dia dá para trocar por armazenamento seguro nativo (Keystore), mas isso exige APK novo.
+- **Mensagens de erro** passam por `lib/friendlyError.ts` (`errorMessage`/`friendlyMessage`): "causa: o que fazer", curto. Mensagem de regra de negócio já em português passa direto. Para erro novo, adicionar o código/status lá, não texto solto na tela.
+- Toda tabela de rotas de shell precisa de `<Route path="*" element={<NotFoundPage />} />`; rota que existe no desktop e é linkada no mobile (cards do ADM, menu) precisa existir também em `MobileAdminShell`.
+- Hooks nunca depois de `return` antecipado (3 seções de importação já quebraram por isso; `oxlint` aponta como `rules-of-hooks`).
+
 ## Publicação / Deploy
 
 - Este projeto está conectado a três deploys automáticos a partir de `main`: **Vercel** e dois sites Netlify (`gestaodevendasks`, `painel-de-vendas-kms`).

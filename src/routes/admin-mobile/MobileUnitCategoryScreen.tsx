@@ -1,3 +1,4 @@
+import { MobileRankingCards } from '../../components/ranking/MobileRankingCards';
 import { useMemo, useState } from 'react';
 import { RankingImageModal } from '../../components/ranking/RankingImageModal';
 import { useCategoryLabelMap } from '../../lib/business/categoryLabels';
@@ -189,16 +190,7 @@ export function MobileUnitCategoryScreen({
         {rankingList.length === 0 ? (
           <div style={{ fontSize: 10, color: 'var(--mv2-texto-2)', padding: '8px 0', textAlign: 'center' }}>Sem vendas no período.</div>
         ) : (
-          rankingList.map((r, i) => (
-            <div key={r.matricula} className="mv2-row">
-              <span className="mv2-pos" style={{ color: accent }}>
-                {i + 1}
-              </span>
-              {r.foto ? <img src={r.foto} alt="" className="mv2-avatar" loading="lazy" decoding="async" /> : <div className="mv2-avatar" />}
-              <span className="mv2-name">{r.apelido || r.nome}</span>
-              <span className="mv2-qty">{r.itens} un.</span>
-            </div>
-          ))
+          <MobileRankingCards rows={rankingList} getValue={(r) => r.itens} formatValue={(v) => `${v} un.`} />
         )}
       </div>
 

@@ -1,3 +1,4 @@
+import { MobileRankingCards } from '../../components/ranking/MobileRankingCards';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImportPanel';
@@ -216,18 +217,7 @@ export function MobileBioPage() {
         {rankingList.length === 0 ? (
           <div style={{ fontSize: 10, color: 'var(--mv2-texto-2)', padding: '8px 0', textAlign: 'center' }}>Sem vendas no período.</div>
         ) : (
-          rankingList.map((r, i) => (
-            <div key={r.matricula} className="mv2-row">
-              <span className="mv2-pos" style={{ color: 'var(--mv2-rosa)' }}>
-                {i + 1}
-              </span>
-              {r.foto ? <img src={r.foto} alt="" className="mv2-avatar" loading="lazy" decoding="async" /> : <div className="mv2-avatar" />}
-              <span className="mv2-name">{r.apelido || r.nome}</span>
-              <span className="mv2-qty">
-                {r.itens} un. · {r.pontos.toFixed(1)} pts
-              </span>
-            </div>
-          ))
+          <MobileRankingCards rows={rankingList} getValue={(r) => r.pontos} formatValue={(v) => `${v.toFixed(1)} pts`} getSecondaryValue={(r) => r.itens} formatSecondaryValue={(v) => `${v} un.`} />
         )}
       </div>
 

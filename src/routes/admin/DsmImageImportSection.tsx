@@ -96,6 +96,8 @@ export interface DsmImageImportSectionHandle {
   confirmar: () => void;
 }
 
+const NO_COLLABORATORS: never[] = [];
+
 export const DsmImageImportSection = forwardRef<
   DsmImageImportSectionHandle,
   {
@@ -105,7 +107,8 @@ export const DsmImageImportSection = forwardRef<
   }
 >(function DsmImageImportSection({ onStepChange, onCentralChange, onAcaoChange }, ref) {
   const { profile } = useAuth();
-  const { data: collaborators } = useCollaborators();
+  const { data: collaboratorsData } = useCollaborators();
+  const collaborators = collaboratorsData ?? NO_COLLABORATORS;
   const { data: existingRecords, refetch: refetchDsmRecords } = useDsmRecords();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pasteAreaRef = useRef<HTMLDivElement>(null);
@@ -173,7 +176,6 @@ export const DsmImageImportSection = forwardRef<
     };
   }, [imagePreviewUrl]);
 
-  if (!collaborators) return null;
 
   const collaboratorsById = new Map(collaborators.map((c) => [c.id, c]));
   const collaboratorByMatricula = new Map(collaborators.map((c) => [normalizeMatricula(c.matricula), c]));
@@ -475,6 +477,11 @@ export const DsmImageImportSection = forwardRef<
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, imageBlob, text, error, scanning, clientesColumnMatches, matches, rows, completenessWarning, saving, result]);
+
+  // Só depois de TODOS os hooks (antes ficava lá em cima, e quando a lista de
+  // colaboradores chegava depois do 1º render o React quebrava com "Rendered more
+  // hooks than during the previous render").
+  if (!collaboratorsData) return null;
 
   return (
     <div className="flex flex-col gap-3">

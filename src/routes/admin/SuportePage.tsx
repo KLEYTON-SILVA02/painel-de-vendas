@@ -73,7 +73,7 @@ function TrocaSenhaCard({ email }: { email: string | undefined }) {
       }
       const { error: updateErr } = await supabase.auth.updateUser({ password: novaSenha });
       if (updateErr) {
-        setError(updateErr.message);
+        setError(errorMessage(updateErr, 'Não foi possível trocar a senha.'));
         return;
       }
       setSenhaAtual('');
@@ -145,7 +145,7 @@ function EmailRecuperacaoCard({ email }: { email: string | undefined }) {
       // vira o oficial da conta depois que o link é confirmado.
       const { error: updateErr } = await supabase.auth.updateUser({ email: novoEmail.trim() });
       if (updateErr) {
-        setError(updateErr.message);
+        setError(errorMessage(updateErr, 'Não foi possível trocar o e-mail.'));
         return;
       }
       setNovoEmail('');

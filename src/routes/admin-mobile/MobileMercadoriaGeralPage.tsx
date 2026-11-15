@@ -1,3 +1,4 @@
+import { MobileRankingCards } from '../../components/ranking/MobileRankingCards';
 import { useMemo, useState } from 'react';
 import { useMobileCategoryLabelMap } from '../../lib/business/categoryLabels';
 import { diasRestantesNoMes, getGoalFromTotals, getSuperMetaFromTotals, goalProration } from '../../lib/business/goals';
@@ -158,16 +159,7 @@ export function MobileMercadoriaGeralPage() {
         {rankingList.length === 0 ? (
           <div style={{ fontSize: 10, color: 'var(--mv2-texto-2)', padding: '8px 0', textAlign: 'center' }}>Sem vendas no período.</div>
         ) : (
-          rankingList.slice(0, 10).map((r, i) => (
-            <div key={r.matricula} className="mv2-row">
-              <span className="mv2-pos" style={{ color: ACCENT }}>
-                {i + 1}
-              </span>
-              {r.foto ? <img src={r.foto} alt="" className="mv2-avatar" loading="lazy" decoding="async" /> : <div className="mv2-avatar" />}
-              <span className="mv2-name">{r.apelido || r.nome}</span>
-              <span className="mv2-qty">{fmtMoney(r.valor)}</span>
-            </div>
-          ))
+          <MobileRankingCards rows={rankingList.slice(0, 10)} getValue={(r) => r.valor} formatValue={fmtMoney} />
         )}
       </div>
 

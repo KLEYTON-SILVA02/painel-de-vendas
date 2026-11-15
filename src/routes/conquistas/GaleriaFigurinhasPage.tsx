@@ -1,3 +1,4 @@
+import { saveBlobFile } from '../../lib/saveFile';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PageLoading } from '../../components/PageLoading';
@@ -127,12 +128,7 @@ export function GaleriaFigurinhasPage() {
     if (!data) return;
     const blob = await generateConquistaCalendarJpgBlob(data);
     if (!blob) return;
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `figurinhas-${data.matricula}-${MONTH_NAMES_FULL[mes].toLowerCase()}.jpg`;
-    a.click();
-    URL.revokeObjectURL(url);
+    await saveBlobFile(blob, `figurinhas-${data.matricula}-${MONTH_NAMES_FULL[mes].toLowerCase()}.jpg`);
   }
 
   async function handleDownloadPdf() {
@@ -141,12 +137,7 @@ export function GaleriaFigurinhasPage() {
     setDownloadingPdf(true);
     try {
       const blob = await generateConquistaCalendarPdfBlob(data);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `figurinhas-${data.matricula}-${MONTH_NAMES_FULL[mes].toLowerCase()}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      await saveBlobFile(blob, `figurinhas-${data.matricula}-${MONTH_NAMES_FULL[mes].toLowerCase()}.pdf`);
     } finally {
       setDownloadingPdf(false);
     }
