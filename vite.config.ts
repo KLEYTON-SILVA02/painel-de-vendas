@@ -32,7 +32,7 @@ export default defineConfig({
         // it's desktop-only, 7MB+, and would otherwise bloat the PWA's
         // offline cache for every install regardless of whether that device
         // ever shows it.
-        globIgnores: ['**/media/**'],
+        globIgnores: ['**/media/**', '404.html', 'erro.html'],
         // Never let the service worker cache Supabase API/auth calls — sales,
         // goals, and login all need to hit the network, not a stale cache.
         navigateFallbackDenylist: [/^\/api/],

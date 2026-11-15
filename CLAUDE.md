@@ -112,6 +112,7 @@ um estilo novo a cada tela.
 - **Lembrar-me** (`lib/rememberedLogin.ts`): no app instalado guarda usuário + senha (senha cifrada com AES-GCM, chave não exportável no IndexedDB); no navegador comum guarda só o usuário e deixa a senha para o gerenciador do navegador. Desmarcar e entrar apaga tudo. Um dia dá para trocar por armazenamento seguro nativo (Keystore), mas isso exige APK novo.
 - **Mensagens de erro** passam por `lib/friendlyError.ts` (`errorMessage`/`friendlyMessage`): "causa: o que fazer", curto. Mensagem de regra de negócio já em português passa direto. Para erro novo, adicionar o código/status lá, não texto solto na tela.
 - Toda tabela de rotas de shell precisa de `<Route path="*" element={<NotFoundPage />} />`; rota que existe no desktop e é linkada no mobile (cards do ADM, menu) precisa existir também em `MobileAdminShell`.
+- **Páginas de erro da hospedagem**: `vercel.json` precisa do `rewrites` que manda qualquer endereço (menos `/assets/`) para `/index.html` — sem isso, Ctrl+F5 em `/admin/...` mostrava a tela "404 NOT_FOUND" da Vercel (a navegação normal escondia o problema porque o service worker responde por ela). `public/404.html` (endereço inexistente) e `public/erro.html` (APK sem internet, via `server.errorPath`, vale só a partir do próximo APK) são as páginas curtas em português; erros 5xx da própria Vercel não dá para personalizar.
 - Hooks nunca depois de `return` antecipado (3 seções de importação já quebraram por isso; `oxlint` aponta como `rules-of-hooks`).
 
 ## Desempenho de telas que processam vendas (2026-11-15)

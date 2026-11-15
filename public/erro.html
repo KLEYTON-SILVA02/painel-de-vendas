@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Sem conexão</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: #070b1a; color: #e6ebff;
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  .card {
+    width: 100%; max-width: 380px; text-align: center;
+    background: rgba(13, 20, 48, .9); border: 1px solid #1c2750; border-radius: 20px; padding: 28px 22px;
+    box-shadow: 0 0 24px rgba(0, 240, 255, .08);
+  }
+  .icon { font-size: 34px; margin-bottom: 10px; }
+  h1 { font-size: 20px; margin: 0 0 8px; }
+  p { margin: 0 0 6px; line-height: 1.5; color: #93a0c8; font-size: 15px; }
+  .fix { color: #e6ebff; margin-bottom: 20px; }
+  .row { display: flex; gap: 10px; }
+  .btn {
+    flex: 1; min-width: 0; padding: 11px 8px; border-radius: 12px; font-size: 14px; font-weight: 600;
+    text-decoration: none; text-align: center; cursor: pointer; border: 1px solid #00f0ff; background: transparent; color: #00f0ff;
+    font-family: inherit;
+  }
+  .btn.primary { background: #00f0ff; color: #04101f; }
+  .btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+</style>
+</head>
+<body>
+  <main class="card">
+    <div class="icon" aria-hidden="true">📡</div>
+    <h1>Sem conexão com o sistema</h1>
+    <p>Não foi possível abrir o Gestão de Vendas.</p>
+    <p class="fix">Confira o Wi-Fi ou os dados do celular e toque em Tentar de novo.</p>
+    <div class="row">
+      <button class="btn primary" type="button" onclick="location.replace('https://painel-de-vendas-orcin.vercel.app')">Tentar de novo</button>
+    </div>
+  </main>
+</body>
+</html>
