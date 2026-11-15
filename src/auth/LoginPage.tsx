@@ -4,7 +4,7 @@ import { PASSWORD_HINT, PASSWORD_MIN_LENGTH, validatePassword } from '../lib/pas
 import { supabase } from '../lib/supabase';
 import { buildWhatsAppLink } from '../lib/whatsapp';
 import '../styles/login-retro-future.css';
-import gvLogo from '../assets/brand/gv-logo.png';
+import gvLogo from '../assets/brand/gv-logo.webp';
 import whatsappQr from '../assets/brand/whatsapp-qr.webp';
 import instagramQr from '../assets/brand/instagram-qr.webp';
 import emailQr from '../assets/brand/email-qr.webp';
@@ -34,7 +34,7 @@ export function LoginPage() {
       <div className="mv2-login-card">
         <div className="mv2-login-header">
           <div className="mv2-logo-ring">
-            <img src={gvLogo} alt="Gestão de Vendas" />
+            <img src={gvLogo} alt="Gestão de Vendas" width={128} height={128} decoding="async" />
           </div>
           <h1>GESTÃO DE VENDAS</h1>
           <div className="mv2-subtitle">Entre para continuar</div>
