@@ -20,6 +20,9 @@ const config: CapacitorConfig = {
   server: {
     url: 'https://painel-de-vendas-orcin.vercel.app',
     cleartext: false,
+    // Sem internet ao abrir, em vez da tela de erro do Android aparece public/erro.html
+    // (curta, em português, com botão de tentar de novo). Só vale a partir do próximo APK gerado.
+    errorPath: 'erro.html',
   },
 };
 
