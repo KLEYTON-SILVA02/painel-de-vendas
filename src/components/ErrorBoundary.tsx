@@ -137,7 +137,8 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
           <div className="max-w-sm w-full rounded-2xl border border-slate-800 bg-slate-900/60 p-6 text-center">
             <h2 className="text-base font-semibold mb-2">Algo deu errado</h2>
             <p className="text-sm text-slate-400 mb-4">
-              Essa tela encontrou um erro inesperado. Recarregar a página normalmente resolve.
+              Esta tela encontrou um erro inesperado: toque em Recarregar. Se repetir, saia e entre de novo; se
+              continuar, avise o suporte.
             </p>
             <button
               onClick={() => window.location.reload()}

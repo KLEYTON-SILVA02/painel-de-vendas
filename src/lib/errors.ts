@@ -1,19 +1,15 @@
 import { FunctionsHttpError } from '@supabase/supabase-js';
+import { friendlyMessage } from './friendlyError';
 
-/** Extracts a human-readable message from anything a Supabase call can throw
- * or return as `error`. A real `Error` is the easy case — but the plain
- * `{message, details, hint, code}` object that `supabase.rpc()`/`.from()`
- * return as `error` (and that every `if (error) throw error` in this app
- * re-throws) is never `instanceof Error` unless `.throwOnError()` was
- * chained on the call, which nothing here does. Code that checked only
- * `instanceof Error` was silently swallowing the real backend message
- * (validation errors, RLS denials) behind a generic fallback string. */
+/** Mensagem curta e clara para mostrar ao usuário a partir de qualquer coisa que
+ * uma chamada ao Supabase possa lançar ou devolver como `error` (um `Error` de
+ * verdade ou o objeto simples `{message, code, details, hint}` do PostgREST).
+ * Erros técnicos (HTTP 400/401/403/404/409/413/429/5xx, códigos do banco, falta
+ * de internet, tempo esgotado) viram "causa: o que fazer" — ver friendlyError.ts.
+ * Mensagens de regra de negócio já em português passam direto. `fallback` diz o
+ * que se tentava fazer (ex.: "Falha ao salvar o nome.") e abre a frase. */
 export function errorMessage(err: unknown, fallback: string): string {
-  if (err instanceof Error) return err.message;
-  if (err && typeof err === 'object' && 'message' in err && typeof (err as { message: unknown }).message === 'string') {
-    return (err as { message: string }).message;
-  }
-  return fallback;
+  return friendlyMessage(err, fallback);
 }
 
 /** Same problem as errorMessage() above, different SDK: when
@@ -34,5 +30,5 @@ export async function edgeFunctionErrorMessage(err: unknown, fallback: string): 
       // response body wasn't JSON (or already consumed) — fall through
     }
   }
-  return errorMessage(err, fallback);
+  return friendlyMessage(err, fallback);
 }

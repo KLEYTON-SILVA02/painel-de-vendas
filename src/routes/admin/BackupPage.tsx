@@ -1,3 +1,5 @@
+import { errorMessage } from '../../lib/errors';
+import { saveBlobFile } from '../../lib/saveFile';
 import { useRef, useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -37,12 +39,10 @@ export function BackupPage() {
         backup[table] = data;
       }
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `backup-vendas-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      await saveBlobFile(blob, `backup-vendas-${new Date().toISOString().slice(0, 10)}.json`);
+    } catch (err) {
+      // Antes a falha (internet caiu no meio, sem permissão) sumia sem nenhum aviso.
+      setResult(errorMessage(err, 'Não foi possível gerar o backup.'));
     } finally {
       setExporting(false);
     }
@@ -92,7 +92,7 @@ export function BackupPage() {
 
       setResult(`Importado: ${counts.join(', ') || 'nenhum dado encontrado no arquivo'}.`);
     } catch (err) {
-      setResult(`Erro ao importar: ${err instanceof Error ? err.message : String(err)}`);
+      setResult(errorMessage(err, 'Erro ao importar o backup.'));
     } finally {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = '';

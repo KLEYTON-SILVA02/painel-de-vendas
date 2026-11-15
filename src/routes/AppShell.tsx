@@ -9,6 +9,7 @@ import { ChampionHeaderButton } from '../components/dashboard/ChampionOfDay';
 import { ClosingClock } from '../components/ClosingClock';
 import { BirthdayCelebrationHost } from '../components/BirthdayCelebration';
 import { ConquistaCelebrationHost } from '../components/ConquistaCelebration';
+import { NotFoundPage } from '../components/NotFoundPage';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { HamburgerIcon, MedalIcon } from '../components/icons/NavIcons';
 import { ImportProgressBadge } from '../components/ImportProgressBadge';
@@ -344,10 +345,12 @@ export function AppShell() {
                     <Route path="categorias" element={<CategoriasPage />} />
                     <Route path="nomes-categorias" element={<NomesCategoriasPage />} />
                     <Route path="suporte" element={<SuportePage />} />
+                    <Route path="*" element={<NotFoundPage />} />
                   </Routes>
                 </Suspense>
               }
             />
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
           </Suspense>
           </ErrorBoundary>

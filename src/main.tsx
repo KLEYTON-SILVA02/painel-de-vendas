@@ -23,4 +23,15 @@ createRoot(document.getElementById('root')!).render(
 if ('serviceWorker' in navigator) {
   const updateSW = registerSW({ immediate: true })
   setInterval(() => updateSW(), 60 * 60 * 1000)
+
+  // No celular o app passa horas em segundo plano (e o timer acima pausa junto).
+  // Ao voltar para a tela, confere se saiu versão nova — no máximo 1 vez a cada
+  // 5 minutos — para o app instalado receber as melhorias logo, sem esperar a hora cheia.
+  let lastCheck = Date.now()
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return
+    if (Date.now() - lastCheck < 5 * 60 * 1000) return
+    lastCheck = Date.now()
+    updateSW()
+  })
 }

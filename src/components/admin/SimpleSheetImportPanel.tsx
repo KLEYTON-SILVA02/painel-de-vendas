@@ -1,3 +1,4 @@
+import { errorMessage } from '../../lib/errors';
 import { useRef, useState } from 'react';
 import { HelpTip } from '../HelpTip';
 import { idFromCell } from '../../lib/business/parsing';
@@ -96,17 +97,11 @@ export function SimpleSheetImportPanel({
       setResult(res);
       setRows(null);
     } catch (err) {
-      // Supabase erros (PostgrestError) não são `instanceof Error` — são
-      // objetos simples com `.message` (e às vezes `.details`/`.hint`). Sem
-      // isso, qualquer erro de banco/RLS cai no fallback genérico abaixo e
-      // esconde o motivo real da falha do ADM (e de quem for diagnosticar).
-      const message =
-        err instanceof Error
-          ? err.message
-          : err && typeof err === 'object' && 'message' in err && typeof (err as { message: unknown }).message === 'string'
-            ? (err as { message: string; details?: string }).message +
-              ((err as { details?: string }).details ? ` (${(err as { details?: string }).details})` : '')
-            : 'Falha ao importar.';
+      // O motivo vem em linguagem simples (ver friendlyError.ts); o `details` do
+      // banco (ex.: qual valor já existe) continua junto, porque ajuda a achar a linha.
+      const details = err && typeof err === 'object' ? (err as { details?: unknown }).details : null;
+      const base = errorMessage(err, 'Falha ao importar.');
+      const message = typeof details === 'string' && details ? `${base} (${details})` : base;
       setError(message);
     } finally {
       setBusy(false);

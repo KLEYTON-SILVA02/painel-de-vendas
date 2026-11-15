@@ -19,6 +19,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Gestão de Vendas" />
+    <!-- Abre a conexão (DNS + TLS) com o banco já durante o carregamento do app: a
+         primeira consulta (sessão/perfil) deixa de pagar essa espera, o que pesa
+         mais em rede móvel. O endereço vem de VITE_SUPABASE_URL na hora do build. -->
+    <link rel="preconnect" href="%VITE_SUPABASE_URL%" crossorigin />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!-- Loaded non-blocking (preload + swap to `media="all"` on load): this

@@ -52,12 +52,15 @@ export interface DsmImportSectionHandle {
   confirmar: () => void;
 }
 
+const NO_COLLABORATORS: never[] = [];
+
 export const DsmImportSection = forwardRef<
   DsmImportSectionHandle,
   { onCentralChange?: (central: CentralImportacaoData) => void; onAcaoChange?: (acao: ImportAcaoBotoes) => void }
 >(function DsmImportSection({ onCentralChange, onAcaoChange }, ref) {
   const { profile } = useAuth();
-  const { data: collaborators } = useCollaborators();
+  const { data: collaboratorsData } = useCollaborators();
+  const collaborators = collaboratorsData ?? NO_COLLABORATORS;
   const { data: existingRecords, refetch: refetchDsmRecords } = useDsmRecords();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -74,7 +77,6 @@ export const DsmImportSection = forwardRef<
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<{ count: number; duplicateCount: number; unregisteredCount: number } | null>(null);
 
-  if (!collaborators) return null;
 
   const collaboratorsById = new Map(collaborators.map((c) => [c.id, c]));
   const collaboratorByMatricula = new Map(collaborators.map((c) => [normalizeMatricula(c.matricula), c]));
@@ -255,6 +257,11 @@ export const DsmImportSection = forwardRef<
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, fileName, error, saving, result, rows]);
+
+  // Só depois de TODOS os hooks (antes ficava lá em cima, e quando a lista de
+  // colaboradores chegava depois do 1º render o React quebrava com "Rendered more
+  // hooks than during the previous render").
+  if (!collaboratorsData) return null;
 
   return (
     <div className="flex flex-col gap-3">

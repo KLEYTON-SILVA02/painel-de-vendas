@@ -5,6 +5,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { BackButton } from '../../components/BackButton';
 import { ConquistaCelebrationHost } from '../../components/ConquistaCelebration';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
+import { NotFoundPage } from '../../components/NotFoundPage';
 import { ImportProgressBadge } from '../../components/ImportProgressBadge';
 import { PageLoading } from '../../components/PageLoading';
 import { Sidebar } from '../../components/Sidebar';
@@ -35,6 +36,10 @@ const ConfiguracoesPage = lazy(() => import('../admin/ConfiguracoesPage').then((
 const IconesPage = lazy(() => import('../admin/IconesPage').then((m) => ({ default: m.IconesPage })));
 const MinhaLojaPage = lazy(() => import('../admin/MinhaLojaPage').then((m) => ({ default: m.MinhaLojaPage })));
 const ProdutosPage = lazy(() => import('../admin/ProdutosPage').then((m) => ({ default: m.ProdutosPage })));
+const UvcPage = lazy(() => import('../admin/UvcPage').then((m) => ({ default: m.UvcPage })));
+const NomesCategoriasPage = lazy(() => import('../admin/NomesCategoriasPage').then((m) => ({ default: m.NomesCategoriasPage })));
+const SuportePage = lazy(() => import('../admin/SuportePage').then((m) => ({ default: m.SuportePage })));
+const TutoriaisPage = lazy(() => import('../admin/TutoriaisPage').then((m) => ({ default: m.TutoriaisPage })));
 const VendasArquivadasPage = lazy(() => import('../admin/VendasArquivadasPage').then((m) => ({ default: m.VendasArquivadasPage })));
 const ConquistasPage = lazy(() => import('../conquistas/ConquistasPage').then((m) => ({ default: m.ConquistasPage })));
 const GaleriaFigurinhasPage = lazy(() => import('../conquistas/GaleriaFigurinhasPage').then((m) => ({ default: m.GaleriaFigurinhasPage })));
@@ -228,6 +233,12 @@ export function MobileAdminShell() {
             <Route path="/admin/icones" element={<IconesPage />} />
             <Route path="/admin/card-conquista" element={<CardConquistaPage />} />
             <Route path="/admin/categorias" element={<CategoriasPage />} />
+            {/* Estas 4 existiam só no desktop: o card/menu aparecia no celular e levava a uma tela em branco. */}
+            <Route path="/admin/uvc" element={<UvcPage />} />
+            <Route path="/admin/nomes-categorias" element={<NomesCategoriasPage />} />
+            <Route path="/admin/suporte" element={<SuportePage />} />
+            <Route path="/tutoriais" element={<TutoriaisPage />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </Suspense>
         </ErrorBoundary>

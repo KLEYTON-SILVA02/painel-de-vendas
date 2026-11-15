@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState, type ReactElement } from 'react';
 import { NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
+import { NotFoundPage } from '../../components/NotFoundPage';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import {
   BagIcon,
@@ -192,6 +193,7 @@ export function CollaboratorShell() {
             )}
             <Route path="/configuracoes" element={<CollaboratorConfiguracoesPage />} />
             <Route path="/notificacoes" element={<CollaboratorNotificacoesPage audience="collaborator" />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
           </Suspense>
           </ErrorBoundary>

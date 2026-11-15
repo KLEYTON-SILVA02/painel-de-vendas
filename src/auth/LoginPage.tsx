@@ -1,6 +1,8 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PASSWORD_HINT, PASSWORD_MIN_LENGTH, validatePassword } from '../lib/passwordPolicy';
+import { errorMessage } from '../lib/errors';
+import { forgetLogin, recallLogin, rememberLogin, type LoginKind } from '../lib/rememberedLogin';
 import { supabase } from '../lib/supabase';
 import { buildWhatsAppLink } from '../lib/whatsapp';
 import '../styles/login-retro-future.css';
@@ -152,6 +154,49 @@ function LockIcon() {
   );
 }
 
+// "Lembrar-me": preenche usuário (e, no app instalado, a senha) na próxima vez
+// e grava/apaga depois de um login que deu certo. Ver lib/rememberedLogin.ts.
+function useRememberedLogin(kind: LoginKind) {
+  const [identifier, setIdentifierState] = useState('');
+  const [password, setPasswordState] = useState('');
+  const [remember, setRemember] = useState(false);
+  const touched = useRef(false);
+
+  useEffect(() => {
+    let alive = true;
+    recallLogin(kind).then((saved) => {
+      // Se a pessoa já começou a digitar, não sobrescreve o que ela escreveu.
+      if (!alive || !saved || touched.current) return;
+      setIdentifierState(saved.identifier);
+      if (saved.password) setPasswordState(saved.password);
+      setRemember(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [kind]);
+
+  return {
+    identifier,
+    password,
+    remember,
+    setRemember,
+    setIdentifier: (v: string) => {
+      touched.current = true;
+      setIdentifierState(v);
+    },
+    setPassword: (v: string) => {
+      touched.current = true;
+      setPasswordState(v);
+    },
+    /** Chamar só depois de um login que deu certo. */
+    persist: async () => {
+      if (remember) await rememberLogin(kind, { identifier: identifier.trim(), password });
+      else forgetLogin(kind);
+    },
+  };
+}
+
 function FieldError({ message }: { message: string | null }) {
   if (!message) return null;
   return <p style={{ color: '#ff8a8a', fontSize: 10, margin: 0 }}>{message}</p>;
@@ -167,9 +212,7 @@ function AdminLoginForm() {
   // enumeration shape as resolve_collaborator_email (ambiguous match or no
   // match both return null, and the login error message never says which).
   const navigate = useNavigate();
-  const [identifier, setIdentifier] = useState('');
-  const [password, setPassword] = useState('');
-  const [remember, setRemember] = useState(false);
+  const { identifier, setIdentifier, password, setPassword, remember, setRemember, persist } = useRememberedLogin('admin');
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -199,7 +242,10 @@ function AdminLoginForm() {
         // sem isso, uma conta que também está na allow-list platform_builders
         // cairia na tela cross-loja em vez da própria loja, mesmo tendo
         // entrado pela aba Administrador.
-        else navigate('/');
+        else {
+          await persist();
+          navigate('/');
+        }
       } else {
         const policyError = validatePassword(password);
         if (policyError) {
@@ -211,7 +257,7 @@ function AdminLoginForm() {
           password,
           options: { emailRedirectTo: window.location.origin },
         });
-        if (err) setError(err.message);
+        if (err) setError(errorMessage(err, 'Não foi possível criar a conta.'));
         else setError('Conta criada. Verifique o e-mail se a confirmação estiver ativa, ou apenas entre.');
       }
     } finally {
@@ -225,6 +271,8 @@ function AdminLoginForm() {
         <UserIcon />
         <input
           type={mode === 'signup' ? 'email' : 'text'}
+          name="username"
+          autoComplete="username"
           required
           placeholder={mode === 'signup' ? 'E-mail' : 'E-mail ou usuário'}
           value={identifier}
@@ -235,6 +283,8 @@ function AdminLoginForm() {
         <LockIcon />
         <input
           type="password"
+          name="password"
+          autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
           required
           minLength={mode === 'signup' ? PASSWORD_MIN_LENGTH : undefined}
           placeholder={mode === 'signup' ? PASSWORD_HINT : 'Senha'}
@@ -273,9 +323,7 @@ function AdminLoginForm() {
 
 function CollaboratorLoginForm() {
   const navigate = useNavigate();
-  const [matricula, setMatricula] = useState('');
-  const [password, setPassword] = useState('');
-  const [remember, setRemember] = useState(false);
+  const { identifier: matricula, setIdentifier: setMatricula, password, setPassword, remember, setRemember, persist } = useRememberedLogin('colaborador');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -303,7 +351,10 @@ function CollaboratorLoginForm() {
       if (signInErr) setError('Matrícula/usuário ou senha inválidos.');
       // Mesma razão do AdminLoginForm: sempre volta pra raiz, mesmo que o
       // navegador esteja parado em /construtor de uma visita anterior.
-      else navigate('/');
+      else {
+          await persist();
+          navigate('/');
+        }
     } finally {
       setBusy(false);
     }
@@ -315,6 +366,8 @@ function CollaboratorLoginForm() {
         <UserIcon />
         <input
           type="text"
+          name="username"
+          autoComplete="username"
           required
           placeholder="Matrícula ou usuário"
           value={matricula}
@@ -323,7 +376,7 @@ function CollaboratorLoginForm() {
       </label>
       <label className="mv2-input-group">
         <LockIcon />
-        <input type="password" required placeholder="Senha" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <input type="password" name="password" autoComplete="current-password" required placeholder="Senha" value={password} onChange={(e) => setPassword(e.target.value)} />
       </label>
 
       <div className="mv2-form-row">
@@ -355,8 +408,7 @@ function CollaboratorLoginForm() {
 // revela qual dos dois foi.
 function ConstrutorLoginForm() {
   const navigate = useNavigate();
-  const [identifier, setIdentifier] = useState('');
-  const [password, setPassword] = useState('');
+  const { identifier, setIdentifier, password, setPassword, remember, setRemember, persist } = useRememberedLogin('construtor');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -380,6 +432,7 @@ function ConstrutorLoginForm() {
         setError('Usuário/e-mail ou senha inválidos.');
         return;
       }
+      await persist();
       navigate('/construtor');
     } finally {
       setBusy(false);
@@ -392,6 +445,8 @@ function ConstrutorLoginForm() {
         <UserIcon />
         <input
           type="text"
+          name="username"
+          autoComplete="username"
           required
           placeholder="E-mail ou usuário"
           value={identifier}
@@ -400,8 +455,14 @@ function ConstrutorLoginForm() {
       </label>
       <label className="mv2-input-group">
         <LockIcon />
-        <input type="password" required placeholder="Senha" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <input type="password" name="password" autoComplete="current-password" required placeholder="Senha" value={password} onChange={(e) => setPassword(e.target.value)} />
       </label>
+      <div className="mv2-form-row">
+        <label className="mv2-remember">
+          <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+          Lembrar-me
+        </label>
+      </div>
       <button type="submit" disabled={busy} className="mv2-btn-primary">
         {busy ? 'Entrando…' : 'Entrar'}
       </button>
