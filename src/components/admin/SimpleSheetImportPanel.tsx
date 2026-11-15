@@ -19,6 +19,7 @@ export function SimpleSheetImportPanel({
   onConfirm,
   helpKey,
   helpFallback,
+  embedded = false,
 }: {
   title: string;
   columns: string[];
@@ -29,6 +30,9 @@ export function SimpleSheetImportPanel({
    * funciona normalmente sem eles. */
   helpKey?: string;
   helpFallback?: string;
+  /** Dentro de outro painel que já tem moldura e botão próprio para abrir/fechar:
+   * mostra só o conteúdo (sempre aberto), sem card nem cabeçalho. */
+  embedded?: boolean;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
@@ -108,21 +112,24 @@ export function SimpleSheetImportPanel({
     }
   }
 
+  const isOpen = embedded || open;
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-      <div className="flex items-center gap-2 w-full">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="text-sm font-semibold flex items-center justify-between flex-1 min-w-0"
-        >
-          <span>📥 {title}</span>
-          <span className="text-xs text-slate-400">{open ? '▲' : '▼'}</span>
-        </button>
-        {helpKey && <HelpTip helpKey={helpKey} fallback={helpFallback} />}
-      </div>
-      {open && (
-        <div className="mt-3 flex flex-col gap-3">
+    <div className={embedded ? '' : 'rounded-2xl border border-slate-800 bg-slate-900/60 p-4'}>
+      {!embedded && (
+        <div className="flex items-center gap-2 w-full">
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="text-sm font-semibold flex items-center justify-between flex-1 min-w-0"
+          >
+            <span>📥 {title}</span>
+            <span className="text-xs text-slate-400">{open ? '▲' : '▼'}</span>
+          </button>
+          {helpKey && <HelpTip helpKey={helpKey} fallback={helpFallback} />}
+        </div>
+      )}
+      {isOpen && (
+        <div className={embedded ? 'flex flex-col gap-3' : 'mt-3 flex flex-col gap-3'}>
           <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
             <p className="text-xs text-slate-500 mb-2">
               Colunas esperadas (dados a partir da <b>linha 2</b> — linha 1 é o cabeçalho):
