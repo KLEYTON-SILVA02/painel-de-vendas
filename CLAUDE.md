@@ -113,6 +113,14 @@ um estilo novo a cada tela.
   `cqw` não valem nas propriedades do próprio container (resolvem contra o
   container de fora) — usar % ali.
 
+### Cards 4+ — colunas por largura, layout comprido e card "sem código" (2026-11-16)
+
+- Quantas colunas cabem vem da **largura real** da área (`columnsForWidth` em `rankingCard.ts`, medida com ResizeObserver em `RankingCardGrid`), não de faixas fixas: menu lateral aberto = área mais estreita = **menos cards por linha e por página (ex.: 4 em vez de 5), com o tamanho do card quase igual** — o que sobra vai para a próxima página. Ajustar o tamanho mínimo em `MIN_CARD_PX` se o card precisar mudar de tamanho; nunca voltar a faixas fixas (o card crescia ~50% e estourava a altura do pódio). Mobile segue com `fixedColumns={2}`.
+- `cardLayout="tall"` (prop de `PodiumSplit`, usada só na **Biosintética**): 1 linha de cards compridos com a **altura exata do pódio** (o arco só alonga a parte reta; nome/valor colados embaixo). A paginação sai do fluxo (`.rc-split:has(...)` reserva o espaço no padding) para a altura nunca diferir do pódio.
+- `unassignedCard` (prop de `PodiumSplit`): card extra no fim da lista com a soma do que não tem dono — na Biosintética, vendas G1-G4 **sem matrícula ou com matrícula não cadastrada** (`computeBioUnassigned`, `bio.ts`). Sem número, sem foto ("?"), sem seta; some quando não há nenhuma.
+- Biosintética tem **"Imprimir extrato do mês"** (`buildBioExtractHtml`, `printExtract.ts`) no cabeçalho da Lista de vendas: sempre o mês inteiro do período em tela (busca o mês se a tela estiver em um dia só).
+- Menu lateral: **Biosintética fica no bloco de baixo (acima do ADM)** e **Tutoriais no fim da lista principal, abaixo de DSM** (trocaram de lugar).
+
 ## App Android (APK) e versão mobile — como funciona (2026-11-15)
 
 - O APK **não embute o site**: `capacitor.config.ts` aponta `server.url` para o deploy de produção da Vercel. Por isso toda melhoria de velocidade/tela publicada em `main` chega ao app já instalado na próxima abertura (e ao voltar do segundo plano, ver `main.tsx`). Só mudança **nativa** (plugin Capacitor novo, manifesto, ícone) exige gerar e instalar um APK novo.

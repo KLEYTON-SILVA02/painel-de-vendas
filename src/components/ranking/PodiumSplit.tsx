@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import podiumPremiumBg from '../../assets/ranking/podium-premium-bg.webp';
 import { TrendArrow } from '../TrendArrow';
 import type { StaircaseRow } from './PodiumStaircase';
-import { RankingCardGrid } from './RankingCardGrid';
+import { RankingCardGrid, type RankingCardSlot } from './RankingCardGrid';
 
 // "Ranking Geral de Vendas" — new split layout (top-3 over the ADM-supplied
 // podium artwork on the left, positions 4-15 as a 1- or 2-column pill grid
@@ -119,6 +119,8 @@ export function PodiumSplit<T extends StaircaseRow>({
   columns = 2,
   layout = 'cards',
   cardColumns,
+  cardLayout = 'grid',
+  unassignedCard,
   footer,
 }: {
   ranking: T[];
@@ -144,6 +146,17 @@ export function PodiumSplit<T extends StaircaseRow>({
    * passa 2 (dois lado a lado, pedido do usuário 2026-11-11); omitido, a grade
    * escolhe sozinha (5/3/2) pela largura. */
   cardColumns?: 2;
+  /** Só no layout 'cards': 'grid' (padrão) = 2 linhas de cards baixos; 'tall' =
+   * 1 linha de cards compridos, com a altura do quadro do pódio (Biosintética,
+   * pedido do usuário 2026-11-16). Em ambos, a quantidade de cards por linha
+   * segue a largura disponível (menu lateral aberto = menos colunas, cards do
+   * mesmo tamanho; o resto vai pra próxima página). */
+  cardLayout?: 'grid' | 'tall';
+  /** Card extra no fim da lista de cards: a soma do que não pertence a nenhum
+   * colaborador (ex.: vendas sem código/vendedor na Biosintética). `row` traz
+   * os totais no mesmo formato das demais linhas; `label` é o nome mostrado.
+   * Omitido = nenhum card extra. */
+  unassignedCard?: { row: T; label: string };
   /** Optional second metric shown in a smaller font right below the main
    * value (e.g. Biosintética's "quantidade vendida" alongside its "pts")
    * — omitted entirely when not passed, so every other PodiumSplit caller
@@ -194,11 +207,12 @@ export function PodiumSplit<T extends StaircaseRow>({
   const col2: PillSlot<T>[] = rest.slice(col1Count).map((row, i) => ({ row, pos: 4 + col1Count + i }));
   while (col1.length < col2.length) col1.push({ row: null, pos: -1 });
   while (col2.length < col1.length) col2.push({ row: null, pos: -1 });
-  const cardSlots = ranking.slice(3, MAX_CARDS).map((row, i) => ({ row, pos: 4 + i }));
+  const cardSlots: RankingCardSlot<T>[] = ranking.slice(3, MAX_CARDS).map((row, i) => ({ row, pos: 4 + i }));
+  if (unassignedCard) cardSlots.push({ row: unassignedCard.row, pos: 0, kind: 'unassigned', label: unassignedCard.label });
   const leaderValue = Math.max(...ranking.map(getValue));
 
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'stretch' }}>
+    <div className="rc-split" style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'stretch' }}>
       {/* Pódio + footer (Copiar/Gerar imagem/Premium, quando passado) na
           mesma coluna, mesma largura — o footer fica logo abaixo do
           quadro do pódio, não da lista de colocações 4+ ao lado. */}
@@ -255,6 +269,7 @@ export function PodiumSplit<T extends StaircaseRow>({
           getPreviousValue={getPreviousValue}
           reservePagerRow={Boolean(footer)}
           fixedColumns={cardColumns}
+          layout={cardLayout}
         />
       )}
 

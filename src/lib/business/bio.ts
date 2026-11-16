@@ -137,6 +137,49 @@ export function computeBioSummaryAllSectors(
     .sort((a, b) => b.pontos - a.pontos);
 }
 
+/** Soma das vendas de produtos G1-G4 que NÃO pertencem a nenhum colaborador
+ * cadastrado — matrícula em branco ou que não existe na lista de colaboradores.
+ * Essas vendas ficam de fora do ranking (não há quem receber o ponto), mas o
+ * total delas aparece num card à parte na Biosintética, pra não sumirem sem
+ * aviso. Mesmas regras de período, grupo e pontuação de
+ * computeBioSummaryAllSectors — só muda quem é contado. `null` quando não há
+ * nenhuma venda assim (o card some). */
+export function computeBioUnassigned(
+  sales: Sale[],
+  collaborators: Collaborator[],
+  bioGroups: BioGroupsProducts,
+  bioWeights: BioWeights,
+  fromDate: string | null,
+  toDate: string | null,
+  groupFilter?: BioGroupKey | 'ALL' | null,
+): BioSummaryRow | null {
+  const known = new Set(collaborators.map((c) => normalizeMatricula(c.matricula)));
+  const zeroQtd = Object.fromEntries(Object.keys(bioGroups).map((g) => [g, 0]));
+  const row: BioSummaryRow = {
+    matricula: '__sem_codigo__',
+    nome: 'Sem código',
+    apelido: 'Sem código',
+    foto: null,
+    qtd: { ...zeroQtd },
+    pontos: 0,
+    itens: 0,
+  };
+  sales.forEach((s) => {
+    if (fromDate && s.dataISO && s.dataISO < fromDate) return;
+    if (toDate && s.dataISO && s.dataISO > toDate) return;
+    const matricula = normalizeMatricula(s.matricula);
+    if (matricula && known.has(matricula)) return; // tem dono: já está no ranking
+    const g = classifyBio(s.produto, bioGroups);
+    if (!g) return;
+    if (groupFilter && groupFilter !== 'ALL' && g !== groupFilter) return;
+    const qtd = Number(s.qtd) || 0;
+    row.qtd[g] += qtd;
+    row.pontos += qtd * (Number(bioWeights[g]) || 0);
+    row.itens += qtd;
+  });
+  return row.itens > 0 ? row : null;
+}
+
 export interface BioOutsideAlert {
   matricula: string;
   vendedor: string;

@@ -461,3 +461,67 @@ export function buildUvcExtractHtml(params: {
     <div class="meta">Período: ${escapeHtml(periodLabel)}</div>
     ${table}`;
 }
+
+export interface BioExtractRow {
+  dataISO: string;
+  matricula: string;
+  vendedor: string;
+  produto: string;
+  qtd: number;
+  /** Grupo G1-G4 do produto (já classificado) e os pontos da venda. */
+  grupo: string;
+  pontos: number;
+}
+
+/** Extrato impresso da lista de vendas da Biosintética (BioPage.tsx, "Imprimir
+ * extrato do mês") — as vendas de produtos G1-G4 do período, uma linha por
+ * venda (data, vendedor, produto, quantidade, grupo e pontos), com subtotal no
+ * fim. Mesmo padrão visual (impressora térmica, preto sobre branco) dos demais
+ * extratos deste arquivo. Venda sem vendedor cadastrado aparece como "Sem
+ * código" em vez de ficar em branco. */
+export function buildBioExtractHtml(params: {
+  periodLabel: string;
+  storeName?: string | null;
+  categoryLabel?: string;
+  rows: BioExtractRow[];
+}): string {
+  const { periodLabel, storeName, categoryLabel = 'Biosintética', rows } = params;
+  const totalQtd = rows.reduce((a, r) => a + (Number(r.qtd) || 0), 0);
+  const totalPontos = rows.reduce((a, r) => a + (Number(r.pontos) || 0), 0);
+  const fmtPts = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+  const table = rows.length
+    ? `<table>
+        <thead><tr>
+          <th>Data</th><th>Vendedor</th><th>Produto</th>
+          <th style="text-align:right">Qtd</th>
+          <th>Grupo</th>
+          <th style="text-align:right">Pts</th>
+        </tr></thead>
+        <tbody>
+          ${rows
+            .map(
+              (r) => `<tr>
+            <td>${fmtDateBR(r.dataISO)}</td>
+            <td>${escapeHtml(r.vendedor || r.matricula || 'Sem código')}</td>
+            <td>${escapeHtml(r.produto)}</td>
+            <td style="text-align:right">${r.qtd}</td>
+            <td>${escapeHtml(r.grupo)}</td>
+            <td style="text-align:right">${fmtPts(r.pontos)}</td>
+          </tr>`,
+            )
+            .join('')}
+          <tr class="total-row">
+            <td colspan="3">Subtotal</td>
+            <td style="text-align:right">${totalQtd}</td>
+            <td></td>
+            <td style="text-align:right">${fmtPts(totalPontos)}</td>
+          </tr>
+        </tbody>
+      </table>`
+    : `<div class="empty">Nenhuma venda no período.</div>`;
+
+  return `<h1>Extrato de Vendas — ${escapeHtml(categoryLabel)}${storeName ? ` — ${escapeHtml(storeName)}` : ''}</h1>
+    <div class="meta">Período: ${escapeHtml(periodLabel)}</div>
+    ${table}`;
+}
