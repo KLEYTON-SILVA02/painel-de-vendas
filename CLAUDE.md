@@ -93,6 +93,13 @@ um estilo novo a cada tela.
   breakpoint em que esse painel lateral empilha (deixa de ficar do lado), a
   barra volta a ir de ponta a ponta normalmente.
 
+- **Botões que abrem a galeria de arquivos (importar planilha/backup)** usam
+  `ImportFileButton` (`components/import/ImportFileButton.tsx` + `.css`): face
+  em gradiente ciano→roxo com base escura 3D que afunda ao clicar e halo neon
+  discreto só no hover (`@media (hover:hover)`, pausado em repouso, respeita
+  `prefers-reduced-motion`). Só visual — o `onClick`/input de arquivo de cada
+  tela continua o mesmo. Botão novo de importação: reutilizar, não copiar CSS.
+
 - **Colocações 4+ do ranking Premium são cards retangulares em grade** (pedido
   do usuário, 2026-11-10, com modelo SVG): `RankingCardGrid` (dentro de
   `PodiumSplit`, prop `layout`, padrão `'cards'`) — 5 colunas × 2 linhas por

@@ -16,6 +16,7 @@ import {
   ImportSquareProgressBar,
 } from '../../components/import/CentralImportacaoPanel';
 import { ImportAcaoBotoesBar, ImportActionBar } from '../../components/import/ImportActionBar';
+import { ImportFileButton } from '../../components/import/ImportFileButton';
 import { HelpTip } from '../../components/HelpTip';
 import { Spinner } from '../../components/Spinner';
 import { CAT_KEYS, classifyProductTier, type CategoryKey, type ClassificationResult } from '../../lib/business/classification';
@@ -798,30 +799,9 @@ export function ImportarPage() {
           {readPct === null && progress && <p className="text-xs text-cyan-400 mt-2">{progress}</p>}
           {error && <p className="text-xs text-rose-400 mt-2">{error}</p>}
           <ImportActionBar>
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 10,
-                padding: '14px 28px',
-                borderRadius: 14,
-                border: 'none',
-                cursor: 'pointer',
-                background: `linear-gradient(90deg, ${NEON_CYAN}, ${NEON_PURPLE})`,
-                color: '#fff',
-                fontWeight: 800,
-                fontSize: 14,
-                textTransform: 'uppercase',
-                letterSpacing: '.03em',
-                boxShadow: '0 0 18px rgba(0,240,255,.35)',
-              }}
-            >
-              <UploadGlyph />
-              <span>Importar Planilha de Vendas</span>
-            </button>
+            <ImportFileButton onClick={() => fileInputRef.current?.click()} icon={<UploadGlyph />}>
+              Importar Planilha de Vendas
+            </ImportFileButton>
           </ImportActionBar>
         </div>
       )}
@@ -957,28 +937,7 @@ export function ImportarPage() {
         {dsmSubMode === 'planilha' ? (
           dsmSheetNaEtapaInicial ? (
             <ImportActionBar>
-              <button
-                type="button"
-                onClick={() => dsmSheetRef.current?.abrirSeletor()}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 10,
-                  padding: '14px 28px',
-                  borderRadius: 14,
-                  border: 'none',
-                  cursor: 'pointer',
-                  background: `linear-gradient(90deg, ${NEON_CYAN}, ${NEON_PURPLE})`,
-                  color: '#fff',
-                  fontWeight: 800,
-                  fontSize: 14,
-                  textTransform: 'uppercase',
-                  letterSpacing: '.03em',
-                }}
-              >
-                Importar Planilha de DSM
-              </button>
+              <ImportFileButton onClick={() => dsmSheetRef.current?.abrirSeletor()}>Importar Planilha de DSM</ImportFileButton>
             </ImportActionBar>
           ) : (
             <ImportAcaoBotoesBar acao={dsmSheetAcao} onVoltar={() => dsmSheetRef.current?.voltar()} onConfirmar={() => dsmSheetRef.current?.confirmar()} />
@@ -1011,28 +970,7 @@ export function ImportarPage() {
             2026-10-31: mesmo padrão de botões de Importar Vendas). */}
         {!uvcCentral || uvcCentral.etapas[0]?.status !== 'concluido' ? (
           <ImportActionBar>
-            <button
-              type="button"
-              onClick={() => uvcRef.current?.abrirSeletor()}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 10,
-                padding: '14px 28px',
-                borderRadius: 14,
-                border: 'none',
-                cursor: 'pointer',
-                background: `linear-gradient(90deg, ${NEON_CYAN}, ${NEON_PURPLE})`,
-                color: '#fff',
-                fontWeight: 800,
-                fontSize: 14,
-                textTransform: 'uppercase',
-                letterSpacing: '.03em',
-              }}
-            >
-              Importar Planilha de Vendas por Clientes
-            </button>
+            <ImportFileButton onClick={() => uvcRef.current?.abrirSeletor()}>Importar Planilha de Vendas por Clientes</ImportFileButton>
           </ImportActionBar>
         ) : (
           <ImportAcaoBotoesBar acao={uvcAcao} onVoltar={() => uvcRef.current?.voltar()} onConfirmar={() => uvcRef.current?.confirmar()} />

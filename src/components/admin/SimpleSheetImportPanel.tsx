@@ -1,6 +1,7 @@
 import { errorMessage } from '../../lib/errors';
 import { useRef, useState } from 'react';
 import { HelpTip } from '../HelpTip';
+import { ImportFileButton } from '../import/ImportFileButton';
 import { idFromCell } from '../../lib/business/parsing';
 
 const MAX_SIZE = 50 * 1024 * 1024;
@@ -150,13 +151,9 @@ export function SimpleSheetImportPanel({
             onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
             style={{ display: 'none' }}
           />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 self-start"
-          >
+          <ImportFileButton size="sm" onClick={() => fileInputRef.current?.click()} className="self-start">
             Escolher planilha
-          </button>
+          </ImportFileButton>
           {fileName && <p className="text-xs text-slate-500">{fileName}</p>}
           {error && <p className="text-xs text-rose-400">{error}</p>}
 
