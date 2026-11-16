@@ -1,0 +1,133 @@
+/* Botão que abre o seletor de arquivos das telas de importação.
+   Junta duas ideias: "toque 3D" (o botão tem uma base escura e afunda ao ser
+   pressionado) e "brilho flutuante" (um halo neon que acende ao passar o mouse).
+   Cores só da paleta do sistema (ciano #00f0ff, roxo #a82bff, rosa #ff3df0) e
+   efeito discreto (halo ~7px, animação lenta). Só CSS: não muda nenhum
+   comportamento do botão — o onClick continua sendo o de cada tela.
+
+   Camadas (dentro de um contexto de empilhamento do próprio botão):
+     ::before (z -2) = halo neon borrado, só aparece no hover/foco;
+     ::after  (z -1) = a face do botão (degradê) + a base 3D (sombra sólida);
+     conteúdo          = ícone e texto, por cima de tudo. */
+
+.gv-import-btn {
+  --gv-depth: 6px;
+  --gv-edge: #2b1466;
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 28px;
+  margin-bottom: var(--gv-depth); /* reserva o espaço da base 3D */
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: #fff;
+  font-weight: 800;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.08s ease-out;
+}
+
+.gv-import-btn--sm {
+  --gv-depth: 4px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* face + base 3D */
+.gv-import-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #00f0ff, #a82bff);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 var(--gv-depth) 0 var(--gv-edge);
+  transition: box-shadow 0.08s ease-out, filter 0.15s;
+}
+
+/* halo neon */
+.gv-import-btn::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  z-index: -2;
+  border-radius: calc(14px + 2px);
+  background: linear-gradient(45deg, #00f0ff, #a82bff, #ff3df0, #00f0ff, #a82bff, #ff3df0, #00f0ff);
+  background-size: 300% 100%;
+  filter: blur(7px);
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+  animation: gv-import-glow 8s linear infinite;
+  animation-play-state: paused; /* só anima enquanto está visível (hover/foco) */
+  pointer-events: none;
+}
+.gv-import-btn--sm::before {
+  border-radius: 12px;
+}
+
+@keyframes gv-import-glow {
+  0% { background-position: 0 0; }
+  50% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
+
+@media (hover: hover) {
+  .gv-import-btn:hover:not(:disabled)::before {
+    opacity: 0.75;
+    animation-play-state: running;
+  }
+  .gv-import-btn:hover:not(:disabled)::after {
+    filter: brightness(1.07);
+  }
+}
+
+/* teclado: o mesmo halo, com contorno visível */
+.gv-import-btn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+.gv-import-btn:focus-visible::before {
+  opacity: 0.75;
+  animation-play-state: running;
+}
+
+/* pressionado: afunda até a base e o halo fica mais forte (vale também no toque) */
+.gv-import-btn:active:not(:disabled) {
+  transform: translateY(var(--gv-depth));
+}
+.gv-import-btn:active:not(:disabled)::after {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 0 var(--gv-edge);
+}
+.gv-import-btn:active:not(:disabled)::before {
+  opacity: 0.9;
+  animation-play-state: running;
+}
+
+.gv-import-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.gv-import-btn:disabled::before {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gv-import-btn,
+  .gv-import-btn::after,
+  .gv-import-btn::before {
+    transition: none;
+    animation: none;
+  }
+}

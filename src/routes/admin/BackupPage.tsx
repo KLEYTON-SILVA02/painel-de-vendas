@@ -1,4 +1,5 @@
 import { errorMessage } from '../../lib/errors';
+import { ImportFileButton } from '../../components/import/ImportFileButton';
 import { saveBlobFile } from '../../lib/saveFile';
 import { useRef, useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
@@ -127,8 +128,11 @@ export function BackupPage() {
           accept=".json"
           disabled={importing}
           onChange={(e) => e.target.files?.[0] && handleImport(e.target.files[0])}
-          className="text-xs text-slate-400"
+          style={{ display: 'none' }}
         />
+        <ImportFileButton size="sm" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+          {importing ? 'Restaurando…' : 'Escolher arquivo de backup'}
+        </ImportFileButton>
         {result && <p className="text-xs text-slate-400 mt-2">{result}</p>}
       </div>
     </div>
