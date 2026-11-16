@@ -6,13 +6,15 @@ import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImport
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
 import { SalesListLockedNotice } from '../../components/SalesListLockedNotice';
 import { PodiumSplit, type PodiumSpots } from '../../components/ranking/PodiumSplit';
-import { computeBioSummaryAllSectors, groupBioRows, type BioSummaryRow } from '../../lib/business/bio';
+import { computeBioSummaryAllSectors, computeBioUnassigned, groupBioRows, type BioSummaryRow } from '../../lib/business/bio';
 import { classifyBio, normalizeGrupoImport, type BioGroupKey } from '../../lib/business/classification';
 import { diasRestantesNoMes } from '../../lib/business/goals';
-import type { BioGroupGoal, BioGroupsProducts, BioWeights } from '../../lib/business/types';
+import type { BioGroupGoal, BioGroupsProducts, BioWeights, Sale } from '../../lib/business/types';
+import { monthFirstISO, monthLastISO } from '../../lib/dateRange';
+import { buildBioExtractHtml, openPrintPreview, type BioExtractRow } from '../../lib/printExtract';
 import { fmtDateBR } from '../../lib/format';
 import { useAddBioProduct, useBulkInsertBioProducts, useDeleteBioProduct, useUpdateBioGroupGoal, useUpdateBioWeights } from '../../lib/mutations';
-import { useBioGroupGoals, useBioGroups, useCategoryTypes, useCollaborators, useSalesInRange, useStoreSettings } from '../../lib/queries';
+import { useBioGroupGoals, useBioGroups, useCategoryTypes, useCollaborators, useSalesInRange, useStore, useStoreSettings } from '../../lib/queries';
 import { useDateRange } from '../DateRangeContext';
 
 const BIO_GROUP_KEYS: BioGroupKey[] = ['G1', 'G2', 'G3', 'G4'];
@@ -27,6 +29,7 @@ export function BioPage() {
   // demonstrativo) is already filtered down to dashFrom..dashTo.
   const { data: sales } = useSalesInRange(dashFrom, dashTo);
   const { data: storeSettings } = useStoreSettings();
+  const { data: store } = useStore();
   const { data: categoryTypes } = useCategoryTypes();
   const bioCategoryType = categoryTypes?.find((c) => c.chave === 'biosintetica');
   const { data: bioGroupRows } = useBioGroups(bioCategoryType?.id);
@@ -84,6 +87,50 @@ export function BioPage() {
     () => computeBioSummaryAllSectors(salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, 'ALL'),
     [salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo],
   );
+  // Card extra do ranking: soma das vendas G1-G4 sem código/vendedor cadastrado
+  // (ficam fora do ranking porque não há quem receba o ponto, mas não somem).
+  const unassigned = useMemo(
+    () => computeBioUnassigned(salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, bioFilter),
+    [salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, bioFilter],
+  );
+
+  // "Imprimir extrato do mês": sempre o mês inteiro do período em tela, mesmo
+  // que o usuário tenha filtrado um dia só. Se a tela já está no mês inteiro, as
+  // vendas já estão em cache (mesma consulta) e a impressão abre na hora; senão
+  // busca o mês só quando o botão é clicado.
+  const monthYear = Number(dashFrom.slice(0, 4));
+  const monthIdx = Number(dashFrom.slice(5, 7)) - 1;
+  const monthFrom = monthFirstISO(monthYear, monthIdx);
+  const monthTo = monthLastISO(monthYear, monthIdx);
+  const periodIsWholeMonth = dashFrom === monthFrom && dashTo === monthTo;
+  const [printRequested, setPrintRequested] = useState(false);
+  const { data: monthSales, isFetching: monthFetching } = useSalesInRange(monthFrom, monthTo, periodIsWholeMonth || printRequested);
+
+  function openMonthExtract(list: Sale[]) {
+    const rows: BioExtractRow[] = [];
+    for (const s of list) {
+      if (!s.dataISO || s.dataISO < monthFrom || s.dataISO > monthTo) continue;
+      const g = classifyBio(s.produto, bioGroups);
+      if (!g) continue;
+      rows.push({ dataISO: s.dataISO, matricula: s.matricula, vendedor: s.vendedor, produto: s.produto, qtd: s.qtd, grupo: g, pontos: s.qtd * (Number(bioWeightsData[g]) || 0) });
+    }
+    rows.sort((a, b) => b.dataISO.localeCompare(a.dataISO));
+    const periodLabel = `${fmtDateBR(monthFrom)} — ${fmtDateBR(monthTo)}`;
+    const categoryLabel = bioCategoryType?.nome ?? 'Biosintética';
+    openPrintPreview(`Extrato — ${categoryLabel} — ${periodLabel}`, buildBioExtractHtml({ periodLabel, storeName: store?.nome_loja, categoryLabel, rows }));
+  }
+
+  function handlePrintMonth() {
+    if (monthSales) openMonthExtract(monthSales);
+    else setPrintRequested(true); // busca o mês; o efeito abaixo imprime quando chegar
+  }
+
+  useEffect(() => {
+    if (!printRequested || !monthSales) return;
+    setPrintRequested(false);
+    openMonthExtract(monthSales);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [printRequested, monthSales]);
 
   if (!collaborators || !sales || !storeSettings || !bioCategoryType || !bioGroupRows || !groupGoals) {
     return <PageLoading />;
@@ -165,12 +212,25 @@ export function BioPage() {
             spots={storeSettings.ranking_podium_spots as unknown as PodiumSpots | null}
             getSecondaryValue={(r) => r.itens}
             formatSecondaryValue={(v) => `${v} un.`}
+            cardLayout="tall"
+            unassignedCard={unassigned ? { row: unassigned, label: 'SEM CÓDIGO' } : undefined}
           />
         )}
       </div>
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <h3 className="text-sm font-semibold mb-1">Lista de vendas — Biosintética</h3>
+        <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+          <h3 className="text-sm font-semibold">Lista de vendas — Biosintética</h3>
+          <button
+            type="button"
+            onClick={handlePrintMonth}
+            disabled={printRequested && monthFetching}
+            className="rounded-lg border px-3 py-1.5 text-sm font-semibold disabled:opacity-60"
+            style={{ borderColor: '#14ff00', color: '#14ff00' }}
+          >
+            🖨️ {printRequested && monthFetching ? 'Gerando...' : 'Imprimir extrato do mês'}
+          </button>
+        </div>
         {!salesListEnabled ? (
           <SalesListLockedNotice onEnable={toggleSalesListEnabled} />
         ) : (

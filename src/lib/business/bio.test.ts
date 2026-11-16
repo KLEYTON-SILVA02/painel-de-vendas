@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { auditBioOutsideBalcao, computeBioSummary } from './bio';
+import { auditBioOutsideBalcao, computeBioSummary, computeBioUnassigned } from './bio';
 import type { BioGroupsProducts, BioWeights, Collaborator, Sale } from './types';
 
 const collaborators: Collaborator[] = [
@@ -77,5 +77,42 @@ describe('generic category-type support', () => {
     expect(alerts).toHaveLength(1);
     expect(alerts[0].matricula).toBe('M4');
     expect(alerts[0].grupo).toBe('PRATA');
+  });
+});
+
+describe('computeBioUnassigned', () => {
+  const orphanSales: Sale[] = [
+    ...sales,
+    // sem matrícula e com matrícula que não existe na lista de colaboradores
+    { id: 's4', dataISO: '2026-08-04', matricula: '', vendedor: '', produto: 'Suplemento Alfa 60cp', qtd: 4, valor: 200, grupo: 'MER' },
+    { id: 's5', dataISO: '2026-08-05', matricula: 'X99', vendedor: 'Ex-funcionário', produto: 'Suplemento Beta 30cp', qtd: 2, valor: 60, grupo: 'MER' },
+    // produto que não é G1-G4: nunca conta, mesmo sem dono
+    { id: 's6', dataISO: '2026-08-05', matricula: '', vendedor: '', produto: 'Produto irrelevante', qtd: 9, valor: 10, grupo: 'MER' },
+  ];
+
+  it('soma só as vendas G1-G4 sem dono (sem matrícula ou matrícula desconhecida)', () => {
+    const r = computeBioUnassigned(orphanSales, collaborators, bioGroups, bioWeights, null, null);
+    expect(r).not.toBeNull();
+    expect(r!.itens).toBe(6); // 4 (G1) + 2 (G2)
+    expect(r!.pontos).toBeCloseTo(4 * 1.5 + 2 * 1.0);
+    expect(r!.qtd.G1).toBe(4);
+    expect(r!.qtd.G2).toBe(2);
+  });
+
+  it('não conta venda de colaborador cadastrado (essas já estão no ranking)', () => {
+    expect(computeBioUnassigned(sales, collaborators, bioGroups, bioWeights, null, null)).toBeNull();
+  });
+
+  it('respeita período e filtro de grupo', () => {
+    const soG1 = computeBioUnassigned(orphanSales, collaborators, bioGroups, bioWeights, null, null, 'G1');
+    expect(soG1!.itens).toBe(4);
+    const foraDoPeriodo = computeBioUnassigned(orphanSales, collaborators, bioGroups, bioWeights, '2026-08-05', '2026-08-31');
+    expect(foraDoPeriodo!.itens).toBe(2);
+  });
+
+  it('casa matrícula com zeros à esquerda (mesma regra do ranking)', () => {
+    const cadastrados: Collaborator[] = [{ ...collaborators[0], matricula: '007' }];
+    const venda: Sale[] = [{ id: 'z', dataISO: '2026-08-01', matricula: '7', vendedor: 'A', produto: 'Suplemento Alfa', qtd: 1, valor: 1, grupo: 'MER' }];
+    expect(computeBioUnassigned(venda, cadastrados, bioGroups, bioWeights, null, null)).toBeNull();
   });
 });

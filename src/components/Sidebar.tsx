@@ -77,10 +77,11 @@ const CAT_NAV: {
 const GROUPS = ['Principal', 'Categorias', 'Programas'] as const;
 const ADM_NAV_ITEM = CAT_NAV.find((c) => c.key === 'ADM')!;
 
-// Função Tutoriais: fixo no menu lateral, acima do botão ADM (engrenagem) —
-// mesmo bloco isolado (sb-settings-nav) para não competir por espaço com os
-// grupos de navegação principais, mas com destaque próprio (capelo, cor
-// diferente) por ser uma função de ajuda, não mais uma categoria/programa.
+// Função Tutoriais: no fim da lista principal, logo abaixo de DSM (e das
+// categorias extras), com destaque próprio (capelo, cor diferente) por ser uma
+// função de ajuda, não uma categoria/programa. Antes ficava no bloco de baixo,
+// acima do ADM — trocou de lugar com a Biosintética (pedido do usuário,
+// 2026-11-16).
 const TUTORIAIS_NAV_ITEM = { label: 'Tutoriais', color: '#14ff00', icon: GraduationCapIcon, slot: 'tutoriais', to: '/tutoriais', end: false };
 
 export function Sidebar({
@@ -229,19 +230,6 @@ export function Sidebar({
                   <span className="sb-label">{label(c.key, c.label)}</span>
                 </NavLink>
               ))}
-              {g === 'Programas' && bioCategory && bioCategory.ativo && (
-                <NavLink
-                  to="/bio"
-                  end={false}
-                  onClick={onNavigate}
-                  title={bioCategory.nome}
-                  style={{ '--sbc': '#14ff00' } as React.CSSProperties}
-                  className={({ isActive }) => (isActive ? 'active' : '')}
-                >
-                  <FunctionIcon slot="biosintetica" fallback={LeafIcon} size={18} />
-                  <span className="sb-label">{bioCategory.nome}</span>
-                </NavLink>
-              )}
               {g === 'Programas' && dsmCategory && dsmCategory.ativo && (
                 <NavLink
                   to="/dsm"
@@ -274,6 +262,19 @@ export function Sidebar({
                     <span className="sb-label">{c.nome}</span>
                   </NavLink>
                 ))}
+              {g === 'Programas' && (
+                <NavLink
+                  to={TUTORIAIS_NAV_ITEM.to}
+                  end={TUTORIAIS_NAV_ITEM.end}
+                  onClick={onNavigate}
+                  title={TUTORIAIS_NAV_ITEM.label}
+                  style={{ '--sbc': TUTORIAIS_NAV_ITEM.color } as React.CSSProperties}
+                  className={({ isActive }) => (isActive ? 'active' : '')}
+                >
+                  <FunctionIcon slot={TUTORIAIS_NAV_ITEM.slot} fallback={TUTORIAIS_NAV_ITEM.icon} size={18} />
+                  <span className="sb-label">{TUTORIAIS_NAV_ITEM.label}</span>
+                </NavLink>
+              )}
             </div>
           );
         })}
@@ -282,21 +283,23 @@ export function Sidebar({
       {/* ADM/settings link, pulled out of the scrolling nav above so it
           anchors near the bottom of the sidebar instead of sitting inline
           with the category/program links — spaced apart via margin, not a
-          divider line (see ADM_NAV_ITEM). Tutoriais sits right above it, in
-          the same isolated block, per the ADM's explicit request to fix it
-          "acima do botão Configurações" (o botão de engrenagem ADM). */}
+          divider line (see ADM_NAV_ITEM). Biosintética sits right above it, in
+          the same isolated block (trocou de lugar com Tutoriais, pedido do
+          usuário 2026-11-16 — Tutoriais agora fica abaixo de DSM). */}
       <nav className="sb-nav sb-settings-nav">
-        <NavLink
-          to={TUTORIAIS_NAV_ITEM.to}
-          end={TUTORIAIS_NAV_ITEM.end}
-          onClick={onNavigate}
-          title={TUTORIAIS_NAV_ITEM.label}
-          style={{ '--sbc': TUTORIAIS_NAV_ITEM.color } as React.CSSProperties}
-          className={({ isActive }) => (isActive ? 'active' : '')}
-        >
-          <FunctionIcon slot={TUTORIAIS_NAV_ITEM.slot} fallback={TUTORIAIS_NAV_ITEM.icon} size={18} />
-          <span className="sb-label">{TUTORIAIS_NAV_ITEM.label}</span>
-        </NavLink>
+        {bioCategory && bioCategory.ativo && (
+          <NavLink
+            to="/bio"
+            end={false}
+            onClick={onNavigate}
+            title={bioCategory.nome}
+            style={{ '--sbc': '#14ff00' } as React.CSSProperties}
+            className={({ isActive }) => (isActive ? 'active' : '')}
+          >
+            <FunctionIcon slot="biosintetica" fallback={LeafIcon} size={18} />
+            <span className="sb-label">{bioCategory.nome}</span>
+          </NavLink>
+        )}
         <NavLink
           to={ADM_NAV_ITEM.to}
           end={ADM_NAV_ITEM.end}
