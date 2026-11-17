@@ -6,7 +6,7 @@
 // instead of this constant — BALCAO_SETOR is BIOSINTÉTICA's own default.
 import { classifyBio } from './classification';
 import type { BioGroupKey } from './classification';
-import { firstName } from './normalize';
+import { firstName, normalize } from './normalize';
 import { normalizeMatricula } from './parsing';
 import type { BioGroupsProducts, BioWeights, Collaborator, Sale } from './types';
 
@@ -178,6 +178,68 @@ export function computeBioUnassigned(
     row.itens += qtd;
   });
   return row.itens > 0 ? row : null;
+}
+
+export interface BioProductTotal {
+  produto: string;
+  qtd: number;
+  pontos: number;
+}
+
+/** Total vendido por produto (só produtos G1-G4) no período, do mais vendido ao
+ * menos vendido. Independe do filtro de grupo da tela e de quem vendeu: conta
+ * toda venda de produto Biosintética. Produtos com o mesmo nome (ignorando
+ * maiúsculas/acentos) viram uma linha só. */
+export function aggregateBioProducts(
+  sales: Sale[],
+  bioGroups: BioGroupsProducts,
+  bioWeights: BioWeights,
+  fromDate: string | null,
+  toDate: string | null,
+): BioProductTotal[] {
+  const map = new Map<string, BioProductTotal>();
+  sales.forEach((s) => {
+    if (fromDate && s.dataISO && s.dataISO < fromDate) return;
+    if (toDate && s.dataISO && s.dataISO > toDate) return;
+    const g = classifyBio(s.produto, bioGroups);
+    if (!g) return;
+    const key = normalize(s.produto);
+    const qtd = Number(s.qtd) || 0;
+    const cur = map.get(key) ?? { produto: s.produto, qtd: 0, pontos: 0 };
+    cur.qtd += qtd;
+    cur.pontos += qtd * (Number(bioWeights[g]) || 0);
+    map.set(key, cur);
+  });
+  return Array.from(map.values()).sort((a, b) => b.qtd - a.qtd || b.pontos - a.pontos || a.produto.localeCompare(b.produto, 'pt-BR'));
+}
+
+export interface BioDayTotal {
+  dataISO: string;
+  /** Quantas vendas (lançamentos) de produto Biosintética no dia. */
+  vendas: number;
+  /** Unidades vendidas no dia. */
+  qtd: number;
+}
+
+/** Todos os dias de `fromDate` a `toDate` (inclusive, YYYY-MM-DD), com as vendas
+ * e unidades de produtos G1-G4 de cada um — dia sem venda aparece com zero.
+ * Independe do filtro de grupo da tela. */
+export function aggregateBioDays(sales: Sale[], bioGroups: BioGroupsProducts, fromDate: string, toDate: string): BioDayTotal[] {
+  const days = new Map<string, BioDayTotal>();
+  const start = Date.UTC(Number(fromDate.slice(0, 4)), Number(fromDate.slice(5, 7)) - 1, Number(fromDate.slice(8, 10)));
+  const end = Date.UTC(Number(toDate.slice(0, 4)), Number(toDate.slice(5, 7)) - 1, Number(toDate.slice(8, 10)));
+  for (let t = start; t <= end; t += 86_400_000) {
+    const iso = new Date(t).toISOString().slice(0, 10);
+    days.set(iso, { dataISO: iso, vendas: 0, qtd: 0 });
+  }
+  sales.forEach((s) => {
+    const day = s.dataISO ? days.get(s.dataISO) : undefined;
+    if (!day) return;
+    if (!classifyBio(s.produto, bioGroups)) return;
+    day.vendas += 1;
+    day.qtd += Number(s.qtd) || 0;
+  });
+  return Array.from(days.values());
 }
 
 export interface BioOutsideAlert {

@@ -563,3 +563,111 @@ export function buildBioExtractHtml(params: {
     ${table}
     ${summary}`;
 }
+
+export interface BioProductExtractRow {
+  produto: string;
+  qtd: number;
+}
+
+/** Extrato "Produtos mais e menos vendidos" da Biosintética: duas listas
+ * numeradas (produto + quantidade), as `limit` maiores e as `limit` menores.
+ * `products` já vem do mais para o menos vendido (aggregateBioProducts). O
+ * produto que aparece em "Mais vendidos" não se repete em "Menos vendidos" —
+ * com poucos produtos vendidos, a segunda lista fica menor (ou vazia). */
+export function buildBioTopProductsHtml(params: {
+  periodLabel: string;
+  storeName?: string | null;
+  categoryLabel?: string;
+  products: BioProductExtractRow[];
+  limit?: number;
+}): string {
+  const { periodLabel, storeName, categoryLabel = 'Biosintética', products, limit = 10 } = params;
+  const top = products.slice(0, limit);
+  const bottom = products.slice(limit).slice(-limit).reverse(); // do menos vendido para cima
+
+  const list = (items: BioProductExtractRow[], empty: string) =>
+    items.length
+      ? `<table>
+        <thead><tr>
+          <th style="width:2.2em">#</th><th>Produto</th>
+          <th style="text-align:right">Qtd</th>
+        </tr></thead>
+        <tbody>
+          ${items
+            .map(
+              (r, i) => `<tr>
+            <td>${i + 1}</td>
+            <td>${escapeHtml(r.produto)}</td>
+            <td style="text-align:right">${r.qtd}</td>
+          </tr>`,
+            )
+            .join('')}
+        </tbody>
+      </table>`
+      : `<div class="empty">${empty}</div>`;
+
+  const body = products.length
+    ? `<h2>Mais vendidos</h2>${list(top, '')}
+       <h2>Menos vendidos</h2>${list(bottom, 'Poucos produtos vendidos — todos já aparecem em "Mais vendidos".')}`
+    : `<div class="empty">Nenhuma venda no período.</div>`;
+
+  return `<h1>Produtos mais e menos vendidos — ${escapeHtml(categoryLabel)}${storeName ? ` — ${escapeHtml(storeName)}` : ''}</h1>
+    <div class="meta">Período: ${escapeHtml(periodLabel)}</div>
+    ${body}`;
+}
+
+export interface BioDayExtractRow {
+  dataISO: string;
+  vendas: number;
+  qtd: number;
+}
+
+const WEEKDAY_SHORT = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+
+/** Extrato "Vendas por dia" da Biosintética: todos os dias do período (dd/mm +
+ * dia da semana) com o número de vendas e as unidades de cada um, e o total no
+ * fim. Dia sem venda sai com zero, pra ficar claro que não foi esquecido. */
+export function buildBioDailyHtml(params: {
+  periodLabel: string;
+  storeName?: string | null;
+  categoryLabel?: string;
+  days: BioDayExtractRow[];
+}): string {
+  const { periodLabel, storeName, categoryLabel = 'Biosintética', days } = params;
+  const totalVendas = days.reduce((a, d) => a + d.vendas, 0);
+  const totalQtd = days.reduce((a, d) => a + d.qtd, 0);
+  const label = (iso: string) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    return `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')} ${WEEKDAY_SHORT[new Date(y, m - 1, d).getDay()]}`;
+  };
+
+  const table = days.length
+    ? `<table>
+        <thead><tr>
+          <th>Dia</th>
+          <th style="text-align:right">Vendas</th>
+          <th style="text-align:right">Qtd</th>
+        </tr></thead>
+        <tbody>
+          ${days
+            .map(
+              (d) => `<tr>
+            <td>${label(d.dataISO)}</td>
+            <td style="text-align:right">${d.vendas}</td>
+            <td style="text-align:right">${d.qtd}</td>
+          </tr>`,
+            )
+            .join('')}
+          <tr class="total-row">
+            <td>Total</td>
+            <td style="text-align:right">${totalVendas}</td>
+            <td style="text-align:right">${totalQtd}</td>
+          </tr>
+        </tbody>
+      </table>`
+    : `<div class="empty">Nenhum dia no período.</div>`;
+
+  return `<h1>Vendas por dia — ${escapeHtml(categoryLabel)}${storeName ? ` — ${escapeHtml(storeName)}` : ''}</h1>
+    <div class="meta">Período: ${escapeHtml(periodLabel)}</div>
+    ${table}`;
+}
