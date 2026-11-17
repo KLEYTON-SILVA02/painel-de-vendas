@@ -464,21 +464,30 @@ export function buildUvcExtractHtml(params: {
 
 export interface BioExtractRow {
   dataISO: string;
+  /** Matrícula da venda ('' quando não tem) — junto com `vendedor`, define quem
+   * é o vendedor no resumo do fim do extrato. */
   matricula: string;
+  /** Nome já resolvido para exibir (apelido do colaborador; quando a venda não
+   * tem dono cadastrado, o nome que veio na própria venda). */
   vendedor: string;
   produto: string;
   qtd: number;
-  /** Grupo G1-G4 do produto (já classificado) e os pontos da venda. */
-  grupo: string;
+  /** Pontos da venda (quantidade × peso do grupo) — só entram nos totais. */
   pontos: number;
 }
 
+/** "2026-11-10" → "10/11" (dia/mês, sem ano). */
+function fmtDayMonth(dataISO: string): string {
+  const [, m, d] = dataISO.split('-');
+  return m && d ? `${d}/${m}` : dataISO;
+}
+
 /** Extrato impresso da lista de vendas da Biosintética (BioPage.tsx, "Imprimir
- * extrato do mês") — as vendas de produtos G1-G4 do período, uma linha por
- * venda (data, vendedor, produto, quantidade, grupo e pontos), com subtotal no
- * fim. Mesmo padrão visual (impressora térmica, preto sobre branco) dos demais
- * extratos deste arquivo. Venda sem vendedor cadastrado aparece como "Sem
- * código" em vez de ficar em branco. */
+ * extrato do mês"): uma linha por venda com Data (dd/mm), Vendedor (apelido),
+ * Produto e Quantidade; no fim, um resumo com TODOS os vendedores, a
+ * quantidade total e os pontos totais de cada um (mais o total geral). Mesmo
+ * padrão visual (impressora térmica, preto sobre branco) dos demais extratos
+ * deste arquivo. Venda sem vendedor aparece como "Sem código". */
 export function buildBioExtractHtml(params: {
   periodLabel: string;
   storeName?: string | null;
@@ -486,42 +495,71 @@ export function buildBioExtractHtml(params: {
   rows: BioExtractRow[];
 }): string {
   const { periodLabel, storeName, categoryLabel = 'Biosintética', rows } = params;
-  const totalQtd = rows.reduce((a, r) => a + (Number(r.qtd) || 0), 0);
-  const totalPontos = rows.reduce((a, r) => a + (Number(r.pontos) || 0), 0);
   const fmtPts = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const nomeDe = (r: BioExtractRow) => r.vendedor || r.matricula || 'Sem código';
 
   const table = rows.length
     ? `<table>
         <thead><tr>
           <th>Data</th><th>Vendedor</th><th>Produto</th>
           <th style="text-align:right">Qtd</th>
-          <th>Grupo</th>
-          <th style="text-align:right">Pts</th>
         </tr></thead>
         <tbody>
           ${rows
             .map(
               (r) => `<tr>
-            <td>${fmtDateBR(r.dataISO)}</td>
-            <td>${escapeHtml(r.vendedor || r.matricula || 'Sem código')}</td>
+            <td>${fmtDayMonth(r.dataISO)}</td>
+            <td>${escapeHtml(nomeDe(r))}</td>
             <td>${escapeHtml(r.produto)}</td>
             <td style="text-align:right">${r.qtd}</td>
-            <td>${escapeHtml(r.grupo)}</td>
+          </tr>`,
+            )
+            .join('')}
+        </tbody>
+      </table>`
+    : `<div class="empty">Nenhuma venda no período.</div>`;
+
+  // Resumo por vendedor: soma de quantidade e pontos, maior pontuação primeiro.
+  const bySeller = new Map<string, { nome: string; qtd: number; pontos: number }>();
+  for (const r of rows) {
+    const key = r.matricula || nomeDe(r);
+    const cur = bySeller.get(key) ?? { nome: nomeDe(r), qtd: 0, pontos: 0 };
+    cur.qtd += Number(r.qtd) || 0;
+    cur.pontos += Number(r.pontos) || 0;
+    bySeller.set(key, cur);
+  }
+  const sellers = Array.from(bySeller.values()).sort((a, b) => b.pontos - a.pontos || a.nome.localeCompare(b.nome, 'pt-BR'));
+  const totalQtd = sellers.reduce((a, r) => a + r.qtd, 0);
+  const totalPontos = sellers.reduce((a, r) => a + r.pontos, 0);
+  const summary = rows.length
+    ? `<h2>Resumo por vendedor</h2>
+      <table>
+        <thead><tr>
+          <th>Vendedor</th>
+          <th style="text-align:right">Qtd</th>
+          <th style="text-align:right">Pts</th>
+        </tr></thead>
+        <tbody>
+          ${sellers
+            .map(
+              (r) => `<tr>
+            <td>${escapeHtml(r.nome)}</td>
+            <td style="text-align:right">${r.qtd}</td>
             <td style="text-align:right">${fmtPts(r.pontos)}</td>
           </tr>`,
             )
             .join('')}
           <tr class="total-row">
-            <td colspan="3">Subtotal</td>
+            <td>Total</td>
             <td style="text-align:right">${totalQtd}</td>
-            <td></td>
             <td style="text-align:right">${fmtPts(totalPontos)}</td>
           </tr>
         </tbody>
       </table>`
-    : `<div class="empty">Nenhuma venda no período.</div>`;
+    : '';
 
   return `<h1>Extrato de Vendas — ${escapeHtml(categoryLabel)}${storeName ? ` — ${escapeHtml(storeName)}` : ''}</h1>
     <div class="meta">Período: ${escapeHtml(periodLabel)}</div>
-    ${table}`;
+    ${table}
+    ${summary}`;
 }

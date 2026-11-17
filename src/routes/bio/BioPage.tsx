@@ -9,6 +9,8 @@ import { PodiumSplit, type PodiumSpots } from '../../components/ranking/PodiumSp
 import { computeBioSummaryAllSectors, computeBioUnassigned, groupBioRows, type BioSummaryRow } from '../../lib/business/bio';
 import { classifyBio, normalizeGrupoImport, type BioGroupKey } from '../../lib/business/classification';
 import { diasRestantesNoMes } from '../../lib/business/goals';
+import { firstName } from '../../lib/business/normalize';
+import { normalizeMatricula } from '../../lib/business/parsing';
 import type { BioGroupGoal, BioGroupsProducts, BioWeights, Sale } from '../../lib/business/types';
 import { monthFirstISO, monthLastISO } from '../../lib/dateRange';
 import { buildBioExtractHtml, openPrintPreview, type BioExtractRow } from '../../lib/printExtract';
@@ -107,12 +109,22 @@ export function BioPage() {
   const { data: monthSales, isFetching: monthFetching } = useSalesInRange(monthFrom, monthTo, periodIsWholeMonth || printRequested);
 
   function openMonthExtract(list: Sale[]) {
+    // Nome do vendedor = apelido do colaborador cadastrado; venda sem dono
+    // cadastrado usa o nome que veio na própria venda.
+    const apelidoPorMatricula = new Map(collaboratorsData.map((c) => [normalizeMatricula(c.matricula), c.apelido || firstName(c.nome)]));
     const rows: BioExtractRow[] = [];
     for (const s of list) {
       if (!s.dataISO || s.dataISO < monthFrom || s.dataISO > monthTo) continue;
       const g = classifyBio(s.produto, bioGroups);
       if (!g) continue;
-      rows.push({ dataISO: s.dataISO, matricula: s.matricula, vendedor: s.vendedor, produto: s.produto, qtd: s.qtd, grupo: g, pontos: s.qtd * (Number(bioWeightsData[g]) || 0) });
+      rows.push({
+        dataISO: s.dataISO,
+        matricula: normalizeMatricula(s.matricula),
+        vendedor: apelidoPorMatricula.get(normalizeMatricula(s.matricula)) ?? s.vendedor,
+        produto: s.produto,
+        qtd: s.qtd,
+        pontos: s.qtd * (Number(bioWeightsData[g]) || 0),
+      });
     }
     rows.sort((a, b) => b.dataISO.localeCompare(a.dataISO));
     const periodLabel = `${fmtDateBR(monthFrom)} — ${fmtDateBR(monthTo)}`;
