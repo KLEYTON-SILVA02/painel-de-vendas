@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { auditBioOutsideBalcao, computeBioSummary, computeBioUnassigned } from './bio';
+import { aggregateBioDays, aggregateBioProducts, auditBioOutsideBalcao, computeBioSummary, computeBioUnassigned } from './bio';
 import type { BioGroupsProducts, BioWeights, Collaborator, Sale } from './types';
 
 const collaborators: Collaborator[] = [
@@ -114,5 +114,39 @@ describe('computeBioUnassigned', () => {
     const cadastrados: Collaborator[] = [{ ...collaborators[0], matricula: '007' }];
     const venda: Sale[] = [{ id: 'z', dataISO: '2026-08-01', matricula: '7', vendedor: 'A', produto: 'Suplemento Alfa', qtd: 1, valor: 1, grupo: 'MER' }];
     expect(computeBioUnassigned(venda, cadastrados, bioGroups, bioWeights, null, null)).toBeNull();
+  });
+});
+
+describe('aggregateBioProducts / aggregateBioDays', () => {
+  const vendas: Sale[] = [
+    { id: 'a', dataISO: '2026-11-01', matricula: 'M1', vendedor: 'Ana', produto: 'Suplemento Alfa 30cp', qtd: 2, valor: 1, grupo: 'MER' },
+    { id: 'b', dataISO: '2026-11-01', matricula: 'M2', vendedor: 'Bruno', produto: 'SUPLEMENTO ALFA 30CP', qtd: 3, valor: 1, grupo: 'MER' },
+    { id: 'c', dataISO: '2026-11-03', matricula: '', vendedor: '', produto: 'Suplemento Beta 30cp', qtd: 1, valor: 1, grupo: 'MER' },
+    { id: 'd', dataISO: '2026-11-03', matricula: 'M1', vendedor: 'Ana', produto: 'Produto irrelevante', qtd: 9, valor: 1, grupo: 'MER' },
+    { id: 'e', dataISO: '2026-12-01', matricula: 'M1', vendedor: 'Ana', produto: 'Suplemento Alfa 30cp', qtd: 7, valor: 1, grupo: 'MER' },
+  ];
+
+  it('soma por produto (mesmo nome em maiúscula/minúscula vira um só), do mais ao menos vendido', () => {
+    const r = aggregateBioProducts(vendas, bioGroups, bioWeights, '2026-11-01', '2026-11-30');
+    expect(r.map((p) => [p.produto, p.qtd])).toEqual([
+      ['Suplemento Alfa 30cp', 5],
+      ['Suplemento Beta 30cp', 1],
+    ]);
+    expect(r[0].pontos).toBeCloseTo(5 * 1.5);
+  });
+
+  it('inclui venda sem dono e ignora produto fora de G1-G4 e dias fora do período', () => {
+    const r = aggregateBioProducts(vendas, bioGroups, bioWeights, '2026-11-01', '2026-11-30');
+    expect(r.find((p) => p.produto.includes('irrelevante'))).toBeUndefined();
+    expect(r.find((p) => p.produto.includes('Beta'))!.qtd).toBe(1); // vendida sem matrícula
+  });
+
+  it('dias: lista TODOS os dias do período, com zero onde não houve venda', () => {
+    const d = aggregateBioDays(vendas, bioGroups, '2026-11-01', '2026-11-30');
+    expect(d).toHaveLength(30);
+    expect(d[0]).toEqual({ dataISO: '2026-11-01', vendas: 2, qtd: 5 });
+    expect(d[1]).toEqual({ dataISO: '2026-11-02', vendas: 0, qtd: 0 });
+    expect(d[2]).toEqual({ dataISO: '2026-11-03', vendas: 1, qtd: 1 }); // o irrelevante não conta
+    expect(d[29].dataISO).toBe('2026-11-30');
   });
 });

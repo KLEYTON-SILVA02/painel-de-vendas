@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildBioExtractHtml } from './printExtract';
+import { buildBioDailyHtml, buildBioExtractHtml, buildBioTopProductsHtml } from './printExtract';
 
 describe('buildBioExtractHtml', () => {
   const rows = [
@@ -41,5 +41,55 @@ describe('buildBioExtractHtml', () => {
     expect(html).toContain('Nenhuma venda no período.');
     expect(html).not.toContain('<table>');
     expect(html).not.toContain('Resumo por vendedor');
+  });
+});
+
+describe('buildBioTopProductsHtml', () => {
+  const produtos = Array.from({ length: 25 }, (_, i) => ({ produto: `Produto ${i + 1}`, qtd: 100 - i })); // já do mais ao menos vendido
+
+  it('mostra os 10 mais vendidos e os 10 menos vendidos (do menor para cima), sem repetir', () => {
+    const html = buildBioTopProductsHtml({ periodLabel: 'p', products: produtos });
+    const [maisParte, menosParte] = html.split('Menos vendidos');
+    expect(maisParte).toContain('Mais vendidos');
+    expect(maisParte).toContain('Produto 1<');
+    expect(maisParte).toContain('Produto 10<');
+    expect(maisParte).not.toContain('Produto 11<');
+    expect(menosParte).toContain('Produto 25<'); // o menos vendido de todos
+    expect(menosParte).toContain('Produto 16<');
+    expect(menosParte).not.toContain('Produto 15<');
+    expect(menosParte.indexOf('Produto 25<')).toBeLessThan(menosParte.indexOf('Produto 24<')); // menor primeiro
+  });
+
+  it('com poucos produtos a lista de menos vendidos avisa em vez de repetir', () => {
+    const html = buildBioTopProductsHtml({ periodLabel: 'p', products: produtos.slice(0, 4) });
+    expect(html.split('Menos vendidos')[1]).toContain('Poucos produtos vendidos');
+    expect(html.split('Menos vendidos')[1]).not.toContain('Produto 1<');
+  });
+
+  it('sem vendas mostra aviso e escapa HTML', () => {
+    expect(buildBioTopProductsHtml({ periodLabel: 'p', products: [] })).toContain('Nenhuma venda no período.');
+    expect(buildBioTopProductsHtml({ periodLabel: 'p', products: [{ produto: '<b>x</b>', qtd: 1 }] })).toContain('&lt;b&gt;x&lt;/b&gt;');
+  });
+});
+
+describe('buildBioDailyHtml', () => {
+  const days = [
+    { dataISO: '2026-11-01', vendas: 2, qtd: 5 },
+    { dataISO: '2026-11-02', vendas: 0, qtd: 0 },
+    { dataISO: '2026-11-03', vendas: 1, qtd: 1 },
+  ];
+
+  it('lista cada dia (dd/mm + dia da semana) com vendas e quantidade, inclusive os zerados', () => {
+    const html = buildBioDailyHtml({ periodLabel: 'p', days });
+    expect(html).toContain('01/11 dom');
+    expect(html).toContain('02/11 seg');
+    expect(html).toContain('<td style="text-align:right">0</td>');
+  });
+
+  it('soma o total do período no fim', () => {
+    const html = buildBioDailyHtml({ periodLabel: 'p', days });
+    const total = html.split('class="total-row"')[1];
+    expect(total).toContain('<td style="text-align:right">3</td>'); // 2 + 0 + 1 vendas
+    expect(total).toContain('<td style="text-align:right">6</td>'); // 5 + 0 + 1 un.
   });
 });

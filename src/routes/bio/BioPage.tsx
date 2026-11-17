@@ -6,14 +6,14 @@ import { SimpleSheetImportPanel } from '../../components/admin/SimpleSheetImport
 import { MetricsFilterBar, type MfbStatCard } from '../../components/MetricsFilterBar';
 import { SalesListLockedNotice } from '../../components/SalesListLockedNotice';
 import { PodiumSplit, type PodiumSpots } from '../../components/ranking/PodiumSplit';
-import { computeBioSummaryAllSectors, computeBioUnassigned, groupBioRows, type BioSummaryRow } from '../../lib/business/bio';
+import { aggregateBioDays, aggregateBioProducts, computeBioSummaryAllSectors, computeBioUnassigned, groupBioRows, type BioSummaryRow } from '../../lib/business/bio';
 import { classifyBio, normalizeGrupoImport, type BioGroupKey } from '../../lib/business/classification';
 import { diasRestantesNoMes } from '../../lib/business/goals';
 import { firstName } from '../../lib/business/normalize';
 import { normalizeMatricula } from '../../lib/business/parsing';
 import type { BioGroupGoal, BioGroupsProducts, BioWeights, Sale } from '../../lib/business/types';
 import { monthFirstISO, monthLastISO } from '../../lib/dateRange';
-import { buildBioExtractHtml, openPrintPreview, type BioExtractRow } from '../../lib/printExtract';
+import { buildBioDailyHtml, buildBioExtractHtml, buildBioTopProductsHtml, openPrintPreview, type BioExtractRow } from '../../lib/printExtract';
 import { fmtDateBR } from '../../lib/format';
 import { useAddBioProduct, useBulkInsertBioProducts, useDeleteBioProduct, useUpdateBioGroupGoal, useUpdateBioWeights } from '../../lib/mutations';
 import { useBioGroupGoals, useBioGroups, useCategoryTypes, useCollaborators, useSalesInRange, useStore, useStoreSettings } from '../../lib/queries';
@@ -21,6 +21,15 @@ import { useDateRange } from '../DateRangeContext';
 
 const BIO_GROUP_KEYS: BioGroupKey[] = ['G1', 'G2', 'G3', 'G4'];
 const GRUPO_LABELS: Record<BioGroupKey, string> = { G1: 'Grupo 1', G2: 'Grupo 2', G3: 'Grupo 3', G4: 'Grupo 4' };
+
+// Os 3 tipos de impressão da Biosintética (um botão para cada). Todos usam o mês
+// inteiro e todos os produtos G1-G4 — não dependem do filtro de grupo da tela.
+type PrintKind = 'produtos' | 'lista' | 'dias';
+const PRINT_OPTIONS: { kind: PrintKind; label: string }[] = [
+  { kind: 'produtos', label: 'Mais e menos vendidos' },
+  { kind: 'lista', label: 'Lista de vendas do mês' },
+  { kind: 'dias', label: 'Vendas por dia' },
+];
 
 export function BioPage() {
   const { profile } = useAuth();
@@ -96,21 +105,36 @@ export function BioPage() {
     [salesData, collaboratorsData, bioGroups, bioWeightsData, dashFrom, dashTo, bioFilter],
   );
 
-  // "Imprimir extrato do mês": sempre o mês inteiro do período em tela, mesmo
-  // que o usuário tenha filtrado um dia só. Se a tela já está no mês inteiro, as
-  // vendas já estão em cache (mesma consulta) e a impressão abre na hora; senão
-  // busca o mês só quando o botão é clicado.
+  // Impressões (3 tipos, ver PRINT_OPTIONS): sempre o mês inteiro do período em
+  // tela, mesmo que o usuário tenha filtrado um dia só. Se a tela já está no mês
+  // inteiro, as vendas já estão em cache (mesma consulta) e a impressão abre na
+  // hora; senão busca o mês só quando um botão é clicado.
   const monthYear = Number(dashFrom.slice(0, 4));
   const monthIdx = Number(dashFrom.slice(5, 7)) - 1;
   const monthFrom = monthFirstISO(monthYear, monthIdx);
   const monthTo = monthLastISO(monthYear, monthIdx);
   const periodIsWholeMonth = dashFrom === monthFrom && dashTo === monthTo;
-  const [printRequested, setPrintRequested] = useState(false);
-  const { data: monthSales, isFetching: monthFetching } = useSalesInRange(monthFrom, monthTo, periodIsWholeMonth || printRequested);
+  const [printRequested, setPrintRequested] = useState<PrintKind | null>(null);
+  const { data: monthSales, isFetching: monthFetching } = useSalesInRange(monthFrom, monthTo, periodIsWholeMonth || printRequested !== null);
 
-  function openMonthExtract(list: Sale[]) {
-    // Nome do vendedor = apelido do colaborador cadastrado; venda sem dono
-    // cadastrado usa o nome que veio na própria venda.
+  function openMonthPrint(kind: PrintKind, list: Sale[]) {
+    const periodLabel = `${fmtDateBR(monthFrom)} — ${fmtDateBR(monthTo)}`;
+    const categoryLabel = bioCategoryType?.nome ?? 'Biosintética';
+    const storeName = store?.nome_loja;
+
+    if (kind === 'produtos') {
+      const products = aggregateBioProducts(list, bioGroups, bioWeightsData, monthFrom, monthTo);
+      openPrintPreview(`Mais e menos vendidos — ${categoryLabel} — ${periodLabel}`, buildBioTopProductsHtml({ periodLabel, storeName, categoryLabel, products }));
+      return;
+    }
+    if (kind === 'dias') {
+      const days = aggregateBioDays(list, bioGroups, monthFrom, monthTo);
+      openPrintPreview(`Vendas por dia — ${categoryLabel} — ${periodLabel}`, buildBioDailyHtml({ periodLabel, storeName, categoryLabel, days }));
+      return;
+    }
+
+    // 'lista': uma linha por venda. Nome do vendedor = apelido do colaborador
+    // cadastrado; venda sem dono cadastrado usa o nome que veio na própria venda.
     const apelidoPorMatricula = new Map(collaboratorsData.map((c) => [normalizeMatricula(c.matricula), c.apelido || firstName(c.nome)]));
     const rows: BioExtractRow[] = [];
     for (const s of list) {
@@ -127,20 +151,18 @@ export function BioPage() {
       });
     }
     rows.sort((a, b) => b.dataISO.localeCompare(a.dataISO));
-    const periodLabel = `${fmtDateBR(monthFrom)} — ${fmtDateBR(monthTo)}`;
-    const categoryLabel = bioCategoryType?.nome ?? 'Biosintética';
-    openPrintPreview(`Extrato — ${categoryLabel} — ${periodLabel}`, buildBioExtractHtml({ periodLabel, storeName: store?.nome_loja, categoryLabel, rows }));
+    openPrintPreview(`Extrato — ${categoryLabel} — ${periodLabel}`, buildBioExtractHtml({ periodLabel, storeName, categoryLabel, rows }));
   }
 
-  function handlePrintMonth() {
-    if (monthSales) openMonthExtract(monthSales);
-    else setPrintRequested(true); // busca o mês; o efeito abaixo imprime quando chegar
+  function handlePrint(kind: PrintKind) {
+    if (monthSales) openMonthPrint(kind, monthSales);
+    else setPrintRequested(kind); // busca o mês; o efeito abaixo imprime quando chegar
   }
 
   useEffect(() => {
     if (!printRequested || !monthSales) return;
-    setPrintRequested(false);
-    openMonthExtract(monthSales);
+    setPrintRequested(null);
+    openMonthPrint(printRequested, monthSales);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [printRequested, monthSales]);
 
@@ -231,17 +253,20 @@ export function BioPage() {
       </div>
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-        <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
-          <h3 className="text-sm font-semibold">Lista de vendas — Biosintética</h3>
-          <button
-            type="button"
-            onClick={handlePrintMonth}
-            disabled={printRequested && monthFetching}
-            className="rounded-lg border px-3 py-1.5 text-sm font-semibold disabled:opacity-60"
-            style={{ borderColor: '#14ff00', color: '#14ff00' }}
-          >
-            🖨️ {printRequested && monthFetching ? 'Gerando...' : 'Imprimir extrato do mês'}
-          </button>
+        <h3 className="text-sm font-semibold mb-2">Lista de vendas — Biosintética</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3" role="group" aria-label="Tipo de impressão">
+          {PRINT_OPTIONS.map((o) => (
+            <button
+              key={o.kind}
+              type="button"
+              onClick={() => handlePrint(o.kind)}
+              disabled={printRequested !== null && monthFetching}
+              className="rounded-lg border px-3 py-1.5 text-sm font-semibold disabled:opacity-60 truncate"
+              style={{ borderColor: '#14ff00', color: '#14ff00' }}
+            >
+              🖨️ {printRequested === o.kind && monthFetching ? 'Gerando...' : o.label}
+            </button>
+          ))}
         </div>
         {!salesListEnabled ? (
           <SalesListLockedNotice onEnable={toggleSalesListEnabled} />
