@@ -122,6 +122,10 @@ um estilo novo a cada tela.
 - Biosintética tem **3 tipos de impressão**, um botão para cada (pedido do usuário, 2026-11-17; `PRINT_OPTIONS` em `BioPage.tsx`): **Mais e menos vendidos** (top 10 e bottom 10 por produto, sem repetir; `aggregateBioProducts` + `buildBioTopProductsHtml`), **Lista de vendas do mês** (a de cima) e **Vendas por dia** (todos os dias do mês com nº de vendas e unidades, zeros incluídos; `aggregateBioDays` + `buildBioDailyHtml`). Todas usam o mês inteiro e **todos os produtos G1-G4 — não dependem do filtro de grupo da tela**.
 - Menu lateral: **Biosintética fica no bloco de baixo (acima do ADM)** e **Tutoriais no fim da lista principal, abaixo de DSM** (trocaram de lugar).
 
+### Última atualização na Tela Inicial (2026-11-20)
+
+- O card superior da Tela Inicial (desktop) mostra, logo abaixo da barra de progresso, **"Última atualização: dd/mm/aaaa às hh:mm"** = `created_at` da importação mais recente em `sales_imports` (`useLastSalesImport`, `queries.ts`; formato `fmtDateTimeBR`, `format.ts`). Não tem coluna nova: cada nova planilha de vendas já grava essa linha, e a tela de Importar já invalida `['sales_imports']` ao concluir, então o texto atualiza sozinho. Sem importação ainda, mostra "nenhuma planilha importada ainda". O horário é o do **início da gravação** do lote. Só o ADM lê `sales_imports` (RLS); mostrar para colaborador/celular exigiria uma RPC nova.
+
 ## App Android (APK) e versão mobile — como funciona (2026-11-15)
 
 - O APK **não embute o site**: `capacitor.config.ts` aponta `server.url` para o deploy de produção da Vercel. Por isso toda melhoria de velocidade/tela publicada em `main` chega ao app já instalado na próxima abertura (e ao voltar do segundo plano, ver `main.tsx`). Só mudança **nativa** (plugin Capacitor novo, manifesto, ícone) exige gerar e instalar um APK novo.

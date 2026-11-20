@@ -28,7 +28,7 @@ import {
 import type { Dynamic, Goal } from '../../lib/business/types';
 import { summaryFromCategoryTotals, sumCategoryTotals } from '../../lib/business/summary';
 import { addDaysISO, monthFirstISO, monthLastISO, todayISO } from '../../lib/dateRange';
-import { fmtDateBR, fmtMoney } from '../../lib/format';
+import { fmtDateBR, fmtDateTimeBR, fmtMoney } from '../../lib/format';
 import { copyText, formatRankingText } from '../../lib/clipboard';
 import { useUpdateStoreSettings } from '../../lib/mutations';
 import { generateAllCategoryImages, generateRankingImageBlob, tryCopyImage, type CategoryImageSpec, type MultiImageResult } from '../../lib/rankingImage';
@@ -40,6 +40,7 @@ import {
   useDsmRecords,
   useDynamics,
   useGoals,
+  useLastSalesImport,
   useMobileCategoryTotals,
   useSalesInRange,
   useSpecialLists,
@@ -347,6 +348,7 @@ export function DashboardPage() {
   const { data: storeSettings, isError: storeSettingsError } = useStoreSettings();
   const { data: store } = useStore();
   const { data: billingCycle } = useStoreBillingCycle();
+  const { data: lastImportAt } = useLastSalesImport();
   const { data: dsmRecords } = useDsmRecords();
   const { data: clientServiceRecords } = useClientServiceRecords();
   const { data: categoryTypes } = useCategoryTypes();
@@ -944,6 +946,20 @@ export function DashboardPage() {
           <div style={{ position: 'relative', height: 8, borderRadius: 5, background: '#080818', border: '1px solid #212948', overflow: 'hidden', marginTop: 8 }}>
             <div style={{ height: '100%', width: `${barPct}%`, background: 'linear-gradient(90deg,#00f0ff,#a82bff)', borderRadius: 5 }} />
             {barMarker !== null && <div style={{ position: 'absolute', top: -3, bottom: -3, width: 2, background: '#ffb700', left: `${barMarker}%` }} />}
+          </div>
+          {/* Data e hora da última planilha de vendas carregada (pedido do
+              usuário, 2026-11-20) — vem da importação mais recente, então
+              atualiza sozinho a cada nova importação. Sem nenhuma
+              importação ainda, avisa em vez de ficar em branco. */}
+          <div
+            title="Dia e horário em que a última planilha de vendas foi carregada no sistema"
+            style={{ marginTop: 7, display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, lineHeight: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+          >
+            <span aria-hidden="true">🕒</span>
+            <span style={{ color: '#8b90bf', textTransform: 'uppercase', letterSpacing: '.08em' }}>Última atualização</span>
+            <b style={{ color: lastImportAt ? '#00f0ff' : '#64748b', fontWeight: 700 }}>
+              {lastImportAt ? fmtDateTimeBR(lastImportAt) : 'nenhuma planilha importada ainda'}
+            </b>
           </div>
         </div>
 

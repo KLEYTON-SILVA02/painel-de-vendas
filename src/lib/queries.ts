@@ -300,6 +300,28 @@ export function useSalesImports() {
   });
 }
 
+/** Quando a última planilha de vendas foi carregada (`created_at` da
+ * importação mais recente) — mostrado na Tela Inicial como "Última
+ * atualização". Busca só 1 linha, não o histórico inteiro de importações. A
+ * chave começa com 'sales_imports', então o invalidateQueries que a tela de
+ * Importar já faz ao concluir também atualiza este valor. Só o ADM enxerga
+ * `sales_imports` (RLS); para outros perfis volta `null`. */
+export function useLastSalesImport() {
+  return useQuery({
+    queryKey: ['sales_imports', 'last'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('sales_imports')
+        .select('created_at')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.created_at ?? null;
+    },
+  });
+}
+
 /** All DSM records for the store — every row is a colaborador+dia+quantidade
  * conversion count, always summed together (never replaced by a later
  * import, see 0087_dsm_records.sql). Small table (one row per colaborador

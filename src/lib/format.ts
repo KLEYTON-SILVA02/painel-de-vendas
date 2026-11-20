@@ -8,6 +8,17 @@ export function fmtDateBR(iso: string | null): string {
   return `${d}/${m}/${y}`;
 }
 
+/** "19/11/2026 às 18:42" — data e hora no horário do aparelho (a loja usa o
+ * fuso de Brasília). Recebe um timestamp ISO completo (ex.: `created_at` do
+ * banco); vazio ou inválido devolve ''. */
+export function fmtDateTimeBR(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} às ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 /** DD/MM, no year — for the mobile "Lista de vendas" table only, where the
  * date filter above it already pins the period to a single month (so the
  * year is always implicitly the current one being viewed). Dropping it
